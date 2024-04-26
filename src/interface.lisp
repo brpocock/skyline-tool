@@ -444,7 +444,8 @@ If you need more help, ask support@interworldly.com
 
 Copyright © 2016-2024, Bruce-Robert Pocock
 Copyright © 2024, Interworldly Adventuring, LLC
-See LICENSE for details
+
+See COPYING for details
 
 "))
 

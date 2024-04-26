@@ -92,11 +92,11 @@
            (#\\ "_revsol_") (#\# "_num_") (#\Space "__") (#\Newline "___")
            (#\Return "_ret_")
            (otherwise (format nil "_u~4,'0x_" (char-code token))))))
-    
+
     (number (format nil "tok~36r" token))
-    
+
     (null "nil")
-    
+
     (t (token-safe (princ-to-string token)))))
 
 (assert (equal (token-safe "My best friend") "My__best__friend"))
