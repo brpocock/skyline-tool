@@ -1,4 +1,4 @@
 [submodule "zx7mini"]
 	path = zx7mini
-	url = https://github.com/antoniovillena/zx7mini
+	url = git@github.com:antoniovillena/zx7mini
 	branch = master
