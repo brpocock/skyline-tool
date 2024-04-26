@@ -1,0 +1,52 @@
+# Backup files
+*~
+*#
+.#*
+DEADJOE
+.DS_Store
+*.orig
+*.tiled-session
+.mscbackup
+*.backup
+
+# Emulator junk files
+cfg
+*.log
+snap/
+comments/
+
+# Generated/output files
+Dist/*
+Object/*
+Source/Generated/*
+*.fasl
+phantasia.trace
+/dumper*.lisp
+
+# Compiled binaries from sources we distribute (or Quicklisp)
+bin/skyline-tool
+bin/buildapp
+bin/zx7mini
+bin/7800heat
+bin/7800sign
+bin/7800header
+
+# IDE temp files
+.emacs.desktop
+.emacs.desktop.lock
+*slime-notes*
+.#*#
+*.mscz.autosave
+.~lock.*
+
+# PNGs produced from XCFs are left littered around but need not be checked in any more
+Source/Art/*.png
+Source/Maps/Tiles/*.png
+Source/Blobs/*.png
+
+# Generated from constants in the source code
+Tools/*.gpl
+
+# Core dumps automatically triggered by faults
+brk.core
+fault.core
