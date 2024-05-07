@@ -47,6 +47,7 @@
         :write-asset-ids 'write-asset-ids
         :write-cart-header 'write-cart-header
         :write-gimp-palettes 'write-gimp-palettes
+        :write-inventory-tables 'write-inventory-tables
         :write-projection-tables.s 'write-projection-tables.s
         :write-master-makefile 'write-master-makefile))
 

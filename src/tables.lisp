@@ -330,40 +330,77 @@ ProjectionTables:~20t.block")
 (defun fixed-display (fixed)
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
+(defun write-inventory-tables (&optional (source-text "Source/Tables/Inventory.txt")
+                                         (source-code "Source/Generated/InventoryTables.s"))
+  "Collect the names of all inventory items and write them out"
+  (format *trace-output* "~&Reading inventory item names from ~a…"
+          (enough-namestring source-text))
+  (finish-output *trace-output*)
+  (with-output-to-file (code source-code :if-exists :supersede)
+    (format code ";;; Generated from ~a
+
+ItemNames: .block~2%"
+            (enough-namestring source-text))
+    (with-input-from-file (text source-text)
+      (loop for counter from 0 below (* 16 8)
+            for line = (read-line text nil nil)
+            while (and line (not (emptyp line)))
+            do (format code "~&Item~x:~10t.ptext ~s~60t; ~d (~{~d.~d~})"
+                       counter
+                       (subseq line 0 (position #\; line))
+                       counter
+                       (multiple-value-list (floor counter 8)))
+            finally
+               (progn
+                 (format *trace-output* " …read ~:d item name~:p (of ~:d max), done.~%"
+                         (1+ counter) (* 16 8))
+                 (when (< counter (* 16 8))
+                   (loop for i from counter below (* 16 8)
+                         do (format code "~&Item~x:~10t.ptext \"untitled item ~(~:*~x~)\"" i))))))
+    (format code "~2%~10tAllItemNames=(~{Item~x~^,~})
+Low:~10t.byte <(AllItemNames)
+High:~10t.byte >(AllItemNames)
+~10t.bend
+;;; end of file~%"
+            (loop for counter from 0 below (* 16 8)
+                  collecting counter))))
+
 (defun write-characters-tables (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
                                           (source-pathname "Source/Generated/CharacterTables.s"))
   (format *trace-output* "~&Reading NPC stats from ~a … "
           (enough-namestring spreadsheet-pathname))
-  (push (list :name "Player" :kind "Player") *npc-stats*)
-  (push (list :name "Narrator" :kind "Narrator") *npc-stats*)
-  (load-npc-stats spreadsheet-pathname)
-  (with-output-to-file (source source-pathname :if-exists :supersede)
-    (format *trace-output* "writing ~a … " (enough-namestring source-pathname))
-    (finish-output *trace-output*)
-    (format source ";;; Generated from ~a
+  (finish-output *trace-output*)
+  (let ((*npc-stats* (list)))
+    (push (list :name "Player" :kind "Player") *npc-stats*)
+    (push (list :name "Narrator" :kind "Narrator") *npc-stats*)
+    (load-npc-stats spreadsheet-pathname)
+    (with-output-to-file (source source-pathname :if-exists :supersede)
+      (format *trace-output* "writing ~a … " (enough-namestring source-pathname))
+      (finish-output *trace-output*)
+      (format source ";;; Generated from ~a
 ;;; Character tables~2%"
-            (enough-namestring spreadsheet-pathname))
-    (format source "~%CharNames:
+              (enough-namestring spreadsheet-pathname))
+      (format source "~%CharNames:
 ~10t.text \"terrificguy\"
 ~10t.text \"narrator\", 0, 0, 0, 0~
 ~{~%~10t.text \"~a\"~@[,~30t~{~a~^, ~a~^, ~a~^, ~a~^,   ~}~]~}
 "
-            (loop for char in *npc-stats*
-                  collect (getf char :name)
-                  collect (loop repeat (- 12 (length (getf char :name)))
-                                collect 0)))
-    (loop for name in '(:character-id :hp :ac :pitch :speed
-                        :kind :hair-color :skin-color :clothes-color
-                        :head :body)
-          for asm-name = (cl-change-case:pascal-case (string name))
-          do (progn
-               (format source "~%~a:~%~10t.byte $00, $00~32t; Player, Narrator" asm-name)
-               (dolist (char *npc-stats*)
-                 (format *trace-output* "~%~4t~s~20t~a" (npc-interpret-field (getf char name) name) (getf char :name)))
-               (loop for char in *npc-stats*
-                     do (format source "~%~10t.byte $~2,'0x~32t; (~:(~a~))"
-                                (or (npc-interpret-field (getf char name) name
-                                                         :name (getf char :name))
-                                    0)
-                                (getf char :name)))))
-    (format *trace-output* " done.")))
+              (loop for char in *npc-stats*
+                    collect (getf char :name)
+                    collect (loop repeat (- 12 (length (getf char :name)))
+                                  collect 0)))
+      (loop for name in '(:character-id :hp :ac :pitch :speed
+                          :kind :hair-color :skin-color :clothes-color
+                          :head :body)
+            for asm-name = (cl-change-case:pascal-case (string name))
+            do (progn
+                 (format source "~%~a:~%~10t.byte $00, $00~32t; Player, Narrator" asm-name)
+                 (dolist (char *npc-stats*)
+                   (format *trace-output* "~%~4t~s~20t~a" (npc-interpret-field (getf char name) name) (getf char :name)))
+                 (loop for char in *npc-stats*
+                       do (format source "~%~10t.byte $~2,'0x~32t; (~:(~a~))"
+                                  (or (npc-interpret-field (getf char name) name
+                                                           :name (getf char :name))
+                                      0)
+                                  (getf char :name)))))
+      (format *trace-output* " done."))))
