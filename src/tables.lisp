@@ -403,7 +403,7 @@ High:~10t.byte >(AllItemNames)
                                                            :name (getf char :name))
                                       0)
                                   (getf char :name)))))
-    (format *trace-output* " done.")))
+      (format *trace-output* " done."))))
 
 (defun write-docks-index (&optional (pathname #p"Source/Generated/DocksIndex.s"))
   "Write the dock IDs from the maps index to PATHNAME"
@@ -419,5 +419,4 @@ High:~10t.byte >(AllItemNames)
                        (cl-change-case:lower-case (gethash name *maps-display-names* "untitled"))))
       (format code "~2%~10tDockNames = (~{DockName~d~^, ~})"
               (loop for i from 1 upto max-dock-id collecting i))
-      (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)")))
-  )
+      (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
