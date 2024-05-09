@@ -547,6 +547,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "AssetIDs" 'write-asset-ids
           "EnemyStatsTable" 'compile-enemy-stats
           "ItemDropTable" 'compile-item-drops
+          "DocksIndex.s" 'write-docks-index
           "ShoppingTable" 'compile-shops
           "ClassConstants" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops

@@ -46,6 +46,7 @@
         :write-asset-bank 'write-asset-bank
         :write-asset-ids 'write-asset-ids
         :write-cart-header 'write-cart-header
+        :write-docks-index 'write-docks-index
         :write-gimp-palettes 'write-gimp-palettes
         :write-inventory-tables 'write-inventory-tables
         :write-projection-tables.s 'write-projection-tables.s
