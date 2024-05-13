@@ -331,7 +331,7 @@ ProjectionTables:~20t.block")
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
 (defun write-inventory-tables (&optional (source-text "Source/Tables/Inventory.txt")
-                                         (source-code "Source/Generated/InventoryTables.s"))
+                                         (source-code "Source/Generated/InventoryLabels.s"))
   "Collect the names of all inventory items and write them out"
   (format *trace-output* "~&Reading inventory item names from ~a…"
           (enough-namestring source-text))
