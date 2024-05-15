@@ -128,8 +128,8 @@
                 (vector dump-file)
                 (t (load-dump-into-mem dump-file)))
               (find-label-from-files "ActiveDLL"))
-    (0 (find-label-from-files "AltDLL"))
-    (#x80 (find-label-from-files "DLL"))))
+    (#x80 (find-label-from-files "AltDLL"))
+    (0 (find-label-from-files "DLL"))))
 
 (defun decode-dll-from-dump (&optional (dump-file #p"/tmp/dump")
                                        (start-address (detect-active-dll dump-file)))
