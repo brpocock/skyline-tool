@@ -1778,8 +1778,9 @@ but now also ~s."
                                                  word)
                                          (list "SpeakJet.M1"))))))))
       (flatten
-       (remove-if #'null
-                  (fixup-exclamations (combine-adjacent-pauses bytes)))))))
+       (append (remove-if #'null
+                          (fixup-exclamations (combine-adjacent-pauses bytes)))
+               (cons "SpeakJet.EndOfPhrase" nil))))))
 
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
