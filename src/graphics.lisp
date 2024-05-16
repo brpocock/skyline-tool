@@ -1602,10 +1602,11 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
   (let ((index (or (position pixel palette)
                    (when best-fit-p
                      (destructuring-bind (r g b) (elt (machine-palette) pixel)
-                       (position (find-nearest-in-palette palette
+                       (position (find-nearest-in-palette (mapcar (lambda (i) (elt (machine-palette) i))
+                                                                  (coerce palette 'list))
                                                           r g b)
                                  (mapcar (lambda (c) (elt (machine-palette) c))
-                                         palette)
+                                         (coerce palette 'list))
                                  :test 'equalp))))))
     (or index
         (error 'color-not-in-palette-error
@@ -1670,7 +1671,7 @@ position within a larger image I."
                                   :best-fit-p best-fit-p))))
     output))
 
-(defun 7800-image-to-160a (image &key byte-width height palette)
+(defun 7800-image-to-160a (image &key byte-width height palette best-fit-p)
   "Convert IMAGE to 160A bytes.
 
 BYTE-WIDTH  is the  width of  IMAGE in  bytes; HEIGHT  is the  height in
@@ -1683,7 +1684,8 @@ pixels; PALETTE is the palette to which to hold the image."
                                               (* b 4) y
                                               (1- (* (1+ b) 4)) y))
                  (indices (pixels-into-palette byte-pixels palette
-                                               :x0 (* b 4) :y0 y)))
+                                               :x0 (* b 4) :y0 y
+                                               :best-fit-p best-fit-p)))
             (push (logior
                    (ash (aref indices 0) 6)
                    (ash (aref indices 1) 4)
@@ -2283,8 +2285,9 @@ but world “~a” needs ~:d for the ~r level~:p
         (dotimes (y height)
           (setf (aref output x y)
                 (if allow-imperfect-p
-                    (apply #'find-nearest-in-palette rgb
-                           (palette->rgb (aref region x y)))
+                    (apply #'rgb->palette
+                           (apply #'find-nearest-in-palette rgb
+                                  (palette->rgb (aref region x y))))
                     (or (position (aref region x y) palette)
                         (error "Color ~s  at (~d, ~d) is not in palette ~s"
                                (aref region x y) x y palette)))))))
@@ -2298,10 +2301,10 @@ but world “~a” needs ~:d for the ~r level~:p
 
 (defun check-height+width-for-blob (height width palette-pixels)
   (assert (zerop (mod width 4)) (width)
-          "BLOB ripper requires width mod 4, not ~d (4 × ~d + ~d)"
+          "BLOB ripper requires width mod 4, not ~d (4 × ~{~d + ~d~})"
           width (multiple-value-list (floor width 4)))
   (assert (zerop (mod (1- height) 16)) (height)
-          "BLOB ripper requires height mod 16 + 1, not ~d (16 × ~d + ~d)"
+          "BLOB ripper requires height mod 16 + 1, not ~d (16 × ~{~d + ~d~})"
           height (multiple-value-list (floor height 16)))
   (format *trace-output* " (~:d×~:d px)" width height)
   (finish-output *trace-output*)
@@ -2324,7 +2327,8 @@ but world “~a” needs ~:d for the ~r level~:p
                       (2a-to-list palettes))))))
 
 (defun blob/write-span-to-stamp-buffer (span stamp-buffer
-                                        &key stamp-offsets serial output id)
+                                        &key stamp-offsets serial output id
+                                             imperfectp)
   (setf (gethash id stamp-offsets) serial)
   (let ((start (+ (* #x1000 (floor serial #x100))
                   (mod serial #x100))))
@@ -2336,7 +2340,8 @@ but world “~a” needs ~:d for the ~r level~:p
               (let ((bytes-across (7800-image-to-160a (elt span stamp)
                                                       :byte-width 1
                                                       :height 16
-                                                      :palette #(0 1 2 3))))
+                                                      :palette #(0 1 2 3)
+                                                      :best-fit-p imperfectp)))
                 (assert (= 1 (length bytes-across)))
                 (car bytes-across))))
         (dotimes (byte 16)
@@ -2355,7 +2360,7 @@ but world “~a” needs ~:d for the ~r level~:p
    (mapcar #'palette->rgb (coerce (elt (2a-to-list palettes) pal-index) 'list))
    :allow-imperfect-p allow-imperfect-p))
 
-(defun blob/write-spans (spans output)
+(defun blob/write-spans (spans output &key imperfectp)
   (format output "~2%Spans:~%")
   (let ((stamp-buffer (make-array #x1000 :adjustable t))
         (stamp-offsets (make-hash-table)))
@@ -2369,7 +2374,8 @@ but world “~a” needs ~:d for the ~r level~:p
                                                 :stamp-offsets stamp-offsets
                                                 :serial serial
                                                 :output output
-                                                :id id)
+                                                :id id
+                                                :imperfectp imperfectp)
                (incf serial (length span))))
     (format *trace-output* " writing stamps … ")
     (format output "~2%;;; Binary stamp data follows.~%")
@@ -2378,8 +2384,9 @@ but world “~a” needs ~:d for the ~r level~:p
     (format output "~2%;;; This size marker is the estimated amount of ROM that this
 ;;; blob may take up, used for allocation purposes.
 ;;; $SIZE$~x~%"
-            (round (* #x100 (ceiling (* 5.1 (hash-table-count spans)) #x100))
-                   (array-dimension stamp-buffer 0)))))
+            (+ #x20
+               (* 4 (hash-table-count spans))
+               (length stamp-buffer)))))
 
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
   "Rip a Bitmap Large Object Block in mode 160A from PNG-FILE.
@@ -2396,7 +2403,9 @@ rules perfectly."
          (palette-pixels (png->palette height width
                                        (png-read:image-data png)))
          (output-pathname (png-to-blob-pathname png-file))
-         (imperfectp (equal imperfectp$ "--imperfect")))
+         (imperfectp (or (eql :imperfect imperfectp$)
+                         (equal imperfectp$ "--imperfect"))))
+    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
     (check-height+width-for-blob height width palette-pixels)
     (let* ((palettes (extract-palettes palette-pixels))
            (palettes-list (2a-to-lol palettes))
@@ -2421,19 +2430,18 @@ Blob_~a:~10t.block~2%"
           (format output "~2&Zone~d:" zone)
           (flet ((emit-span (x span pal-index)
                    (when span
-                     (let ((id (if-let (existing (gethash span spans))
-                                 existing
-                                 (prog1
-                                     (setf (gethash span spans) (prog1 next-span-id
-                                                                  (incf next-span-id)))
-                                   (cond
-                                     ((and (< stamp-counting #x100)
-                                           (< (+ stamp-counting (length span)) #x100))
-                                      (incf stamp-counting (length span)))
-                                     ((and (< stamp-counting #x100)
-                                           (>= (+ stamp-counting (length span)) #x100))
-                                      (setf stamp-counting #x100))
-                                     (t (incf stamp-counting)))))))
+                     (let ((id (or (gethash span spans)
+                                   (prog1
+                                       (setf (gethash span spans) (prog1 next-span-id
+                                                                    (incf next-span-id)))
+                                     (cond
+                                       ((and (< stamp-counting #x100)
+                                             (< (+ stamp-counting (length span)) #x100))
+                                        (incf stamp-counting (length span)))
+                                       ((and (< stamp-counting #x100)
+                                             (>= (+ stamp-counting (length span)) #x100))
+                                        (setf stamp-counting #x100))
+                                       (t (incf stamp-counting)))))))
                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
                                id pal-index (length span)
                                (- x (* 4 (length span))))))))
@@ -2474,7 +2482,7 @@ Blob_~a:~10t.block~2%"
                   finally
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
-        (blob/write-spans spans output)))
+        (blob/write-spans spans output :imperfectp imperfectp)))
     (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
