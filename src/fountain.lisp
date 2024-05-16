@@ -3146,7 +3146,7 @@ Character_~0@*~a:
                     11)))
     (unless (probe-file pathname)
       (error "Could not find expected script file “~a” for script named “~a”"
-             (enough-namestring pathname) script-moniker))
+             (enough-namestring pathname) title))
     (with-input-from-file (fountain pathname)
       (loop for line = (read-line fountain nil nil)
             while line

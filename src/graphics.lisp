@@ -311,15 +311,15 @@
                (20 (subseq +c64-palette+ 0 7))
                ((64 128) +c64-palette+)
                (2 +apple-hires-palette+)
-               (8 (ecase *region*
+               (8 (ecase region
                     (:ntsc +nes-palette-ntsc+)
                     (:pal +nes-palette-pal+)))
-               (2600 (ecase *region*
+               (2600 (ecase region
                        (:ntsc +vcs-ntsc-palette+)
                        (:pal +vcs-pal-palette+)
                        (:secam +vcs-secam-palette+)))
                (2609 +intv-palette+)
-               (7800 (ecase *region*
+               (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
                (5200 +vcs-ntsc-palette+)
@@ -1236,6 +1236,7 @@ Proceed with caution."))
         (compile-font-generic *machine* nil font font-input)))))
 
 (defun compile-font-8×8 (png-file out-dir height width image-nybbles)
+  (declare (ignore))
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
@@ -1248,7 +1249,8 @@ Proceed with caution."))
 VIC2Font:
 "
               png-file)
-      (let ((colour (loop for char from 0 below (* (/ height 8) (/ width 8))
+      (let (#+ ()
+            (colour (loop for char from 0 below (* (/ height 8) (/ width 8))
                           for x-cell = (mod (* char 8) width)
                           for y-cell = (* 8 (floor (* char 8) width))
                           for char-data = (extract-region image-nybbles
@@ -1409,7 +1411,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                 (zerop (mod height 8))))
        (format *trace-output* "~% Image ~A seems to be sprite (player) data"
                png-file)
-       (compile-tia-player png-file target-dir height width palette-pixels))
+       #+ () (compile-tia-player png-file target-dir height width palette-pixels))
 
       ((and (zerop (mod width 8))
             (zerop (mod height 8)))
@@ -1925,6 +1927,7 @@ pixels; PALETTE is the palette to which to hold the image."
     (reverse bytes-lists)))
 
 (defmethod parse-7800-object ((mode (eql :320d)) png &key width height palette)
+  (declare (ignore png width height palette))
   (error "unimplemented mode ~A" mode))
 
 (defun grab-7800-palette (mode png)
@@ -2140,7 +2143,7 @@ pixels; PALETTE is the palette to which to hold the image."
         (let ((big-endian-p (evenp 2x)))
           (let* ((left (aref screen (* 2x 2) y))
                  (right (aref screen (1+ (* 2x 2)) y))
-                 (tile-hash (tile-hash left right big-endian-p))
+                 #+ ()  (tile-hash (tile-hash left right big-endian-p))
                  (merged-tile (or (gethash tile-hash *merged-tiles*)
                                   (setf (gethash tile-hash *merged-tiles*)
                                         (incf *tile-counter*)))))
@@ -2157,6 +2160,7 @@ pixels; PALETTE is the palette to which to hold the image."
                  ;; TODO
                  :background-color #x44))
 
+#+ ()
 (defun map-tiles/tia (world levels)
   (format *trace-output* "~&Sorting tile art into TIA format in world ~a…" world)
   (let* ((*merged-tiles* (make-hash-table :test #'equal))
