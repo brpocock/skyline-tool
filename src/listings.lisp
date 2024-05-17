@@ -36,7 +36,7 @@
 wp 0140,2,w,{frame > 10},{printf \"Stagehand stack theatens to overflow into Maria mirrors\"}
 wp 0160,2,w,{frame > 10},{printf \"NMI stack threatens to overwrite Stagehand stack\"}
 wp 0180,2,w,{frame > 10},{printf \"Script stack threatens to overwrite NMI stack\"}
-wp 01a0,2,w,{frame > 10},{printf \"Main stack threatens to overwrite Script stack\"}
+wp 01c0,2,w,{frame > 10},{printf \"Main stack threatens to overwrite Script stack\"}
 wp 0100,40,rw,{frame > 10},{printf \"Garbage memory access attempted\"}
 wp 0300,100,rw,{frame > 10},{printf \"Garbage memory access attempted\"}
 wp 0400,50,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
