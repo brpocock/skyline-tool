@@ -110,6 +110,8 @@
               (0 "Idle") (1 "Climbing") (2 "Dead") (3 "Flying")
               (4 "Knocked Back") (5 "Swimming") (6 "Using Equipment") (7 "Wading")
               (8 "Walking") (9 "Waving Arms") (10 "Gesturing")
+              (11 "Sleep") (12 "Non-interactive") (13 "Dance")
+              (14 "Panic") (15 "Walk (with shield)") (16 "Idle (with shield)")
               (otherwise "unknown"))))
   (:method ((field (eql :boat-width)) value s)
     (format s " = ~r tile~:p" (1+ (first value))))
