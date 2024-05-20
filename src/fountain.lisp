@@ -2091,7 +2091,7 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage weather (&optional kind)
-  (format t "~%~10t.mva WeatherKind, Weather~:(~a~)" (or kind "None")))
+  (format t "~%~10t.mva WeatherKind, # Weather~:(~a~)" (or kind "None")))
 
 (defstage wake (actor)
   (destructuring-bind (name &key found-in-scene-p &allow-other-keys)
