@@ -2120,7 +2120,7 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage fade-in (from-color)
-  (format t "~2&~10tlda # ~a~%~10tldx #1~32t; fade in"
+  (format t "~2&~10tlda # ~a~%~10tldx #1~32t; fade in~%~10tjsr FadeBrightness"
           (cond
             ((string= "WHITE" from-color) "$f ; White")
             ((string= "BLACK" from-color) "0 ; Black")
