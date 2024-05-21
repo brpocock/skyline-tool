@@ -36,18 +36,18 @@
 wp 0140,2,w,{frame > 10},{printf \"Stagehand stack theatens to overflow into TIA/Maria mirrors\"}
 wp 0160,2,w,{frame > 10},{printf \"Script stack threatens to overwrite NMI stack\"}
 wp 01c0,2,w,{frame > 10},{printf \"Main stack threatens to overwrite Script stack\"}
-wp 0100,40,rw,{frame > 10},{printf \"Garbage TIA/Maria mirrors access attempted\"}
-wp 0300,100,rw,{frame > 10},{printf \"Garbage memory access attempted\"}
-wp 0400,50,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
-wp 0460,20,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
+wp 0100,40,rw,{frame > 10 && b@pc != 2c},{printf \"Garbage TIA/Maria mirrors access attempted\"}
+wp 0300,100,rw,{frame > 10 && b@pc != 2c},{printf \"Garbage memory access attempted\"}
+wp 0400,50,rw,{frame > 10 && b@pc != 2c},{printf \"Unmapped device memory access attempted\"}
+wp 0460,20,rw,{frame > 10 && b@pc != 2c},{printf \"Unmapped device memory access attempted\"}
 wp 0480,80,rw,{frame > 10},{printf \"RIOT memory access attempted\"}
-wp 0500,80,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
+wp 0500,80,rw,{frame > 10 && b@pc != 2c},{printf \"Unmapped device memory access attempted\"}
 wp 0580,80,rw,{frame > 10},{printf \"RIOT memory access attempted\"}
-wp 0600,1200,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
-wp 2040,c0,rw,{frame > 10},{printf \"Garbage memory access attempted\"}
-wp 2140,c0,rw,{frame > 10},{printf \"Garbage memory access attempted\"}
-wp 2800,800,rw,{frame > 10},{printf \"BIOS memory access attempted\"}
-wp 3000,1000,rw,{frame > 10},{printf \"Unmapped device memory access attempted\"}
+wp 0600,1200,rw,{frame > 10 && b@pc != 2c},{printf \"Unmapped device memory access attempted\"}
+wp 2040,c0,rw,{frame > 10 && b@pc != 2c},{printf \"Garbage memory access attempted\"}
+wp 2140,c0,rw,{frame > 10 && b@pc != 2c},{printf \"Garbage memory access attempted\"}
+wp 2800,800,rw,{frame > 10 && b@pc != 2c},{printf \"BIOS memory access attempted\"}
+wp 3000,1000,rw,{frame > 10 && b@pc != 2c},{printf \"Unmapped device memory access attempted\"}
 wp 8002,7ffe,w,1,{printf \"Write to ROM detected\"}
 wp 8000,2,w,{(wpdata & 3f) != 3f},{printf \"Bank switch: now in $%02x (pc $%04x, beamy %d)\", wpdata, pc, beamy; go}
 wp 8000,2,w,{(wpdata & 3f) == 3f},{printf \"Tried to bank in LastBank at $8000\"}
@@ -61,6 +61,7 @@ wp 30,1,w,1,{printf \"DPPL write ($%02x)\", wpdata; go}
 bp ~4,'0x,1,{snap \"brk.snap.png\"; save \"brk.core\",0,10000; printf \"BRK handler invoked at $%02x:%04x\", b@(4661),  -2+w@(2+sp)}
 bp ~4,'0x,1,{snap \"fault.snap.png\"; save \"fault.core\",0,10000; printf \"Minor Fault invoked at $%02x:%04x\", b@(4661),  -2+w@(1+sp)}
 rp {pc<8000},{printf \"Program counter underflow\"}
-printf \"\\n\\n\\n\\n\\n\\nReady.\""
+printf \"\\n\\n\\n\\n\\n\\nReady.\"
+"
                 (or break 0)
                 (or minor-fault 0))))))
