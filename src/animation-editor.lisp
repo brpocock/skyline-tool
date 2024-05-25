@@ -389,6 +389,13 @@
                (:block4 8))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+(clim:define-presentation-to-command-translator click-to-set-body
+    (simple-animation-sequence-decal-body com-set-decal-body anim-seq-editor-frame
+     :gesture :select :menu nil
+     :documentation "Change body number")
+    (object)
+  (list))
+
 (define-anim-seq-editor-frame-command (com-next-palette :name t) ()
   (setf (anim-seq-editor-palette *anim-seq-editor-frame*)
         (ecase (simple-animation-sequence-write-mode 
