@@ -308,7 +308,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
   `(tagbody do-over
       (let ((*system-debugger* *debugger-hook*)
             (*debugger-hook* (or
-                              #+mcclim (when  (x11-p) #'clim-debugger:debugger)
+                              #+mcclim (when  (and nil x11-p) #'clim-debugger:debugger)
                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                               *debugger-hook*)))
         (restart-case

@@ -485,6 +485,10 @@
                 finally (return best)))
         (cond
           ;; TODO make a proper error with presentation methods to handle this
+          ((clim:extended-output-stream-p *trace-output*)
+           (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
+All colors: ~s~@[~% at (~3d,~3d)~]"
+                  tile palettes (all-colors-in-tile tile) x y))
           ((tty-xterm-p)
            (error "Tile could not fit any palette:~% Tile: ~a
  Palettes: ~{~%~5t~{~{$~2,'0x ~a~}~^, ~}~^;~45t~{~{$~2,'0x ~a~}~^, ~}~^; ~}
@@ -1366,21 +1370,64 @@ range is 0 - #xffffffff (4,294,967,295)"
                                    :if-exists :supersede)
         (write-bytes bytes object)))))
 
+(defun ensure-byte (number)
+  (coerce (round number) '(unsigned-byte 8)))
+
+(defun darken-color-in-palette (color)
+  (destructuring-bind (r g b) (palette->rgb color)
+    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
+      (let ((s* (* s 2/3))
+            (v* (* v 1/2) ))
+        (apply #'rgb->palette (mapcar #'ensure-byte
+                                      (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
+
+(defun lighten-color-in-palette (color)
+  (destructuring-bind (r g b) (palette->rgb color)
+    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
+      (let ((s* (* s 2/3))
+            (v* (+ v (/ (- 1 v) 2))))
+        (apply #'rgb->palette (mapcar #'ensure-byte
+                                      (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
+
+(defun redden-color-in-palette (color)
+  (destructuring-bind (r g b) (palette->rgb color)
+    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
+      (let ((h* (if (> h 180)
+                    (+ h (/ (- 1 h) 2))
+                    (/ h 2))))
+        (apply #'rgb->palette (mapcar #'ensure-byte
+                                      (multiple-value-list (dufy:hsv-to-rgb h* s v))))))))
+
+(defun adjust-palettes (adjust-color-function palettes)
+  (let ((adjusted-palettes (make-array (list 8 4) :element-type '(unsigned-byte 8))))
+    (dotimes (palette-index 8)
+      (dotimes (color-index 4)
+        (setf (aref adjusted-palettes palette-index color-index)
+              (funcall adjust-color-function (aref palettes palette-index color-index)))))
+    adjusted-palettes))
+
 (defun extract-tileset-palette (pathname outfile)
-  (let ((*machine* 7800))
-    (ensure-directories-exist outfile)
-    (with-output-to-file (output outfile :if-exists :supersede)
+  (ensure-directories-exist outfile)
+  (with-output-to-file (output outfile :if-exists :supersede)
+    (flet ((dump-palettes (series)
+             (format output "~%~12t.byte ~a ; Background"
+                     (atari-colu-string (aref series 0 0)))
+             (dotimes (palette-index 8)
+               (format output "~%~12t.byte ~a, ~a, ~a"
+                       (atari-colu-string (aref series palette-index 1))
+                       (atari-colu-string (aref series palette-index 2))
+                       (atari-colu-string (aref series palette-index 3))))))
       (let* ((tileset (load-tileset pathname)))
         (format output ";;; Palette ~a~%;;; extracted from ~a"
                 (enough-namestring outfile) (enough-namestring pathname))
         (dolist (*region* '(:ntsc :pal))
           (let ((palettes (extract-palettes (tileset-image tileset))))
-            (format output "~2%~10t.if TV == ~a~%~12t.byte ~a ; Background"
-                    *region*
-                    (atari-colu-string (aref palettes 0 0)))
-            (dotimes (palette-index 8)
-              (format output "~%~12t.byte ~a, ~a, ~a"
-                      (atari-colu-string (aref palettes palette-index 1))
-                      (atari-colu-string (aref palettes palette-index 2))
-                      (atari-colu-string (aref palettes palette-index 3))))
+            (format output "~2%~10t.if TV == ~a" *region*)
+            (dump-palettes palettes)
+            (format output "~2%;; Dark")
+            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes))
+            (format output "~2%;; Light")
+            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes))
+            (format output "~2%;; Red")
+            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes))
             (format output "~%~10t.fi~%")))))))
