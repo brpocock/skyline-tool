@@ -683,12 +683,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               logior logxor looks loses
               magic mask minus moves
               natural nefertem negative none nor north not
-              of on or
+              of on or orange
               part peach pi pirate pitch player player-armor-color
               player-hair-color player-skin-color playing plus
               potion positive power princess product  purple
               quotient
-              raining raise raised real repeat right ring robe root round rowboat
+              raining raise raised real red repeat right ring robe root round rowboat
               second seconds set shadow shield shift ship silver sleeps sleep
               skin sloop staff south sum sword
               square starts stops
@@ -696,6 +696,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               ulluk under unless up upon
               value vizier
               wait walks wand we weigh west when white with wrench wakes
+              yellow
               zero))
   :test 'equalp
   :documentation "Words recognized specially by the stage directions parser")
