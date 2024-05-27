@@ -1082,7 +1082,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                      #'stage/color-robe)
                   (head number
                         #'stage/head-num))
-  (color purple green peach silver blue brown black white gray)
+  (color clear peach purple green silver orange brown white gray black yellow red blue)
   (location (quoted (lambda (place)
                       (list 'place place 0 'north 0 'east)))
             (numeric direction of/from quoted
