@@ -3133,8 +3133,7 @@ Character_~0@*~a:
          (dir (if (equal "Scripts" (first dir))
                   (subseq dir 1)
                   dir))
-         (title (cl-change-case:pascal-case (string-trim #(#\Space #\Tab)
-                                                         (last-elt path))))
+         (title (string-trim #(#\Space #\Tab) (last-elt path)))
          (pathname (make-pathname
                     :directory (append (list :relative "Source" "Scripts") dir)
                     :name title
@@ -3159,7 +3158,7 @@ Character_~0@*~a:
                    (check-type scene-number (integer 0 #x7ff)
                                "a scene number integer between 0 and 2,047")
                    (format *trace-output* "~&//* Script “~a” is scene ~:d; id $~4,'0x"
-                           script-moniker scene-number id)
+                           title scene-number id)
                    (return-from find-script-id id))))
       (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
         #+ () (warn "Script file “~a” is missing a Scene number line. ~
