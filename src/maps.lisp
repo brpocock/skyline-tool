@@ -306,7 +306,7 @@
                (tile-number (if detailp
                                 (aref detail x y)
                                 (aref ground x y))))
-          (unless (<= 0 tile-number 127)
+          (unless (<= 1 tile-number 128)
             (cerror "Continue, using tile $7f"
                     "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer."
                     tile-number tile-number x y detailp)
