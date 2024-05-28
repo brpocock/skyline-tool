@@ -1421,11 +1421,11 @@ range is 0 - #xffffffff (4,294,967,295)"
   (ensure-directories-exist outfile)
   (with-output-to-file (output outfile :if-exists :supersede)
     (flet ((dump-palettes (series label)
-             (format *trace-output* "~%~10a: " label)
+             (format *trace-output* "~%~10a:" label)
              (dotimes (p 8)
                (dotimes (c 4)
                  (print-wide-pixel (aref series p c) *trace-output*)))
-             (format output "~%~a:~%~12t.byte ~a ; Background"
+             (format output "~%~10t;; ~a:~%~12t.byte ~a ; Background"
                      label
                      (atari-colu-string (aref series 0 0)))
              (dotimes (palette-index 8)
