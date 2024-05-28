@@ -1385,7 +1385,7 @@ range is 0 - #xffffffff (4,294,967,295)"
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
       (let ((s* (* s 2/3))
-            (v* (+ v (/ (- 1 v) 2))))
+            (v* (+ v (/ (- 1.0d0 v) 2))))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
 
@@ -1393,10 +1393,21 @@ range is 0 - #xffffffff (4,294,967,295)"
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
       (let ((h* (if (> h 180)
-                    (+ h (/ (- 1 h) 2))
-                    (/ h 2))))
+                    (+ h (/ (- 1.0d0 h) 2.0d0))
+                    (/ h 2.0d0)))
+            (s* (+ s (/ (- 1.0d0 s) 2.0d0))))
         (apply #'rgb->palette (mapcar #'ensure-byte
-                                      (multiple-value-list (dufy:hsv-to-rgb h* s v))))))))
+                                      (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
+
+(defun cyanate-color-in-palette (color)
+  (destructuring-bind (r g b) (palette->rgb color)
+    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
+      (let ((h* (if (> h 180)
+                    (+ 180.0d0 (/ (- h 180.0d0) 2.0d0))
+                    (* h 3/2)))
+            (s* (+ s (/ (- 1.0d0 s) 2.0d0))))
+        (apply #'rgb->palette (mapcar #'ensure-byte
+                                      (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
 
 (defun adjust-palettes (adjust-color-function palettes)
   (let ((adjusted-palettes (make-array (list 8 4) :element-type '(unsigned-byte 8))))
@@ -1409,8 +1420,13 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun extract-tileset-palette (pathname outfile)
   (ensure-directories-exist outfile)
   (with-output-to-file (output outfile :if-exists :supersede)
-    (flet ((dump-palettes (series)
-             (format output "~%~12t.byte ~a ; Background"
+    (flet ((dump-palettes (series label)
+             (format *trace-output* "~%~10a: " label)
+             (dotimes (p 8)
+               (dotimes (c 4)
+                 (print-wide-pixel (aref series p c) *trace-output*)))
+             (format output "~%~a:~%~12t.byte ~a ; Background"
+                     label
                      (atari-colu-string (aref series 0 0)))
              (dotimes (palette-index 8)
                (format output "~%~12t.byte ~a, ~a, ~a"
@@ -1422,12 +1438,11 @@ range is 0 - #xffffffff (4,294,967,295)"
                 (enough-namestring outfile) (enough-namestring pathname))
         (dolist (*region* '(:ntsc :pal))
           (let ((palettes (extract-palettes (tileset-image tileset))))
+            (format *trace-output* "~% ~a:~%" (enough-namestring outfile))
             (format output "~2%~10t.if TV == ~a" *region*)
-            (dump-palettes palettes)
-            (format output "~2%;; Dark")
-            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes))
-            (format output "~2%;; Light")
-            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes))
-            (format output "~2%;; Red")
-            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes))
+            (dump-palettes palettes "Base")
+            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes) "Dark")
+            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes) "Light")
+            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
+            (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
             (format output "~%~10t.fi~%")))))))
