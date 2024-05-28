@@ -107,25 +107,30 @@
                           (bytes-to-32-bits
                            (cl-base64:base64-string-to-usb8-array (third data)))))))
 
-(defun find-tile-by-number (number &rest tilesets)
+(defun find-tile-by-number (number tileset
+                            &key decal-tileset decal2-tileset x y layer)
   "Find a tile by NUMBER among TILESETS"
-  (loop for tileset in tilesets
-        for id = (- number (tileset-gid tileset))
-        when (<= (tileset-gid tileset)
-                 number
-                 (1- (+ (tileset-gid tileset)
-                        (array-dimension (tile-attributes tileset) 0))))
-          return (values id
-                         (coerce (loop for b below 6
-                                       collect (aref (tile-attributes tileset)
-                                                     id b))
-                                 'vector)
-                         (position tileset tilesets))
-        finally
-           (progn (cerror "Continue, using tile 0"
-                          "Can't find ~d ($~2,'0x) in any linked tileset:~{~& • ~s~^, nor ~}"
-                          number number tilesets)
-                  (return (values 0 #(0 0 0 0 0 0) -1)))))
+  (let ((tilesets (remove-if #'null (list tileset decal-tileset decal2-tileset))))
+    (loop for tileset in tilesets
+          for id = (- number (tileset-gid tileset))
+          when (<= (tileset-gid tileset)
+                   number
+                   (1- (+ (tileset-gid tileset)
+                          (array-dimension (tile-attributes tileset) 0))))
+            return (values id
+                           (coerce (loop for b below 6
+                                         collect (aref (tile-attributes tileset)
+                                                       id b))
+                                   'vector)
+                           (position tileset tilesets))
+          finally
+             (progn (cerror "Continue, using tile $7f"
+                            "Can't find tile with ID ~d ($~2,'0x) ~:[~2*~;at (~d, ~d) on layer “~a”~] in linked tileset~p:~{
+ • ~s~^, nor ~}"
+                            number number
+                            (or x y layer) x y layer
+                            number tilesets)
+                    (return (values #x7f #(0 0 0 0 0 0) -1))))))
 
 (defun assign-attributes (attr attr-table)
   "Assign attibutes ATTR into ATTR-TABLE, reusing existing entry if possible"
@@ -232,9 +237,8 @@
                    n))
             (type (or (assocdr "type" (second object) nil) "rug"))
             (decal-props (logior-numbers (decal-properties->binary object))))
-        (multiple-value-bind (id attrs tileset) (find-tile-by-number gid
-                                                                     base-tileset
-                                                                     decal-tileset)
+        (multiple-value-bind (id attrs tileset) (find-tile-by-number gid base-tileset
+                                                                     :decal-tileset decal-tileset)
           (declare (ignore attrs))
           (let ((tile-default-palette (aref (tileset-palettes
                                              (elt (list base-tileset
@@ -302,14 +306,18 @@
                (tile-number (if detailp
                                 (aref detail x y)
                                 (aref ground x y))))
-          (assert (<= 0 tile-number 1023) (tile-number)
-                  "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer."
-                  tile-number tile-number x y detailp)
+          (unless (<= 0 tile-number 127)
+            (cerror "Continue, using tile $7f"
+                    "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer."
+                    tile-number tile-number x y detailp)
+            (setf tile-number #x7f))
           (multiple-value-bind (tile-id tile-attributes)
-              (find-tile-by-number tile-number base-tileset)
+              (find-tile-by-number tile-number base-tileset
+                                   :x x :y y :layer (if detailp "detail" "ground"))
             (when detailp
               (multiple-value-bind (alt-tile-id alt-tile-attributes)
-                  (find-tile-by-number (aref ground x y) base-tileset)
+                  (find-tile-by-number (aref ground x y) base-tileset
+                                       :x x :y y :layer "detail")
                 (setf (aref tile-attributes 5) alt-tile-id)
                 (add-alt-tile-attributes tile-attributes alt-tile-attributes)))
             (find-effective-attributes base-tileset x y objects
