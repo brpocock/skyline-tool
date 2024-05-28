@@ -1169,7 +1169,7 @@ range is 0 - #xffffffff (4,294,967,295)"
                              (xml-matches "tileset" xml)))
            (layers (xml-matches "layer" xml))
            (object-groups (xml-matches "objectgroup" xml))
-           (animations-list (parse-tile-animation-sets tilesets)))
+           (animations-list #+ () (parse-tile-animation-sets tilesets)))
       (assert (<= 1 (length layers) 2) ()
               "This tool requires 1-2 tile layers, found ~:d tile map layer~:p in ~a"
               (length layers) pathname)
