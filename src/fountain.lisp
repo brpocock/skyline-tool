@@ -2372,12 +2372,13 @@ but now also ~s."
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
-~10t.GetProp Course
+~10t.GetProp ActorCourse
 ~10tsta ScriptWaitCourse
-~10t.GetProp Course + 1
+~10t.GetProp ActorCourse + 1
 ~10tsta ScriptWaitCourse + 1
-~10tldy # CourseFinishedP
 ~a:
+~10tjsr Lib.ScriptYield
+~10tldy # CourseFinishedP
 ~10tlda (ScriptWaitCourse), y
 ~10tbpl ~:*~a
 
