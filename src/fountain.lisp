@@ -1528,7 +1528,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                           "\\1\\2")
                          "….")
                         " "))))
-    (let ((no~ (remove #\~ prepared)))
+    (let ((no~ (remove #\¶ (remove #\~ prepared))))
       (assert (string-equal no~
                             (ignore-errors (minifont->unicode
                                             (unicode->minifont no~))))
@@ -2355,14 +2355,35 @@ but now also ~s."
                                "Actor ~:(~a) was not in scene when requested to walk relative to their current position"
                                name)
                        (return))))
-          (format t "~%~10tlda # CharacterID_~a"
-                  (cl-change-case:pascal-case (string name)))
-          (format t "~%~10tjsr Lib.FindCharacter~%")
-          (format t "~%~10t.mva DestX, #~d" x)
-          (format t "~%~10t.mva DestY, #~d" y)
-          (ecase abs/rel
-            (:absolute (format t "~%~10tjsr Lib.DoWalk~%"))
-            (:relative (format t "~%~10tjsr Lib.DoWalkRelative~%")))))))
+          (format t "
+~10tlda # CharacterID_~a
+~10tjsr Lib.FindCharacter
+
+~10t.mva DestX, #~d
+~10t.mva DestY, #~d
+
+~10tjsr Lib.DoWalk~@[Relative~]
+"
+                  (cl-change-case:pascal-case (string name))
+                  x y (ecase abs/rel
+                        (:absolute nil)
+                        (:relative t)))
+          (format t "
+~10tlda # CharacterID_~a
+~10tjsr Lib.FindCharacter
+
+~10t.GetProp Course
+~10tsta ScriptWaitCourse
+~10t.GetProp Course + 1
+~10tsta ScriptWaitCourse + 1
+~10tldy # CourseFinishedP
+~a:
+~10tlda (ScriptWaitCourse), y
+~10tbpl ~:*~a
+
+"
+                  (cl-change-case:pascal-case (string name))
+                  (genlabel "WaitToArrive"))))))
 
 (defstage look (who how)
   (loop for i from 0
