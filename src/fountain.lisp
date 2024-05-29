@@ -2369,18 +2369,12 @@ but now also ~s."
                         (:absolute nil)
                         (:relative t)))
           (format t "
+~a:
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
-~10t.GetProp ActorCourse
-~10tsta ScriptWaitCourse
 ~10t.GetProp ActorCourse + 1
-~10tsta ScriptWaitCourse + 1
-~a:
-~10tjsr Lib.ScriptYield
-~10tldy # CourseFinishedP
-~10tlda (ScriptWaitCourse), y
-~10tbpl ~:*~a
+~10tbne ~:*~a
 
 "
                   (cl-change-case:pascal-case (string name))

@@ -261,7 +261,7 @@
                   (string (parse-integer offset :radix 16)))))
     (multiple-value-bind (class-name other-object)
         (decode-object (subseq dump offset) offset)
-      (when (plusp other-object)
+      (when (and other-object (> other-object #x100))
         (decode-object-at dump other-object))
       class-name)))
 
