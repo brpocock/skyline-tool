@@ -2374,11 +2374,11 @@ but now also ~s."
 ~10tjsr Lib.FindCharacter
 
 ~10t.GetProp ActorCourse + 1
-~10tbne ~:*~a
+~10tbne ~0@*~a
 
 "
-                  (cl-change-case:pascal-case (string name))
-                  (genlabel "WaitToArrive"))))))
+                  (genlabel "WaitToArrive")
+                  (cl-change-case:pascal-case (string name)))))))
 
 (defstage look (who how)
   (loop for i from 0
