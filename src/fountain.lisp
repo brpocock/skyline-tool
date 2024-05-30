@@ -53,14 +53,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
       (error "Cross-quarter direction cannot be found from ~s ~s"
              nor/sou eas/wes)))
 
-  (defun stage/when (when conditional comma clauses stop)
+  (defun stage/when (_when conditional _comma clauses _stop)
     "Stage direction: when CONDITIONAL is true, perform CLAUSES"
-    (declare (ignore when comma stop))
-    (list 'if conditional clauses))
-
-  (defun stage/if-as-when (if conditional comma clauses stop)
-    "Stage direction: a WHEN masquerading as a one-branch IF"
-    (declare (ignore if comma stop))
+    (declare (ignore _when _comma _stop))
     (list 'if conditional clauses))
 
   (defun stage/if-otherwise (if conditional comma clauses sem
@@ -74,14 +69,14 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (declare (ignore unless comma stop))
     (list 'if conditional nil clauses))
 
-  (defun stage/repeat (repeat numeric times comma clauses)
+  (defun stage/repeat (_repeat numeric _times _colon clauses)
     "Stage direction: Repeat CLAUSES NUMERIC times"
-    (declare (ignore repeat times comma))
+    (declare (ignore _repeat _times _colon))
     (list 'repeat numeric clauses))
 
-  (defun stage/jump-to-file (continued in file in_ folder)
+  (defun stage/jump-to-file (_continued _in file _in_ folder)
     "Stage direction: script is continued in another file/asset"
-    (declare (ignore continued in in_))
+    (declare (ignore _continued _in _in_))
     ;; XXX could use symbolic script IDs here for legibility of generated code
     (list 'jump (find-script-id (concatenate 'string folder "/" file))))
 
@@ -669,28 +664,28 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ |:|
               a aboard above absolute all amulet and appears arrow arrows armor at awakens
-              base beat beats below black blue boards boolean boots
-              both bow brown buckler by
-              can captain caspar catamaran ceiling chalice clear close continued crown crowns cut
-              dances dancing difference disembarks divided do dolly done down durbat
+              base beat beats becomes below black blue boards boolean boots
+              both bow bright brightly brown buckler by
+              can captain caspar catamaran ceiling chalice clear close continued crown crowns cut cyan cyan-lit
+              dances dancing dark difference dim disembarks divided do dolly done down durbat
               e earl east either elderembarks enter enters equal exclusive exit exits
-              faces fade floor for frame from
+              faces fade find floor for frame from
               gains gets glass go goes grand grappling-hook gray greater green
-              hair hammer has head headed hear
+              hair hammer has head headed hear here
               if imaginary in include inclusive is it
               knife
-              launch left less like logand logarithm logical
+              launch left less like lit logand logarithm logical
               logior logxor looks loses
               magic mask minus moves
-              natural nefertem negative none nor north not
-              of on or orange
+              natural nefertem negative none nor normal-lit normally north not
+              of on open or orange
               part peach pi pirate pitch player player-armor-color
               player-hair-color player-skin-color playing plus
               potion positive power princess product  purple
-              quotient
-              raining raise raised real red repeat right ring robe root round rowboat
-              second seconds set shadow shield shift ship silver sleeps sleep
-              skin sloop staff south sum sword
+              quickly quotient
+              raining raise raised ready real red red-lit repeat right ring robe root round rowboat
+              second seconds see set shadow shield shift ship silver sleeps sleep
+              skin sloop slowly staff south sum sword
               square starts stops
               than the then times to torch tranh truck tunic
               ulluk under unless up upon
@@ -707,24 +702,35 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (:start-symbol directions)
   (:terminals #.(concatenate 'list +stage-direction-words+
                              '(number quoted actor variable)))
-  (:precedence ((:right -) (:left + -) (:left * /)))
-  (directions statement
-              (directions statement))
+  (:precedence ((:right -) (:left + -) (:left * /)
+                (:left directions)
+                (:left statement)
+                (:left preparation-paragraph)))
+  (directions (statement #'identity)
+              (directions statement #'list)
+              (preparation-paragraph directions #'list))
   
   (statement call-expr
              (when conditional |,| clauses |.|
                    #'stage/when)
              (if conditional |,| clauses |.|
-                 #'stage/if-as-when)
+                 #'stage/when)
              (if conditional |,| clauses |;| otherwise |,| clauses |.|
                  #'stage/if-otherwise)
              (unless conditional |,| clauses |.|
                      #'stage/unless)
-             (clauses |.| (lambda (clauses stop)
-                            (declare (ignore stop))
+             (clauses |.| (lambda (clauses _stop)
+                            (declare (ignore _stop))
                             clauses))
-             (repeat numeric times |,| clauses
+             (repeat numeric times |:| clauses
                #'stage/repeat))
+  
+  (preparation-paragragh
+   (get-ready-expression directions ready-expression
+                         (lambda (_prep directions _ready)
+                           (declare (ignore _prep _ready))
+                           (list 'prepare directions))))
+  
   (clauses clause
            sem-clauses
            do/done-block)
@@ -741,47 +747,105 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
           walk-clause
           facing-clause
           audio-clause
-          appearance-clause
           assignment-clause
           go-to-clause
           truck/dolly
           ship-clause
           weather-clause
+          lighting-clause
           (cut to include actor/location)
           (cut to center on actor/location)
           (at numeric / second |,| truck/dolly)
           jump-to-other-file-clause)
   
-  (weather-clause (it is clear (lambda (&rest _)
-                                 (list 'weather nil)))
-                  (it is raining (lambda (&rest _)
-                                   (list 'weather 'raining))))
+  (get-ready-expression (open on |:|)
+                        (we open on |:|)
+                        (we see |:|)
+                        (we find |:|))
   
-  (dance-clause (actor starts dancing (lambda (&rest _)
+  (ready-expression ready |.|)
+  
+  (around-here here
+               out
+               (around here))
+  
+  (weather-condition raining)
+  
+  (weather-clause (it is clear (lambda (&rest _)
+                                 (declare (ignore _))
+                                 (list 'weather nil)))
+                  (it is weather-condition (lambda (_it _is weather)
+                                             (declare (ignore _it _is))
+                                             (list 'weather weather)))
+                  (it is clear around-here (lambda (&rest _)
+                                             (declare (ignore _))
+                                             (list 'weather nil)))
+                  (it is weather-condition around-here (lambda (_it _is weather _here)
+                                                         (declare (ignore _it _is _here))
+                                                         (list 'weather weather))))
+  (lighting-word (dim (constantly 'dark))
+                 (night (constantly 'dark))
+                 dark
+                 bright
+                 red-lit
+                 cyan-lit
+                 normal-lit
+                 (normally lit (constantly 'normal-lit))
+                 (brightly lit (constantly 'bright))
+                 (dimly lit (constantly 'dark)))
+  (speed-adverb slowly quickly)
+  (lighting-clause (it is lighting-word
+                       (lambda (_it _is lighting)
+                         (declare (ignore _it _is))
+                         (list 'lighting lighting)))
+                   (it is lighting-word around-here
+                       (lambda (_it _is lighting &rest _)
+                         (declare (ignore _it _is _))
+                         (list 'lighting lighting)))
+                   (it becomes lighting-word
+                       (lambda (_it _becomes lighting &rest _)
+                         (declare (ignore _it _becomes _))
+                         (list 'lighting-change lighting 'normal)))
+                   (it becomes lighting-word around-here
+                       (lambda (_it _becomes lighting &rest _)
+                         (declare (ignore _it _becomes _))
+                         (list 'lighting-change lighting 'normal)))
+                   (it speed-adverb becomes lighting-word
+                       (lambda (_it speed _becomes lighting &rest _)
+                         (declare (ignore _it _becomes _))
+                         (list 'lighting-change lighting speed)))
+                   (it speed-adverb becomes lighting-word around-here
+                       (lambda (_it speed _becomes lighting &rest _)
+                         (declare (ignore _it _becomes _))
+                         (list 'lighting-change lighting speed))))
+  
+  (dance-clause (actor starts dancing (lambda (actor &rest _)
                                         (declare (ignore _))
                                         (list 'dance actor)))
-                (actor stops dancing (lambda (&rest _)
+                (actor stops dancing (lambda (actor &rest _)
                                        (declare (ignore _))
                                        (list 'wake actor)))
-                (actor dances (lambda (&rest _)
+                (actor dances (lambda (actor &rest _)
                                 (declare (ignore _))
                                 (list 'dance actor))))
-  (wake/sleep-clause (actor sleeps (lambda (&rest _)
+  
+  (wake/sleep-clause (actor sleeps (lambda (actor &rest _)
                                      (declare (ignore _))
                                      (list 'sleep actor)))
-                     (actor wakes up (lambda (&rest _)
+                     (actor wakes up (lambda (actor &rest _)
                                        (declare (ignore _))
                                        (list 'wake actor)))
-                     (actor awakens (lambda (&rest _)
+                     (actor awakens (lambda (actor &rest _)
                                       (declare (ignore _))
                                       (list 'wake actor))))
-  
-  (fade-clause (fade from black (lambda (&rest _)
-                                  (declare (ignore _))
-                                  (list 'fade-in 'black)))
-               (fade from white (lambda (&rest _)
-                                  (declare (ignore _))
-                                  (list 'fade-in 'white))))
+
+  (fade-color black white red cyan)
+  (fade-clause (fade from fade-color (lambda (_fade _from color)
+                                       (declare (ignore _fade _from))
+                                       (list 'fade-in color)))
+               (fade to fade-color (lambda (_fade _to color)
+                                     (declare (ignore _fade _to))
+                                     (list 'fade-out color))))
   
   (to/for to for)
   
@@ -1038,12 +1102,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                           #'stage/relative-ud-lr)
                  (numeric left/right and numeric up/down
                           #'stage/relative-lr-ud))
-  (appearance-clause (actor* speaks with pitch numeric |,| speed numeric
-                             #'stage/speech-params)
-                     (actor* looks like special-actor
-                             #'stage/special-appearance)
-                     (actor* has npc-description
-                             #'stage/looks-like))
   (actor* actor special-actor)
   (special-actor (the princess (constantly 'aisling))
                  (aisling (constantly 'aisling))
@@ -1065,24 +1123,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                  (player (constantly 'player))
 
                  (shadow player (constantly 'shadow-player)))
-  (npc-description (npc-descriptor)
-                   (npc-descriptor and npc-descriptor
-                                   #'stage/npc-desc-2)
-                   (npc-descriptor |,| npc-descriptor |,| and npc-descriptor
-                                   #'stage/npc-desc-3)
-                   (npc-descriptor |,| npc-descriptor |,| npc-descriptor |,|
-                                   and npc-descriptor
-                                   #'stage/npc-desc-4))
-  (npc-descriptor (color hair
-                         #'stage/color-hair)
-                  (color skin
-                         #'stage/color-skin)
-                  (a color tunic
-                     #'stage/color-tunic)
-                  (a color robe
-                     #'stage/color-robe)
-                  (head number
-                        #'stage/head-num))
+  
   (color clear peach purple green silver orange brown white gray black yellow red blue)
   (location (quoted (lambda (place)
                       (list 'place place 0 'north 0 'east)))
@@ -2031,6 +2072,15 @@ but now also ~s."
     (x15 15)
     ((nil) nil)))
 
+(defstage lighting-change (target &optional (speed 'normal))
+  (format t "
+~10tlda # Lighting~a
+~10tsta FadingTarget
+~10tlda # 0
+~10tsta FadingLastFrame
+~10t;; TODO fade speed ~s"
+          target speed))
+
 (defstage sleep (actor)
   (destructuring-bind (name &key kind found-in-scene-p &allow-other-keys)
       (require-actor actor)
@@ -2120,14 +2170,15 @@ but now also ~s."
               ok-label done-label
               ok-label done-label))))
 
-(defstage fade-in (from-color)
-  (format t "~2&~10tlda # ~a~%~10tldx #1~32t; fade in~%~10tjsr Lib.FadeBrightness"
-          (cond
-            ((string= "WHITE" from-color) "$f ; White")
-            ((string= "BLACK" from-color) "0 ; Black")
-            (t (cerror "Continue, with a fade from black"
-                       "Fade from black or white only, not ~a" from-color)
-               "0 ; Black (substituted for ~a)" from-color))))
+(defstage fade-in (from-color &optional (speed normal))
+  (format t "~%;;; TODO: speed ~s" speed)
+  (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
+          from-color))
+
+(defstage fade-out (to-color &optional (speed normal))
+  (format t "~%;;; TODO: speed ~s" speed)
+  (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
+          to-color))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
@@ -2289,6 +2340,7 @@ but now also ~s."
 (defvar *boat-classes* nil)
 
 (defstage boat (ship-name east/west target actors)
+  (declare (ignore actors)) ; TODO
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*))
@@ -2665,9 +2717,7 @@ but now also ~s."
 (defun find-or-load-actor (actor)
   (if-let (record (find-actor actor))
     (list record t)
-    (if-let (record (load-actor actor))
-      (list (cons actor record) nil)
-      (error "Unable to find or load actor ~:(~a~)" actor))))
+    (list (cons actor (load-actor actor)) nil)))
 
 (defun require-actor (actor)
   (tagbody top
@@ -3175,8 +3225,8 @@ Character_~0@*~a:
                         (id (logior dir-hash scene-number)))
                    (check-type scene-number (integer 0 #x7ff)
                                "a scene number integer between 0 and 2,047")
-                   (format *trace-output* "~&//* Script “~a” is scene ~:d; id $~4,'0x"
-                           title scene-number id)
+                   (format *trace-output* "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                           dir title scene-number dir-hash id)
                    (return-from find-script-id id))))
       (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
         #+ () (warn "Script file “~a” is missing a Scene number line. ~
