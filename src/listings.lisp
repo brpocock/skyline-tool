@@ -61,7 +61,7 @@ wp 30,1,w,1,{printf \"DPPL write ($%02x)\", wpdata; go}
 bp ~4,'0x,1,{snap \"brk.snap.png\"; save \"brk.core\",0,10000; printf \"BRK handler invoked at $%02x:%04x\", b@(4661),  -2+w@(2+sp)}
 bp ~4,'0x,1,{snap \"fault.snap.png\"; save \"fault.core\",0,10000; printf \"Minor Fault invoked at $%02x:%04x\", b@(4661),  -2+w@(1+sp)}
 rp {pc<8000},{printf \"Program counter underflow\"}
-printf \"\\n\\n\\n\\n\\n\\nReady.\"
+printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
                 (or break 0)
                 (or minor-fault 0))))))
