@@ -1393,7 +1393,7 @@ range is 0 - #xffffffff (4,294,967,295)"
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
       (let ((s* (* s 3/4))
-            (v* (+ v (* 1/2 (- 1 v)))))
+            (v* (+ v (* 1/2 (- 255 v)))))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
 
