@@ -2370,6 +2370,8 @@ but now also ~s."
                         (:relative t)))
           (format t "
 ~a:
+~10tjsr Lib.ScriptYield
+
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
