@@ -1384,7 +1384,7 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun darken-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((s* (* s 2/3))
+      (let ((s* (* s 3/4))
             (v* (* v 1/2) ))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
@@ -1392,28 +1392,28 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun lighten-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((s* (* s 2/3))
-            (v* (+ v (/ (- 1.0d0 v) 2))))
+      (let ((s* (* s 3/4))
+            (v* (+ v (* 1/2 (- 1 v)))))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h s* v*))))))))
 
 (defun redden-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((h* (if (> h 180)
+      (let ((h* (if (> 180 h)
                     (+ h (/ (- 1.0d0 h) 2.0d0))
                     (/ h 2.0d0)))
-            (s* (+ s (/ (- 1.0d0 s) 2.0d0))))
+            (s* (+ s (* 1/2 (- 1 s)))))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
 
 (defun cyanate-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
     (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((h* (if (> h 180)
+      (let ((h* (if (> 180 h)
                     (+ 180.0d0 (/ (- h 180.0d0) 2.0d0))
                     (* h 3/2)))
-            (s* (+ s (/ (- 1.0d0 s) 2.0d0))))
+            (s* (+ s (* 1/2 (- 1 s)))))
         (apply #'rgb->palette (mapcar #'ensure-byte
                                       (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
 

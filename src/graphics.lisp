@@ -1745,7 +1745,8 @@ pixels; PALETTE is the palette to which to hold the image."
 (defun print-wide-pixel (color stream &key shortp unit)
   (cond
     #+mcclim
-    ((typep stream 'clim:application-pane)
+    ((member (package-name (symbol-package (class-name (class-of stream))))
+             '(clim clim-listener) :test #'string-equal)
      (print-clim-pixel color stream :shortp shortp :unit unit))
     ((tty-xterm-p)
      (print-ansi-pixel color stream))
