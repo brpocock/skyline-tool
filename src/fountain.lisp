@@ -1,7 +1,7 @@
 (in-package :skyline-tool)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-
+  
   (declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))
 
   (defun all-cdrs (expr)
@@ -2170,12 +2170,12 @@ but now also ~s."
               ok-label done-label
               ok-label done-label))))
 
-(defstage fade-in (from-color &optional (speed normal))
+(defstage fade-in (from-color &optional (speed 'normal))
   (format t "~%;;; TODO: speed ~s" speed)
   (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
           from-color))
 
-(defstage fade-out (to-color &optional (speed normal))
+(defstage fade-out (to-color &optional (speed 'normal))
   (format t "~%;;; TODO: speed ~s" speed)
   (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
           to-color))
