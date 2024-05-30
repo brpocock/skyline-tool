@@ -2079,7 +2079,14 @@ but now also ~s."
 ~10tlda # 0
 ~10tsta FadingLastFrame
 ~10t;; TODO fade speed ~s"
-          target speed))
+          (cl-change-case:pascal-case (string target)) speed))
+
+(defstage lighting (target)
+  (format t "
+~10tlda # Lighting~a
+~10tsta LightingKind
+"
+          (cl-change-case:pascal-case (string target)) speed))
 
 (defstage sleep (actor)
   (destructuring-bind (name &key kind found-in-scene-p &allow-other-keys)
