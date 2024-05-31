@@ -1399,23 +1399,17 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (defun redden-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
-    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((h* (if (> 180 h)
-                    (+ h (/ (- 1.0d0 h) 2.0d0))
-                    (/ h 2.0d0)))
-            (s* (+ s (* 1/2 (- 1 s)))))
-        (apply #'rgb->palette (mapcar #'ensure-byte
-                                      (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
+    (let ((r* (min #xff (* r 4/3)))
+          (g* (min #xff (* g 2/3)))
+          (b* (min #xff (* b 2/3))))
+      (apply #'rgb->palette (mapcar #'ensure-byte (list r* g* b*))))))
 
 (defun cyanate-color-in-palette (color)
   (destructuring-bind (r g b) (palette->rgb color)
-    (destructuring-bind (h s v) (multiple-value-list (dufy:rgb-to-hsv r g b))
-      (let ((h* (if (> 180 h)
-                    (+ 180.0d0 (/ (- h 180.0d0) 2.0d0))
-                    (* h 3/2)))
-            (s* (+ s (* 1/2 (- 1 s)))))
-        (apply #'rgb->palette (mapcar #'ensure-byte
-                                      (multiple-value-list (dufy:hsv-to-rgb h* s* v))))))))
+    (let ((r* (min #xff (* r 2/3)))
+          (g* (min #xff (* g 4/3)))
+          (b* (min #xff (* b 2/3))))
+      (apply #'rgb->palette (mapcar #'ensure-byte (list r* g* b*))))))
 
 (defun adjust-palettes (adjust-color-function palettes)
   (let ((adjusted-palettes (make-array (list 8 4) :element-type '(unsigned-byte 8))))
