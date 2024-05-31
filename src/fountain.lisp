@@ -2178,14 +2178,30 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
-  (format t "~%;;; TODO: speed ~s" speed)
-  (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
-          from-color))
+  (format t "
+~10tlda # FadeSpeed~:(~a~)
+~10tsta FadingSpeed
+~10tlda # LightingNormal
+~10tsta FadingTarget
+~10tlda # FadeActualColor~:(~a~)
+~10tldy # NumColors
+~a:
+~10tsta MapBackground, y
+~10tdey
+~10tbpl ~:*~a
+"
+          (cl-change-case:pascal-case (string speed))
+          (cl-change-case:pascal-case (string from-color))
+          (genlabel "FadeInSetPalettes")))
 
 (defstage fade-out (to-color &optional (speed 'normal))
-  (format t "~%;;; TODO: speed ~s" speed)
-  (format t "~2&~10tlda # FadeColor~:(~a~)~%~10tldx #FadeIn~%~10tjsr Lib.FadeBrightness"
-          to-color))
+  (format t "
+~10tlda # FadeSpeed~:(~a~)
+~10tsta FadingSpeed
+~10tlda # FadeColor~:(~a~)
+~10tsta FadingTarget"
+          (cl-change-case:pascal-case (string speed))
+          (cl-change-case:pascal-case (string to-color))))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
