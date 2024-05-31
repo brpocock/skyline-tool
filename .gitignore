@@ -50,3 +50,4 @@ Tools/*.gpl
 # Core dumps automatically triggered by faults
 brk.core
 fault.core
+lib/system-index.txt
