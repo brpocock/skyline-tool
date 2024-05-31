@@ -708,7 +708,10 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                 (:left preparation-paragraph)))
   (directions (statement #'identity)
               (directions statement #'list)
-              (preparation-paragraph directions #'list))
+              (get-ready-expression directions ready-expression
+                                    (lambda (_prep directions _ready)
+                                      (declare (ignore _prep _ready))
+                                      (list 'prepare directions))))
   
   (statement call-expr
              (when conditional |,| clauses |.|
@@ -724,12 +727,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                             clauses))
              (repeat numeric times |:| clauses
                #'stage/repeat))
-  
-  (preparation-paragragh
-   (get-ready-expression directions ready-expression
-                         (lambda (_prep directions _ready)
-                           (declare (ignore _prep _ready))
-                           (list 'prepare directions))))
   
   (clauses clause
            sem-clauses
@@ -1312,6 +1309,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
       ((nil)
        (cond
          ((null line)
+          #| Compiler says this line is unreachable, but I'm being silly and leaving it in for now. |#
           (return (list 'end nil)))
          ((emptyp (string-trim #(#\Space #\Tab) line))
           nil)
