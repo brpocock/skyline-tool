@@ -175,6 +175,11 @@ Checking for Quicklisp first…")
           ("texinfo-tex"))
         do (install-os-package package :libp libp :develp develp)))
 
+(format t "~&Adding Ultralisp repo…")
+
+(funcall (intern "INSTALL-DIST" (find-package :ql-dist))
+         "http://dist.ultralisp.org" :prompt nil)
+
 (format t "~&Precompiling fastloads of Lisp libraries…")
 
 (load (merge-pathnames (make-pathname :name "setup" :type "lisp"
@@ -183,7 +188,7 @@ Checking for Quicklisp first…")
 (format t "~& … and some optional debugging libs …")
 (ignore-errors
  (map nil (intern "QUICKLOAD" (find-package :quicklisp))
-      '(:prepl ;:clim-clx :mcclim :clouseau :climacs
+      '(:prepl :clim-clx :mcclim :clouseau :climacs
         :quicklisp-slime-helper :prepl)))
 
 (format t "~& Compiling Buildapp…")
