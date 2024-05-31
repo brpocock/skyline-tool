@@ -34,6 +34,7 @@
                :replic
                :split-sequence
                :swank
+               :trivial-backtrace
                :trivial-gray-streams
                :xmls
                :yacc

@@ -677,7 +677,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               launch left less like lit logand logarithm logical
               logior logxor looks loses
               magic mask minus moves
-              natural nefertem negative none nor normal-lit normally north not
+              natural nefertem negative night none nor normal-lit normally north not
               of on open or orange
               part peach pi pirate pitch player player-armor-color
               player-hair-color player-skin-color playing plus
@@ -3007,15 +3007,12 @@ Script_~a_~a: .block
                        (or value "(End of file.)"))
                (return))
               (fade-to
-               (format t "~2&~10tlda # ~a~%~10tldx #-1~32t; fade out"
-                       (cond
-                         ((string= "WHITE" value) "$f")
-                         ((string= "BLACK" value) "0")
-                         (t (cerror
-                             "Continue, treat as a fade to black"
-                             "Fade to black or white only, not ~s" value)
-                            "0")))
-               (format t "~%~10tjsr Lib.FadeBrightness~%"))
+               (format t "
+~10tlda # FadeSpeedNormal
+~10tsta FadingSpeed
+~10tlda # FadeColor~:(~a~)
+~10tsta FadingTarget"
+                       (cl-change-case:pascal-case (string value))))
               (branch
                (print-end-of-script-label 0)
                (destructuring-bind (option . text) value
