@@ -2,3 +2,6 @@
 	path = zx7mini
 	url = git@github.com:antoniovillena/zx7mini
 	branch = master
+[submodule "zpb-ttf"]
+	path = lib/zpb-ttf
+	url = git@github.com:xach/zpb-ttf.git
