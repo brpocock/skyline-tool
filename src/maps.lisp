@@ -1408,7 +1408,7 @@ range is 0 - #xffffffff (4,294,967,295)"
   (destructuring-bind (r g b) (palette->rgb color)
     (let ((r* (min #xff (* r 2/3)))
           (g* (min #xff (* g 4/3)))
-          (b* (min #xff (* b 2/3))))
+          (b* (min #xff (* b 4/3))))
       (apply #'rgb->palette (mapcar #'ensure-byte (list r* g* b*))))))
 
 (defun adjust-palettes (adjust-color-function palettes)
