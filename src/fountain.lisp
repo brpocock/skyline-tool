@@ -2078,15 +2078,18 @@ but now also ~s."
 ~10tsta FadingTarget
 ~10tlda # 0
 ~10tsta FadingLastFrame
-~10t;; TODO fade speed ~s"
-          (cl-change-case:pascal-case (string target)) speed))
+~10tlda # FadeSpeed~a
+~10tsta FadingSpeed
+"
+          (cl-change-case:pascal-case (string target))
+          (cl-change-case:pascal-case (string speed))))
 
 (defstage lighting (target)
   (format t "
 ~10tlda # Lighting~a
 ~10tsta LightingKind
 "
-          (cl-change-case:pascal-case (string target)) speed))
+          (cl-change-case:pascal-case (string target))))
 
 (defstage sleep (actor)
   (destructuring-bind (name &key kind found-in-scene-p &allow-other-keys)
@@ -2965,17 +2968,21 @@ Script_~a_~a: .block
               (speaker
                (destructuring-bind (actor-name &key found-in-scene-p &allow-other-keys)
                    (require-actor value)
-                 (unless found-in-scene-p
-                   (cerror "Continue, with them speaking from off-camera"
-                           "Actor ~:(~a~) was asked to speak, but they are not in the scene" actor-name)
-                   (write-off-camera-speaker actor-name))
-                 (format t "
+                 
+                 (cond
+                   ((string-equal actor-name 'narrator)
+                    (write-off-camera-speaker actor-name))
+                   (found-in-scene-p
+                    (format t "
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 ~10tstx DialogueSpeakerDecal
 ~10tlda DecalXH, x
 ~10tsta DialogueSpeakerX"
-                         (cl-change-case:pascal-case (string actor-name)))))
+                            (cl-change-case:pascal-case (string actor-name))))
+                   (t (cerror "Continue, with them speaking from off-camera"
+                              "Actor ~:(~a~) was asked to speak, but they are not in the scene" actor-name)
+                      (write-off-camera-speaker actor-name)))))
               (speech (fountain/write-speech value))
               (reboot
                (print-end-of-script-label)
