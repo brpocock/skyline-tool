@@ -82,7 +82,7 @@
 
 (define-launcher-frame-command (com-run-nullary-function :menu nil :name t)
     ((function-name 'nullary-function-name :gesture :select))
-  (make-thread (lambda () (funcall function-name))
+  (clim-sys:make-process (lambda () (funcall function-name))
                :name (cl-change-case:title-case (string function-name))))
 
 (defun check-for-absent-assets-in-project-folder ()
@@ -193,8 +193,9 @@ The signal code was ~a" break-code)
 
 (defun run-launcher ()
   "Open the Skyline Tool launcher (main menu) in its own thread"
-  (make-thread (lambda () (launcher))
-               :name "Skyline Tool launcher"))
+  (let ((*trace-output* (make-synonym-stream '*trace-output*)))
+    (clim-sys:make-process (lambda () (launcher))
+                 :name "Skyline Tool GUI Launcher")))
 
 (defun cl-user::skyline-tool ()
   "Open the Skyline Tool launcher (main menu)"

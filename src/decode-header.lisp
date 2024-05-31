@@ -137,7 +137,7 @@
 
 (defun show-dll-from-dump (&optional (dump-file #p"/tmp/dump")
                                      (start-address (detect-active-dll dump-file)))
-  (make-thread (lambda ()
+  (clim-sys:make-process (lambda ()
                  (clim-simple-interactor:run-in-simple-interactor
                   (lambda () (decode-dll-from-dump dump-file start-address))
                   :process-name "Decode DLL from Dump"

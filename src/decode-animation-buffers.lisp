@@ -58,7 +58,7 @@
 
 (define-anim-buffer-frame-command (com-find-decal :menu t :name t)
     ((decal 'decal-index-value))
-  (make-thread (lambda () (show-decal decal))
+  (clim-sys:make-process (lambda () (show-decal decal))
                :name "Show decal"))
 
 (clim:define-presentation-type palette-color () :inherit-from 'integer)

@@ -54,7 +54,7 @@
 
 (define-show-decal-frame-command (com-open-ext-file :name t :menu t)
     ((pathname 'ext-file-link))
-  (make-thread (lambda () (uiop:run-program (list "xdg-open" (enough-namestring pathname))))
+  (clim-sys:make-process (lambda () (uiop:run-program (list "xdg-open" (enough-namestring pathname))))
                :name (format nil "Edit spreadsheet ~a" (enough-namestring pathname))))
 
 (clim:define-presentation-to-command-translator click-for-ext-file

@@ -51,7 +51,7 @@
                                       "Don't")))))
 
 (defun run-script-in-playtest (script-full-name)
-  (make-thread (lambda ()
+  (clim-sys:make-process (lambda ()
                  (uiop:run-program
                   (list "gnome-terminal"
                         "--window"
@@ -75,7 +75,7 @@
 (define-run-script-frame-command (com-edit-script :menu t :name t) ((script-full-name 'script-name))
   (if swank::*emacs-connection*
       (swank:ed-in-emacs (format nil "Source/~a.fountain" script-full-name))
-      (make-thread (lambda ()
+      (clim-sys:make-process (lambda ()
                      (uiop:run-program
                       (list "emacsclient" "-n"
                             (format nil "Source/~a.fountain" script-full-name))))
@@ -119,7 +119,7 @@
         (let ((*run-script-frame* frame))
           (setf (clim:frame-pretty-name frame)
                 (format nil "~a: Run Script" (cl-change-case:title-case *game-title*)))
-          (make-thread (lambda () (clim:run-frame-top-level frame))
+          (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
                        :name "Script Runner (launcher)")))))
 
 (defmethod clim:text-size ((stream swank/gray::slime-output-stream) size &rest _))

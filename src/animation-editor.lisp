@@ -916,7 +916,7 @@
 
 (defun edit-animation-sequence (&optional (sequence 0))
   "Select which frames go together to form an animation sequence"
-  (make-thread (lambda ()
+  (clim-sys:make-process (lambda ()
                  (load-all-animation-sequences)
                  (let ((*anim-seq-editor-frame*
                          (clim:make-application-frame 'anim-seq-editor-frame
@@ -1146,7 +1146,7 @@
 (defun assign-animation-sequence (decal-kind body action facing)
   "Select which animation sequence applies to which action(s)"
   (let ((parent *anim-seq-assigns-frame*))
-    (make-thread (lambda ()
+    (clim-sys:make-process (lambda ()
                    (let ((*anim-seq-assign-frame*
                            (clim:make-application-frame
                             'anim-seq-assign-frame
@@ -1267,7 +1267,7 @@
 
 (defun assign-animation-sequences ()
   "Select which animation sequence applies to which action(s)"
-  (make-thread (lambda ()
+  (clim-sys:make-process (lambda ()
                  (load-all-animation-sequences)
                  (let ((*anim-seq-assigns-frame*
                          (clim:make-application-frame 'anim-seq-assigns-frame)))
@@ -1384,7 +1384,7 @@
 
 (defun choose-tile-from-set (&key tileset callback artp write-mode palette)
   "Choose a tile from a set"
-  (make-thread (lambda ()
+  (clim-sys:make-process (lambda ()
                  (load-all-animation-sequences)
                  (let ((*show-tileset-frame*
                          (clim:make-application-frame 'show-tileset-frame
@@ -1556,7 +1556,7 @@
                       body)))
     (setf *choose-sequence-frame* frame
           (clim:frame-pretty-name frame) name)
-    (make-thread (lambda () (clim:run-frame-top-level frame))
+    (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
                  :name name)))
 
 (define-anim-seq-assigns-frame-command (com-save-all-animations :name t :menu t) ()

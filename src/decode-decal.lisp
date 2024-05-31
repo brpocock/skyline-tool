@@ -382,7 +382,7 @@
     (force-output stream)))
 
 (define-show-decal-frame-command (com-find-animation-buffer :menu t :name t) ((buffer 'anim-buffer-index-value))
-  (make-thread (lambda () (show-animation-buffer buffer))
+  (clim-sys:make-process (lambda () (show-animation-buffer buffer))
                :name "Show animation buffer"))
 
 (clim:define-presentation-to-command-translator click-for-animation-buffer
@@ -394,7 +394,7 @@
 
 (defun show-decal (&optional (index 0) &key (dump (load-dump-into-mem)))
   "Display (from a core dump) the details of a decal's state"
-  (make-thread
+  (clim-sys:make-process
    (lambda ()
      (let ((frame (clim:make-application-frame 'show-decal-frame
                                                :index index
