@@ -177,8 +177,9 @@ Checking for Quicklisp first…")
 
 (format t "~&Adding Ultralisp repo…")
 
-(funcall (intern "INSTALL-DIST" (find-package :ql-dist))
-         "http://dist.ultralisp.org" :prompt nil)
+(unless (funcall (intern "DIST-VERSION" (find-package :ql)) "ultralisp")
+  (funcall (intern "INSTALL-DIST" (find-package :ql-dist))
+           "http://dist.ultralisp.org" :prompt nil))
 
 (format t "~&Precompiling fastloads of Lisp libraries…")
 
