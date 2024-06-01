@@ -2994,7 +2994,7 @@ Script_~a_~a: .block
                (format t "
 ~10tldx # GameOverKind~:(~a~)
 ~10tjmp Lib.GameOver
-~10t.bend"
+"
                        value))
               (end
                (print-end-of-script-label)
