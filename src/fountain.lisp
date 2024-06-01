@@ -1352,6 +1352,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                (cerror "Continue, ignoring extra"
                                                        "END OF LINE does not expect additional ~s" rest))
                                              '(reboot))
+                             "TO TITLE " (lambda (rest)
+                                           (declare (ignore rest))
+                                           (list 'game-over "TITLE"))
                              "GAME OVER -" (lambda (rest)
                                              (list 'game-over rest)))
                   by #'cddr
@@ -2980,7 +2983,7 @@ Script_~a_~a: .block
                (return))
               (game-over
                (print-end-of-script-label)
-               (assert (member value '("LOST" "WON") :test 'string-equal)
+               (assert (member value '("TITLE" "LOST" "WON") :test 'string-equal)
                        (value)
                        "GAME OVER currently supports LOST or WON only, not ~s" value)
                (format t "
