@@ -1562,18 +1562,21 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
   (let ((prepared
           (string-trim #(#\Space #\Tab)
                        (cl-ppcre:regex-replace-all
-                        "[ \\t\\n]+"
+                        "—"
                         (cl-ppcre:regex-replace-all
-                         "(…|\\.\\.\\.+)"
+                         "[ \\t\\n]+"
                          (cl-ppcre:regex-replace-all
-                          "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                          "(…|\\.\\.\\.+)"
                           (cl-ppcre:regex-replace-all
-                           "\\'"
-                           string
-                           "’")
-                          "\\1\\2")
-                         "….")
-                        " "))))
+                           "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                           (cl-ppcre:regex-replace-all
+                            "\\'"
+                            string
+                            "’")
+                           "\\1\\2")
+                          "….")
+                         " ")
+                        "-"))))
     (let ((no~ (remove #\¶ (remove #\~ prepared))))
       (assert (string-equal no~
                             (ignore-errors (minifont->unicode
