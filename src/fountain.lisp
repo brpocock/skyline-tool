@@ -1352,7 +1352,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                (cerror "Continue, ignoring extra"
                                                        "END OF LINE does not expect additional ~s" rest))
                                              '(reboot))
-                             "TO TITLE " (lambda (rest)
+                             "RETURN TO TITLE " (lambda (rest)
                                            (declare (ignore rest))
                                            (list 'game-over "TITLE"))
                              "GAME OVER -" (lambda (rest)
