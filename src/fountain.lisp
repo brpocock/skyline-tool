@@ -2068,7 +2068,7 @@ but now also ~s."
 (defstage prepare (&rest directions)
   (format t "~%~10t.mva AllowPageFlipP, # 0~%")
   (map nil #'stage-directions->code directions)
-  (format t "~%~10t.mva AllowPageFlipP, #$80~%"))
+  (format t "~%~10tjsr Lib.SceneReady~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
   (format t "
