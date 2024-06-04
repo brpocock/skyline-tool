@@ -666,7 +666,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
-            '(|(| |)| + |,| - |.| /  × ÷ |:|
+            '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
               a aboard above absolute all amulet and appears arrow arrows armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
@@ -681,7 +681,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               launch left less like lit logand logarithm logical
               logior logxor looks loses
               magic mask minus moves moving
-              natural negative night none nor normal-lit normally north not
+              natural negative next night none nor normal-lit normally north not
               of on open or
               part pi pirate pitch player-armor-color
               player-hair-color player-skin-color playing plus
@@ -689,7 +689,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
-              skin sloop slowly staff south sum sword
+              skin sloop slowly staff south suddenly sum sword
               square starts stops
               than the then times to torch truck tunic
               under unless up upon
@@ -713,11 +713,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                   (:left statement)
                   (:left preparation-paragraph)))
     (directions (statement #'identity)
-                (directions statement #'list)
-                (get-ready-expression directions ready-expression
-                                      (lambda (_prep directions _ready)
-                                        (declare (ignore _prep _ready))
-                                        (list 'prepare directions))))
+                (directions statement #'list))
     (someone actor
              (the actor #1=(lambda (_the actor) (declare (ignore _the)) actor))
              (a actor #1#)
@@ -727,22 +723,38 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                      #'stage/when)
                (if conditional |,| clauses |.|
                    #'stage/when)
-               (if conditional |,| clauses |;| otherwise |,| clauses |.|
+               (if conditional |,| clauses skyline-tool::|;| otherwise |,| clauses |.|
                    #'stage/if-otherwise)
                (unless conditional |,| clauses |.|
                        #'stage/unless)
                (clauses |.| (lambda (clauses _stop)
                               (declare (ignore _stop))
                               clauses))
-               (repeat numeric times |:| clauses
-                 #'stage/repeat))
-
+               (repeat numeric times skyline-tool::|:| clauses
+                 #'stage/repeat)
+               preparation-paragraph)
+    (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
+                          	(lambda (_intro _ellipsis directions _closing _ellipsout)
+                                    (declare (ignore _intro _ellipsis _closing _ellipsout))
+                                  (list 'prepare directions)))
+                            (preparation-introduction statement (lambda (_intro statement)
+                                                                  (declare (ignore _intro))
+                                                                  (list 'prepare statement))))
+    (preparation-introduction (we open on) (open on) (we find) (we see))
+    (preparation-closing then suddenly next)
+    (ellipsis (|.| |.| |.|) |…| skyline-tool::|:|)
     (clauses clause
              sem-clauses
+             (clause |,| and then clause (lambda (clause1 _comma _and _then clause2)
+                                           (declare (ignore _comma _and _then))
+                                           (list 'progn clause1 clause2)))
+             (clause |,| and clause (lambda (clause1 _comma _and clause2)
+                                      (declare (ignore _comma _and))
+                                      (list 'progn clause1 clause2)))
              do/done-block)
-    (sem-clauses (clause |;| clause
+    (sem-clauses (clause skyline-tool::|;| clause
                          #'stage/semicolon-clauses)
-                 (sem-clauses |;| clause
+                 (sem-clauses skyline-tool::|;| clause
                               #'stage/semicolon-clauses))
     (clause beat-clause
             fade-clause
@@ -763,13 +775,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (cut to center on actor/location)
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
-
-    (get-ready-expression (open on |:|)
-                          (we open on |:|)
-                          (we see |:|)
-                          (we find |:|))
-
-    (ready-expression ready |.|)
 
     (around-here here
                  out
@@ -1053,7 +1058,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (conditionals (simple-conditional |,| conditionals
                                       #'stage/conditionals-list))
     (enter-clause (skyline-tool::enter someone at location
-                                       #'stage/enter))
+                                       #'stage/enter)
+                  (someone is at location (lambda (someone is at location)
+                                            (stage/enter is someone at location))))
     (ship-clause
      (the ship-name appears in the east/west headed for actor/location
           #'stage/empty-boat)
@@ -1525,7 +1532,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                                              (return (token-values word)))
                                       (setf word (concatenate 'string word (string char))))))
                              ((emptyp word)
-                              (return (list (intern (string char)) (string char))))
+                              (return (list (intern (string char) #.*package*) (string char))))
                              (t (rewind-stream)
                                 (return (token-values word)))))))
       (when parsed
@@ -1948,7 +1955,7 @@ but now also ~s."
                               ((member decal '("human" "Vizier" "Nefertem"
                                                "Earl" "Captain" "Princess" "Elder" "phantom" "sailor")
                                        :test #'string-equal)
-                               (intern (string-upcase decal)))
+                               (intern (string-upcase decal) #.*package*))
                               (t (cerror "Use generic HUMAN decal"
                                          "Decal kind “~a” not recognized (for “~:(~a~)”/“~a” in NPC stats)"
                                          decal actor name))))
@@ -2054,6 +2061,14 @@ but now also ~s."
   (or (when (null name) nil)
       (position name *common-palette* :test #'string-equal)
       (error "Not a common color name: ~a (expected one of: ~s)" name *common-palette*)))
+
+(defstage progn (&rest directions)
+  (map nil #'stage-directions->code directions))
+
+(defstage prepare (&rest directions)
+  (format t "~%~10t.mva AllowPageFlipP, # 0~%")
+  (map nil #'stage-directions->code directions)
+  (format t "~%~10t.mva AllowPageFlipP, #$80~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
   (format t "
@@ -2426,8 +2441,8 @@ but now also ~s."
                         (:absolute nil)
                         (:relative t)))
           (when waitp
-            (format t "
-~a:
+            (format t "~%~10tlda # CharacterID_~a~%~10tjsr Lib.SettleActor~%"
+            #|~a:
 ~10tjsr Lib.ScriptYield
 
 ~10tlda # CharacterID_~a
@@ -2435,9 +2450,8 @@ but now also ~s."
 
 ~10t.GetProp ActorCourse + 1
 ~10tbne ~0@*~a
-
-"
                     (genlabel "WaitToArrive")
+|#
                     (pascal-case (string name))))))))
 
 (defstage look (who how)
@@ -2556,7 +2570,7 @@ but now also ~s."
                      if (char= #\& (char (string arg) 0))
                        collect arg
                      else
-                       collect (intern (format nil "~a*" arg))))
+                       collect (intern (format nil "~a*" arg) #.*package*)))
         (argv (gensym "ARGS-")))
     `(defmethod compile-time-math ((fun (eql ',fun)) (,argv cons))
        (destructuring-bind (,@args*) ,argv
