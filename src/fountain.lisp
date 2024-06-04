@@ -2086,6 +2086,7 @@ but now also ~s."
   (format t "
 ~10tlda # Lighting~a
 ~10tsta LightingKind
+~10tjsr Lib.AnimateLighting
 "
           (pascal-case (string target))))
 
