@@ -3,6 +3,16 @@
   (:import-from :uiop
                 uiop:run-program
                 uiop:split-string)
+  (:import-from :cl-change-case
+                cl-change-case:camel-case 	cl-change-case:constant-case
+                cl-change-case:dot-case 	cl-change-case:header-case
+                cl-change-case:lower-case 	cl-change-case:lower-case-first
+                cl-change-case:no-case  	cl-change-case:param-case
+                cl-change-case:pascal-case 	cl-change-case:path-case
+                cl-change-case:sentence-case 	cl-change-case:snake-case
+                cl-change-case:string-lower-case-p 	cl-change-case:string-upper-case-p
+                cl-change-case:swap-case 	cl-change-case:title-case
+                cl-change-case:upper-case 	cl-change-case:upper-case-first)
   (:export #:compile-index
            #:collect-assets
            #:compile-art

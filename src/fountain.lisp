@@ -432,9 +432,13 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (declare (ignore faces to the))
     (list 'face someone dir))
 
-  (defun stage/walks-relative (someone walks relative)
-    (declare (ignore walks))
+  (defun stage/walks-relative (someone _walks relative)
+    (declare (ignore _walks))
     (list 'walk someone relative))
+
+  (defun stage/start-walk-relative (someone _starts _walking relative)
+    (declare (ignore _starts _walking))
+    (list 'walk someone relative :waitp nil))
 
   (defun stage/relative-to (to loc)
     (declare (ignore to))
@@ -666,9 +670,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               a aboard above absolute all amulet and appears arrow arrows armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
-              can captain caspar catamaran ceiling chalice clear close continued crown crowns cut cyan cyan-lit
+              can catamaran ceiling chalice clear close continued crown crowns cut cyan cyan-lit
               dances dancing dark difference dim disembarks divided do dolly done down durbat
-              e earl east either elderembarks enter enters equal exclusive exit exits
+              e east either embarks enter enters equal exclusive exit exits
               faces fade find floor for frame from
               gains gets glass go goes grand grappling-hook greater
               hair hammer has head headed hear here
@@ -676,21 +680,21 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               knife
               launch left less like lit logand logarithm logical
               logior logxor looks loses
-              magic mask minus moves
-              natural nefertem negative night none nor normal-lit normally north not
+              magic mask minus moves moving
+              natural negative night none nor normal-lit normally north not
               of on open or
-              part pi pirate pitch player player-armor-color
+              part pi pirate pitch player-armor-color
               player-hair-color player-skin-color playing plus
-              potion positive power princess product  purple
+              potion positive power product  purple
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
               skin sloop slowly staff south sum sword
               square starts stops
-              than the then times to torch tranh truck tunic
-              ulluk under unless up upon
-              value vizier
-              wait walks wand we weigh west when white with wrench wakes
+              than the then times to torch truck tunic
+              under unless up upon
+              value
+              wait walking walks wand we weigh west when white with wrench wakes
               yellow
               zero))
   :test 'equalp
@@ -714,7 +718,10 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                       (lambda (_prep directions _ready)
                                         (declare (ignore _prep _ready))
                                         (list 'prepare directions))))
-
+    (someone actor
+             (the actor #1=(lambda (_the actor) (declare (ignore _the)) actor))
+             (a actor #1#)
+             (an actor #1#))
     (statement call-expr
                (when conditional |,| clauses |.|
                      #'stage/when)
@@ -818,25 +825,15 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                            (declare (ignore _it _becomes _))
                            (list 'lighting-change lighting speed))))
 
-    (dance-clause (actor starts dancing (lambda (actor &rest _)
+    (wake/sleep-clause (someone sleeps (lambda (someone &rest _)
+                                         (declare (ignore _))
+                                         (list 'sleep someone)))
+                       (someone wakes up (lambda (someone &rest _)
+                                           (declare (ignore _))
+                                           (list 'wake someone)))
+                       (someone awakens (lambda (someone &rest _)
                                           (declare (ignore _))
-                                          (list 'dance actor)))
-                  (actor stops dancing (lambda (actor &rest _)
-                                         (declare (ignore _))
-                                         (list 'wake actor)))
-                  (actor dances (lambda (actor &rest _)
-                                  (declare (ignore _))
-                                  (list 'dance actor))))
-
-    (wake/sleep-clause (actor sleeps (lambda (actor &rest _)
-                                       (declare (ignore _))
-                                       (list 'sleep actor)))
-                       (actor wakes up (lambda (actor &rest _)
-                                         (declare (ignore _))
-                                         (list 'wake actor)))
-                       (actor awakens (lambda (actor &rest _)
-                                        (declare (ignore _))
-                                        (list 'wake actor))))
+                                          (list 'wake someone))))
 
     (fade-color black white red cyan)
     (fade-clause (fade from fade-color (lambda (_fade _from color)
@@ -852,13 +849,13 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
     (east/west (east (constantly 'east)) (west (constantly 'west)))
 
-    (actor-list (actor |,| actor)
-                (actor-list |,| actor))
+    (someone-list (someone |,| someone)
+                  (someone-list |,| someone))
 
-    (actors actor
-            (actor and actor)
-            (actor |,| and actor)
-            (actor-list |,| and actor))
+    (someones someone
+              (someone and someone)
+              (someone |,| and someone)
+              (someone-list |,| and someone))
 
     (call-expr (call quoted
                      #'stage/call)
@@ -927,12 +924,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                  #'stage/var←val)
                        (variable < - numeric
                                  #'stage/var<-val)
-                       (set actor-state to numeric
+                       (set someone-state to numeric
                             #'stage/set-state-to-val)
-                       (actor-state ← numeric
-                                    #'stage/state←val)
-                       (actor-state < - numeric
-                                    #'stage/state<-val)
+                       (someone-state ← numeric
+                                      #'stage/state←val)
+                       (someone-state < - numeric
+                                      #'stage/state<-val)
                        (set player-state to numeric
                             #'stage/set-state-to-val)
                        (player-state ← numeric
@@ -1060,12 +1057,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (ship-clause
      (the ship-name appears in the east/west headed for actor/location
           #'stage/empty-boat)
-     (the ship-name appears in the east/west with actors aboard headed to/for actor/location
+     (the ship-name appears in the east/west with someones aboard headed to/for actor/location
           #'stage/full-boat)
      (the ship-name gets under weigh to the east/west
           #'stage/sail-away)
-     (actor embarks/boards the ship-name #'stage/embarks)
-     (actor disembarks from the ship-name #'stage/disembarks))
+     (someone embarks/boards the ship-name #'stage/embarks)
+     (someone disembarks from the ship-name #'stage/disembarks))
 
     (embarks/boards boards (embarks upon) (embarks on))
 
@@ -1079,7 +1076,20 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (walk-clause (someone walks relative-position
                           #'stage/walks-relative)
                  (someone moves relative-position
-                          #'stage/walks-relative))
+                          #'stage/walks-relative)
+                 (someone starts walking relative-position
+                          #'stage/start-walk-relative)
+                 (someone starts moving relative-position
+                          #'stage/start-walk-relative)
+                 (someone starts dancing (lambda (someone &rest _)
+                                           (declare (ignore _))
+                                           (list 'dance someone)))
+                 (someone stops dancing (lambda (someone &rest _)
+                                          (declare (ignore _))
+                                          (list 'wake someone)))
+                 (someone dances (lambda (someone &rest _)
+                                   (declare (ignore _))
+                                   (list 'dance someone))))
     (relative-position step-distance
                        (to location
                            #'stage/relative-to)
@@ -1101,27 +1111,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                             #'stage/relative-ud-lr)
                    (numeric left/right and numeric up/down
                             #'stage/relative-lr-ud))
-    (actor* actor special-actor)
-    (special-actor (the princess (constantly 'aisling))
-                   (aisling (constantly 'aisling))
-
-                   (the earl (constantly 'ulluk))
-                   (ulluk (constantly 'ulluk))
-
-                   (the elder (constantly 'tranh))
-                   (tranh (constantly 'tranh))
-
-                   (nefertem (constantly 'nefertem))
-
-                   (the captain (constantly 'caspar))
-                   (caspar (constantly 'caspar))
-
-                   (the vizier (constantly 'vizier))
-
-                   (the player (constantly 'player))
-                   (player (constantly 'player))
-
-                   (shadow player (constantly 'shadow-player)))
 
     (color clear ,@*common-palette*)
     (location (quoted (lambda (place)
@@ -1149,7 +1138,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
              number
              pi
              (e (constantly (exp 1)))
-             actor-state
+             someone-state
              player-state
              (- number)
              (|(| number + number i |)|
@@ -1196,11 +1185,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                       #'stage/bool-xor)
              (boolean inclusive numeric or numeric
                       #'stage/logior))
-    (actor-state
-     (the x position of actor)
-     (the y position of actor)
-     (the hit points of actor)
-     (the max hit points of actor))
+    (someone-state
+     (the x position of someone)
+     (the y position of someone)
+     (the hit points of someone)
+     (the max hit points of someone))
     (player-state
      (the x position of the player)
      (the y position of the player)
@@ -1214,8 +1203,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (plus* plus +)
     (minus* minus - less)
     (division* (divided by) / ÷)
-    (times* times ✕ ×)
-    (someone actor special-actor)))
+    (times* times ✕ ×)))
 
 (defvar *fountain-state* nil)
 
@@ -1375,7 +1363,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               (starts-with-subseq "INT. " line)
               (starts-with-subseq "EXT. " line))
           (let ((scene-name (mapcar (lambda (part)
-                                      (cl-change-case:pascal-case
+                                      (pascal-case
                                        (string-trim #(#\Space #\Tab) part)))
                                     (split-sequence
                                      #\-
@@ -1437,7 +1425,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                    (if (= 1 (length s))
                        (format nil "~@c (~a)"
                                (first-elt s)
-                               (cl-change-case:sentence-case
+                               (sentence-case
                                 (char-name (first-elt s))))
                        s))))
         ((= 2 len)
@@ -1499,7 +1487,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                      (every #'actor-name-char-p (subseq string 1)))
                 (list 'variable string))
                ((char= #\" (char string 0))
-                (list 'quoted (cl-change-case:pascal-case (subseq string 1))))
+                (list 'quoted (pascal-case (subseq string 1))))
                (t (list 'string string)))))
     (let ((parsed (loop with word = ""
                         for char = (read-char stream nil nil)
@@ -1946,17 +1934,17 @@ but now also ~s."
      (restart-case
          (destructuring-bind  (&key name decal body head hair skin clothing
                                     voice-pitch voice-speed voice-bend speech-color
-                                    comment hp ac character-id nicks
+                                    hp ac character-id nicks
                                &allow-other-keys)
              (find-npc-stats actor)
-           (declare (ignore comment))
            (unless character-id
-             (error "Actor ~:(~a~) could not be found in NPC stats file" actor))
-           #+ () (warn "Loading actor ~:(~a~)~%~8tStats: ~s" actor (find-npc-stats actor))
+             (cerror "Continue, using Norville"
+                     "Actor ~:(~a~) could not be found in NPC stats file" actor)
+             (return-from load-actor (load-actor "Norville")))
            (let* ((kind (cond ((emptyp decal)
                                (cerror "Continue, using HUMAN as the decal kind"
-                                       "Decal kind not given for “~:(~a~)”/“~a”~%~s"
-                                       actor name decal))
+                                       "Decal kind not given for “~:(~a~)”/“~a”"
+                                       actor name))
                               ((member decal '("human" "Vizier" "Nefertem"
                                                "Earl" "Captain" "Princess" "Elder" "phantom" "sailor")
                                        :test #'string-equal)
@@ -1964,37 +1952,36 @@ but now also ~s."
                               (t (cerror "Use generic HUMAN decal"
                                          "Decal kind “~a” not recognized (for “~:(~a~)”/“~a” in NPC stats)"
                                          decal actor name))))
-                  (record (append
-                           (list :kind kind
-                                 :hp (unless (emptyp hp) (parse-integer hp))
-                                 :ac (unless (emptyp ac) (parse-integer ac))
-                                 :pitch (npc-interpret-field voice-pitch :voice-pitch :name name)
-                                 :speed (npc-interpret-field voice-speed :voice-speed :name name)
-                                 :bend (npc-interpret-field voice-bend :voice-bend :name name)
-                                 :speech-color (npc-interpret-field speech-color
-                                                                    :speech-color :name name)
-                                 :character-id character-id
-                                 :nicks nicks
-                                 :hair-color (npc-interpret-field hair :hair-color :name name)
-                                 :skin-color (npc-interpret-field skin :skin-color :name name)
-                                 :clothes-color (npc-interpret-field clothing :clothes-color
-                                                                     :name name))
-                           (when (eql kind 'sailor)
-                             (list :body (npc-interpret-field body :body :kind kind :name name)))
-                           (when (eql kind 'human)
-                             (list :head (npc-interpret-field head :head :kind kind :name name)
-                                   :body (npc-interpret-field body :body :kind kind :name name))))))
+                  (record
+                    (append (list :name name
+                                  :kind kind
+                                  :hp (unless (emptyp hp) (parse-integer hp))
+                                  :ac (unless (emptyp ac) (parse-integer ac))
+                                  :pitch (npc-interpret-field voice-pitch :voice-pitch :name name)
+                                  :speed (npc-interpret-field voice-speed :voice-speed :name name)
+                                  :bend (npc-interpret-field voice-bend :voice-bend :name name)
+                                  :speech-color (npc-interpret-field speech-color
+                                                                     :speech-color :name name)
+                                  :character-id character-id
+                                  :nicks nicks
+                                  :hair-color (npc-interpret-field hair :hair-color :name name)
+                                  :skin-color (npc-interpret-field skin :skin-color :name name)
+                                  :clothes-color (npc-interpret-field clothing :clothes-color
+                                                                      :name name))
+                            (when (eql kind 'sailor)
+                              (list :body (npc-interpret-field body :body :kind kind :name name)))
+                            (when (eql kind 'human)
+                              (list :head (npc-interpret-field head :head :kind kind :name name)
+                                    :body (npc-interpret-field body :body :kind kind :name name))))))
              (if-let (i (position-if
                          (lambda (actor)
                            (and (consp actor)
                                 (< 1 (length actor))
-                                (getf (subseq actor 1) :character-id)
-                                (= character-id (getf (subseq actor 1) :character-id))))
+                                (getf actor :character-id)
+                                (= character-id (getf actor :character-id))))
                          *actors*))
-               (progn #+ () (warn "Updating actor record, from~%~8t~s~%…to…~%~8t~s"
-                                  (elt *actors* i) record)
-                      (setf (elt *actors* i) record))
-               #+ () (warn "Actor record not in *ACTORS* so no update~%~8t~s" record))
+               (setf (elt *actors* i) record)
+               (push record *actors*))
              (return-from load-actor record))))))
 
 (defun find-location (location)
@@ -2077,23 +2064,19 @@ but now also ~s."
 ~10tlda # FadeSpeed~a
 ~10tsta FadingSpeed
 "
-          (cl-change-case:pascal-case (string target))
-          (cl-change-case:pascal-case (string speed))))
+          (pascal-case (string target))
+          (pascal-case (string speed))))
 
 (defstage lighting (target)
   (format t "
 ~10tlda # Lighting~a
 ~10tsta LightingKind
 "
-          (cl-change-case:pascal-case (string target))))
+          (pascal-case (string target))))
 
 (defstage sleep (actor)
-  (destructuring-bind (name &key kind found-in-scene-p &allow-other-keys)
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor actor)
-    (unless (member kind '(player princess nefertem))
-      (cerror "Continue, ignoring sleep request"
-              "Actor ~:(~a~) asked to go to sleep, but they have no sleep frames" actor)
-      (return))
     (unless found-in-scene-p
       (cerror "Continue, ignoring sleep request"
               "Actor ~:(~a~) asked to go to sleep, but they are not in the scene" actor)
@@ -2113,12 +2096,12 @@ but now also ~s."
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
-              (cl-change-case:pascal-case (string name))
+              (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
 
 (defstage dance (actor)
-  (destructuring-bind (name &key kind found-in-scene-p &allow-other-keys)
+  (destructuring-bind (&key name kind found-in-scene-p &allow-other-keys)
       (require-actor actor)
     (unless (member kind '(captain sailor player nefertem))
       (cerror "Continue, ignoring dance request"
@@ -2143,7 +2126,7 @@ but now also ~s."
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
-              (cl-change-case:pascal-case (string name))
+              (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
 
@@ -2151,7 +2134,7 @@ but now also ~s."
   (format t "~%~10t.mva WeatherKind, # Weather~:(~a~)" (or kind "None")))
 
 (defstage wake (actor)
-  (destructuring-bind (name &key found-in-scene-p &allow-other-keys)
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor actor)
     (unless found-in-scene-p
       (cerror "Continue, ignoring awakening request"
@@ -2172,7 +2155,7 @@ but now also ~s."
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
-              (cl-change-case:pascal-case (string name))
+              (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
 
@@ -2189,8 +2172,8 @@ but now also ~s."
 ~10tdey
 ~10tbpl ~:*~a
 "
-          (cl-change-case:pascal-case (string speed))
-          (cl-change-case:pascal-case (string from-color))
+          (pascal-case (string speed))
+          (pascal-case (string from-color))
           (genlabel "FadeInSetPalettes")))
 
 (defstage fade-out (to-color &optional (speed 'normal))
@@ -2199,8 +2182,8 @@ but now also ~s."
 ~10tsta FadingSpeed
 ~10tlda # FadeColor~:(~a~)
 ~10tsta FadingTarget"
-          (cl-change-case:pascal-case (string speed))
-          (cl-change-case:pascal-case (string to-color))))
+          (pascal-case (string speed))
+          (pascal-case (string to-color))))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
@@ -2272,7 +2255,7 @@ but now also ~s."
 (defstage exit (who)
   (let ((not-found-character-label
           (genlabel "CharacterNotFound")))
-    (destructuring-bind (name &key found-in-scene-p &allow-other-keys)
+    (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
         (require-actor who)
       (unless found-in-scene-p
         (cerror "Continue, ignoring “exit” direction"
@@ -2287,14 +2270,14 @@ but now also ~s."
 ~10tjsr Lib.ExitCharacter
 
 ~:*~a:"
-              (cl-change-case:pascal-case (string name))
+              (pascal-case (string name))
               not-found-character-label))))
 
 (defstage enter (who where)
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
     (push actor *actors*)
     (if (eql :oc where)
-        (destructuring-bind (name &key &allow-other-keys)
+        (destructuring-bind (&key name &allow-other-keys)
             (require-actor who)
           (cond
             (found-in-scene-p
@@ -2309,7 +2292,7 @@ but now also ~s."
 ~10tlda # 127
 ~10tsta DecalYH, x
 "
-                     (cl-change-case:pascal-case (string name))))
+                     (pascal-case (string name))))
             (t
              (format t "
 ~10t.mvaw Proto, Character_~a
@@ -2326,11 +2309,11 @@ but now also ~s."
 ~10tlda # 127
 ~10tsta DecalYH, x
 "
-                     (cl-change-case:pascal-case (string name))))))
+                     (pascal-case (string name))))))
         ;; else
         (destructuring-bind (abs/rel x y) (interpret-place where)
           (assert (eql abs/rel :absolute))
-          (destructuring-bind (name &key &allow-other-keys)
+          (destructuring-bind (&key name &allow-other-keys)
               (require-actor who)
             (cond
               (found-in-scene-p
@@ -2347,7 +2330,7 @@ but now also ~s."
 ~10tjsr Lib.UpdateOneDecal
 
 "
-                       (cl-change-case:pascal-case (string name)) x y))
+                       (pascal-case (string name)) x y))
               (t
                (format t "
 ~10t.mvaw Proto, Character_~a
@@ -2356,7 +2339,7 @@ but now also ~s."
 ~10tjsr Lib.EnterCharacter
 
 "
-                       (cl-change-case:pascal-case (string name)) x y))))))))
+                       (pascal-case (string name)) x y))))))))
 
 (defvar *boat-ids* nil)
 (defvar *boat-classes* nil)
@@ -2411,10 +2394,10 @@ but now also ~s."
 (defstage disembarks (actor ship-name)
   (format t "~%~10t;; TODO actor ~a disembarks from ship ~a" actor ship-name))
 
-(defstage walk (who where)
+(defstage walk (who where &key (waitp t))
   (if (eql who 'player)
       (format t "~%~10t;; TODO: Move the player") ; TODO #151
-      (destructuring-bind (name &key found-in-scene-p &allow-other-keys)
+      (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
           (require-actor who)
         (destructuring-bind (abs/rel x y) (interpret-place where)
           (unless found-in-scene-p
@@ -2426,8 +2409,8 @@ but now also ~s."
                   (compile-stage-direction 'enter (list who where))
                   (return))
                 (progn (cerror "Continue, ignoring the request"
-                               "Actor ~:(~a) was not in scene when requested to walk relative to their current position"
-                               name)
+                               "Actor ~a was not in scene when requested to walk relative to their current position"
+                               who)
                        (return))))
           (format t "
 ~10tlda # CharacterID_~a
@@ -2438,11 +2421,12 @@ but now also ~s."
 
 ~10tjsr Lib.DoWalk~@[Relative~]
 "
-                  (cl-change-case:pascal-case (string name))
+                  (pascal-case (string name))
                   x y (ecase abs/rel
                         (:absolute nil)
                         (:relative t)))
-          (format t "
+          (when waitp
+            (format t "
 ~a:
 ~10tjsr Lib.ScriptYield
 
@@ -2453,8 +2437,8 @@ but now also ~s."
 ~10tbne ~0@*~a
 
 "
-                  (genlabel "WaitToArrive")
-                  (cl-change-case:pascal-case (string name)))))))
+                    (genlabel "WaitToArrive")
+                    (pascal-case (string name))))))))
 
 (defstage look (who how)
   (loop for i from 0
@@ -2491,7 +2475,7 @@ but now also ~s."
     (west "CharacterFacingLeft")))
 
 (defstage face (who where)
-  (destructuring-bind (name &key found-in-scene-p &allow-other-keys)
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor who)
     (unless found-in-scene-p
       (cerror "Continue, ignoring facing request"
@@ -2514,7 +2498,7 @@ but now also ~s."
 
 ~a:
 "
-              (cl-change-case:pascal-case (string name))
+              (pascal-case (string name))
               ok-label done-label
               ok-label
               (stage-facing-value where)
@@ -2705,7 +2689,7 @@ but now also ~s."
     ((and (consp field)
           (eql 'var (car field)))
      (format nil "ScriptVar_~a"
-             (cl-change-case:pascal-case (second field))))
+             (pascal-case (second field))))
     (t (error "Unknown field type ~s" field))))
 
 (defstage set (var value)
@@ -2724,50 +2708,47 @@ but now also ~s."
       (t (error "Unexpected tree function name ~s" fun)))))
 
 (defun find-actor (actor)
-  (or (and (string-equal actor 'player)
-           (list "Player" :kind 'player :character-id #xff))
-      (and (string-equal actor 'narrator)
-           (list "Narrator" :kind 'narrator :character-id #xfe))
-      (find actor *actors*
-            :key #'first
-            :test #'string-equal)
-      (loop for match in *actors*
-            for i from 0
-            do (when (member actor (getf (subseq match 1) :nicks) :test #'string-equal)
-                 (return (cons i match))))))
+  (or (when (string-equal actor 'player)
+        (list :name "Player" :kind 'player :character-id #xff))
+      (when (string-equal actor 'narrator)
+        (list :name "Narrator" :kind 'narrator :character-id #xfe))
+      (when-let (found (find-if (lambda (record)
+                                  (or (string-equal actor (getf record :name))
+                                      (member actor (getf record :nicks)
+                                              :test #'string-equal)
+                                      (string-equal actor (getf record :name))))
+                                *actors*))
+        found)))
 
 (defun find-or-load-actor (actor)
   (if-let (record (find-actor actor))
     (list record t)
-    (list (cons actor (load-actor actor)) nil)))
+    (list (load-actor actor) nil)))
 
 (defun require-actor (actor)
-  (tagbody top
-     (let* ((found-in-scene
-              (or (find-actor actor)
-                  (warn "Actor ~:(~a~) was not present in scene" actor)))
-            (record (or found-in-scene (cons actor (load-actor actor))))
-            #+ () (name (and (consp record) (< 1 (length record)) (second record)))
-            (deets (and (consp record) (< 1 (length record)) (subseq record 1))))
-       (unless (getf deets :character-id)
-         #+ () (warn "No details on ~:(~a~), checking NPC stats file …" actor)
-         (setf record (load-actor actor)))
-       (unless (and deets (getf deets :character-id))
-         (error "Actor ~:(~a~) does not seem to be found in the NPC Stats file.
-~:[Nothing is known but their name.~;Info about actor is limited to:~{~%~8t~20a: ~a~}~]"
-                actor deets))
-       (return-from require-actor (append record
-                                          (list :found-in-scene-p (when found-in-scene t)))))))
+  (let* ((found-in-scene
+           (or (find-actor actor)
+               (warn "Actor ~:(~a~) was not present in scene" actor)))
+         (deets (or found-in-scene (load-actor actor))))
+    (unless (getf deets :character-id)
+      (setf deets (load-actor actor)))
+    (unless (and deets (getf deets :character-id))
+      (cerror "Continue with Norville"
+              "Actor ~:(~a~) does not seem to be found in the NPC Stats file."
+              actor)
+      (require-actor "Norville"))
+    (append deets
+            (list :name actor :found-in-scene-p (when found-in-scene t)))))
 
 (defun fountain/write-scene-start (value)
   (setf *current-scene*
         (etypecase value
           (cons (concatenate 'string
-                             (cl-change-case:pascal-case (first value))
+                             (pascal-case (first value))
                              "/"
-                             (cl-change-case:pascal-case (second value))))
+                             (pascal-case (second value))))
           (string (format nil "~{~a~^/~}"
-                          (mapcar #'cl-change-case:pascal-case
+                          (mapcar #'pascal-case
                                   (split-sequence #\/ value))))))
   (format t "
 ~10t.mva NextMap, # Map_~a_ID
@@ -2870,7 +2851,7 @@ Speech_~a:~
           (if (string-equal "CONTINUE" option)
               "0 ; (continue)"
               (concatenate 'string "ScriptLabel_"
-                           (cl-change-case:pascal-case option)))
+                           (pascal-case option)))
           (script-auto-label "WaitForUserInput"))
   (return-from fountain/write-speech-branch
     (dialogue-hash text)))
@@ -2909,7 +2890,7 @@ EndOfScript~a
 ~10tstx DialogueSpeakerDecal
 ~10tlda #$ff
 ~10tsta DialogueSpeakerX"
-              (cl-change-case:pascal-case (string actor-name)))))
+              (pascal-case (string actor-name)))))
 
 (defun compile-fountain-stream (fountain)
   "Compile the contents of the stream FOUNTAIN into assembly language"
@@ -2928,9 +2909,9 @@ Script_~a_~a: .block
 ~10t.fi
 "
 
-          (cl-change-case:pascal-case (last-elt (pathname-directory
-                                                 *current-pathname*)))
-          (cl-change-case:pascal-case (pathname-name *current-pathname*)))
+          (pascal-case (last-elt (pathname-directory
+                                  *current-pathname*)))
+          (pascal-case (pathname-name *current-pathname*)))
   (let ((lexer (make-fountain-lexer fountain))
         (*actors* nil)
         (*line-number* 0)
@@ -2954,20 +2935,18 @@ Script_~a_~a: .block
                 (format t "~%~10t;; ~a" value))
               (label
                (format t "~%ScriptLabel_~a:"
-                       (cl-change-case:pascal-case value)))
+                       (pascal-case value)))
               (scene
                (fountain/write-scene-start value))
               (speaker-oc
-               (destructuring-bind (actor-name &rest _) (require-actor value)
-                 (declare (ignore _))
-                 (write-off-camera-speaker actor-name)))
+               (destructuring-bind (&key name &allow-other-keys) (require-actor value)
+                 (write-off-camera-speaker name)))
               (speaker
-               (destructuring-bind (actor-name &key found-in-scene-p &allow-other-keys)
+               (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
                    (require-actor value)
-
                  (cond
-                   ((string-equal actor-name 'narrator)
-                    (write-off-camera-speaker actor-name))
+                   ((string-equal value 'narrator)
+                    (write-off-camera-speaker name))
                    (found-in-scene-p
                     (format t "
 ~10tlda # CharacterID_~a
@@ -2975,10 +2954,10 @@ Script_~a_~a: .block
 ~10tstx DialogueSpeakerDecal
 ~10tlda DecalXH, x
 ~10tsta DialogueSpeakerX"
-                            (cl-change-case:pascal-case (string actor-name))))
+                            (pascal-case (string name))))
                    (t (cerror "Continue, with them speaking from off-camera"
-                              "Actor ~:(~a~) was asked to speak, but they are not in the scene" actor-name)
-                      (write-off-camera-speaker actor-name)))))
+                              "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
+                      (write-off-camera-speaker name)))))
               (speech (fountain/write-speech value))
               (reboot
                (print-end-of-script-label)
@@ -3010,13 +2989,13 @@ Script_~a_~a: .block
 ~10tsta FadingSpeed
 ~10tlda # FadeColor~:(~a~)
 ~10tsta FadingTarget"
-                       (cl-change-case:pascal-case (string value))))
+                       (pascal-case (string value))))
               (branch
                (print-end-of-script-label 0)
                (destructuring-bind (option . text) value
                  (fountain/write-speech-branch option text)))
               (go (format t "~%~10tjmp ScriptLabel_~a~%"
-                          (cl-change-case:pascal-case value)))
+                          (pascal-case value)))
               (otherwise
                (cerror "Insert a no-op"
                        "An unhandled feature was encountered in the script. ~
@@ -3026,10 +3005,10 @@ Script_~a_~a: .block
                        sym value)))
             sym))
     (dolist (actor *actors*)
-      (destructuring-bind (name &key kind hp ac pitch speed
-                                     hair-color skin-color clothes-color
-                                     speech-color bend
-                                     head body character-id
+      (destructuring-bind (&key name kind hp ac pitch speed
+                                hair-color skin-color clothes-color
+                                speech-color bend
+                                head body character-id
                            &allow-other-keys)
           actor
         (unless (member name '(player narrator) :test 'string-equal)
@@ -3095,7 +3074,7 @@ Character_~0@*~a:
 ~10t.fi
 ~10t.send
 "
-                  (cl-change-case:pascal-case (string name))
+                  (pascal-case (string name))
                   ;; --- Entity
                   ;; Decal
                   #xff
@@ -3112,7 +3091,7 @@ Character_~0@*~a:
                   0
                   ;; --- Character
                   ;; DecalKind
-                  (cl-change-case:pascal-case
+                  (pascal-case
                    (string kind))
                   ;; SkinColor
                   (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
@@ -3141,7 +3120,7 @@ Character_~0@*~a:
                   ;; SpeechSpeed
                   (or speed 100)
                   ;; SpeechColor
-                  (cl-change-case:pascal-case
+                  (pascal-case
                    (or speech-color "Gray"))
                   ;; NameLength + Name
                   name)))))
@@ -3214,12 +3193,11 @@ Character_~0@*~a:
 
 (defun find-script-id (script-moniker)
   "Find the script ID for SCRIPT-MONIKER, defined by a scene number or the hash of its name"
-  (let* ((path (mapcar #'cl-change-case:pascal-case
+  (let* ((path (mapcar #'pascal-case
                        (flatten (mapcar (curry #'split-sequence #\/)
                                         (split-sequence #\- script-moniker)))))
          (dir (mapcar (lambda (el)
-                        (cl-change-case:pascal-case
-                         (string-trim #(#\Space #\Tab) el)))
+                        (pascal-case (string-trim #(#\Space #\Tab) el)))
                       (butlast path)))
          (dir (if (equal "Scripts" (first dir))
                   (subseq dir 1)
