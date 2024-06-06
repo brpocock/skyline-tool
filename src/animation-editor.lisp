@@ -464,7 +464,7 @@
 (dolist (tileset (all-tilesets))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
-                             (string-upcase (cl-change-case:param-case tileset)))
+                             (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
               :menu t :tester anim-seq-editing-background-p
               :documentation ,(format nil "Switch to tile sheet ~a" tileset))
@@ -474,7 +474,7 @@
 (dolist (tileset (all-scenery-decals))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
-                             (string-upcase (cl-change-case:param-case tileset)))
+                             (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
               :menu t :tester anim-seq-editing-scenery-p
               :documentation ,(format nil "Switch to tile sheet ~a" tileset))
@@ -972,7 +972,7 @@
     (clim:with-output-as-presentation (pane (anim-seq-assign-action frame)
                                             'anim-seq-action)
       (clim:with-text-size (pane :large)
-        (format pane "~a" (cl-change-case:title-case
+        (format pane "~a" (title-case
                            (string (anim-seq-assign-action frame))))))
     (terpri pane)
     (clim:with-text-size (pane :large)
@@ -980,7 +980,7 @@
     (clim:with-output-as-presentation (pane (anim-seq-assign-facing frame)
                                             'anim-seq-facing)
       (clim:with-text-size (pane :large)
-        (format pane "~a" (cl-change-case:title-case
+        (format pane "~a" (title-case
                            (string (anim-seq-assign-facing frame))))))
     (when (reduce #'eql (list (find-assigned-animation-sequence
                                (anim-seq-assign-decal-kind frame)
@@ -1231,7 +1231,7 @@
           (clim:formatting-cell (pane)
             (clim:with-text-face (pane :bold)
               (clim:with-text-size (pane :large)
-                (format pane "  ~a" (cl-change-case:title-case (string action))))))))
+                (format pane "  ~a" (title-case (string action))))))))
       (terpri pane)
       (let (printed-decal-kind)
         (dolist (decal-kind +decal-kinds+)
@@ -1244,14 +1244,14 @@
                 (clim:formatting-row (pane)
                   (clim:formatting-cell (pane)
                     (unless (eql printed-decal-kind decal-kind)
-                      (format pane "  ~a" (cl-change-case:title-case (string decal-kind)))
+                      (format pane "  ~a" (title-case (string decal-kind)))
                       (setf printed-decal-kind decal-kind)))
                   (clim:formatting-cell (pane)
                     (unless (eql printed-body body)
                       (format pane "~d" body)
                       (setf printed-body body)))
                   (clim:formatting-cell (pane)
-                    (format pane "~a" (cl-change-case:title-case (string facing))))
+                    (format pane "~a" (title-case (string facing))))
                   (dolist (action +all-actions+)
                     (clim:formatting-cell (pane)
                       (clim:with-output-as-presentation (pane (list decal-kind body action facing)
@@ -1259,7 +1259,7 @@
                         (if-let ((seq (find-assigned-animation-sequence
                                        decal-kind body action facing)))
                           (format pane "    ~a~@[ (~a)~]"
-                                  (cl-change-case:title-case
+                                  (title-case
                                    (simple-animation-sequence-index seq))
                                   (simple-animation-sequence-label seq))
                           (format pane "   —   ")))))))))))
@@ -1304,7 +1304,7 @@
                     (decal-kind-name (anim-seq-assign-decal-kind assign-frame))
                     (unless (zerop (anim-seq-assign-body assign-frame))
                       (anim-seq-assign-body assign-frame))
-                    (cl-change-case:sentence-case
+                    (sentence-case
                      (string (anim-seq-assign-action assign-frame)))
                     (if (= 1 (length facings))
                         (string-downcase (first facings))
@@ -1395,7 +1395,7 @@
                                                       :palette palette)))
                    (setf (clim:frame-pretty-name *show-tileset-frame*)
                          (format nil "Show Tileset ~a"
-                                 (cl-change-case:title-case tileset)))
+                                 (title-case tileset)))
                    (clim:run-frame-top-level *show-tileset-frame*)))
                :name "Show Tileset"))
 
@@ -1476,7 +1476,7 @@
                 (:background "Background (map tiles)")
                 (:scenery "Scenery decals"))
               (eql :npc (choose-sequence-major-kind frame))
-              (cl-change-case:title-case (string (choose-sequence-decal-kind frame)))
+              (title-case (string (choose-sequence-decal-kind frame)))
               (choose-sequence-body frame)))
     (terpri pane)
     (dolist (match matches)
@@ -1551,8 +1551,8 @@
                                        :decal-kind decal-kind
                                        :body body))
         (name (format nil "Choose Animation Sequence (~a, ~a, ~d)"
-                      (cl-change-case:title-case (string major-kind))
-                      (cl-change-case:title-case (string decal-kind))
+                      (title-case (string major-kind))
+                      (title-case (string decal-kind))
                       body)))
     (setf *choose-sequence-frame* frame
           (clim:frame-pretty-name frame) name)
@@ -1635,7 +1635,7 @@
       (with-output-to-file (s source-name :if-exists :supersede)
         (format s ";;; ~a Source/Generated/AnimationTable.s
 ;;;; This is a generated file (from Animation.ods), editing it is futile~2%"
-                (cl-change-case:title-case *game-title*))
+                (title-case *game-title*))
         (format s "~2%~10t.section BankData~%AnimationTable: .block")
         (format s "~2%Sequences:")
         (dolist (frames '(2 4 8))
@@ -1658,9 +1658,9 @@
                   (count-if (lambda (key)
                               (eql kind (first key)))
                             (hash-table-keys *animation-assignments*))
-                  (cl-change-case:title-case (string kind))))
+                  (title-case (string kind))))
         (format s "~2%~10tDecalKindActions=(~{Match~aAction~^, ~})"
-                (mapcar (compose #'cl-change-case:pascal-case #'string) +decal-kinds+))
+                (mapcar (compose #'pascal-case #'string) +decal-kinds+))
         (format s "
 
 MatchDecalKindActionL:
@@ -1668,7 +1668,7 @@ MatchDecalKindActionL:
 MatchDecalKindActionH:
 ~10t.byte >DecalKindActions")
         (format s "~2%~10tDecalKindDetails=(~{Match~aDetails~^, ~})"
-                (mapcar (compose #'cl-change-case:pascal-case #'string) +decal-kinds+))
+                (mapcar (compose #'pascal-case #'string) +decal-kinds+))
         (format s "
 
 MatchDecalKindDetailsL:
@@ -1676,7 +1676,7 @@ MatchDecalKindDetailsL:
 MatchDecalKindDetailsH:
 ~10t.byte >DecalKindDetails")
         (format s "~2%~10tDecalKindReferences=(~{Match~aReference~^, ~})"
-                (mapcar (compose #'cl-change-case:pascal-case #'string) +decal-kinds+))
+                (mapcar (compose #'pascal-case #'string) +decal-kinds+))
         (format s "
 
 MatchDecalKindReferenceL:
@@ -1691,19 +1691,21 @@ MatchDecalKindReferenceH:
                 (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
             (format s "~%~10t.byte ~d~32t; Body count for ~a"
                     (hash-table-count set)
-                    (cl-change-case:title-case (string kind)))))
+                    (title-case (string kind)))))
         (format s "~2%MatchAction:")
-        (let (last-kind)
+        (let (last-kind last-body)
           (dolist (key keys)
             (destructuring-bind (kind body action facing) key
-              (declare (ignore body))
               (unless (eql kind last-kind)
-                (format s "~%Match~aAction:" (cl-change-case:pascal-case (string kind)))
+                (format s "~%Match~aAction:" (pascal-case (string kind)))
                 (setf last-kind kind))
+              (unless (or (zerop body) (eql body last-body))
+                (format s "~%;;; switch to body ~s~%~10t.byte 0" body)
+                (setf last-body body))
               (let* ((seq (gethash key *animation-assignments*))
                      (i (simple-animation-sequence-index seq)))
                 (format s "~%~10t.byte Action~20,,1a | DecalFacingMatch~:(~6,,1a~) << 6~%~10t;; ~d. ~a~%"
-                        (cl-change-case:pascal-case (string action))
+                        (pascal-case (string action))
                         facing
                         i
                         (simple-animation-sequence-label seq))))))
@@ -1713,7 +1715,7 @@ MatchDecalKindReferenceH:
             (destructuring-bind (kind body action facing) key
               (declare (ignore body action facing))
               (unless (eql kind last-kind)
-                (format s "~%Match~aDetails:" (cl-change-case:pascal-case (string kind)))
+                (format s "~%Match~aDetails:" (pascal-case (string kind)))
                 (setf last-kind kind))
               (let* ((seq (gethash key *animation-assignments*))
                      (i (simple-animation-sequence-index seq)))
@@ -1739,7 +1741,7 @@ MatchDecalKindReferenceH:
                    (i (simple-animation-sequence-index seq)))
               (let ((kind (simple-animation-sequence-decal-kind seq)))
                 (unless (eql kind last-kind)
-                  (format s "~%Match~aReference:" (cl-change-case:pascal-case (string kind)))
+                  (format s "~%Match~aReference:" (pascal-case (string kind)))
                   (setf last-kind kind)))
               (ecase (simple-animation-sequence-frame-count seq)
                 (1 (format s "~%~10t.byte $~2,'0x~20t; single frame index; ~d. ~a (~a)"
@@ -1769,7 +1771,7 @@ Match~aAction:~0@*
 Match~aDetails:~0@*
 Match~aReference:
 "
-                    (cl-change-case:pascal-case (string kind)))))
+                    (pascal-case (string kind)))))
         (format s "~2%~10t.byte $ff")
         (format s "~2%~10t.bend~%~10t.send~2%"))))
   (format *trace-output* " done, AnimationTable.s ready.~%"))
