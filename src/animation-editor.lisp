@@ -1582,7 +1582,8 @@
     (object)
   (list))
 
-(defun display-anim-preview (window pane)
+(defun display-anim-preview (_window pane)
+  (declare (ignore _window))
   (format pane "TODO: Display a preview of the animation here"))
 
 (defun sort-matching-lists-by-decal-kind (a b)
