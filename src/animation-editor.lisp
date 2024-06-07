@@ -1653,13 +1653,6 @@
                       (simple-animation-sequence-label seq)
                       (simple-animation-sequence-write-mode seq)))))
         (format s "~2%Assignments:")
-        (format s "~2%MatchDecalAlternatives:")
-        (dolist (kind +decal-kinds+)
-          (format s "~%~10t.byte ~d~31t; ~a"
-                  (count-if (lambda (key)
-                              (eql kind (first key)))
-                            (hash-table-keys *animation-assignments*))
-                  (title-case (string kind))))
         (format s "~2%~10tDecalKindActions=(~{Match~aAction~^, ~})"
                 (mapcar (compose #'pascal-case #'string) +decal-kinds+))
         (format s "
