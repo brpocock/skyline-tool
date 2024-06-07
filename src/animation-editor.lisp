@@ -1685,23 +1685,23 @@ MatchDecalBodyL:
 ~10t.byte <DecalBodies
 MatchDecalBodyH:
 ~10t.byte >DecalBodies")
-        (let ((set (make-hash-table)))
-          (dolist (kind +decal-kinds+)
+        (format s "~2%MatchDecalBodies:")
+        (dolist (kind +decal-kinds+)
+          (let ((set (make-hash-table)))
             (dolist (seq *animation-sequences*)
               (when (eql kind (simple-animation-sequence-decal-kind seq))
-                (incf (gethash (simple-animation-sequence-decal-body seq) set 0)))))
-          (format s "~2%MatchDecalBodies:")
-          (dolist (kind +decal-kinds+)
+                (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
             (format s "~%~10t.byte ~d~32t; Body count for ~a"
                     (hash-table-count set)
-                    (title-case (string kind)))
-            #+ () (format s "~2%MatchDecalBodies:~%~10t.byte ~d~32t; Body count for ~a"
-                          (hash-table-count set)
-                          (title-case (string kind))))
-          (dolist (kind +decal-kinds+)
-            (if (zerop (hash-table-count set))
-                (format s "~2%~10tMatchBodies~a = 0" kind)
-                (format s "~2%MatchBodies~a:~{~%~10t.byte ~d~}"
+                    (pascal-case (string kind)))))
+        (dolist (kind +decal-kinds+)
+          (let ((set (make-hash-table)))
+            (dolist (seq *animation-sequences*)
+              (when (eql kind (simple-animation-sequence-decal-kind seq))
+                (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
+            (if (member (hash-table-count set) '(0 1) :test #'=)
+                (format s "~2%~10tMatchBodies~a = 0" (pascal-case (string kind)))
+                (format s "~2%MatchBodies~a:~%~10t.byte ~{~d~^, ~}"
                         kind
                         (rest (loop for body from 0
                                     for offset from 0
@@ -1709,7 +1709,7 @@ MatchDecalBodyH:
                                                         (and (eql kind (simple-animation-sequence-decal-kind seq))
                                                              (eql body (simple-animation-sequence-decal-body seq))))
                                                    *animation-sequences*)
-                                    collect (count-if #1# *animation-sequences*)))))))
+                                    collect (1- (count-if #1# *animation-sequences*))))))))
         (format s "~2%MatchAction:")
         (let (last-kind)
           (dolist (key keys)
