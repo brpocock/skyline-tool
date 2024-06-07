@@ -1582,7 +1582,8 @@
     (object)
   (list))
 
-(defun display-anim-preview (window pane)
+(defun display-anim-preview (_window pane)
+  (declare (ignore _window))
   (format pane "TODO: Display a preview of the animation here"))
 
 (defun sort-matching-lists-by-decal-kind (a b)
@@ -1683,25 +1684,47 @@ MatchDecalKindReferenceL:
 ~10t.byte <DecalKindReferences
 MatchDecalKindReferenceH:
 ~10t.byte >DecalKindReferences")
-        (format s "~2%MatchDecalBodies:")
-        (dolist (kind +decal-kinds+)
-          (let ((set (make-hash-table)))
+        (format s "~2%~10tDecalBodies=(~{MatchBodies~a~^, ~})"
+                (mapcar (compose #'pascal-case #'string) +decal-kinds+))
+        (format s "
+
+MatchDecalBodyL:
+~10t.byte <DecalBodies
+MatchDecalBodyH:
+~10t.byte >DecalBodies")
+        (let ((set (make-hash-table)))
+          (dolist (kind +decal-kinds+)
             (dolist (seq *animation-sequences*)
               (when (eql kind (simple-animation-sequence-decal-kind seq))
-                (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
+                (incf (gethash (simple-animation-sequence-decal-body seq) set 0)))))
+          (format s "~2%MatchDecalBodies:")
+          (dolist (kind +decal-kinds+)
             (format s "~%~10t.byte ~d~32t; Body count for ~a"
                     (hash-table-count set)
-                    (title-case (string kind)))))
+                    (title-case (string kind)))
+            #+ () (format s "~2%MatchDecalBodies:~%~10t.byte ~d~32t; Body count for ~a"
+                          (hash-table-count set)
+                          (title-case (string kind))))
+          (dolist (kind +decal-kinds+)
+            (if (zerop (hash-table-count set))
+                (format s "~2%~10tMatchBodies~a = 0" kind)
+                (format s "~2%MatchBodies~a:~{~%~10t.byte ~d~}"
+                        kind
+                        (rest (loop for body from 0
+                                    for offset from 0
+                                    while (find-if #1=(lambda (seq)
+                                                        (and (eql kind (simple-animation-sequence-decal-kind seq))
+                                                             (eql body (simple-animation-sequence-decal-body seq))))
+                                                   *animation-sequences*)
+                                    collect (count-if #1# *animation-sequences*)))))))
         (format s "~2%MatchAction:")
-        (let (last-kind last-body)
+        (let (last-kind)
           (dolist (key keys)
             (destructuring-bind (kind body action facing) key
+              (declare (ignore body))
               (unless (eql kind last-kind)
                 (format s "~%Match~aAction:" (pascal-case (string kind)))
                 (setf last-kind kind))
-              (unless (or (zerop body) (eql body last-body))
-                (format s "~%;;; switch to body ~s~%~10t.byte 0" body)
-                (setf last-body body))
               (let* ((seq (gethash key *animation-assignments*))
                      (i (simple-animation-sequence-index seq)))
                 (format s "~%~10t.byte Action~20,,1a | DecalFacingMatch~:(~6,,1a~) << 6~%~10t;; ~d. ~a~%"
