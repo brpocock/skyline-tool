@@ -1702,7 +1702,7 @@ MatchDecalBodyH:
             (if (member (hash-table-count set) '(0 1) :test #'=)
                 (format s "~2%~10tMatchBodies~a = 0" (pascal-case (string kind)))
                 (format s "~2%MatchBodies~a:~%~10t.byte ~{~d~^, ~}"
-                        kind
+                        (pascal-case (string kind))
                         (rest (loop for body from 0
                                     for offset from 0
                                     while (find-if #1=(lambda (seq)
