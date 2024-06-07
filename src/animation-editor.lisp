@@ -1694,15 +1694,13 @@ MatchDecalKindReferenceH:
                     (hash-table-count set)
                     (title-case (string kind)))))
         (format s "~2%MatchAction:")
-        (let (last-kind last-body)
+        (let (last-kind)
           (dolist (key keys)
             (destructuring-bind (kind body action facing) key
+              (declare (ignore body))
               (unless (eql kind last-kind)
                 (format s "~%Match~aAction:" (pascal-case (string kind)))
                 (setf last-kind kind))
-              (unless (or (zerop body) (eql body last-body))
-                (format s "~%;;; switch to body ~s~%~10t.byte 0" body)
-                (setf last-body body))
               (let* ((seq (gethash key *animation-assignments*))
                      (i (simple-animation-sequence-index seq)))
                 (format s "~%~10t.byte Action~20,,1a | DecalFacingMatch~:(~6,,1a~) << 6~%~10t;; ~d. ~a~%"
