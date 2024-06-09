@@ -1699,9 +1699,9 @@ MatchDecalBodyH:
             (dolist (seq *animation-sequences*)
               (when (eql kind (simple-animation-sequence-decal-kind seq))
                 (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
-            (if (member (hash-table-count set) '(0 1) :test #'=)
+            (if (zerop (hash-table-count set))
                 (format s "~2%~10tMatchBodies~a = 0" (pascal-case (string kind)))
-                (format s "~2%MatchBodies~a:~%~10t.byte ~{~d~^, ~}"
+                (format s "~2%MatchBodies~a:~%~10t.byte ~{~d, ~}~d ; end + 1"
                         (pascal-case (string kind))
                         (rest (loop for body from 0
                                     for offset from 0
@@ -1709,7 +1709,10 @@ MatchDecalBodyH:
                                                         (and (eql kind (simple-animation-sequence-decal-kind seq))
                                                              (eql body (simple-animation-sequence-decal-body seq))))
                                                    *animation-sequences*)
-                                    collect (1- (count-if #1# *animation-sequences*))))))))
+                                    collect (1- (count-if #1# *animation-sequences*))))
+                        (count-if (lambda (seq)
+                                    (eql kind (simple-animation-sequence-decal-kind seq)))
+                                  *animation-sequences*)))))
         (format s "~2%MatchAction:")
         (let (last-kind)
           (dolist (key keys)
