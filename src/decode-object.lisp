@@ -234,7 +234,7 @@
                    (clim:formatting-cell (t)
                      (format t " = "))
                    (clim:formatting-cell (t)
-                     (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~%~}"
+                     (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
                              (coerce (subseq dump field-start next-offset)
                                      'list))
                      (if (string= "CharacterName" field-name)
@@ -251,8 +251,14 @@
                                             t))
                      (if (string= "ActorCourse" field-name)
                          (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                               (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))))))
-    (format t "~32t >~%")
+                                               (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
+                   (terpri)))
+        (clim:formatting-row (t)
+          (clim:formatting-cell (t))
+          (clim:formatting-cell (t))
+          (clim:formatting-cell (t))
+          (clim:formatting-cell (t)
+            (format t "~32t >~%")))))
     (values class-name actor-course)))
 
 (defun decode-object-at (dump &optional (offset 0))
