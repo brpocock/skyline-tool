@@ -2389,7 +2389,7 @@ but now also ~s."
 ~a:
 ~10tlda BoatMoving
 ~10tcmp #$ff
-~10tbeq ~:*~a"
+~10tbne ~:*~a"
                 x
                 boat-id ship-name
                 (genlabel "WaitForBoat"))        ))))
@@ -2415,7 +2415,7 @@ but now also ~s."
 ~a:
 ~10tlda BoatMoving
 ~10tcmp #$ff
-~10tbeq ~:*~a"
+~10tbne ~:*~a"
           (genlabel "WaitForBoat")))
 
 (defstage embarks (actor ship-name)
