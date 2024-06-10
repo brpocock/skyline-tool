@@ -228,7 +228,7 @@
               for length = (- next-offset field-start)
               do (clim:formatting-row (t)
                    (clim:formatting-cell (t)
-                     (format t "~%~10t~22a" field-name))
+                     (format t "~10t~22a" field-name))
                    (clim:formatting-cell (t)
                      (format t "@ $~2,'0x" field-start))
                    (clim:formatting-cell (t)
