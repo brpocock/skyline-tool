@@ -1953,7 +1953,7 @@ but now also ~s."
                                        "Decal kind not given for “~:(~a~)”/“~a”"
                                        actor name))
                               ((member decal '("human" "Vizier" "Nefertem"
-                                               "Earl" "Captain" "Princess" "Elder" "phantom" "sailor")
+                                               "Earl" "Captain" "Princess" "Elder" "sentinel" "sailor")
                                        :test #'string-equal)
                                (intern (string-upcase decal) #.*package*))
                               (t (cerror "Use generic HUMAN decal"

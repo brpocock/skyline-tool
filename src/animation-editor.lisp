@@ -25,7 +25,7 @@
     (:vizier '("Vizier"))
     (:nefertem '("PlayerTiles"))
     ((:earl :captain :princess :elder) '("MainNPCs"))
-    (:phantom '("Phantoms"))
+    (:sentinel '("Sentinels"))
     (:sailor '("Sailors"))
     (:player '("PlayerTiles"))
     (:enemy
@@ -47,7 +47,7 @@
     (:captain "Captain Caspar")
     (:princess "Princess Aisling")
     (:elder "Elder Tranh")
-    (:phantom "Phantom Soldiers")
+    (:sentinel "Sentinels")
     (:sailor "Sailors")
     (:player "The Player")
     (:enemy "Enemies")
@@ -58,7 +58,7 @@
 
 (define-constant +decal-kinds+
     '( :player :human :earl :captain :princess :elder :nefertem
-      :vizier :phantom :sailor :enemy :block1 :block2 :block3 :block4)
+      :vizier :sentinel :sailor :enemy :block1 :block2 :block3 :block4)
   :test 'equalp)
 
 (clim:define-presentation-type simple-animation-sequence-index () :inherit-from 'integer)
@@ -112,7 +112,7 @@
         (ecase (simple-animation-sequence-major-kind seq)
           ((:background :scenery) :160a)
           (:npc (case (simple-animation-sequence-decal-kind seq)
-                  ((:nefertem :phantom :enemy) :160a)
+                  ((:nefertem :sentinel :enemy) :160a)
                   (otherwise :160b))))))
 
 (clim:define-application-frame anim-seq-editor-frame ()
@@ -178,7 +178,7 @@
             ((:background :scenery) :160a)
             (:npc (case (simple-animation-sequence-decal-kind
                          (anim-seq-editor-sequence frame))
-                    ((:nefertem :phantom :enemy) :160a)
+                    ((:nefertem :sentinel :enemy) :160a)
                     (otherwise :160b)))))
     (setf (simple-animation-sequence-bytes-width (anim-seq-editor-sequence frame))
           (ecase (simple-animation-sequence-write-mode (anim-seq-editor-sequence frame))
@@ -193,7 +193,7 @@
     (with-input-from-file
         (bin (if artp
                  (cond
-                   ((string= "Phantoms" name)
+                   ((string= "Sentinels" name)
                     (make-pathname
                      :directory (list :relative "Object" "Assets")
                      :name "Art.SandyIslandEnemies" :type "o"))
@@ -271,7 +271,7 @@
                                             (:npc (case (simple-animation-sequence-decal-kind
                                                          (anim-seq-editor-sequence
                                                           *anim-seq-editor-frame*))
-                                                    ((:nefertem :phantom :enemy) :160a)
+                                                    ((:nefertem :sentinel :enemy) :160a)
                                                     (otherwise :160b))))
                               :artp (ecase (simple-animation-sequence-major-kind seq)
                                       ((:background :scenery) nil)
