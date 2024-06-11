@@ -191,7 +191,7 @@
                         (5 "Elder Tranh")
                         (6 "Nefertem")
                         (7 "The Grand Vizier")
-                        (8 "Phantom Soldier")
+                        (8 "Sentinel")
                         (9 "Sailor")
                         (10 "Enemy")
                         (11 "Block 1 NPC")
