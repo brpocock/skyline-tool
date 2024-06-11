@@ -2387,6 +2387,8 @@ but now also ~s."
 ~10tjsr Lib.FindBoat
 
 ~a:
+~10tjsr Lib.ScriptYield
+
 ~10tlda BoatMoving
 ~10tcmp #$ff
 ~10tbne ~:*~a"
