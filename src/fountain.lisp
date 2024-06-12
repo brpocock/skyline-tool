@@ -901,6 +901,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                           #'stage/numeric-beats)
                  (numeric beats
                           #'stage/numeric-beats)
+                 (wait for actor (lambda (_wait _for actor)
+                                   (declare (ignore _wait _for))
+                                   (list 'wait-for actor)))
                  (wait for numeric second
                        #'stage/wait-secs)
                  (wait for numeric seconds
@@ -2255,6 +2258,16 @@ but now also ~s."
 "
                 (floor secs 256)
                 (script-auto-label "WaitForManyFramesCounter")))))
+
+(defstage wait-for (actor)
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
+      (require-actor actor)
+    (unless found-in-scene-p
+      (cerror "Continue, ignoring wait request"
+              "Asked to wait for actor ~:(~a~), but they are not in the scene" actor)
+      (return))
+    (format t "~%~10tlda # CharacterID_~a~%~10tjsr Lib.SettleActor~%"
+            (pascal-case (string name)))))
 
 (defvar *dict-words* nil)
 
