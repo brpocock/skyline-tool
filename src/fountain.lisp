@@ -2197,9 +2197,15 @@ but now also ~s."
 ~10tlda # FadeSpeed~:(~a~)
 ~10tsta FadingSpeed
 ~10tlda # FadeColor~:(~a~)
-~10tsta FadingTarget"
+~10tsta FadingTarget
+
+~a:
+~10tjsr Lib.ScriptYield
+~10tlda FadingTarget
+~10tbne ~:*~a"
           (pascal-case (string speed))
-          (pascal-case (string to-color))))
+          (pascal-case (string to-color))
+          (genlabel "FadeOut")))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
