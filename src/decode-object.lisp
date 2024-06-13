@@ -272,6 +272,7 @@
       class-name)))
 
 (defun decode-all-objects (&optional (dump (load-dump-into-mem)))
+  (decode-player-object dump)
   (loop for i from 0 below #x40
         for object-start = (+ (elt dump (+ i (find-label-from-files "ObjectL")))
                               (* #x100 (elt dump (+ i (find-label-from-files "ObjectH")))))
@@ -379,10 +380,19 @@ Room for objects:
   "Describe the object pointed-to by the Self pointer from a dump"
   (clim-simple-interactor:run-in-simple-interactor #'decode-self-object
                                                    :height 850
-                                                   :process-name "Object “Self”"))
+                                                   :process-name "Decode Self Objects"
+                                                   :window-title "Object “Self”"))
+
+(defun show-all-objects ()
+  "Decode all objects currently in the object heap"
+  (clim-simple-interactor:run-in-simple-interactor #'decode-all-objects
+                                                   :height 850
+                                                   :process-name "All Objects"
+                                                   :window-title "All Objects"))
 
 (defun show-player-object ()
   "Describe the Player object from a dump"
   (clim-simple-interactor:run-in-simple-interactor #'decode-player-object
                                                    :height 850
-                                                   :process-name "Player Object"))
+                                                   :process-name "Player Object"
+                                                   :window-title "Player Object"))

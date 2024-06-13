@@ -44,7 +44,8 @@
        show-animation-buffer
        show-decal
        show-player-object
-       show-self-object)
+       show-self-object
+       show-all-objects)
       (lisp
        run-repl
        show-lisp-room
