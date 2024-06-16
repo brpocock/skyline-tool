@@ -308,6 +308,7 @@
                  :type "size"))
 
 (defun allocate-assets (build &optional (*machine* 7800))
+  "allocate the banks for assets for BUILD (AA, Public, &c)"
   (assert (member build +all-builds+ :test 'equal) (build)
           "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
   (let ((assets-list (all-assets-for-build build)))
