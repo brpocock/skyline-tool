@@ -784,7 +784,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                     (declare (ignore _equips _article))
                                                     (list 'equip actor item))))
 
-    (item-name nothing knife shield (small shield) hammer potion sword (large shield)
+    (item-name nothing knife shield (small shield) hammer potion sword (large shield) (no shield)
                bow torch chalice staff wand rope glass wrench)
     
     (article a an the)
@@ -2083,15 +2083,25 @@ but now also ~s."
 
 (defstage equip (actor item)
   (format t "~%~10tlda # CharacterID_~a" (pascal-case (string actor)))
-  (format t "
+  (if (search "SHIELD" (string-upcase item))
+      (format t "
+~10tjsr FindCharacter
+
+~10tbcs ~a
+
+~10t.SetProp CharacterShield, # Shield~a
+~0@*~a:~%"
+              (genlabel "DoneEquip")
+              (pascal-case (string item)))
+      (format t "
 ~10tjsr FindCharacter
 
 ~10tbcs ~a
 
 ~10t.SetProp CharacterEquipment, # Equip~a
 ~0@*~a:~%"
-          (genlabel "DoneEquip")
-          (pascal-case (string item))))
+              (genlabel "DoneEquip")
+              (pascal-case (string item)))))
 
 (defstage prepare (&rest directions)
   (format t "~%~10t.mva AllowPageFlipP, # 0~%")
