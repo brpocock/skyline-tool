@@ -675,7 +675,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
               gains gets glass go goes grand grappling-hook greater
-              hair hammer has head headed hear here
+              hair hammer has head headed hear here hp hurt
               if imaginary in include inclusive is it
               knife
               large launch left less like lit logand logarithm logical
@@ -762,6 +762,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             dance-clause
             enter-clause
             equip-clause
+            actor-is-clause
             exit-clause
             walk-clause
             facing-clause
@@ -776,7 +777,20 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (cut to center on actor/location)
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
-
+    
+    (actor-is-clause (someone is actor-coda (lambda (someone _is coda)
+                                              (declare (ignore _is))
+                                              (cons (car coda) (cons someone (rest coda))))))
+    (actor-coda
+     (at location (lambda (_at location)
+                    (declare (ignore _at))
+                    (list 'enter location)))
+     (hurt (lambda (_hurt)
+             (declare (ignore _hurt))
+             (list 'hurt 1)))
+     (hurt for number hp (lambda (_hurt _for number _xp)
+                           (declare (ignore _hurt _for _xp))
+                           (list 'hurt number))))
     (equip-clause (actor equips item-name (lambda (actor _equips item)
                                             (declare (ignore _equips))
                                             (list 'equip actor item)))
@@ -1075,9 +1089,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (conditionals (simple-conditional |,| conditionals
                                       #'stage/conditionals-list))
     (enter-clause (skyline-tool::enter someone at location
-                                       #'stage/enter)
-                  (someone is at location (lambda (someone is at location)
-                                            (stage/enter is someone at location))))
+                                       #'stage/enter))
     (ship-clause
      (the ship-name appears in the east/west headed for actor/location
           #'stage/empty-boat)
@@ -2081,6 +2093,22 @@ but now also ~s."
 
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
+
+(defstage hurt (actor amount)
+  (destructuring-bind (&key name &allow-other-keys)
+      (require-actor actor)
+    (format t "
+~10tlda # CharacterID_~a
+~10tjsr Lib.FindCharacter
+
+~10tbcs ~a
+
+~10t.mva HurtHP, # ~d
+~10t.CallMethod CallActorHurt
+~1@*~a:~%"
+            (pascal-case (string name))
+            (genlabel "DoneHurt")
+            (round amount))))
 
 (defstage equip (actor item-ident)
   (destructuring-bind (&key name &allow-other-keys)
