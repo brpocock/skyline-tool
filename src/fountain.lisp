@@ -2082,10 +2082,12 @@ but now also ~s."
   (map nil #'stage-directions->code directions))
 
 (defstage equip (actor item)
-  (format t "~%~10tlda # CharacterID_~a" (pascal-case (string actor)))
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
+      (require-actor actor)
+    (format t "~%~10tlda # CharacterID_~a" (pascal-case (string name))))
   (if (search "SHIELD" (string-upcase item))
       (format t "
-~10tjsr FindCharacter
+~10tjsr Lib.FindCharacter
 
 ~10tbcs ~a
 
@@ -2094,7 +2096,7 @@ but now also ~s."
               (genlabel "DoneEquip")
               (pascal-case (string item)))
       (format t "
-~10tjsr FindCharacter
+~10tjsr Lib.FindCharacter
 
 ~10tbcs ~a
 
@@ -2102,6 +2104,7 @@ but now also ~s."
 ~0@*~a:~%"
               (genlabel "DoneEquip")
               (pascal-case (string item)))))
+
 
 (defstage prepare (&rest directions)
   (format t "~%~10t.mva AllowPageFlipP, # 0~%")
