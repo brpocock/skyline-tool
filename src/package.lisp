@@ -37,6 +37,7 @@
 (defparameter *studio* (cdr (assoc :*studio *project.json*)))
 (defparameter *publisher* (cdr (assoc :*publisher *project.json*)))
 (defparameter *machine* (cdr (assoc :*machine *project.json*)))
+(defparameter *sound* (cdr (assoc :*sound *project.json*)))
 (defparameter *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*))))
 (defparameter *default-skin-color* (cdr (assoc :*default-skin-color *project.json*)))
 (defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))

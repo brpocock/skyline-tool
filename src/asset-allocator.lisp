@@ -439,7 +439,7 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
 
 (defun makefile-contains-target-p (target)
   (let ((target-prefix (concatenate 'string (typecase target
-                                              (pathname (namestring target))
+                                              (pathname (enough-namestring target))
                                               (string target)
                                               (t (princ-to-string target)))
                                     ":")))
@@ -453,10 +453,9 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
   (let ((generated-asset-pathname
           (make-pathname :directory '(:relative "Source" "Generated" "Assets")
                          :name name :type "s")))
-    (when (some (curry #'eql 0) (list (search "Song." name)
-                                      (search "Art." name)
-                                      (search "Blob." name)
-                                      (search "Script." name)))
+    (when (some (lambda (frag)
+                  (eql 0 (search frag name)))
+                (list "Song." "Art." "Blob." "Script."))
       (return-from find-included-file generated-asset-pathname)))
   (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
     (let ((possible-file (make-pathname :directory path :name name :type "s")))
