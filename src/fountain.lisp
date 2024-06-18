@@ -784,7 +784,8 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                     (declare (ignore _equips _article))
                                                     (list 'equip actor item))))
 
-    (item-name nothing knife shield (small shield) hammer potion sword (large shield) (no shield)
+    (item-name nothing knife shield (small shield)
+               hammer potion sword (large shield) (no shield)
                bow torch chalice staff wand rope glass wrench)
     
     (article a an the)
@@ -2081,29 +2082,30 @@ but now also ~s."
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
 
-(defstage equip (actor item)
-  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
+(defstage equip (actor item-ident)
+  (destructuring-bind (&key name &allow-other-keys)
       (require-actor actor)
     (format t "~%~10tlda # CharacterID_~a" (pascal-case (string name))))
-  (if (search "SHIELD" (string-upcase item))
-      (format t "
+  (let ((item (format nil "~{~a~^ ~}" (ensure-list item-ident))))
+    (if (search "SHIELD" (string-upcase item))
+        (format t "
 ~10tjsr Lib.FindCharacter
 
 ~10tbcs ~a
 
 ~10t.SetProp CharacterShield, # Shield~a
 ~0@*~a:~%"
-              (genlabel "DoneEquip")
-              (pascal-case (string item)))
-      (format t "
+                (genlabel "DoneEquip")
+                (pascal-case (string item)))
+        (format t "
 ~10tjsr Lib.FindCharacter
 
 ~10tbcs ~a
 
 ~10t.SetProp CharacterEquipment, # Equip~a
 ~0@*~a:~%"
-              (genlabel "DoneEquip")
-              (pascal-case (string item)))))
+                (genlabel "DoneEquip")
+                (pascal-case (string item))))))
 
 
 (defstage prepare (&rest directions)
