@@ -667,30 +667,30 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a aboard above absolute all amulet and appears arrow arrows armor at awakens
+              a an aboard above absolute all amulet and appears arrow arrows armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close continued crown crowns cut cyan cyan-lit
               dances dancing dark difference dim disembarks divided do dolly done down durbat
-              e east either embarks enter enters equal exclusive exit exits
+              e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
               gains gets glass go goes grand grappling-hook greater
               hair hammer has head headed hear here
               if imaginary in include inclusive is it
               knife
-              launch left less like lit logand logarithm logical
+              large launch left less like lit logand logarithm logical
               logior logxor looks loses
               magic mask minus moves moving
-              natural negative next night none nor normal-lit normally north not
+              natural negative next night none nor normal-lit normally north not nothing
               of on open or
               part pi pirate pitch player-armor-color
               player-hair-color player-skin-color playing plus
               potion positive power product  purple
               quickly quotient
-              raining raise raised ready real red red-lit repeat right ring robe root round rowboat
+              raining raise raised ready real red red-lit repeat right ring robe rope root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
-              skin sloop slowly staff south suddenly sum sword
-              square starts stops
+              skin sloop slowly small staff south 
+              square starts stops suddenly sum sword
               than the then times to torch truck tunic
               under unless up upon
               value
@@ -761,6 +761,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             wake/sleep-clause
             dance-clause
             enter-clause
+            equip-clause
             exit-clause
             walk-clause
             facing-clause
@@ -776,10 +777,22 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
 
+    (equip-clause (actor equips item-name (lambda (actor _equips item)
+                                            (declare (ignore _equips))
+                                            (list 'equip actor item)))
+                  (actor equips article item-name (lambda (actor _equips _article item)
+                                                    (declare (ignore _equips _article))
+                                                    (list 'equip actor item))))
+
+    (item-name nothing knife shield (small shield) hammer potion sword (large shield)
+               bow torch chalice staff wand rope glass wrench)
+    
+    (article a an the)
+    
     (around-here here
                  out
                  (around here))
-
+    
     (weather-condition raining)
 
     (weather-clause (it is clear (lambda (&rest _)
@@ -2068,6 +2081,18 @@ but now also ~s."
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
 
+(defstage equip (actor item)
+  (format t "~%~10tlda # CharacterID_~a" (pascal-case (string actor)))
+  (format t "
+~10tjsr FindCharacter
+
+~10tbcs ~a
+
+~10t.SetProp CharacterEquipment, # Equip~a
+~0@*~a:~%"
+          (genlabel "DoneEquip")
+          (pascal-case (string item))))
+
 (defstage prepare (&rest directions)
   (format t "~%~10t.mva AllowPageFlipP, # 0~%")
   (map nil #'stage-directions->code directions)
@@ -2937,6 +2962,7 @@ EndOfScript~a
       (format t "
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
+
 ~10tstx DialogueSpeakerDecal
 ~10tlda #$ff
 ~10tsta DialogueSpeakerX"
