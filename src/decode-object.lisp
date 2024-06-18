@@ -154,6 +154,7 @@
               (#x80 "No Shield")
               (otherwise "(invalid value)"))))
   (:method ((field (eql :character-equipment)) value s)
+    ;; TODO move these into JSON
     (format s " = ~a"
             (case (first value)
               (#x80 "No Item")
