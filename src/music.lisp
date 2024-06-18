@@ -1068,7 +1068,8 @@ Gathered text:~{~% • ~a~}"
                                           distortion))
                               object)
                  (setf now time)
-                 (appendf off-notes (list (list (+ time duration) voice))))))))
+                 (appendf off-notes (list (list (+ time duration) voice)))))))
+  (write-bytes #(0 0 0 0 0 0 0 0) object))
 
 (defun assigned-song-bank-and-title (assignment)
   (list (car assignment)
