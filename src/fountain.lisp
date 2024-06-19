@@ -2476,19 +2476,24 @@ but now also ~s."
 ~a:
 ~10tjsr Lib.ScriptYield
 
-~10tlda BoatMoving
-~10tcmp #$ff
-~10tbne ~:*~a"
+~10tldx #~d~32t; Boat “~a”
+~10tjsr Lib.FindBoat
+
+~10tldy # BoatState
+~10tlda (Self), y
+~10t;; cmp # BoatStateAnchored~32t; zero
+~10tbne ~3@*~a"
                 x
                 boat-id ship-name
-                (genlabel "WaitForBoat"))        ))))
+                (genlabel "WaitForBoat")
+                boat-id ship-name)        ))))
 
 (defstage sail-away (ship-name east/west)
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*)))
-      (format t "~%~10tldx #~d~32t; Boat “~a”" boat-id ship-name)))
-  (format t "
+      (format t "~%~10tldx #~d~32t; Boat “~a”" boat-id ship-name)
+      (format t "
 ~10tjsr Lib.FindBoat
 
 ~10tbcc ~a
@@ -2496,16 +2501,23 @@ but now also ~s."
 ~10t.DebugBreak \"dwmb\" ; \"Dude, where's my boat?\"
 ~:*~a:
 "
-          (script-auto-label "FoundBoat"))
-  (ecase east/west
-    (east (format t "~%~10t.mva BoatDestX, MapWidth~%~10t.SetProp BoatState, # BoatStateSailEast"))
-    (west (format t "~%~10t.mva BoatDestX, #-3~%~10t.SetProp BoatState, # BoatStateSailWest")))
-  (format t "
+              (script-auto-label "FoundBoat"))
+      (ecase east/west
+        (east (format t "~%~10t.mva BoatDestX, MapWidth~%~10t.SetProp BoatState, # BoatStateSailEast"))
+        (west (format t "~%~10t.mva BoatDestX, #-3~%~10t.SetProp BoatState, # BoatStateSailWest")))
+      (format t "
 ~a:
-~10tlda BoatMoving
-~10tcmp #$ff
-~10tbne ~:*~a"
-          (genlabel "WaitForBoat")))
+~10tjsr Lib.ScriptYield
+
+~10tldx #~d~32t; Boat “~a”
+~10tjsr Lib.FindBoat
+
+~10tldy # BoatState
+~10tlda (Self), y
+~10t;; cmp # BoatStateAnchored~32t; zero
+~10tbne ~0@*~a"
+              (genlabel "WaitForBoat")
+              boat-id ship-name))))
 
 (defstage embarks (actor ship-name)
   (format t "~%~10t;; TODO actor ~a embarks upon ship ~a" actor ship-name))
