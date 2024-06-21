@@ -868,7 +868,7 @@ Dist/~:*~a.Test.bin: \\~
 ~0@*Dist/~a.Test.bin: .EXTRA_PREREQS = bin/7800sign
 "
           *game-title*
-          (loop for bank below (1- (number-of-banks :public :ntsc))
+          (loop for bank below (number-of-banks :public :ntsc)
                 collect bank)
           *game-title*))
 
