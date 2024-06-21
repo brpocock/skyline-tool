@@ -1006,7 +1006,7 @@ Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/B
         (if (and (= #x3f *last-bank*)
                  (= #x3e *bank*))
             (format t "~%
-Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~*
+Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
 	mkdir -p Object/
 	touch $@
 
@@ -1014,18 +1014,7 @@ Object/Bank~(~2,'0x~).Test.o:
 	mkdir -p Object/
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
-                    *bank*
-                    (if (probe-file bank-source)
-                        (recursive-read-deps bank-source)
-                        (list (make-pathname :directory (list :relative "Source" "Generated")
-                                             :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
-                                             :type "s")))
-                    (< *bank* *last-bank*)
-                    (when (= *bank* *last-bank*)
-                      (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
-                    (first-assets-bank "Test")
-                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
-                            (include-paths-for-current-bank)))
+                    *bank*)
             (format t "~%
 Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastBankDefs.Test.NTSC.s~]
 	mkdir -p Object
