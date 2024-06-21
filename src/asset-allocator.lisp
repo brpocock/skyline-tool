@@ -253,7 +253,7 @@
           (removef assets asset))))
     (let ((available-banks (- (number-of-banks build video)
                               (first-assets-bank build)
-                              (if (= *last-bank* #x3f)
+                              (if (= #x40 (number-of-banks build video))
                                   2
                                   1)))
           (tries 0))
