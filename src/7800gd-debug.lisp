@@ -11,7 +11,6 @@
              #:cmd-write-cart
              #:cmd-write-data
              #:cmd-write-data-complete
-             #:cmd-status
              #:upload
              #:with-open-7800gd-port))
 
@@ -58,8 +57,8 @@
 (defconstant +a78-save-savekey+ (ash 1 1))
 (defconstant +a78-video-hint-composite+ (ash 1 1))
 
-(defconstant +a78-controller-atarivox-savekey 10)
-(defconstant +a78-controller-mega7800 12)
+(defconstant +a78-controller-atarivox-savekey+ 10)
+(defconstant +a78-controller-mega7800+ 12)
 
 (defconstant +ea78-v4-mapper-linear+ 0)
 (defconstant +ea78-v4-mapper-supergame+ 1)
@@ -189,8 +188,8 @@
 
 (defun cmd-write-data-complete (port)
   "Check for write data completion"
-  (or (equalp #(0) (com-read port 1))
-      (error "Write data not completed")))
+  (unless (equalp #(0) (com-read port 1))
+    (error "Write data not completed")))
 
 (defun cmd-execute (port &key
                            (mapper +ea78-v4-mapper-supergame+)
