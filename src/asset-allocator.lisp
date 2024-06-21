@@ -1007,10 +1007,11 @@ Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/B
                  (= #x3e *bank*))
             (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~*
+	mkdir -p Object/
 	touch $@
 
 Object/Bank~(~2,'0x~).Test.o:
-	mkdir -p Object
+	mkdir -p Object/
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
                     *bank*
