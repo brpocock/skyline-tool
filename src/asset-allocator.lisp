@@ -868,7 +868,7 @@ Dist/~:*~a.Test.bin: \\~
 ~0@*Dist/~a.Test.bin: .EXTRA_PREREQS = bin/7800sign
 "
           *game-title*
-          (loop for bank below (number-of-banks :public :ntsc)
+          (loop for bank below (1- (number-of-banks :public :ntsc))
                 collect bank)
           *game-title*))
 
@@ -1003,7 +1003,26 @@ Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/B
 	bin/skyline-tool labels-to-include Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt \\
 		c000 ffff LastBankDefs.Test.NTSC"
                   *bank* *last-bank*))
-        (format t "~%
+        (if (and (= #x3f *last-bank*)
+                 (= *bank* (1- *last-bank*)))
+            (format t "~%
+Object/Bank~(~2,'0x~).Test.o:
+	mkdir -p Object
+	dd if=/dev/zero bs=1024 count=16 of=$@
+"
+                    *bank*
+                    (if (probe-file bank-source)
+                        (recursive-read-deps bank-source)
+                        (list (make-pathname :directory (list :relative "Source" "Generated")
+                                             :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
+                                             :type "s")))
+                    (< *bank* *last-bank*)
+                    (when (= *bank* *last-bank*)
+                      (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
+                    (first-assets-bank "Test")
+                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                            (include-paths-for-current-bank)))
+            (format t "~%
 Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastBankDefs.Test.NTSC.s~]
 	mkdir -p Object
 	${AS7800} ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
@@ -1011,18 +1030,18 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt
 "
-                *bank*
-                (if (probe-file bank-source)
-                    (recursive-read-deps bank-source)
-                    (list (make-pathname :directory (list :relative "Source" "Generated")
-                                         :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
-                                         :type "s")))
-                (< *bank* *last-bank*)
-                (when (= *bank* *last-bank*)
-                  (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
-                (first-assets-bank "Test")
-                (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
-                        (include-paths-for-current-bank)))))))
+                    *bank*
+                    (if (probe-file bank-source)
+                        (recursive-read-deps bank-source)
+                        (list (make-pathname :directory (list :relative "Source" "Generated")
+                                             :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
+                                             :type "s")))
+                    (< *bank* *last-bank*)
+                    (when (= *bank* *last-bank*)
+                      (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
+                    (first-assets-bank "Test")
+                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                            (include-paths-for-current-bank))))))))
 
 (defun write-makefile-for-blobs ()
   (dolist (blob (remove-duplicates
