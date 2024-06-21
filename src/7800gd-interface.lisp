@@ -25,15 +25,14 @@ any dangerous  or sensitive  devices are connected  to ANY  serial port,
 instead, find the  device port pathname (e.g. /dev/ttyUSB0)  and pass it
 in yourself. It is possible that this probe process could cause issues.
 
-When ready, hit Return, and I'll try to locate the path to the burner.")
+When ready, hit Return, and I'll try to locate the path to the interface.")
   (force-output)
   (let ((ports (click.adventuring.skyline.eprom:enumerate-real-serial-ports)))
     (format t "~&Searching ~:d serial ports…" (length ports))
     (let ((thread-pool (mapcar #'spawn-thread-to-look-for-7800gd-on-port ports)))
-      (labels ((kill-threads () (map nil
-                                     (lambda (th) (when (and th (thread-alive-p th))
-                                                    (destroy-thread th)))
-                                     thread-pool)))
+      (labels ((kill-threads () (dolist (th thread-pool)
+				       (when (and th (thread-alive-p th))
+                                                    (destroy-thread th)))))
         (loop
            (dolist (thread thread-pool)
              (unless (thread-alive-p thread)
@@ -60,7 +59,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                        (mapcar #'thread-name thread-pool))))
            (sleep 3/2))))))
 
-(defun push-7800gd (binary-pathname &key serial-pathname (executep t))
+(defun push-7800gd (binary-pathname &key (serial-pathname (uiop:getenv "TTY")) (executep t))
   "Push the BINARY-PATHNAME file in BIN format to the 7800GD on serial port SERIAL-PATHNAME.
 
 If SERIAL-PATHNAME is not supplied, search for the 7800GD on any serial port.

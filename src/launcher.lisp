@@ -114,7 +114,7 @@ asset) changes, this may work."
   (clim-simple-interactor:run-in-simple-interactor
    (lambda ()
      (push-7800gd-bin-no-execute (format nil "Dist/~a.Public.NTSC.bin" *game-title*)
-                                 :bump-version-p t))
+                                 (find-7800gd-serial-port) t))
    :process-name "Shove binary into running system"))
 
 (defun explain-error-code (error-code)
