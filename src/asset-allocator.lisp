@@ -253,7 +253,9 @@
           (removef assets asset))))
     (let ((available-banks (- (number-of-banks build video)
                               (first-assets-bank build)
-                              1))
+                              (if (= *last-bank* #x3f)
+                                  2
+                                  1)))
           (tries 0))
       (format *trace-output*
               "~&Will try every possible permutation to find one that fits into ~:d ROM bank~:p … "
@@ -839,6 +841,15 @@ Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
           (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
                   (include-paths-for-current-bank))))
 
+(defun write-ram-bank-makefile (&key build video)
+  "Writes the Makefile entry for the RAM bank used by 7800GD"
+  (format t "~%
+Object/Bank3e.~a.~a.o:
+	mkdir -p Object
+	dd if=/dev/zero bs=1024 count=16 of=$@
+"
+          build video))
+
 (defun write-makefile-test-target ()
   "Writes the test ROM target for the Makefile"
   (format t "~%
@@ -1076,6 +1087,9 @@ mentioned in the top-level Makefile."
                   ((= *bank* *last-bank*)
                    (write-bank-makefile (last-bank-source-pathname)
                                         :build build :video video))
+                  ((and (= *last-bank* #x3f)
+                        (= *bank* #x3e))
+                   (write-ram-bank-makefile :build build :video video))
                   ((probe-file bank-source)
                    (write-bank-makefile bank-source
                                         :build build :video video))
