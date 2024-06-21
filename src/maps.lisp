@@ -1448,3 +1448,16 @@ range is 0 - #xffffffff (4,294,967,295)"
             (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
             (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
             (format output "~%~10t.fi~%")))))))
+
+(defun tilesets-referenced-by-map (&optional (map *current-scene*))
+  (mapcar (lambda (xml-elements)
+            (mapcan (lambda (xml-attrs)
+                      (mapcan #'second
+                              (remove-if-not (lambda (attr)
+                                               (string= (first attr) "source"))
+                                             xml-attrs)))
+                    (cdr xml-elements)))
+          (xml-matches "tileset" (xmls:parse-to-list (alexandria:read-file-into-string map)))))
+
+(defun load-tilesets (tilesets-list &optional (map *current-scene*))
+  (mapcar (rcurry #'load-tileset map) tilesets-list))

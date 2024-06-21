@@ -3369,3 +3369,9 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
         (format *trace-output* "~&//* Script “~:(~a~)” is scene ~:d; id $~4,'0x"
                 script-moniker (logand #x7ff id) id)
         id))))
+
+(defun find-decal-by-name (decal &key (map *current-scene*)
+                                      (tilesets (tilesets-referenced-by-map map)))
+  (print (remove-if (lambda (tileset)
+                      (zerop (tileset-gid tileset)))
+                    (load-tilesets tilesets))))
