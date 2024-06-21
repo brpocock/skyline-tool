@@ -948,6 +948,7 @@ set ram@4000
 set snes1
 unset 7800joy2
 set savekey
+set hsc
 set composite
 set pokey@450
 save
