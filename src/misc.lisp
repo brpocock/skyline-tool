@@ -1098,22 +1098,24 @@ then use $f9 (512kiB) banking."
   (format s "#<Hash-Table (~s): ~s>" (hash-table-test hash-table) (hash-table-plist hash-table)))
 ;;
 (defun write-cart-header (header-name binary-name)
-  (let ((size (ql-util:file-size binary-name)))
-    (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
-                                             :if-exists :supersede)
-      (write-byte (char-code #\C) header)
-      (write-byte (char-code #\A) header)
-      (write-byte (char-code #\R) header)
-      (write-byte (char-code #\T) header)
-      (write-bytes #(0 0 0) header)
-      (write-byte (ecase size
-                    (#x8000 4)
-                    (#x10000 71)
-                    (#x20000 72)
-                    (#x40000 73)
-                    (#x80000 74))
-                  header)
-      (write-bytes #(0 0 0 0 0 0 0 0) header))))
+  (ecase *machine*
+    (5200
+     (let ((size (ql-util:file-size binary-name)))
+       (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede)
+         (write-byte (char-code #\C) header)
+         (write-byte (char-code #\A) header)
+         (write-byte (char-code #\R) header)
+         (write-byte (char-code #\T) header)
+         (write-bytes #(0 0 0) header)
+         (write-byte (ecase size
+                       (#x8000 4)
+                       (#x10000 71)
+                       (#x20000 72)
+                       (#x40000 73)
+                       (#x80000 74))
+                     header)
+         (write-bytes #(0 0 0 0 0 0 0 0) header))))))
 
 (defun prepend-fundamental-mode (file)
   (let ((contents (read-file-into-string file)))
