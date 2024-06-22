@@ -2105,7 +2105,7 @@ but now also ~s."
   (destructuring-bind (&key x y gid) (find-named-object-in-scene item-name)
     (let ((x (floor x 8))
           (y (floor y 16))
-          (art (* 2 gid))
+          (art (logand #xff (* 2 gid)))
           (bye (genlabel "NextPickUp"))
           (loop (genlabel "LoopPickUp"))
           (done (genlabel "DonePickUp")))
