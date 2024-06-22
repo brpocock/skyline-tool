@@ -2103,9 +2103,9 @@ but now also ~s."
 (defstage pick-up (actor item-name)
   (declare (ignore actor))
   (destructuring-bind (&key x y gid) (find-named-object-in-scene item-name)
-    (let ((x (floor x 8))
-          (y (floor y 16))
-          (art (logand #xff (* 2 gid)))
+    (let ((x (floor (the real x) 8))
+          (y (1- (floor (the real y) 16)))
+          (art (logand #xff (* 2 (1- (the real gid)))))
           (bye (genlabel "NextPickUp"))
           (loop (genlabel "LoopPickUp"))
           (done (genlabel "DonePickUp")))
@@ -2125,11 +2125,16 @@ but now also ~s."
 ~10tcmp #$~2,10x
 ~10tbne ~a
 
+~10tjsr Lib.DestroyDecal
+
+~10tldx Ref
+~10t.mvaw Size, BasicScenerySize
 ~10tlda DecalObjectL, x
 ~10tsta Self
 ~10tlda DecalObjectH, x
 ~10tsta Self + 1
-~10tstx Ref
+~10tlda #-1
+~10tsta Ref
 ~10tjsr Lib.DestroyObject
 
 ~10tjmp ~a
