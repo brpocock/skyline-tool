@@ -1448,3 +1448,13 @@ range is 0 - #xffffffff (4,294,967,295)"
             (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
             (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
             (format output "~%~10t.fi~%")))))))
+
+(defun find-named-object-in-scene (name-object &optional (scene-name *current-scene*))
+  (dolist (match (xml-matches "object" (xml-match "objectgroup" (locale-xml scene-name))))
+    (when-let (this-name (ignore-errors (assocdr "name" (cadr match))))
+      (when (string-equal this-name name-object)
+        (return-from find-named-object-in-scene
+          (list :x (parse-number (assocdr "x" (cadr match)))
+                :y (parse-number (assocdr "y" (cadr match)))
+                :gid (parse-integer (assocdr "gid" (cadr match))))))))
+  (error "Can't find “~a” in scene “~a”" name-object scene-name))

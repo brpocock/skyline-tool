@@ -683,7 +683,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               magic mask minus moves moving
               natural negative next night none nor normal-lit normally north not nothing
               of on open or
-              part pi pirate pitch player-armor-color
+              part pi picks pirate pitch player-armor-color
               player-hair-color player-skin-color playing plus
               potion positive power product  purple
               quickly quotient
@@ -762,6 +762,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             dance-clause
             enter-clause
             equip-clause
+            pick-up-clause
             actor-is-clause
             exit-clause
             walk-clause
@@ -788,16 +789,24 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (hurt (lambda (_hurt)
              (declare (ignore _hurt))
              (list 'hurt 1)))
-     (hurt for number hp (lambda (_hurt _for number _xp)
-                           (declare (ignore _hurt _for _xp))
+     (hurt for number hp (lambda (_hurt _for number _hp)
+                           (declare (ignore _hurt _for _hp))
                            (list 'hurt number))))
+
+    (pick-up-clause (actor picks up article quoted (lambda (actor _picks _up _an item)
+                                                     (declare (ignore _picks _up _an))
+                                                     (list 'pick-up actor item)))
+                    (actor picks up quoted (lambda (actor _picks _up item)
+                                             (declare (ignore _picks _up))
+                                             (list 'pick-up actor item))))
+
     (equip-clause (actor equips item-name (lambda (actor _equips item)
                                             (declare (ignore _equips))
                                             (list 'equip actor item)))
                   (actor equips article item-name (lambda (actor _equips _article item)
                                                     (declare (ignore _equips _article))
                                                     (list 'equip actor item))))
-
+    
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
                bow torch chalice staff wand rope glass wrench)
@@ -2090,6 +2099,51 @@ but now also ~s."
   (or (when (null name) nil)
       (position name *common-palette* :test #'string-equal)
       (error "Not a common color name: ~a (expected one of: ~s)" name *common-palette*)))
+
+(defstage pick-up (actor item-name)
+  (declare (ignore actor))
+  (destructuring-bind (&key x y gid) (find-named-object-in-scene item-name)
+    (let ((x (floor x 8))
+          (y (floor y 16))
+          (art (* 2 gid))
+          (bye (genlabel "NextPickUp"))
+          (loop (genlabel "LoopPickUp"))
+          (done (genlabel "DonePickUp")))
+      (format t "
+~10t;; Find “~a” at (~d, ~d)
+~10tldx NumDecals
+~a:
+~10tlda DecalXH, x
+~10tcmp #~d
+~10tbne ~a
+
+~10tlda DecalYH, x
+~10tcmp #~d
+~10tbne ~a
+
+~10tlda DecalArtL, x
+~10tcmp #$~2,10x
+~10tbne ~a
+
+~10tlda DecalObjectL, x
+~10tsta Self
+~10tlda DecalObjectH, x
+~10tsta Self + 1
+~10tstx Ref
+~10tjsr Lib.DestroyObject
+
+~10tjmp ~a
+
+~a:
+~10tdex
+~10tbpl ~a
+
+~a:"
+              item-name x y
+              loop
+              x bye y bye art bye
+              done
+              bye loop done))))
 
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
