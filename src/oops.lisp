@@ -41,7 +41,7 @@ node [shape=Mrecord];
                            (slots (gethash class-name class-slots))
                            (methods (gethash class-name methods-set)))
                        (format class-graph "
-~a [label=\"{~a|~{. ~a (~d)~^|~}|~{# ~a~^|~}}\"]"
+~a [label=\"{~a|~{. ~a (~d byte~:p)~^|~}|~{# ~a~^|~}}\"]"
                                class-name
                                (title-case class-name)
                                (when slots
