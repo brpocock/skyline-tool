@@ -25,7 +25,7 @@ node [shape=Mrecord];
 
 ~10tCallBasicObjectClassP = $00
 ")
-            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Methods (2) | # Class P}\"];")
+            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Methods (2 bytes) | # Class P}\"];")
             (let ((methods-set (make-hash-table :test 'equal))
                   (class-slots (make-hash-table :test 'equal))
                   (class-bases (make-hash-table :test 'equal))
