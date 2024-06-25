@@ -2348,7 +2348,6 @@ but now also ~s."
             x y)))
 
 (defstage jump (script-id)
-  (print-end-of-script-label)
   (format t "
 ~10t.mvaw NextScript, $~4,'0x
 ~10tlda # <JLoadScript
@@ -3045,20 +3044,6 @@ Speech_~a:~
   (return-from fountain/write-speech-branch
     (dialogue-hash text)))
 
-(defun print-end-of-script-label (&optional value)
-  (format t "
-~10t.weak
-~10t  EndOfScript_Defined_P := false
-~10t.endweak
-~10t.if !EndOfScript_Defined_P
-~10tEndOfScript_Defined_P := true
-EndOfScript~a
-~10t.fi
-"
-          (if value
-              (format nil " = $~4,'0x" value)
-              ":")))
-
 (defun write-off-camera-speaker (actor-name)
   (unless (find-actor actor-name)
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
@@ -3142,13 +3127,11 @@ Script_~a_~a: .block
                       (write-off-camera-speaker name)))))
               (speech (fountain/write-speech value))
               (reboot
-               (print-end-of-script-label)
                (format t "
 ~10tjmp Lib.WarmStart
 ~10t.bend")
                (return))
               (game-over
-               (print-end-of-script-label)
                (assert (member value '("TITLE" "LOST" "WON") :test 'string-equal)
                        (value)
                        "GAME OVER currently supports LOST or WON only, not ~s" value)
@@ -3158,7 +3141,6 @@ Script_~a_~a: .block
 "
                        value))
               (end
-               (print-end-of-script-label)
                (format t "
 ~10tjmp Lib.ScriptFinis~32t; ~a
 ~10t.bend
@@ -3173,7 +3155,6 @@ Script_~a_~a: .block
 ~10tsta FadingTarget"
                        (pascal-case (string value))))
               (branch
-               (print-end-of-script-label 0)
                (destructuring-bind (option . text) value
                  (fountain/write-speech-branch option text)))
               (go (format t "~%~10tjmp ScriptLabel_~a~%"
