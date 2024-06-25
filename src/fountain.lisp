@@ -3089,14 +3089,6 @@ EndOfScript~a
 
 Script_~a_~a: .block
 
-~10t.weak
-~10t  EndOfScript_Defined_P := false
-~10t.endweak
-~10t.if EndOfScript_Defined_P
-~10t.mvaw ScriptSkipAddress, EndOfScript
-~10t.else
-~10t.mvaw ScriptSkipAddress, 0
-~10t.fi
 "
 
           (pascal-case (last-elt (pathname-directory
