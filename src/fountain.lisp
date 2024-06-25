@@ -2437,15 +2437,15 @@ but now also ~s."
 (defstage enter (who where)
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
     (unless found-in-scene-p
-      (push actor *actors*)
-      (destructuring-bind (&key name kind hp ac pitch speed
-                                hair-color skin-color clothes-color
-                                speech-color bend
-                                head body character-id
-                           &allow-other-keys)
-          actor
-        (unless (member name '(player narrator) :test 'string-equal)
-          (format t "
+      (push actor *actors*))
+    (destructuring-bind (&key name kind hp ac pitch speed
+                              hair-color skin-color clothes-color
+                              speech-color bend
+                              head body character-id
+                         &allow-other-keys)
+        actor
+      (unless (member name '(player narrator) :test 'string-equal)
+        (format t "
 ~10t.section BankData
 ~10t.weak
 ~10t  Character_Defined_P_~0@*~a := false
@@ -2507,56 +2507,56 @@ Character_~0@*~a:
 ~10t.fi
 ~10t.send
 "
-                  (pascal-case (string name))
-                  ;; --- Entity
-                  ;; Decal
-                  #xff
-                  ;; --- Actor
-                  ;; HP
-                  (or hp 10)
-                  ;; Max HP
-                  (or hp 10)
-                  ;; Action
-                  "ActionIdle"
-                  ;; Facing
-                  "Down"
-                  ;; Flags
-                  0
-                  ;; --- Character
-                  ;; DecalKind
-                  (pascal-case
-                   (string kind))
-                  ;; SkinColor
-                  (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
-                  ;; HairColor
-                  (or hair-color (format nil "PaletteColor_~:(~a~)" *default-hair-color*))
-                  ;; ClothesColor
-                  (or clothes-color (format nil "PaletteColor_~:(~a~)" *default-clothes-color*))
-                  ;; Head
-                  (or head 0)
-                  ;; Body
-                  (or body 0)
-                  ;; Shield
-                  #x80
-                  ;; Equipment
-                  #x80
-                  ;; AuxItem
-                  #x80
-                  ;; ArmorClass
-                  (or ac 10)
-                  ;; CharacterID
-                  character-id
-                  ;; SpeechPitch
-                  (or pitch 80)
-                  ;; SpeechBend
-                  (or bend 100)
-                  ;; SpeechSpeed
-                  (or speed 100)
-                  ;; SpeechColor
-                  (pascal-case
-                   (or speech-color "Gray"))
-                  ;; NameLength + Name
-                  name))))
+                (pascal-case (string name))
+                ;; --- Entity
+                ;; Decal
+                #xff
+                ;; --- Actor
+                ;; HP
+                (or hp 10)
+                ;; Max HP
+                (or hp 10)
+                ;; Action
+                "ActionIdle"
+                ;; Facing
+                "Down"
+                ;; Flags
+                0
+                ;; --- Character
+                ;; DecalKind
+                (pascal-case
+                 (string kind))
+                ;; SkinColor
+                (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
+                ;; HairColor
+                (or hair-color (format nil "PaletteColor_~:(~a~)" *default-hair-color*))
+                ;; ClothesColor
+                (or clothes-color (format nil "PaletteColor_~:(~a~)" *default-clothes-color*))
+                ;; Head
+                (or head 0)
+                ;; Body
+                (or body 0)
+                ;; Shield
+                #x80
+                ;; Equipment
+                #x80
+                ;; AuxItem
+                #x80
+                ;; ArmorClass
+                (or ac 10)
+                ;; CharacterID
+                character-id
+                ;; SpeechPitch
+                (or pitch 80)
+                ;; SpeechBend
+                (or bend 100)
+                ;; SpeechSpeed
+                (or speed 100)
+                ;; SpeechColor
+                (pascal-case
+                 (or speech-color "Gray"))
+                ;; NameLength + Name
+                name)))
     #+ () (format *trace-output* "~&//* Character ~a entering scene ~@[… but they were already here~]"
                   (sentence-case (getf actor :name)) found-in-scene-p)
     (if (eql :oc where)
