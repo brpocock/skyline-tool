@@ -2351,7 +2351,6 @@ but now also ~s."
             x y)))
 
 (defstage jump (script-id)
-  (print-end-of-script-label)
   (format t "
 ~10t.mvaw NextScript, $~4,'0x
 ~10tlda # <JLoadScript
@@ -2440,13 +2439,133 @@ but now also ~s."
 
 (defstage enter (who where)
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
-    (push actor *actors*)
+    (unless found-in-scene-p
+      (push actor *actors*))
+    (destructuring-bind (&key name kind hp ac pitch speed
+                              hair-color skin-color clothes-color
+                              speech-color bend
+                              head body character-id
+                         &allow-other-keys)
+        actor
+      (unless (member name '(player narrator) :test 'string-equal)
+        (format t "
+~10t.section BankData
+~10t.weak
+~10t  Character_Defined_P_~0@*~a := false
+~10t.endweak
+~10t.if !Character_Defined_P_~0@*~a
+~10tCharacter_Defined_P_~0@*~a := true
+~10tCharacterID_~0@*~a = $~17@*~2,'0x
+Character_~0@*~a:
+~10t.word CharacterClass
+* = Character_~0@*~a + EntityDecal~1@*
+~10t.byte $~2,'0x ~32t; Decal ID is needed
+* = Character_~0@*~a + ActorHP~2@*
+~10t.word ~d ~32t; HP
+* = Character_~0@*~a + ActorMaxHP~3@*
+~10t.word ~d ~32t; Max HP
+* = Character_~0@*~a + ActorAction~4@*
+~10t.byte ~a
+* = Character_~0@*~a + ActorFacing ~5@*
+~10t.byte CharacterFacing~a
+* = Character_~0@*~a + ActorFlags ~6@*
+~10t.byte ~d ~32t; flags
+* = Character_~0@*~a + CharacterDecalKind ~7@*
+~10t.byte DecalKind~a
+* = Character_~0@*~a + CharacterSkinColor ~8@*
+~10t.byte ~a
+* = Character_~0@*~a + CharacterHairColor ~9@*
+~10t.byte ~a
+* = Character_~0@*~a + CharacterClothesColor ~10@*
+~10t.byte ~a
+* = Character_~0@*~a + CharacterHead ~11@*
+~10t.byte ~d ~32t; head
+* = Character_~0@*~a + CharacterBody ~12@*
+~10t.byte ~d ~32t; body
+* = Character_~0@*~a + CharacterShield ~13@*
+~10t.byte $~2,'0x ~32t; shield
+* = Character_~0@*~a + CharacterEquipment ~14@*
+~10t.byte $~2,'0x ~32t; equipment item
+* = Character_~0@*~a + CharacterAuxItem ~15@*
+~10t.byte $~2,'0x ~32t; auxiliary item
+* = Character_~0@*~a + CharacterArmorClass ~16@*
+~10t.byte ~d ~32t; armor class
+* = Character_~0@*~a + CharacterCharacterID ~17@*
+~10t.byte $~2,'0x ~32t; character ID
+* = Character_~0@*~a + CharacterSpeechPitch ~18@*
+~10t.byte ~d ~32t; speech pitch
+* = Character_~0@*~a + CharacterSpeechBend ~19@*
+~10t.byte ~d ~32t; speech bend
+* = Character_~0@*~a + CharacterSpeechSpeed ~20@*
+~10t.byte ~d ~32t; speech speed
+* = Character_~0@*~a + CharacterSpeechColor ~21@*
+~10t.byte CoLu(COL~:@(~a~), $f) ~32t; speech color
+* = Character_~0@*~a + CharacterNameLength ~22@*
+~10t.ptext \"~a\" ~32t; name
+~10t;; This relies upon the knowledge that the CharacterName
+~10t;; is the final field, so * will be pointing at the first
+~10t;; free byte (after using the bare minimum for the actual
+~10t;; length of the character name, so probably at least a
+~10t;; couple of bytes less than CharacterSize)
+~10t.fi
+~10t.send
+"
+                (pascal-case (string name))
+                ;; --- Entity
+                ;; Decal
+                #xff
+                ;; --- Actor
+                ;; HP
+                (or hp 10)
+                ;; Max HP
+                (or hp 10)
+                ;; Action
+                "ActionIdle"
+                ;; Facing
+                "Down"
+                ;; Flags
+                0
+                ;; --- Character
+                ;; DecalKind
+                (pascal-case
+                 (string kind))
+                ;; SkinColor
+                (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
+                ;; HairColor
+                (or hair-color (format nil "PaletteColor_~:(~a~)" *default-hair-color*))
+                ;; ClothesColor
+                (or clothes-color (format nil "PaletteColor_~:(~a~)" *default-clothes-color*))
+                ;; Head
+                (or head 0)
+                ;; Body
+                (or body 0)
+                ;; Shield
+                #x80
+                ;; Equipment
+                #x80
+                ;; AuxItem
+                #x80
+                ;; ArmorClass
+                (or ac 10)
+                ;; CharacterID
+                character-id
+                ;; SpeechPitch
+                (or pitch 80)
+                ;; SpeechBend
+                (or bend 100)
+                ;; SpeechSpeed
+                (or speed 100)
+                ;; SpeechColor
+                (pascal-case
+                 (or speech-color "Gray"))
+                ;; NameLength + Name
+                name)))
+    #+ () (format *trace-output* "~&//* Character ~a entering scene ~@[… but they were already here~]"
+                  (sentence-case (getf actor :name)) found-in-scene-p)
     (if (eql :oc where)
-        (destructuring-bind (&key name &allow-other-keys)
-            (require-actor who)
-          (cond
-            (found-in-scene-p
-             (format t "
+        (destructuring-bind (&key name &allow-other-keys) actor
+          (if found-in-scene-p
+              (format t "
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
@@ -2457,9 +2576,9 @@ but now also ~s."
 ~10tlda # 127
 ~10tsta DecalYH, x
 "
-                     (pascal-case (string name))))
-            (t
-             (format t "
+                      (pascal-case (string name)))
+              ;; else not found in scene
+              (format t "
 ~10t.mvaw Proto, Character_~a
 ~10t.mva Class, # CharacterClass
 ~10t.FarJSR BankBehavior, ServiceFindClass
@@ -2474,15 +2593,13 @@ but now also ~s."
 ~10tlda # 127
 ~10tsta DecalYH, x
 "
-                     (pascal-case (string name))))))
-        ;; else
+                      (pascal-case (string name)))))
+        ;; else, on camera
         (destructuring-bind (abs/rel x y) (interpret-place where)
           (assert (eql abs/rel :absolute))
-          (destructuring-bind (&key name &allow-other-keys)
-              (require-actor who)
-            (cond
-              (found-in-scene-p
-               (format t "
+          (destructuring-bind (&key name &allow-other-keys) actor
+            (if found-in-scene-p
+                (format t "
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacterInScene
 
@@ -2495,16 +2612,16 @@ but now also ~s."
 ~10tjsr Lib.UpdateOneDecal
 
 "
-                       (pascal-case (string name)) x y))
-              (t
-               (format t "
+                        (pascal-case (string name)) x y)
+                ;; else not already in scene
+                (format t "
 ~10t.mvaw Proto, Character_~a
 ~10t.mva DestX, #~d
 ~10t.mva DestY, #~d
 ~10tjsr Lib.EnterCharacter
 
 "
-                       (pascal-case (string name)) x y))))))))
+                        (pascal-case (string name)) x y)))))))
 
 (defvar *boat-ids* nil)
 (defvar *boat-classes* nil)
@@ -3048,20 +3165,6 @@ Speech_~a:~
   (return-from fountain/write-speech-branch
     (dialogue-hash text)))
 
-(defun print-end-of-script-label (&optional value)
-  (format t "
-~10t.weak
-~10t  EndOfScript_Defined_P := false
-~10t.endweak
-~10t.if !EndOfScript_Defined_P
-~10tEndOfScript_Defined_P := true
-EndOfScript~a
-~10t.fi
-"
-          (if value
-              (format nil " = $~4,'0x" value)
-              ":")))
-
 (defun write-off-camera-speaker (actor-name)
   (unless (find-actor actor-name)
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
@@ -3145,13 +3248,11 @@ Script_~a_~a: .block
                       (write-off-camera-speaker name)))))
               (speech (fountain/write-speech value))
               (reboot
-               (print-end-of-script-label)
                (format t "
 ~10tjmp Lib.WarmStart
 ~10t.bend")
                (return))
               (game-over
-               (print-end-of-script-label)
                (assert (member value '("TITLE" "LOST" "WON") :test 'string-equal)
                        (value)
                        "GAME OVER currently supports LOST or WON only, not ~s" value)
@@ -3161,7 +3262,6 @@ Script_~a_~a: .block
 "
                        value))
               (end
-               (print-end-of-script-label)
                (format t "
 ~10tjmp Lib.ScriptFinis~32t; ~a
 ~10t.bend
@@ -3176,7 +3276,6 @@ Script_~a_~a: .block
 ~10tsta FadingTarget"
                        (pascal-case (string value))))
               (branch
-               (print-end-of-script-label 0)
                (destructuring-bind (option . text) value
                  (fountain/write-speech-branch option text)))
               (go (format t "~%~10tjmp ScriptLabel_~a~%"
@@ -3188,127 +3287,7 @@ Script_~a_~a: .block
                        sym value)
                (format nil "~2%~10tnop~32t;; ~s ~s~2%"
                        sym value)))
-            sym))
-    (dolist (actor *actors*)
-      (destructuring-bind (&key name kind hp ac pitch speed
-                                hair-color skin-color clothes-color
-                                speech-color bend
-                                head body character-id
-                           &allow-other-keys)
-          actor
-        (unless (member name '(player narrator) :test 'string-equal)
-          (format t "
-~10t.section BankData
-~10t.weak
-~10t  Character_Defined_P_~0@*~a := false
-~10t.endweak
-~10t.if !Character_Defined_P_~0@*~a
-~10tCharacter_Defined_P_~0@*~a := true
-~10tCharacterID_~0@*~a = $~17@*~2,'0x
-Character_~0@*~a:
-~10t.word CharacterClass
-* = Character_~0@*~a + EntityDecal~1@*
-~10t.byte $~2,'0x ~32t; Decal ID is needed
-* = Character_~0@*~a + ActorHP~2@*
-~10t.word ~d ~32t; HP
-* = Character_~0@*~a + ActorMaxHP~3@*
-~10t.word ~d ~32t; Max HP
-* = Character_~0@*~a + ActorAction~4@*
-~10t.byte ~a
-* = Character_~0@*~a + ActorFacing ~5@*
-~10t.byte CharacterFacing~a
-* = Character_~0@*~a + ActorFlags ~6@*
-~10t.byte ~d ~32t; flags
-* = Character_~0@*~a + CharacterDecalKind ~7@*
-~10t.byte DecalKind~a
-* = Character_~0@*~a + CharacterSkinColor ~8@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterHairColor ~9@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterClothesColor ~10@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterHead ~11@*
-~10t.byte ~d ~32t; head
-* = Character_~0@*~a + CharacterBody ~12@*
-~10t.byte ~d ~32t; body
-* = Character_~0@*~a + CharacterShield ~13@*
-~10t.byte $~2,'0x ~32t; shield
-* = Character_~0@*~a + CharacterEquipment ~14@*
-~10t.byte $~2,'0x ~32t; equipment item
-* = Character_~0@*~a + CharacterAuxItem ~15@*
-~10t.byte $~2,'0x ~32t; auxiliary item
-* = Character_~0@*~a + CharacterArmorClass ~16@*
-~10t.byte ~d ~32t; armor class
-* = Character_~0@*~a + CharacterCharacterID ~17@*
-~10t.byte $~2,'0x ~32t; character ID
-* = Character_~0@*~a + CharacterSpeechPitch ~18@*
-~10t.byte ~d ~32t; speech pitch
-* = Character_~0@*~a + CharacterSpeechBend ~19@*
-~10t.byte ~d ~32t; speech bend
-* = Character_~0@*~a + CharacterSpeechSpeed ~20@*
-~10t.byte ~d ~32t; speech speed
-* = Character_~0@*~a + CharacterSpeechColor ~21@*
-~10t.byte CoLu(COL~:@(~a~), $f) ~32t; speech color
-* = Character_~0@*~a + CharacterNameLength ~22@*
-~10t.ptext \"~a\" ~32t; name
-~10t;; This relies upon the knowledge that the CharacterName
-~10t;; is the final field, so * will be pointing at the first
-~10t;; free byte (after using the bare minimum for the actual
-~10t;; length of the character name, so probably at least a
-~10t;; couple of bytes less than CharacterSize)
-~10t.fi
-~10t.send
-"
-                  (pascal-case (string name))
-                  ;; --- Entity
-                  ;; Decal
-                  #xff
-                  ;; --- Actor
-                  ;; HP
-                  (or hp 10)
-                  ;; Max HP
-                  (or hp 10)
-                  ;; Action
-                  "ActionIdle"
-                  ;; Facing
-                  "Down"
-                  ;; Flags
-                  0
-                  ;; --- Character
-                  ;; DecalKind
-                  (pascal-case
-                   (string kind))
-                  ;; SkinColor
-                  (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
-                  ;; HairColor
-                  (or hair-color (format nil "PaletteColor_~:(~a~)" *default-hair-color*))
-                  ;; ClothesColor
-                  (or clothes-color (format nil "PaletteColor_~:(~a~)" *default-clothes-color*))
-                  ;; Head
-                  (or head 0)
-                  ;; Body
-                  (or body 0)
-                  ;; Shield
-                  #x80
-                  ;; Equipment
-                  #x80
-                  ;; AuxItem
-                  #x80
-                  ;; ArmorClass
-                  (or ac 10)
-                  ;; CharacterID
-                  character-id
-                  ;; SpeechPitch
-                  (or pitch 80)
-                  ;; SpeechBend
-                  (or bend 100)
-                  ;; SpeechSpeed
-                  (or speed 100)
-                  ;; SpeechColor
-                  (pascal-case
-                   (or speech-color "Gray"))
-                  ;; NameLength + Name
-                  name)))))
+            sym)))
   (format t "~2%;;; end of script file.~%"))
 
 (defun compile-fountain-string (string)

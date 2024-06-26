@@ -908,7 +908,7 @@ Shape:~{~{~a~}~2%~}
                   (with-input-from-file (zx7 zx7-pathname :element-type '(unsigned-byte 8))
                     (read-stream-content-into-byte-vector zx7)))))
     (format *trace-output* "… compression complete, new length ~:d bytes (-~5f%)"
-            (length output) (* 100.0 (/ (length output) (length bytes))))
+            (length output) (- 100.0 (* 100.0 (/ (length output) (length bytes)))))
     output))
 
 (defun compile-5200-mode-e-bitmap (image-pixels &key png-file
