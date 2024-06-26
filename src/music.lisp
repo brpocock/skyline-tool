@@ -690,6 +690,18 @@ skipping MIDI music with ~:d track~:p"
                      (best-tia-note-for-pal freq))))
          0)))
 
+(defun bytes-for-hokey-note (&key voices time key duration distortion)
+  (let ((voice (find-free-voice voices time)))
+    (if voice
+        (if-let ((note (best-pokey-note-for key distortion 8)))
+          (setf (aref voices voice)
+                (cons (list time note duration distortion)
+                      (aref voices voice)))
+          (warn "No POKEY note for ~a at time ~d"
+                (midi->note-name key) time))
+        (warn "Too much polyphony: dropping POKEY note ~a at time ~d"
+              (midi->note-name key) time))))
+
 (defun midi->pokey (midi-notes tv)
   (loop for track in midi-notes
         with distortion
@@ -704,19 +716,21 @@ skipping MIDI music with ~:d track~:p"
                              (:note (destructuring-bind (&key time key duration) params
                                       (typecase distortion
                                         (null
-                                         (warn "Note without knowing instrument: dropping note ~a at time ~d (POKEY)"
-                                               (midi->note-name key) time))
+                                         (cerror "Continue, using Piano for now"
+                                                 "Note without knowing instrument: dropping note ~a at time ~d"
+                                                 (midi->note-name key) time)
+                                         (setf distortion (find-pokey-distortion "Piano"))
+                                         (bytes-for-hokey-note :voices voices
+                                                               :time time
+                                                               :key key
+                                                               :duration duration
+                                                               :distortion distortion))
                                         (symbol
-                                         (let ((voice (find-free-voice voices time)))
-                                           (if voice
-                                               (if-let ((note (best-pokey-note-for key distortion 8)))
-                                                 (setf (aref voices voice)
-                                                       (cons (list time note duration distortion)
-                                                             (aref voices voice)))
-                                                 (warn "No POKEY note for ~a at time ~d"
-                                                       (midi->note-name key) time))
-                                               (warn "Too much polyphony: dropping POKEY note ~a at time ~d"
-                                                     (midi->note-name key) time))))
+                                         (bytes-for-hokey-note :voices voices
+                                                               :time time
+                                                               :key key
+                                                               :duration duration
+                                                               :distortion distortion))
                                         (number
                                          (let ((voice (find-free-voice tia-voices time)))
                                            (if voice
