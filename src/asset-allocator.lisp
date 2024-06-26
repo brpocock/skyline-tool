@@ -625,8 +625,8 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun all-bare-assets ()
   (let ((source-prefix-length 
           (length (pathname-directory (merge-pathnames #p"Source/")))))
-    (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "midi") 
-                                ("Scripts" . "fountain") ("Blobs" . "png"))
+    (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "mscz") 
+                                ("Scripts" . "fountain") ("Blobs" . "xcf"))
           append
           (mapcar
            (lambda (pathname)
@@ -1080,7 +1080,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
   (dolist (blob (remove-duplicates
                  (directory (make-pathname :directory (list :relative "Source" "Blobs")
                                            :name :wild
-                                           :type "png"))))
+                                           :type "xcf"))))
     (write-blob-generation blob)))
 
 (defun write-makefile-for-art ()
