@@ -199,6 +199,7 @@
 (defun size-of-banks ()
   "Size of each ROM bank in bytes."
   (ecase *machine*
+    (2600 #x1000)
     (7800 #x4000)))
 
 (defun try-allocation-sequence (sequence file-sizes &key video)
