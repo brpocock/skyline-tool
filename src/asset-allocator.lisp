@@ -146,7 +146,7 @@
     )
   (:method ((kind (eql :map)))
     (ecase *machine* 
-      (7800 555)) ; FIXME #124
+      (7800 1024)) ; FIXME #124
     ))
 
 (defun song-asset-loader-size ()
