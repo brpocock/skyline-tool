@@ -642,7 +642,7 @@ file ~a.s in bank $~(~2,'0x~)~
   (declare (ignore build))
   (destructuring-bind (kind name) (asset-kind/name asset-indicator)
     (cond ((equal kind "Songs")
-           (format nil "Source/Generated/Assets/Song.~a.s \\~%~{~25tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
+           (format nil "Source/Generated/Assets/Song.~a.s \\~%~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                    name
                    (loop for video in +all-video+
                          collecting (list name video))))
@@ -737,17 +737,28 @@ file ~a.s in bank $~(~2,'0x~)~
         ((map-asset-p asset-indicator)
          (write-asset-compilation/map asset-indicator))
         ((blob-asset-p asset-indicator)
-         (format *trace-output* "~&(BLOB handled elsewhere)"))
-        (t (format t "~%
+         (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a)" asset-indicator))
+        ((script-asset-p asset-indicator)
+         (format t "~%
+~a: ~a Source/Tables/SpeakJet.dic\\
+~10tSource/Assets.index bin/skyline-tool
+	mkdir -p Object/Assets
+	~a"
+                 (asset->object-name asset-indicator)
+                 (asset->source-name asset-indicator)
+                 (asset-compilation-line asset-indicator)))
+        (t
+         (cerror "Continue with generic code" "Unexpected asset kind in indicator: ~a" asset-indicator)
+         (format t "~%
 ~a: ~a~@[\\~%	~a~]\\
 ~10tSource/Assets.index bin/skyline-tool
 	mkdir -p Object/Assets
 	~a"
-                   (asset->object-name asset-indicator)
-                   (asset->source-name asset-indicator)
-                   (when (script-asset-p asset-indicator)
-                     "Source/Tables/SpeakJet.dic")
-                   (asset-compilation-line asset-indicator)))))
+                 (asset->object-name asset-indicator)
+                 (asset->source-name asset-indicator)
+                 (when (script-asset-p asset-indicator)
+                   "Source/Tables/SpeakJet.dic")
+                 (asset-compilation-line asset-indicator)))))
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
@@ -844,6 +855,10 @@ Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 (defun write-ram-bank-makefile (&key build video)
   "Writes the Makefile entry for the RAM bank used by 7800GD"
   (format t "~%
+Object/Bank3e.~a.~a.o.LABELS.txt:~0@*
+	mkdir -p Object/
+	echo \";;; nop\" > $@
+
 Object/Bank3e.~a.~a.o:
 	mkdir -p Object
 	dd if=/dev/zero bs=1024 count=16 of=$@
@@ -1008,7 +1023,7 @@ Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/B
             (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
 	mkdir -p Object/
-	touch $@
+	echo \";;; nop\" > $@
 
 Object/Bank~(~2,'0x~).Test.o:
 	mkdir -p Object/
@@ -1337,10 +1352,10 @@ EndOfBinary = *
   "Looks into Assets.index and searches Source directories for “forgotten” files."
   (read-assets-list)
   (let ((absent nil))
-    (dolist (asset-file (loop for wild in '(#p"Source/Blobs/*.png"
+    (dolist (asset-file (loop for wild in '(#p"Source/Blobs/*.xcf"
                                             #p"Source/Maps/*.tmx"
                                             #p"Source/Scripts/*.fountain"
-                                            #p"Source/Songs/*.midi")
+                                            #p"Source/Songs/*.mscz")
                               append (recursive-directory wild)))
       (let* ((dir (pathname-directory asset-file)) 
              (moniker (format nil "~{~a~^/~}"

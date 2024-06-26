@@ -17,6 +17,7 @@
 
 (defun run-tiled ()
   "Open the project in Tiled"
+  (uiop:run-program (list "make" "pngs"))
   (uiop:run-program (list "tiled" (format nil "Source/Maps/~a.tiled-project" *game-title*))))
 
 (defun open-file-manager ()
