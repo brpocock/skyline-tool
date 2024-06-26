@@ -43,6 +43,10 @@
   (list (subseq asset 0 (position #\/ asset))
         (subseq asset (1+ (position #\/ asset)))))
 
+(defun kind-of-asset (indicator)
+  "Return the keyword for the kind of asset indicated by INDICATOR"
+  (kind-by-name (first (asset-kind/name indicator))))
+
 (defvar *assets-list* nil)
 (defvar *asset-ids-seen* nil)
 
@@ -109,19 +113,19 @@
 
 (defun song-asset-p (asset)
   "Is ASSET a song?"
-  (eql 0 (search "Songs/" asset)))
+  (eql :song (kind-of-asset asset)))
 
 (defun script-asset-p (asset)
   "Is ASSET a script?"
-  (eql 0 (search "Scripts/" asset)))
+  (eql :script (kind-of-asset asset)))
 
 (defun map-asset-p (asset)
   "Is ASSET a map?"
-  (eql 0 (search "Maps/" asset)))
+  (eql :map (kind-of-asset asset)))
 
 (defun blob-asset-p (asset)
   "Is ASSET a BLOB?"
-  (eql 0 (search "Blobs/" asset)))
+  (eql :blob (kind-of-asset asset)))
 
 (defun song-asset-loader-size ()
   "The size in bytes that the LoadSong routine takes in ROM."

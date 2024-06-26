@@ -329,7 +329,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
           (invoke-make (target)
             :report "Ask GNU Make to generate a file"
             :interactive-function (prompt-function "What file should be regenerated?")
-            (uiop:run-program (list "make" "-r" target)))
+            (uiop:run-program (list "make" "-r" target "AUTOCONTINUE=t")))
           (gimp (file)
             :report "Edit a file in Gimp"
             :interactive-function (prompt-function "Edit which file in Gimp?")
