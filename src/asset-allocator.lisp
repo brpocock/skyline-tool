@@ -37,11 +37,15 @@
     ((or (equal kind$ "Scripts")
          (equal kind$ "Script"))
      :script)
+    ((or (null kind$)
+	 (emptyp kind$))
+     nil)
     (t (error "Unrecognized asset kind: ~a" kind$))))
 
 (defun asset-kind/name (asset)
-  (list (subseq asset 0 (position #\/ asset))
-        (subseq asset (1+ (position #\/ asset)))))
+  (when asset
+    (list (subseq asset 0 (position #\/ asset))
+          (subseq asset (1+ (position #\/ asset))))))
 
 (defun kind-of-asset (indicator)
   "Return the keyword for the kind of asset indicated by INDICATOR"
