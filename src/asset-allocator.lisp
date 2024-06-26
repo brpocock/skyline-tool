@@ -379,10 +379,11 @@
 
 (defun number-of-banks (build video)
   (declare (ignore video))
-  (cond
-    ((equal build "Demo") 8)
-    ((equal build "Test") 64)
-    (t 64)))
+  (ecase *machine*
+    (7800 (cond
+            ((equal build "Demo") 8)
+            ((equal build "Test") 64)
+            (t 64)))))
 
 (defun included-file (line)
   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\.include \"(.*)\\.s\"" line))))
@@ -515,7 +516,14 @@ file ~a.s in bank $~(~2,'0x~)~
                          :name name :type "o")))))
   (when (eql 0 (search "Blob." name))
     (let ((possible-file (make-pathname :directory '(:relative "Source" "Blobs")
-                                        :name (subseq name 5) :type "png")))
+                                        :name (subseq name 5) :type "xcf")))
+      (when (probe-file possible-file)
+        (return-from find-included-binary-file
+          (make-pathname :directory '(:relative "Source" "Generated" "Assets")
+                         :name name :type "s")))))
+  (when (eql 0 (search "Song." name))
+    (let ((possible-file (make-pathname :directory '(:relative "Source" "Songs")
+                                        :name (subseq name 5) :type "mscz")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
           (make-pathname :directory '(:relative "Source" "Generated" "Assets")
