@@ -127,30 +127,47 @@
   "Is ASSET a BLOB?"
   (eql :blob (kind-of-asset asset)))
 
+(defgeneric asset-loader-size (kind)
+  (:method ((kind (eql :overhead)))
+    (ecase *machine* 
+      (7800 256)) ; FIXME #124
+    )
+  (:method ((kind (eql :song)))
+    (ecase *machine* 
+      (7800 256)) ; FIXME #124
+    )
+  (:method ((kind (eql :script)))
+    (ecase *machine* 
+      (7800 256)) ; FIXME #124
+    )
+  (:method ((kind (eql :blob)))
+    (ecase *machine* 
+      (7800 256)) ; FIXME #124
+    )
+  (:method ((kind (eql :map)))
+    (ecase *machine* 
+      (7800 256)) ; FIXME #124
+    ))
+
 (defun song-asset-loader-size ()
   "The size in bytes that the LoadSong routine takes in ROM."
-  (ecase *machine* 
-    (7800 256)))  ; FIXME #124
+  (asset-loader-size :song))
 
 (defun script-asset-loader-size ()
   "The size in bytes that the LoadScript routine takes in ROM."
-  (ecase *machine*
-    (7800 256)))  ; FIXME #124
+  (asset-loader-size :script))
 
 (defun map-asset-loader-size ()
   "The size in bytes that the LoadMap routine takes in ROM."
-  (ecase *machine*
-    (7800 1024)))  ; FIXME #124
+  (asset-loader-size :map))
 
 (defun blob-asset-loader-size ()
   "The size in bytes that the LoadBlob routine takes in ROM."
-  (ecase *machine*
-    (7800 256)))  ; FIXME #124
+  (asset-loader-size :blob))
 
 (defun general-overhead-size ()
   "The size in bytes of general overhead in each asset ROM bank."
-  (ecase *machine*
-    (7800 256)))  ; FIXME #124
+  (asset-loader-size :overhead))
 
 (defun bank-size (asset-size-hash)
   "The size of the ROM bank indicated by ASSET-SIZE-HASH plus overhead."
@@ -160,15 +177,10 @@
      (remove-if #'null
                 (flatten
                  (list 
-                  (general-overhead-size)
-                  (when (some #'song-asset-p assets) 
-                    (song-asset-loader-size))
-                  (when (some #'script-asset-p assets)
-                    (script-asset-loader-size))
-                  (when (some #'map-asset-p assets)
-                    (map-asset-loader-size))
-                  (when (some #'blob-asset-p assets)
-                    (blob-asset-loader-size))
+                  (asset-loader-size :overhead)
+                  (mapcar #'asset-loader-size
+                          (remove-duplicates
+                           (mapcar #'kind-of-asset assets)))
                   (mapcar (lambda (asset) (gethash asset asset-size-hash)) 
                           assets)))))))
 
