@@ -677,8 +677,8 @@ skipping MIDI music with ~:d track~:p"
                voices))
 
 (defun find-pokey-distortion (text)
-  (cond ((equal (first text) "Piano") :10)
-        ((equal (first text) "Drums") :12a)
+  (cond ((equal text "Piano") :10)
+        ((equal text "Drums") :12a)
         (t (warn "Ignored text in MIDI: ~s" text))))
 
 (defun best-tia-note-for (key distortion tv)
@@ -711,7 +711,7 @@ skipping MIDI music with ~:d track~:p"
         (loop for object in midi-notes
               collecting (destructuring-bind (kind . params) object
                            (ecase kind
-                             (:text (setf distortion (find-pokey-distortion params)))
+                             (:text (setf distortion (find-pokey-distortion (first params))))
                              (:rest)
                              (:note (destructuring-bind (&key time key duration) params
                                       (typecase distortion
