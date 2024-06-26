@@ -1680,7 +1680,10 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                     (error "Expected SpeakJet phoneme code, but got: ~a" phoneme))
                 (continue () :report "Continue with a gunshot sound"
                   "M1"))
-           collect (concatenate 'string "SpeakJet." (subseq phoneme 1))))))
+           collect (if (every #'digit-char-p (subseq phoneme 1))
+		       (format nil "$~2,'0x"
+			       (logand #xff (parse-number (subseq phoneme 1))))
+		       (concatenate 'string "SpeakJet." (subseq phoneme 1)))))))
 
 (defun load-atarivox-dictionary ()
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
