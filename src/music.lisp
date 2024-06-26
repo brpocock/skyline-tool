@@ -677,8 +677,8 @@ skipping MIDI music with ~:d track~:p"
                voices))
 
 (defun find-pokey-distortion (text)
-  (cond ((equal text "Piano") :10)
-        ((equal text "Drums") :12a)
+  (cond ((search "Piano" text) :10)
+        ((search "Drums" text) :12a)
         (t (warn "Ignored text in MIDI: ~s" text))))
 
 (defun best-tia-note-for (key distortion tv)
@@ -697,9 +697,9 @@ skipping MIDI music with ~:d track~:p"
           (setf (aref voices voice)
                 (cons (list time note duration distortion)
                       (aref voices voice)))
-          (warn "No POKEY note for ~a at time ~d"
+          (warn "No HOKEY note for ~a at time ~d"
                 (midi->note-name key) time))
-        (warn "Too much polyphony: dropping POKEY note ~a at time ~d"
+        (warn "Too much polyphony: dropping HOKEY note ~a at time ~d"
               (midi->note-name key) time))))
 
 (defun midi->pokey (midi-notes tv)
@@ -717,7 +717,7 @@ skipping MIDI music with ~:d track~:p"
                                       (typecase distortion
                                         (null
                                          (cerror "Continue, using Piano for now"
-                                                 "Note without knowing instrument: dropping note ~a at time ~d"
+                                                 "Note without selecting any instrument: note ~a at time ~d"
                                                  (midi->note-name key) time)
                                          (setf distortion (find-pokey-distortion "Piano"))
                                          (bytes-for-hokey-note :voices voices
