@@ -131,62 +131,39 @@
   "Is ASSET a BLOB?"
   (eql :blob (kind-of-asset asset)))
 
-(defgeneric asset-loader-size (kind)
-  (:method ((kind (eql :overhead)))
+(defgeneric asset-loader-size (kind record-count)
+  (:method ((kind (eql :overhead)) record-count)
+    (ecase *machine* 
+      (7800 12)))
+  (:method ((kind (eql :song)) record-count)
     (ecase *machine* 
       (7800 256)) ; FIXME #124
     )
-  (:method ((kind (eql :song)))
+  (:method ((kind (eql :script)) record-count)
     (ecase *machine* 
-      (7800 256)) ; FIXME #124
-    )
-  (:method ((kind (eql :script)))
+      (7800 (+ 94 (* (1+ record-count) 4)))))
+  (:method ((kind (eql :blob)) record-count)
     (ecase *machine* 
-      (7800 256)) ; FIXME #124
-    )
-  (:method ((kind (eql :blob)))
+      (7800 (+ 284 1 (* record-count 3)))))
+  (:method ((kind (eql :map)) record-count)
     (ecase *machine* 
-      (7800 256)) ; FIXME #124
-    )
-  (:method ((kind (eql :map)))
-    (ecase *machine* 
-      (7800 1024)) ; FIXME #124
-    ))
-
-(defun song-asset-loader-size ()
-  "The size in bytes that the LoadSong routine takes in ROM."
-  (asset-loader-size :song))
-
-(defun script-asset-loader-size ()
-  "The size in bytes that the LoadScript routine takes in ROM."
-  (asset-loader-size :script))
-
-(defun map-asset-loader-size ()
-  "The size in bytes that the LoadMap routine takes in ROM."
-  (asset-loader-size :map))
-
-(defun blob-asset-loader-size ()
-  "The size in bytes that the LoadBlob routine takes in ROM."
-  (asset-loader-size :blob))
-
-(defun general-overhead-size ()
-  "The size in bytes of general overhead in each asset ROM bank."
-  (asset-loader-size :overhead))
+      (7800 (+
+             #|LoadMap|# 658
+             #| end of table |# 1
+             #|per record|# (* record-count 3))))))
 
 (defun bank-size (asset-size-hash)
   "The size of the ROM bank indicated by ASSET-SIZE-HASH plus overhead."
   (let ((assets (hash-table-keys asset-size-hash)))
-    (reduce 
-     #'+
-     (remove-if #'null
-                (flatten
-                 (list 
-                  (asset-loader-size :overhead)
-                  (mapcar #'asset-loader-size
-                          (remove-duplicates
-                           (mapcar #'kind-of-asset assets)))
-                  (mapcar (lambda (asset) (gethash asset asset-size-hash)) 
-                          assets)))))))
+    (+ (asset-loader-size :overhead (length assets))
+       (loop for kind in (remove-duplicates
+                          (mapcar #'kind-of-asset assets))
+             sum (asset-loader-size kind
+                                    (count-if (lambda (x)
+                                                (eql kind (kind-of-asset x)))
+                                              assets)))
+       (loop for asset in (hash-table-keys asset-size-hash)
+             sum (gethash asset asset-size-hash)))))
 
 (defun best-permutation (permutations)
   "Find the best of PERMUTATIONS to fit into the smallest number of ROM banks."
