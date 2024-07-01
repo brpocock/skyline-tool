@@ -670,7 +670,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               a an aboard above absolute all amulet and appears arrow arrows armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
-              can catamaran ceiling chalice clear close continued crown crowns cut cyan cyan-lit
+              can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
               dances dancing dark difference dim disembarks divided do dolly done down durbat
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
@@ -685,12 +685,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               of on open or
               part pi picks pirate pitch player-armor-color
               player-hair-color player-skin-color playing plus
-              potion positive power product  purple
+              potion positive power product purple
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe rope root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
               skin sloop slowly small staff south 
-              square starts stops suddenly sum sword
+              square starts stops suddenly sum surprised sweating sword
               than the then times to torch truck tunic
               under unless up upon
               value
@@ -791,7 +791,19 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
              (list 'hurt 1)))
      (hurt for number hp (lambda (_hurt _for number _hp)
                            (declare (ignore _hurt _for _hp))
-                           (list 'hurt number))))
+                           (list 'hurt number)))
+     (sweating (lambda (_sweating)
+                 (declare (ignore _sweating))
+                 (list 'emote '?)))
+     (confused (lambda (_confused)
+                 (declare (ignore _confused))
+                 (list 'emote '?)))
+     (surprised (lambda (_surprised)
+                  (declare (ignore _surprised))
+                  (list 'emote '!)))
+     (puzzled (lambda (_surprised)
+                (declare (ignore _surprised))
+                (list 'emote '?))))
 
     (pick-up-clause (actor picks up article quoted (lambda (actor _picks _up _an item)
                                                      (declare (ignore _picks _up _an))
