@@ -24,8 +24,9 @@ node [shape=Mrecord];
 ~10tClassMethodsPointerOffset = 0
 
 ~10tCallBasicObjectClassP = $00
+~10tCallBasicObjectDestroy = $03
 ")
-            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Methods (2 bytes) | # Class P}\"];")
+            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Methods (2 bytes) | # Class P | # Destroy}\"];")
             (let ((methods-set (make-hash-table :test 'equal))
                   (class-slots (make-hash-table :test 'equal))
                   (class-bases (make-hash-table :test 'equal))
@@ -34,6 +35,7 @@ node [shape=Mrecord];
                     (gethash "BasicObject" class-size) 2)
               (let ((basic-object-methods (make-hash-table :test 'equal)))
                 (setf (gethash "ClassP" basic-object-methods) "BasicObject"
+                      (gethash "Destroy" basic-object-methods) "BasicObject"
                       (gethash "BasicObject" methods-set) basic-object-methods))
               (labels
                   ((finalize-oops-class (class-name last-slot-offset)
@@ -106,7 +108,7 @@ and no ancestor provides an implementation (searched ~{~a~^, ~})\""
                          (format class-methods "
 * = ~aClassMethods + ~d
 
-Method~aClassP: .block
+Method~aClassP: .proc
 ~10tlda Class~{
 ~10tcmp # ~aClass
 ~10tbeq Found~}
@@ -114,9 +116,17 @@ Method~aClassP: .block
 Found:
 ~10tsta Class + 1
 ~10trts
-~10t.bend~%"
+~10t.pend~%"
                                  class-name (* 3 (hash-table-count methods))
-                                 class-name class-ancestry)))))
+                                 class-name class-ancestry)
+                         (format class-methods "
+Method~aDestroy: .proc
+~10t.mvap Source, Self
+~10t.mvaw Size, ~:*~aSize
+~10t.mva Ref, #-1
+~10tjmp Lib.DestroyObject~32t; tail call
+~10t.pend~%"
+                                 class-name)))))
                 (loop with parent-class = "BasicObject" with current-class = "BasicObject"
                       with class-index = 1 with slot-offset = 2
                       for line = (read-line class-file nil nil) while line
