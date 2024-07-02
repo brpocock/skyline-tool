@@ -802,7 +802,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-    
+
     (actor-condition
      (sweating (lambda (_sweating)
                  (declare (ignore _sweating))
@@ -967,6 +967,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                           #'stage/numeric-beats)
                  (wait for actor (lambda (_wait _for actor)
                                    (declare (ignore _wait _for))
+                                   (list 'wait-for actor)))
+                 (wait for the actor (lambda (_wait _for _the actor)
+                                       (declare (ignore _wait _for _the))
                                    (list 'wait-for actor)))
                  (wait for numeric second
                        #'stage/wait-secs)
@@ -2152,7 +2155,7 @@ but now also ~s."
 ~10tbne ~a
 
 ~10tlda DecalArtL, x
-~10tcmp #$~2,10x
+~10tcmp #$~2,'0x
 ~10tbne ~a
 
 ~10tjsr Lib.DestroyDecal
