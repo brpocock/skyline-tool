@@ -2200,7 +2200,7 @@ but now also ~s."
 
 ~10tbcs ~a
 
-~10t.mva HurtHP, # ~d
+~10t.mvaw HurtHP, ~d
 ~10t.CallMethod CallActorHurt
 ~1@*~a:~%"
             (pascal-case (string name))
