@@ -483,14 +483,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (declare (ignore speaks with pitch comma speed))
     (list 'voice actor p s))
 
-  (defun stage/special-appearance (actor looks like special)
-    (declare (ignore looks like))
-    (list 'look actor special))
-
-  (defun stage/looks-like (actor has desc)
-    (declare (ignore has))
-    (list 'look actor desc))
-
   (defun stage/npc-desc-2 (d1 and d2)
     (declare (ignore and))
     (list d1 d2))
@@ -810,7 +802,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-
+    
     (actor-condition
      (sweating (lambda (_sweating)
                  (declare (ignore _sweating))
@@ -2745,19 +2737,19 @@ Character_~0@*~a:
                    :class "Pivitz"))
           (! (list :position :above
                    :graphic "GrBangEmote"
-                   :class "Pivitz"))))
-    (format t "
+                   :class "Pivitz")))
+      (format t "
 ~10t.mva Class, # ~aClass
 ~10t.mva Size, # ~:*~aSize
-~10t.mva CurrentCharacter, # CharacterID_~a
+~10t.mva CurrentCharacterID, # CharacterID_~a
 ~10t.mva RelativePlacement, # ~:[0~;1~]
 ~10t.mva FillPattern, # ~a
 ~10tjsr Lib.Emote
 "
-            class
-            name
-            (eql :above position)
-            graphic)))
+              class
+              (pascal-case (string name))
+              (eql :above position)
+              graphic))))
 
 (defstage embarks (actor ship-name)
   (format t "~%~10t;; TODO actor ~a embarks upon ship ~a" actor ship-name))
