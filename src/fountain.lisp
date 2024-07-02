@@ -2748,8 +2748,8 @@ Character_~0@*~a:
                    :class "Pivitz"))
           (! (list :position :above
                    :graphic "GrBangEmote"
-                   :class "Pivitz"))))
-    (format t "
+                   :class "Pivitz")))
+      (format t "
 ~10t.mva Class, # ~aClass
 ~10t.mva Size, # ~:*~aSize
 ~10t.mva CurrentCharacter, # CharacterID_~a
@@ -2757,10 +2757,10 @@ Character_~0@*~a:
 ~10t.mva FillPattern, # ~a
 ~10tjsr Lib.Emote
 "
-            class
-            name
-            (eql :above position)
-            graphic)))
+              class
+              (pascal-case (string name))
+              (eql :above position)
+              graphic))))
 
 (defstage embarks (actor ship-name)
   (format t "~%~10t;; TODO actor ~a embarks upon ship ~a" actor ship-name))
