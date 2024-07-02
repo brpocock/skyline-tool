@@ -667,7 +667,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a an aboard above absolute all amulet and appears arrow arrows armor at awakens
+              a an aboard above absolute alarmed all amulet and appears arrow arrows armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
@@ -781,7 +781,13 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     
     (actor-is-clause (someone is actor-coda (lambda (someone _is coda)
                                               (declare (ignore _is))
-                                              (cons (car coda) (cons someone (rest coda))))))
+                                              (cons (car coda) (cons someone (rest coda)))))
+                     (someone looks actor-condition (lambda (someone _is coda)
+                                                      (declare (ignore _is))
+                                                      (cons (car coda) (cons someone (rest coda)))))
+                     (someone is actor-condition  (lambda (someone _is coda)
+                                                    (declare (ignore _is))
+                                                    (cons (car coda) (cons someone (rest coda))))))
     (actor-coda
      (at location (lambda (_at location)
                     (declare (ignore _at))
@@ -801,6 +807,23 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (surprised (lambda (_surprised)
                   (declare (ignore _surprised))
                   (list 'emote '!)))
+     (puzzled (lambda (_surprised)
+                (declare (ignore _surprised))
+                (list 'emote '?))))
+
+    (actor-condition
+     (sweating (lambda (_sweating)
+                 (declare (ignore _sweating))
+                 (list 'emote 'sweat)))
+     (confused (lambda (_confused)
+                 (declare (ignore _confused))
+                 (list 'emote '?)))
+     (surprised (lambda (_surprised)
+                  (declare (ignore _surprised))
+                  (list 'emote '!)))
+     (alarmed (lambda (_surprised)
+                (declare (ignore _surprised))
+                (list 'emote '!)))
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
@@ -2709,6 +2732,32 @@ Character_~0@*~a:
 ~10tbne ~0@*~a"
               (genlabel "WaitForBoat")
               boat-id ship-name))))
+
+(defstage emote (actor emotion)
+  (destructuring-bind (&key name &allow-other-keys) (require-actor actor)
+    (destructuring-bind (&key position graphic class)
+        (ecase emotion
+          (sweat (list :position :over
+                       :graphic "GrSweatEmote"
+                       :class "SweatParticle"))
+          (? (list :position :above
+                   :graphic "GrQueryEmote"
+                   :class "Pivitz"))
+          (! (list :position :above
+                   :graphic "GrBangEmote"
+                   :class "Pivitz"))))
+    (format t "
+~10t.mva Class, # ~aClass
+~10t.mva Size, # ~:*~aSize
+~10t.mva CurrentCharacter, # CharacterID_~a
+~10t.mva RelativePlacement, # ~:[0~;1~]
+~10t.mva FillPattern, # ~a
+~10tjsr Lib.Emote
+"
+            class
+            name
+            (eql :above position)
+            graphic)))
 
 (defstage embarks (actor ship-name)
   (format t "~%~10t;; TODO actor ~a embarks upon ship ~a" actor ship-name))
