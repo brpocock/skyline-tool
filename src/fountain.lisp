@@ -2160,7 +2160,7 @@ but now also ~s."
 ~10tbne ~a
 
 ~10tlda DecalArtL, x
-~10tcmp #$~2,10x
+~10tcmp #$~2,'0x
 ~10tbne ~a
 
 ~10tjsr Lib.DestroyDecal
