@@ -2752,7 +2752,7 @@ Character_~0@*~a:
       (format t "
 ~10t.mva Class, # ~aClass
 ~10t.mva Size, # ~:*~aSize
-~10t.mva CurrentCharacter, # CharacterID_~a
+~10t.mva CurrentCharacteIDr, # CharacterID_~a
 ~10t.mva RelativePlacement, # ~:[0~;1~]
 ~10t.mva FillPattern, # ~a
 ~10tjsr Lib.Emote
