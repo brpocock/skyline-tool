@@ -976,6 +976,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                  (wait for actor (lambda (_wait _for actor)
                                    (declare (ignore _wait _for))
                                    (list 'wait-for actor)))
+                 (wait for the actor (lambda (_wait _for _the actor)
+                                       (declare (ignore _wait _for _the))
+                                       (list 'wait-for actor)))
                  (wait for numeric second
                        #'stage/wait-secs)
                  (wait for numeric seconds
