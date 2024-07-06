@@ -148,7 +148,7 @@
   (:method ((kind (eql :map)) record-count)
     (ecase *machine* 
       (7800 (+
-             #|LoadMap|# 658
+             #|LoadMap|# 1024 #| approx XXX |#
              #| end of table |# 1
              #|per record|# (* record-count 3))))))
 

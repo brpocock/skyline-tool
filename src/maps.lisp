@@ -43,11 +43,15 @@
 (defun parse-tile-animation-sets (&rest tilesets)
   (let ((animations (list)))
     (dolist (tileset tilesets)
-      (dolist (tile-data (cddr tileset))
+      (dolist (tile-data (cddr (xmls:parse-to-list
+                                (read-file-into-string
+                                 (namestring (tileset-pathname tileset))))))
         (when (equal "tile" (car tile-data))
+          (format *trace-output* "~&Tile metadata for ~s" (second tile-data))
           (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
             (dolist (animation (cddr tile-data))
               (when (equal "animation" (car animation))
+                (format *trace-output* "~&Animation sequence for tile ~:d…" tile-id)
                 (let ((sequence (list)))
                   (dolist (frame (cddr animation))
                     (assert (equal "frame" (car frame)))
@@ -56,7 +60,7 @@
                                        1000)))
                       (push frame-tile sequence)
                       (push duration sequence)))
-                  (push (cons tile-id (reverse sequence)) animations))))))))
+                  (push (reverse sequence) animations))))))))
     animations))
 
 (defun split-into-bytes (tile-collision-bitmap)
@@ -1177,7 +1181,7 @@ range is 0 - #xffffffff (4,294,967,295)"
                              (xml-matches "tileset" xml)))
            (layers (xml-matches "layer" xml))
            (object-groups (xml-matches "objectgroup" xml))
-           (animations-list #+ () (parse-tile-animation-sets tilesets)))
+           (animations-list (apply #'parse-tile-animation-sets tilesets)))
       (assert (<= 1 (length layers) 2) ()
               "This tool requires 1-2 tile layers, found ~:d tile map layer~:p in ~a"
               (length layers) pathname)
@@ -1318,13 +1322,11 @@ range is 0 - #xffffffff (4,294,967,295)"
                   (write-byte (length exits-table) object)
                   (dolist (exit exits-table)
                     (write-bytes exit object)) ; map/locale asset ID, x, y
-                  ;; animationss list
-                  (assert (zerop (length animations-list)))
+                  ;; animations list
                   (write-byte (length animations-list) object)
                   (dolist (animation animations-list)
-                    (write-byte (length animation) object)
-                    (write-byte (first animation) object)
-                    (loop for (duration frame) on (rest animation) by #'cddr
+                    (write-byte (/ (length animation) 2) object)
+                    (loop for (frame duration) on animation by #'cddr
                           do (write-byte (round (* duration frame-rate)) object)
                           do (write-byte frame object)))
                   ;; enemies list
