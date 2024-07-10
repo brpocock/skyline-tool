@@ -47,7 +47,6 @@
                                 (read-file-into-string
                                  (namestring (tileset-pathname tileset))))))
         (when (equal "tile" (car tile-data))
-          (format *trace-output* "~&Tile metadata for ~s" (second tile-data))
           (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
             (dolist (animation (cddr tile-data))
               (when (equal "animation" (car animation))
@@ -1323,12 +1322,18 @@ range is 0 - #xffffffff (4,294,967,295)"
                   (dolist (exit exits-table)
                     (write-bytes exit object)) ; map/locale asset ID, x, y
                   ;; animations list
-                  (write-byte (length animations-list) object)
+                  (write-byte (1+ (* 2 (reduce #'+ (mapcar (compose #'1+ #'length)
+                                                           animations-list))))
+                              object)
                   (dolist (animation animations-list)
-                    (write-byte (/ (length animation) 2) object)
+                    (write-byte 0 object)
                     (loop for (frame duration) on animation by #'cddr
-                          do (write-byte (round (* duration frame-rate)) object)
+                          do (write-byte (round (* duration frame-rate)) object)))
+                  (dolist (animation animations-list)
+                    (write-byte 0 object)
+                    (loop for (frame duration) on animation by #'cddr
                           do (write-byte frame object)))
+                  (write-byte 0 object)
                   ;; enemies list
                   (write-byte (length enemies-list) object)
                   (loop for enemy across enemies-list
