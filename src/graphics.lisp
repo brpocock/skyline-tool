@@ -886,7 +886,8 @@ Shape:~{~{~a~}~2%~}
           do (setf (aref vector i) element)
           finally (return vector))))
 
-(defun zx7-compress (bytes &key (base-name (string (gensym "ZX7CompressTemp-"))))
+(defun zx7-compress (bytes
+                     &key (base-name (string (gensym "ZX7CompressTemp-"))))
   (format *trace-output* "~&Calling external compressor: ")
   (finish-output *trace-output*)
   (let ((output (let ((*standard-output* *trace-output*)

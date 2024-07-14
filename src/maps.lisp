@@ -1,5 +1,8 @@
 (in-package :skyline-tool)
 
+(defmacro dovector ((var seq) &body body)
+  `(loop for ,var across ,seq do (progn ,@body) finally (return (values))))
+
 (defclass level ()
   ((decals :accessor level-decals :initarg :decals)
    (grid :accessor level-grid :initarg :grid)
@@ -50,7 +53,6 @@
           (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
             (dolist (animation (cddr tile-data))
               (when (equal "animation" (car animation))
-                (format *trace-output* "~&Animation sequence for tile ~:d…" tile-id)
                 (let ((sequence (list)))
                   (dolist (frame (cddr animation))
                     (assert (equal "frame" (car frame)))
@@ -153,6 +155,7 @@
 (defun find-effective-attributes (tileset x y objects attributes
                                   exits enemies)
   "Find the effective attributes for the tile X Y using TILESET, OBJECTS, ATTRIBUTES, EXITS and ENEMIES."
+  (declare (ignore enemies)) ; TODO
   (let ((effective-objects (remove-if-not (lambda (el)
                                             (and (equal "object" (car el))
                                                  (object-covers-tile-p x y el)))
@@ -229,6 +232,7 @@
   (reduce #'logior (remove-if #'null (flatten list))))
 
 (defun collect-decal-object (object enemies base-tileset decal-tileset)
+  (declare (ignore enemies)) ; TODO
   (let ((x (floor (parse-number (assocdr "x" (second object))) 8))
         (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
         (name (or (assocdr "name" (second object) nil) "(Unnamed decal)")))
@@ -252,7 +256,7 @@
                           id tile-default-palette)
             (setf decal-props (logior (logand decal-props #xfffff8ff)
                                       (ash tile-default-palette 24))))
-          (when (plusp tileset); XXX ref #109 ?
+          (when (plusp tileset)         ; XXX ref #109 ?
             (setf decal-props (logior decal-props #x1000)))
           (when-let (pal$ (assocdr "Palette" (second object) nil))
             #+ () (format *trace-output* "~2&//% tile $~2,'0x override palette ~s" id pal$)
@@ -605,7 +609,9 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
           *dock-ids-maps* (make-hash-table :test 'equal)))
   (let* ((page (ss->lol (first (read-ods-into-lists table)))))
     (dolist (row page)
-      (destructuring-bind (&key island full-name display-name id dock-id &allow-other-keys) row
+      (destructuring-bind (&key island full-name display-name id dock-id
+                           &allow-other-keys)
+          row
         (when full-name
           (let ((segment-name
                   (remove #\_ (concatenate 'string
@@ -744,7 +750,7 @@ Update map/s or script to agree with one another and DO-OVER."
                              &key
                                (exits nil exits-provided-p)
                                tile-id
-                               x y)
+                             &allow-other-keys)
   (labels ((set-bit (byte bit)
              (setf (elt bytes byte) (logior (elt bytes byte) bit)))
            (clear-bit (byte bit)
@@ -1144,6 +1150,7 @@ range is 0 - #xffffffff (4,294,967,295)"
       (assemble-binary run-commands-pathname))))
 
 (defun tileset-rom-bank (xml)
+  ;; FIXME #125
   (loop for (string id)
           on '("SandyIsland" 5
                "Indoor" 6
@@ -1158,6 +1165,54 @@ range is 0 - #xffffffff (4,294,967,295)"
                      (search string (assocdr "source" (second match))))
                    (xml-matches "tileset" xml))
           do (return id)))
+
+(defun map-data-vector (&key width height tile-grid attributes-table
+                             exits-table animations-list tv)
+  (let ((s (make-byte-array-with-fill-pointer))
+        (frame-rate (ecase tv (:ntsc 1/60) (:pal 1/50))))
+    (adjust-array s #x1000)
+    ;; map tile graphics
+    (dotimes (y height)
+      (dotimes (x width)
+        (vector-push-extend (aref tile-grid x y 0) s)))
+    ;; map tile attribute set indicator
+    (setf (fill-pointer s) #x400)
+    (dotimes (y height)
+      (dotimes (x width)
+        (vector-push-extend (aref tile-grid x y 1) s)))
+    ;; attributes list
+    (setf (fill-pointer s) #x800)
+    (assert (every (lambda (attr) (= 6 (length attr)))
+                   attributes-table)
+            (attributes-table)
+            "All attributes table entries must be precisely 6 bytes: ~%~s"
+            attributes-table)
+    (dolist (attr attributes-table)
+      (dovector (byte attr)
+        (vector-push-extend byte s))
+      (assert (< (fill-pointer s) #xc00) ()
+              "Overflow (to ~:d byte~:p) in attributes table when trying to add ~s (from among ~:d attribute~:p)"
+              (fill-pointer s) attr (length attributes-table)))
+    
+    ;; exits list
+    (setf (fill-pointer s) #xc00)
+    (dolist (exit exits-table)
+      (dolist (byte exit) ; map/locale asset ID, x, y
+        (vector-push-extend byte s))
+      (assert (< (fill-pointer s) #xe00)))
+    ;; animations list
+    (setf (fill-pointer s) #xe00)
+    (dolist (animation animations-list)
+      (vector-push-extend 0 s)
+      (loop for (frame duration) on animation by #'cddr
+            do (vector-push-extend (* 2 frame) s)))
+    (vector-push-extend 0 s)
+    (dolist (animation animations-list)
+      (vector-push-extend 0 s)
+      (loop for (frame duration) on animation by #'cddr
+            do (vector-push-extend (round (* duration frame-rate)) s)))
+    (vector-push-extend 0 s)
+    s))
 
 (defun compile-map (pathname)
   (format *trace-output* "~&Loading tile map from ~a" (enough-namestring pathname))
@@ -1208,46 +1263,40 @@ range is 0 - #xffffffff (4,294,967,295)"
                               attributes-table decals-table
                               exits-table enemies-list)
             (parse-tile-grid layers objects base-tileset decal-tileset)
-          (let* ((width (array-dimension tile-grid 0))
-                 (height (array-dimension tile-grid 1))
-                 (display-name (or
-                                (gethash (substitute #\/ #\. canon-name) *maps-display-names*)
-                                (error "Can't figure out the display name for ~a" canon-name)))
-                 (name (subseq display-name 0 (min 20 (length display-name))))
-                 (compressed-art
-                   (zx7-compress
-                    (let ((string (make-array (list (* width height))
-                                              :element-type '(unsigned-byte 8))))
-                      (dotimes (y height)
-                        (dotimes (x width)
-                          (setf (aref string (+ (* width y) x))
-                                (aref tile-grid x y 0))))
-                      string)
-                    :base-name (concatenate 'string "Map." canon-name ".Art")))
-                 (compressed-attributes
-                   (zx7-compress
-                    (let ((string (make-array (list (* width height))
-                                              :element-type '(unsigned-byte 8))))
-                      (dotimes (y height)
-                        (dotimes (x width)
-                          (setf (aref string (+ (* width y) x))
-                                (aref tile-grid x y 1))))
-                      string)
-                    :base-name (concatenate 'string nil "Map." canon-name ".Attr")))
-                 (run-commands-content (run-commands-content-for-map pathname)))
-            (assert (<= (* width height) 1024))
-            (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
+          (dolist (tv '(:ntsc :pal))
+            (format *trace-output* "~&About to write map ~a for ~s… "
+                    (title-case canon-name) tv)
+            (let* ((width (array-dimension tile-grid 0))
+                   (height (array-dimension tile-grid 1))
+                   (display-name (or
+                                  (gethash (substitute #\/ #\. canon-name) *maps-display-names*)
+                                  (error "Can't figure out the display name for ~a" canon-name)))
+                   (name (subseq display-name 0 (min 20 (length display-name))))
+                   (compressed-map-data
+                     (zx7-compress
+                      (map-data-vector :width width :height height
+                                       :tile-grid tile-grid
+                                       :attributes-table attributes-table
+                                       :exits-table exits-table
+                                       :animations-list animations-list
+                                       :tv tv)
+                      :base-name (concatenate 'string "Map."
+                                              canon-name
+                                              ".Data."
+                                              (string-upcase tv))))
+                   (run-commands-content (run-commands-content-for-map pathname)))
+              (assert (<= (* width height) 1024))
+              (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
 ~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~r animation~:p, and ~r unique enem~@:p."
-                    width height
-                    (length attributes-table)
-                    (length decals-table)
-                    (count-if #'decal-invisible-p decals-table)
-                    (length exits-table)
-                    (length animations-list)
-                    (length enemies-list))
-            (dolist (tv '(:ntsc :pal))
+                      width height
+                      (length attributes-table)
+                      (length decals-table)
+                      (count-if #'decal-invisible-p decals-table)
+                      (length exits-table)
+                      (length animations-list)
+                      (length enemies-list))
               (format *trace-output* "~&Ready to write binary output for ~a … " tv)
-              (let ((frame-rate (ecase tv (:ntsc 1/60) (:pal 1/50)))
+              (let (
                     (outfile (make-pathname
                               :name (format nil "Map.~a.~a.~a"
                                             (last-elt (pathname-directory pathname))
@@ -1262,52 +1311,35 @@ range is 0 - #xffffffff (4,294,967,295)"
                   (write-byte width object)
                   ;; offset 1, height
                   (write-byte height object)
-                  ;; offset 2-3, offset of art map
+                  ;; offset 2-3, offset of compressed RAM map data
                   (write-word (setf offset (+ 20 1 (length name)))
                               object)
-                  ;; offset 4-5, offset of attributes map
-                  (write-word (incf offset (length compressed-art))
-                              object)
-                  ;; offset 6-7, offset of attributes list
-                  (write-word (incf offset (length compressed-attributes))
-                              object)
+                  ;; offset 4-5, unused now
+                  (write-word 0 object)
+                  ;; offset 6-7, unused now
+                  (write-word 0 object)
                   ;; offset 8-9, offset of decals list
-                  (write-word (incf offset (1+ (* 6 (length attributes-table))))
+                  (write-word (incf offset (length compressed-map-data))
                               object)
-                  ;; offset 10-11, offset of exits list
-                  (write-word (incf offset (1+ (* 7 (length decals-table))))
-                              object)
-                  ;; offset 12-13, offset of animations list
-                  (write-word (incf offset (1+ (* 3 (length exits-table))))
-                              object)
-                  ;; offset 14-15, animations table start
-                  (write-word (incf offset
-                                    (+ 1 (reduce #'+ (mapcar
-                                                      (lambda (animation) (1+ (* 4 (length animation))))
-                                                      animations-list))))
-                              object)
-                  ;; offset 16, tileset ROM bank — TODO #125
+                  ;; offset 10-11, unused now
+                  (write-word 0 object)
+                  ;; offset 12-13, unused now
+                  (write-word 0 object)
+                  ;; offset 14-15, offset of enemies list — not yet implemented
+                  (write-word 0 object)
+                  ;; offset 16, tileset ROM bank
                   (write-byte (tileset-rom-bank xml) object)
                   ;; offset 17, future
                   (write-byte 0 object)
                   ;; offset 18-19, run-commands pointer
                   (if run-commands-content
                       (write-word (incf offset (+ 1 (array-total-size enemies-list))) object)
-                      (write-word 0 object))
+                      (write-word #x2770 object))
                   ;; offset 20, name (Pascal string)
-                  (write-byte (length name) object)
+                  (write-byte (length (unicode->minifont name)) object)
                   (write-bytes (unicode->minifont name) object)
                   ;; compressed art map
-                  (write-bytes compressed-art object)
-                  ;; compressed attributes map
-                  (write-bytes compressed-attributes object)
-                  ;; attributes list
-                  (write-byte (length attributes-table) object)
-                  (assert (every (lambda (attr) (= 6 (length attr))) attributes-table)
-                          (attributes-table)
-                          "All attributes table entries must be precisely 6 bytes: ~%~s" attributes-table)
-                  (dolist (attr attributes-table)
-                    (write-bytes attr object))
+                  (write-bytes compressed-map-data object)
                   ;; decals list
                   (write-byte (length decals-table) object)
                   (assert (every (lambda (decal) (= 4 (length decal))) decals-table)
@@ -1317,23 +1349,6 @@ range is 0 - #xffffffff (4,294,967,295)"
                     (write-bytes (subseq decal 0 3) object) ; x, y, gid of first art
                     (write-dword (fourth decal) object)     ; attributes
                     )
-                  ;; exits list
-                  (write-byte (length exits-table) object)
-                  (dolist (exit exits-table)
-                    (write-bytes exit object)) ; map/locale asset ID, x, y
-                  ;; animations list
-                  (write-byte (1+ (* 2 (reduce #'+ (mapcar (compose #'1+ #'length)
-                                                           animations-list))))
-                              object)
-                  (dolist (animation animations-list)
-                    (write-byte 0 object)
-                    (loop for (frame duration) on animation by #'cddr
-                          do (write-byte (round (* duration frame-rate)) object)))
-                  (dolist (animation animations-list)
-                    (write-byte 0 object)
-                    (loop for (frame duration) on animation by #'cddr
-                          do (write-byte frame object)))
-                  (write-byte 0 object)
                   ;; enemies list
                   (write-byte (length enemies-list) object)
                   (loop for enemy across enemies-list
@@ -1345,23 +1360,28 @@ range is 0 - #xffffffff (4,294,967,295)"
   (let ((i start-i))
     (dotimes (y (floor (array-dimension (tileset-image tileset) 1) 16))
       (dotimes (x (floor (array-dimension (tileset-image tileset) 0) 8))
-        (setf (aref images i) (extract-region (tileset-image tileset)
-                                              (* x 8) (* y 16)
-                                              (1- (* (1+ x) 8)) (1- (* (1+ y) 16))))
+        (setf (aref images i)
+              (extract-region (tileset-image tileset)
+                              (* x 8) (* y 16)
+                              (1- (* (1+ x) 8)) (1- (* (1+ y) 16))))
         (incf i)))))
 
 (defun palette-index (pixel palette)
   (position pixel (coerce palette 'list)))
 
 (defun rip-bytes-from-image (image palettes bytes index &key x y)
-  (let ((palette (elt (2a-to-list palettes) (best-palette image palettes :x x :y y))))
+  (let ((palette (elt (2a-to-list palettes)
+                      (best-palette image palettes :x x :y y))))
     (dotimes (y 16)
       (dotimes (half 2)
         (let ((byte-index (+ (+ half (* 2 index)) (* y #x100))))
           (check-type byte-index (integer 0 (4096)))
           (dotimes (x 4)
             (setf (ldb (byte 2 (* 2 x)) (aref bytes byte-index))
-                  (palette-index (aref image (+ (- 3 x) (* 4 half)) (- 15 y)) palette))))))))
+                  (palette-index (aref image
+                                       (+ (- 3 x) (* 4 half))
+                                       (- 15 y))
+                                 palette))))))))
 
 (defun compile-tileset (pathname &optional common-pathname)
   (let ((*machine* 7800)
