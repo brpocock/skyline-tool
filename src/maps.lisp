@@ -61,7 +61,17 @@
                                        1000)))
                       (push frame-tile sequence)
                       (push duration sequence)))
-                  (push (reverse sequence) animations))))))))
+                  ;; If  the sequence  uses a  frame already  defined as
+                  ;; a part of another sequence, omit it.
+                  (if (some (lambda (animation)
+                              (some (lambda (frame)
+                                      (member frame animation :test #'=))
+                                    sequence))
+                            animations)
+                      (warn "Omitting sequence ~s, due to duplicate frames;
+existing sequences:~{~%~s~}"
+                            sequence animations)
+                      (push (reverse sequence) animations)))))))))
     animations))
 
 (defun split-into-bytes (tile-collision-bitmap)
