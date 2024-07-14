@@ -1222,6 +1222,7 @@ range is 0 - #xffffffff (4,294,967,295)"
       (loop for (frame duration) on animation by #'cddr
             do (vector-push-extend (round (* duration frame-rate)) s)))
     (vector-push-extend 0 s)
+    (vector-push-extend 0 s)
     s))
 
 (defun compile-map (pathname)
