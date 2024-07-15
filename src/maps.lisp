@@ -63,15 +63,19 @@
                       (push duration sequence)))
                   ;; If  the sequence  uses a  frame already  defined as
                   ;; a part of another sequence, omit it.
-                  (if (some (lambda (animation)
-                              (some (lambda (frame)
-                                      (member frame animation :test #'=))
-                                    sequence))
-                            animations)
-                      (warn "Omitting sequence ~s, due to duplicate frames;
+                  (flet ((frames-from (sequence)
+                           (loop for (frame duration) on sequence
+                                 by #'cddr collecting frame)))
+                    (if (some (lambda (animation)
+                                (some (lambda (frame)
+                                        (member frame (frames-from animation)
+                                                :test #'=))
+                                      (frames-from sequence)))
+                              animations)
+                        (warn "Omitting sequence ~s, due to duplicate frames;
 existing sequences:~{~%~s~}"
-                            sequence animations)
-                      (push (reverse sequence) animations)))))))))
+                              sequence animations)
+                        (push (reverse sequence) animations))))))))))
     animations))
 
 (defun split-into-bytes (tile-collision-bitmap)
