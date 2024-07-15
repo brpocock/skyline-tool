@@ -51,7 +51,7 @@
   (loop for (key value) on plist by #'cddr
         collecting value))
 
-(defun parse-tile-animation-sets (&rest tilesets)
+(defun parse-tile-animation-set (&rest tilesets)
   (let ((animations (list)))
     (flet ((add-animation (sequence)
              (pushnew sequence animations
@@ -1252,7 +1252,9 @@ range is 0 - #xffffffff (4,294,967,295)"
                              (xml-matches "tileset" xml)))
            (layers (xml-matches "layer" xml))
            (object-groups (xml-matches "objectgroup" xml))
-           (animations-list (apply #'parse-tile-animation-sets tilesets)))
+           (animations-list (parse-tile-animation-set (first tilesets)))
+           (decal-animations-list
+             (mapcar #'parse-tile-animation-set (rest tilesets))))
       (assert (<= 1 (length layers) 2) ()
               "This tool requires 1-2 tile layers, found ~:d tile map layer~:p in ~a"
               (length layers) pathname)
