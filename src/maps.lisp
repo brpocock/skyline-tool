@@ -43,39 +43,41 @@
 (defun pin (n min max)
   (min max (max min n)))
 
+(defun plist-keys (plist)
+  (loop for (key value) on plist by #'cddr
+        collecting key))
+
+(defun plist-values (plist)
+  (loop for (key value) on plist by #'cddr
+        collecting value))
+
 (defun parse-tile-animation-sets (&rest tilesets)
   (let ((animations (list)))
-    (dolist (tileset tilesets)
-      (dolist (tile-data (cddr (xmls:parse-to-list
-                                (read-file-into-string
-                                 (namestring (tileset-pathname tileset))))))
-        (when (equal "tile" (car tile-data))
-          (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
-            (dolist (animation (cddr tile-data))
-              (when (equal "animation" (car animation))
-                (let ((sequence (list)))
-                  (dolist (frame (cddr animation))
-                    (assert (equal "frame" (car frame)))
-                    (let ((frame-tile (parse-integer (assocdr "tileid" (second frame))))
-                          (duration (/ (parse-integer (assocdr "duration" (second frame)))
-                                       1000)))
-                      (push frame-tile sequence)
-                      (push duration sequence)))
-                  ;; If  the sequence  uses a  frame already  defined as
-                  ;; a part of another sequence, omit it.
-                  (flet ((frames-from (sequence)
-                           (loop for (frame duration) on sequence
-                                 by #'cddr collecting frame)))
-                    (if (some (lambda (animation)
-                                (some (lambda (frame)
-                                        (member frame (frames-from animation)
-                                                :test #'=))
-                                      (frames-from sequence)))
-                              animations)
-                        (warn "Omitting sequence ~s, due to duplicate frames;
-existing sequences:~{~%~s~}"
-                              sequence animations)
-                        (push (reverse sequence) animations))))))))))
+    (flet ((add-animation (sequence)
+             (pushnew sequence animations
+                      :key #'plist-keys
+                      :test (lambda (a b)
+                              #+ () (format *trace-output* "~&//=? ~s ⩭ ~s" a b)
+                              (some (lambda (el) (member el b)) a)))))
+      (dolist (tileset tilesets)
+        (dolist (tile-data (cddr (xmls:parse-to-list
+                                  (read-file-into-string
+                                   (namestring (tileset-pathname tileset))))))
+          (when (equal "tile" (car tile-data))
+            (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
+              (dolist (animation (cddr tile-data))
+                (when (equal "animation" (car animation))
+                  (let ((sequence (list)))
+                    (dolist (frame (cddr animation))
+                      (assert (equal "frame" (car frame)))
+                      (let ((frame-tile (parse-integer (assocdr "tileid" (second frame))))
+                            (duration (/ (parse-integer (assocdr "duration" (second frame)))
+                                         1000)))
+                        (push frame-tile sequence)
+                        (push duration sequence)))
+                    ;; If  the sequence  uses a  frame already  defined as
+                    ;; a part of another sequence, omit it.
+                    (add-animation (reverse sequence))))))))))
     animations))
 
 (defun split-into-bytes (tile-collision-bitmap)
@@ -1279,7 +1281,7 @@ range is 0 - #xffffffff (4,294,967,295)"
                               exits-table enemies-list)
             (parse-tile-grid layers objects base-tileset decal-tileset)
           (dolist (tv '(:ntsc :pal))
-            (format *trace-output* "~&About to write map ~a for ~s… "
+            (format *trace-output* "~&About to write map ~a for ~a… "
                     (title-case canon-name) tv)
             (let* ((width (array-dimension tile-grid 0))
                    (height (array-dimension tile-grid 1))
