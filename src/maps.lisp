@@ -1304,7 +1304,8 @@ range is 0 - #xffffffff (4,294,967,295)"
                    (run-commands-content (run-commands-content-for-map pathname)))
               (assert (<= (* width height) 1024))
               (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
-~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~r animation~:p, and ~r unique enem~@:p."
+~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~
+~r distinct animation~:p, and ~r unique enem~@:p."
                       width height
                       (length attributes-table)
                       (length decals-table)
