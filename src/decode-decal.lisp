@@ -75,28 +75,31 @@
             collect (cons label addr))))
 
 (defun dl-for-decal-status (dump address art-address expected-x)
-  (if (not (dll-can-reach-dl-entry-p dump address))
-      "unreachable"
-      (multiple-value-bind (bytes stringp x art-pointer)
-          (decode-header (coerce (subseq dump address (+ 5 address)) 'list)
-                         :silentp t)
-        (concatenate
-         'string
-         (if (= (floor expected-x) x)
-             "X correct"
-             (format nil "X position incorrect, wanted ~d (~d), got ~d"
-                     expected-x (floor expected-x) x))
-         "; "
-         (cond (stringp "header is for a string, not a stamp")
-               ((not bytes) "no header decoded at address")
-               ((not art-pointer) "no art pointer in header?")
-               ((and (= (logand #xff art-pointer)
-                        (logand #xff art-address))
-                     (> #x1000 (abs (- (logand #xff00 art-pointer)
-                                       (logand #xff00 art-address)))))
-                (format nil "art address matches; $~4,'0x ≅ $~4,'0x" art-address art-pointer))
-               (t (format nil "expected art at $~4,'0x but display list points to $~4,'0x"
-                          art-address art-pointer)))))))
+  (if-let (dll-start (dll-can-reach-dl-entry-p dump address))
+    (multiple-value-bind (bytes stringp x art-pointer)
+        (decode-header (coerce (subseq dump address (+ 5 address)) 'list)
+                       :silentp t)
+      (concatenate
+       'string
+       (if (= (floor expected-x) x)
+           "X correct"
+           (format nil "X position incorrect, wanted ~d (~d), got ~d"
+                   expected-x (floor expected-x) x))
+       "; "
+       (if (= dll-start (detect-active-dll dump))
+           "in current (active) DLL; "
+           "in back buffer DLL; ")
+       (cond (stringp "header is for a string, not a stamp")
+             ((not bytes) "no header decoded at address")
+             ((not art-pointer) "no art pointer in header?")
+             ((and (= (logand #xff art-pointer)
+                      (logand #xff art-address))
+                   (> #x1000 (abs (- (logand #xff00 art-pointer)
+                                     (logand #xff00 art-address)))))
+              (format nil "art address matches; $~4,'0x ≅ $~4,'0x" art-address art-pointer))
+             (t (format nil "expected art at $~4,'0x but display list points to $~4,'0x"
+                        art-address art-pointer)))))
+    "unreachable"))
 
 (defun decode-decal (dump index)
   (let ((addresses (read-labels-for-decal-info)))

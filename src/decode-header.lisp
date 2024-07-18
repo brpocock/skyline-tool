@@ -175,20 +175,20 @@
         do (incf dl-entry dl-increment)
         finally (return nil)))
 
-(defun dll-can-reach-dl-entry-p (mem dl-entry-pointer
-                                 &optional (start-address (detect-active-dll mem)))
-  (loop with y = 0
-        for dll-address from start-address by 3
-        for (dll-pointer offset) = (apply #'decode-dll-entry
-                                          (append (coerce (subseq mem dll-address
-                                                                  (+ 3 dll-address))
-                                                          'list)
-                                                  (list :silentp t)))
-        do (incf y offset)
-        while (and (< dll-address (+ start-address 511))
-                   (<= (- y offset) 262))
-        do (when (and dll-pointer
-                      (dl-contains-entry-p mem dl-entry-pointer :offset dll-pointer))
-             (return-from dll-can-reach-dl-entry-p t)))
+(defun dll-can-reach-dl-entry-p (mem dl-entry-pointer)
+  (dolist (start-address '(#x1800 #x1880))
+    (loop with y = 0
+          for dll-address from start-address by 3
+          for (dll-pointer offset) = (apply #'decode-dll-entry
+                                            (append (coerce (subseq mem dll-address
+                                                                    (+ 3 dll-address))
+                                                            'list)
+                                                    (list :silentp t)))
+          do (incf y offset)
+          while (and (< dll-address (+ start-address 511))
+                     (<= (- y offset) 262))
+          do (when (and dll-pointer
+                        (dl-contains-entry-p mem dl-entry-pointer :offset dll-pointer))
+               (return-from dll-can-reach-dl-entry-p start-address))))
   nil)
 
