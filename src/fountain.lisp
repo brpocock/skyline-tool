@@ -1861,12 +1861,12 @@ but now also ~s."
   (ensure-atarivox-dictionary)
   (when (emptyp string) (return-from convert-for-atarivox nil))
   (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[A-Za-z0-9-']+\\b *\\[(.*?)\\]"
+                 "\\b[A-Za-zÑñ0-9-']+\\b *\\[(.*?)\\]"
                  string
                  " \\1 "))
         (words nil))
     (cl-ppcre:do-scans (start end reg-starts reg-ends
-                        "( +|\\~[A-Za-z]+|[A-Za-z\\']+|[^A-Za-z\\' ]+)" string)
+                        "( +|\\~[A-Za-zÑñ]+|[A-Za-zÑñ\\']+|[^A-Za-zÑñ\\' ]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))

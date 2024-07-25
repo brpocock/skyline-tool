@@ -1108,7 +1108,7 @@ range is 0 - #xffffffff (4,294,967,295)"
         do (write-byte byte stream)))
 
 (define-constant +minifont-punctuation+
-  " ,.?!/&+-×÷=“”’;:…@❓🐸♪©•↑↓←→"
+  " ,.?!/&+-×÷=“”’;:…@❓ñ♪©•↑↓←→"
   :test 'string=)
 
 (defun char->minifont (char)
@@ -1121,7 +1121,7 @@ range is 0 - #xffffffff (4,294,967,295)"
      (if-let ((n #.(position #\’ +minifont-punctuation+ :test #'char=)))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
-    (t (or (let ((pos (position char +minifont-punctuation+ :test #'char=)))
+    (t (or (let ((pos (position (char-downcase char) +minifont-punctuation+ :test #'char=)))
              (when pos (+ 36 pos)))
            (error "Cannot encode character “~:c” (~a) in minifont"
                   char (cl-change-case:sentence-case (char-name char)))))))
