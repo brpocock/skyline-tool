@@ -170,7 +170,7 @@
         while (and dl-increment (< (+ dl-entry dl-increment) (length mem)))
         when (= dl-entry dl-entry-goal)
           do (return t)
-        when (> dl-entry (+ offset 512))
+        when (or (> dl-entry (+ offset 512)) (> dl-entry (- (length mem) #x10)))
           do (return nil)
         do (incf dl-entry dl-increment)
         finally (return nil)))
@@ -186,7 +186,8 @@
                                                     (list :silentp t)))
           do (incf y offset)
           while (and (< dll-address (+ start-address 511))
-                     (<= (- y offset) 262))
+                     (<= (- y offset) 262)
+                     (< dll-address #xfff0))
           do (when (and dll-pointer
                         (dl-contains-entry-p mem dl-entry-pointer :offset dll-pointer))
                (return-from dll-can-reach-dl-entry-p start-address))))
