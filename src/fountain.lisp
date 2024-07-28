@@ -970,7 +970,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                    (list 'wait-for actor)))
                  (wait for the actor (lambda (_wait _for _the actor)
                                        (declare (ignore _wait _for _the))
-                                   (list 'wait-for actor)))
+                                       (list 'wait-for actor)))
                  (wait for numeric second
                        #'stage/wait-secs)
                  (wait for numeric seconds
@@ -1130,6 +1130,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (enter-clause (skyline-tool::enter someone at location
                                        #'stage/enter))
     (ship-clause
+     (the ship-name is at location
+          (lambda (_the ship-name _is _at location)
+            (list 'boat ship-name 'at location nil)))
      (the ship-name appears in the east/west headed for actor/location
           #'stage/empty-boat)
      (the ship-name appears in the east/west with someones aboard headed to/for actor/location
@@ -2663,20 +2666,23 @@ Character_~0@*~a:
     (let ((boat-id (gethash ship-name *boat-ids*))
           (boat-class (gethash ship-name *boat-classes*)))
       (format t "~%~10t;; Boat “~:(~a~)” appears~%~10t;; headed to ~a" ship-name target)
-      (ecase east/west
-        (east (format t "~%~10t.mva DestX, MapWidth"))
-        (west (format t "~%~10t.mva DestX, #-3")))
       (destructuring-bind (kind x y) (interpret-place target)
         (assert (eql kind :absolute) (kind)
                 "KIND of location for positioning a boat must be absolute, but got ~s" kind)
+        (ecase east/west
+          (at (format t "~%~10t.mva DestX, #~d" x))
+          (east (format t "~%~10t.mva DestX, MapWidth"))
+          (west (format t "~%~10t.mva DestX, #-3")))
         (format t "~%~10t.mva DestY, #~d" y)
         (format t "~%~10tldx #~d~32t; Boat “~a”" boat-id ship-name)
         (format t "~%~10tldy # Boat~:(~a~)" boat-class)
         (format t "~%~10tjsr Lib.MakeBoat~%")
         ;; TODO put people on the boat
+        (when (eql east/west 'at)
+          (return))
         (ecase east/west
           (east (format t "~%~10t.SetProp BoatState, # BoatStateSailWest"))
-          (west (format t "~10t.SetProp BoatState, # BoatStateSailEast")))
+          (west (format t "~%~10t.SetProp BoatState, # BoatStateSailEast")))
         (format t "
 ~10t.mva BoatDestX, #~d
 ~10tldx #~d~32t; Boat “~a”
