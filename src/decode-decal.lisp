@@ -129,8 +129,13 @@
           (let ((anim-buffer (floor (fetch "DecalArtL") 4)))
             (clim:with-output-as-presentation (*standard-output* anim-buffer 'anim-buffer-index-value)
               (format t "~40tanimation buffer $~x" anim-buffer))))
-        (format t "~%~10tPalette: ~d"
-                (ash (logand #xe0 (fetch "DecalPalWidth")) -5))
+        (format t "~%~10tPalette: ~d~@[ (flash for ~*~d frame~:p to ~d)~]"
+                (ash (logand #xe0 (fetch "DecalPalWidth")) -5)
+                (plusp (fetch "DecalFlashTime"))
+                (fetch "DecalFlashTime")
+                (if (plusp (logand #x80 (fetch "DecalFlags")))
+                    (logand 4 (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5))
+                    (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5)))
         (format t "~%~10tWidth: ~d byte~:p"
                 (1+ (logxor #x1f (logand #x1f (fetch "DecalPalWidth")))))
         (format t "~%~10tDisplay List Position: ~:[none~;@ $~2,'0x~2,'0x (~a)~]"

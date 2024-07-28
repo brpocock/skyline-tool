@@ -927,7 +927,7 @@
                :name "Edit Animation Sequence"))
 
 (define-constant +all-actions+
-    '(:idle :climbing :dead :flying
+    '(:idle :climbing :hurt :flying
       :knocked-back :swimming :use-equipment :wading
       :walking :wave-arms :gesture :sleep :non-interactive
       :dance :panic :special-walk-with-shield :special-idle-with-shield)

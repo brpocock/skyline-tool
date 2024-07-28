@@ -113,7 +113,7 @@
   (:method ((field (eql :actor-action)) value s)
     (format s " = ~a"
             (case (first value)
-              (0 "Idle") (1 "Climbing") (2 "Dead") (3 "Flying")
+              (0 "Idle") (1 "Climbing") (2 "Hurt") (3 "Flying")
               (4 "Knocked Back") (5 "Swimming") (6 "Using Equipment") (7 "Wading")
               (8 "Walking") (9 "Waving Arms") (10 "Gesturing")
               (11 "Sleep") (12 "Non-interactive") (13 "Dance")
