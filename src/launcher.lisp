@@ -119,8 +119,9 @@ asset) changes, this may work."
    :process-name "Shove binary into running system"))
 
 (defun explain-error-code (error-code)
-  (let ((codes-file (make-pathname :directory "Dist" :name (format nil "~a.error.codes" *game-title*)
-                                   :type "csv")))
+  (let ((codes-file (make-pathname :directory (list :relative "Dist")
+				   :name (format nil "~a.error.codes" *game-title*)
+                                   :type "tsv")))
     (unless (probe-file codes-file)
       (uiop:run-program (list "make" (enough-namestring codes-file))))
     (with-input-from-file (codes codes-file)
