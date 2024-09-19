@@ -17,14 +17,14 @@
                :cl-change-case
                :cl-json
                :cl-ppcre 
-               :clim-listener
-               :clim-debugger
+               #+ () :clim-listener
+               #+ () :clim-debugger
                :clods-export
-               :climacs
-               :clouseau
+               #+ () :climacs
+               #+ () :clouseau
                :cserial-port
                :dufy
-               :mcclim
+               #+ () :mcclim
                :lparallel
                :local-time
                :midi

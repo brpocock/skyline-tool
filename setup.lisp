@@ -45,16 +45,16 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
 (format t "~&Quickloading Skyline-Tool System … ")
 (finish-output)
 (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :cl-plumbing)
-(funcall (intern "QUICKLOAD" (find-package :quicklisp)) :clim)
-(load (merge-pathnames (make-pathname :directory (list :relative)
-			        :name "clim-simple-interactor" :type "lisp")
-		   (or *compile-file-pathname*
-		       *load-pathname*)))
+#+ () (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :clim)
+#+ () (load (merge-pathnames (make-pathname :directory (list :relative)
+			              :name "clim-simple-interactor" :type "lisp")
+                             (or *compile-file-pathname*
+                                 *load-pathname*)))
 (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :skyline-tool)
 (format t "… done with Quickload.~2%")
 
 ;; These are missing, but apparently also no-op works
-(defmethod clim-internals::note-output-record-got-sheet ((drei drei:drei-area) (pane clim:pane)))
-(defmethod clim-internals::note-output-record-lost-sheet ((drei drei:drei-area) (pane clim:pane)))
+#+ () (defmethod clim-internals::note-output-record-got-sheet ((drei drei:drei-area) (pane clim:pane)))
+#+ () (defmethod clim-internals::note-output-record-lost-sheet ((drei drei:drei-area) (pane clim:pane)))
 
 (finish-output)

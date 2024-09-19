@@ -60,10 +60,11 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
       (error "Invalid port? ~a ⇒ ~a" pathname port))
     (list pathname port)))
 
+#+mcclim
 (defun spawn-thread-to-look-for-atarivox-on-port (pathname)
   (check-type pathname (or pathname string))
   (clim-sys:make-process (lambda () (ignore-errors (serial-port-has-atarivox-p pathname)))
-               :name (format nil "Looking for AtariVox on port ~a" pathname)))
+                         :name (format nil "Looking for AtariVox on port ~a" pathname)))
 
 (defvar *atarivox-port* nil)
 
@@ -107,6 +108,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
 
 (defvar *read-script-frame* nil)
 
+#+mcclim
 (clim:define-application-frame read-script-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
   (:panes (script-list-pane :application :height 700 :width 450
@@ -114,6 +116,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
           (interactor :interactor :height 125 :width 450))
   (:layouts (default (clim:vertically () script-list-pane interactor))))
 
+#+mcclim
 (define-read-script-frame-command (com-read-script :menu t :name t)
     ((script-full-name 'script-name :gesture :select))
   (read-script-out-loud script-full-name)
@@ -168,6 +171,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                         (t (format t "~& « ~a »" line)
                            (atarivox-speak line)))))))))
 
+#+mcclim
 (defun play-script-on-atarivox (&optional script-to-read)
   "Choose a script from a menu, and read it out loud on AtariVox (via Stelladaptor over USB)"
   (if script-to-read
@@ -184,4 +188,4 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
         (setf (clim:frame-pretty-name frame)
               (format nil "~a: Read Script" (cl-change-case:title-case *game-title*)))
         (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
-                     :name "Script Reader (launcher)"))))
+                               :name "Script Reader (launcher)"))))

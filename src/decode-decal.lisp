@@ -2,6 +2,7 @@
 
 (defvar *show-decal-frame* nil)
 
+#+mcclim
 (clim:define-application-frame show-decal-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index)
    (%dump :initform (load-dump-into-mem) :accessor decal-from-dump :initarg :dump))
@@ -12,20 +13,25 @@
           (interactor :interactor :height 200 :width 800))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
 
+#+mcclim
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)
 
+#+mcclim
 (define-show-decal-frame-command (com-switch-decal :menu t :name t) ((new-index 'integer))
   (setf (decal-index *show-decal-frame*) new-index)
   (clim:redisplay-frame-panes *show-decal-frame* ))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-switch-to-decal
     (decal-index-value com-switch-decal show-decal-frame
-     :gesture :select :menu nil
-     :documentation "Switch to viewing this decal")
-    (object)
+                       :gesture :select :menu nil
+                       :documentation "Switch to viewing this decal")
+  (object)
   (list object))
 
+#+mcclim
 (define-show-decal-frame-command (com-next-palette :name t :menu t) ()
   (let* ((address (+ (decal-index *show-decal-frame*)
                      (find-label-from-files "DecalPalWidth")))
@@ -43,11 +49,12 @@
                        5)))
     (clim:redisplay-frame-panes *show-decal-frame*)))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-next-palette
     (palette-selector com-next-palette show-decal-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to next palette")
-    (palette-selector)
+                      :gesture :edit :menu nil
+                      :documentation "Switch to next palette")
+  (palette-selector)
   ())
 
 (defun read-labels-for-decal-info (&optional (pathname #p"./Object/Bank00.Public.NTSC.o.LABELS.txt"))
@@ -101,6 +108,7 @@
                         art-address art-pointer)))))
     "unreachable"))
 
+#+mcclim
 (defun decode-decal (dump index)
   (let ((addresses (read-labels-for-decal-info)))
     (labels ((fetch (field)
@@ -193,6 +201,7 @@
               #\Space #\0
               (format nil "~& ~{~8,'0b~}" (coerce (subseq dump row (+ row width)) 'list)))))))
 
+#+mcclim
 (defmethod display-decal-contents ((frame show-decal-frame) (display-pane clim:pane))
   (let* ((stream display-pane)
          (decal-mode (if (plusp (logand #x80
@@ -260,24 +269,24 @@
                                   (+ (decal-index frame)
                                      (find-label-from-files "DecalFlags")))))
         (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream)
-              (display-maria-art stream
-                                 :dump (decal-from-dump frame)
-                                 :mode decal-mode
-                                 :address address
-                                 :colors palette
-                                 :width width
-                                 :unit 8)))
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream)
-              (display-maria-art stream
-                                 :dump (decal-from-dump frame)
-                                 :mode decal-mode
-                                 :address (+ #x10 address)
-                                 :colors palette
-                                 :width width
-                                 :unit 8))))
+                               (clim:formatting-row (stream)
+                                                    (clim:formatting-cell (stream)
+                                                                          (display-maria-art stream
+                                                                                             :dump (decal-from-dump frame)
+                                                                                             :mode decal-mode
+                                                                                             :address address
+                                                                                             :colors palette
+                                                                                             :width width
+                                                                                             :unit 8)))
+                               (clim:formatting-row (stream)
+                                                    (clim:formatting-cell (stream)
+                                                                          (display-maria-art stream
+                                                                                             :dump (decal-from-dump frame)
+                                                                                             :mode decal-mode
+                                                                                             :address (+ #x10 address)
+                                                                                             :colors palette
+                                                                                             :width width
+                                                                                             :unit 8))))
         (display-maria-art stream
                            :dump (decal-from-dump frame)
                            :mode decal-mode
@@ -310,6 +319,7 @@
       (decode-object-at (decal-from-dump frame) object-address))
     (force-output stream)))
 
+#+mcclim
 (defmethod display-decal-palette ((frame show-decal-frame) (display-pane clim:pane))
   (let* ((stream display-pane)
          (decal-mode (if (plusp (logand #x80
@@ -389,17 +399,20 @@
     (print-machine-palette stream)
     (force-output stream)))
 
+#+mcclim
 (define-show-decal-frame-command (com-find-animation-buffer :menu t :name t) ((buffer 'anim-buffer-index-value))
   (clim-sys:make-process (lambda () (show-animation-buffer buffer))
-               :name "Show animation buffer"))
+                         :name "Show animation buffer"))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-animation-buffer
     (anim-buffer-index-value com-find-animation-buffer show-decal-frame
-     :gesture :select :menu nil
-     :documentation "Show the animation buffer")
-    (id)
+                             :gesture :select :menu nil
+                             :documentation "Show the animation buffer")
+  (id)
   (list id))
 
+#+mcclim
 (defun show-decal (&optional (index 0) &key (dump (load-dump-into-mem)))
   "Display (from a core dump) the details of a decal's state"
   (clim-sys:make-process

@@ -516,6 +516,7 @@
                 finally (return best)))
         (cond
           ;; TODO make a proper error with presentation methods to handle this
+          #+mcclim
           ((clim:extended-output-stream-p *trace-output*)
            (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
 All colors: ~s~@[~% at (~3d,~3d)~]"

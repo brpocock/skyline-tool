@@ -361,6 +361,7 @@
 (defun number-of-banks (build video)
   (declare (ignore video))
   (ecase *machine*
+    (2600 32)
     (7800 (cond
             ((equal build "Demo") 8)
             ((equal build "Test") 64)
@@ -895,7 +896,20 @@ Dist/~:*~a.Test.bin: \\~
 
 (defun write-makefile-top-line (&key video build)
   "Writes the top lines for the Makefile"
-  (format t "~%
+  (ecase *machine*
+    (2600 (format t "~%
+Dist/~a.~a.~a.a26: \\~
+~{~%~10tObject/Bank~(~2,'0x~).~a.~a.o~^ \\~}
+	mkdir -p Dist
+	cat $^ > $@
+"
+                  *game-title*
+                  build video
+                  (loop for bank below (number-of-banks build video)
+                        appending (list bank build video))
+                  build video
+                  *game-title*))
+    (7800 (format t "~%
 Dist/~a.~a.~a.a78: ~0@* Dist/~a.~a.~a.bin
 	cp $^ $@
 	bin/7800header -f Source/Generated/header.~1@*~a.~a.script $@
@@ -911,12 +925,12 @@ Dist/~a.~a.~a.bin: \\~
 
 ~0@*Dist/~a.~a.~a.bin: .EXTRA_PREREQS = bin/7800sign
 "
-          *game-title*
-          build video
-          (loop for bank below (number-of-banks build video)
-                appending (list bank build video))
-          build video
-          *game-title*))
+                  *game-title*
+                  build video
+                  (loop for bank below (number-of-banks build video)
+                        appending (list bank build video))
+                  build video
+                  *game-title*))))
 
 (defvar *assets-for-builds* (make-hash-table :test 'equalp)
   "A cache of assets and in which builds they are used.")
@@ -1096,40 +1110,56 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
    :name "LastBank" :type "s"))
 
 (defun write-master-makefile ()
+  (write-master-makefile-for *machine*))
+
+(defmethod write-master-makefile-for ((machine (eql 2600)))
+  (ensure-directories-exist #p"Source/Generated/")
+  (format *trace-output* "~&Writing master Makefile content …")
+  (with-output-to-file (*standard-output* #p"Source/Generated/Makefile"
+                                          :if-exists :supersede)
+    (write-makefile-header)
+    (dolist (build +all-builds+)
+      (dolist (video +all-video+)
+        (let ((*last-bank* (1- (number-of-banks build video))))
+          (write-makefile-top-line :build build :video video)
+          (write-bank-makefile bank-source
+                               :build build :video video))))))
+
+(defmethod write-master-makefile-for ((machine (eql 7800)))
   "Write  out   Source/Generated/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
-  (let ((*machine* 7800))
-    (ensure-directories-exist #p"Source/Generated/")
-    (format *trace-output* "~&Writing master Makefile content …")
-    (with-output-to-file (*standard-output* #p"Source/Generated/Makefile" :if-exists :supersede)
-      (write-makefile-header)
-      (write-makefile-for-bare-assets)
-      (write-makefile-for-tilesets)
-      (write-makefile-for-art)
-      (write-makefile-for-blobs)
-      (write-makefile-test-target)
-      (write-test-header-script)
-      (write-makefile-test-banks)
-      (dolist (build +all-builds+)
-        (dolist (video +all-video+)
-          (let ((*last-bank* (1- (number-of-banks build video))))
-            (write-makefile-top-line :build build :video video)
-            (write-header-script :build build :video video)
-            (dotimes (*bank* (1+ *last-bank*))
-              (let ((bank-source (bank-source-pathname)))
-                (cond
-                  ((= *bank* *last-bank*)
-                   (write-bank-makefile (last-bank-source-pathname)
-                                        :build build :video video))
-                  ((and (= *last-bank* #x3f)
-                        (= *bank* #x3e))
-                   (write-ram-bank-makefile :build build :video video))
-                  ((probe-file bank-source)
-                   (write-bank-makefile bank-source
-                                        :build build :video video))
-                  (t (write-asset-bank-makefile *bank*
-                                                :build build :video video))))))))
-      (format *trace-output* " … done writing master Makefile.~%"))))
+  (ensure-directories-exist #p"Source/Generated/")
+  (format *trace-output* "~&Writing master Makefile content …")
+  (with-output-to-file (*standard-output* #p"Source/Generated/Makefile"
+                                          :if-exists :supersede)
+    (write-makefile-header)
+    (write-makefile-for-bare-assets)
+    (write-makefile-for-tilesets)
+    (write-makefile-for-art)
+    (write-makefile-for-blobs)
+    (write-makefile-test-target)
+    (write-test-header-script)
+    (write-makefile-test-banks)
+    (dolist (build +all-builds+)
+      (dolist (video +all-video+)
+        (let ((*last-bank* (1- (number-of-banks build video))))
+          (write-makefile-top-line :build build :video video)
+          (write-header-script :build build :video video)
+          (dotimes (*bank* (1+ *last-bank*))
+            (let ((bank-source (bank-source-pathname)))
+              (cond
+                ((= *bank* *last-bank*)
+                 (write-bank-makefile (last-bank-source-pathname)
+                                      :build build :video video))
+                ((and (= *last-bank* #x3f)
+                      (= *bank* #x3e))
+                 (write-ram-bank-makefile :build build :video video))
+                ((probe-file bank-source)
+                 (write-bank-makefile bank-source
+                                      :build build :video video))
+                (t (write-asset-bank-makefile *bank*
+                                              :build build :video video))))))))
+    (format *trace-output* " … done writing master Makefile.~%")))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"

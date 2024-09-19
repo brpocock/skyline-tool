@@ -2,6 +2,7 @@
 
 (defvar *launcher-frame* nil)
 
+#+mcclim
 (clim:define-application-frame launcher-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
   (:panes (menu-list-pane :application :height 700 :width 450
@@ -54,6 +55,7 @@
       )
   :test 'equalp)
 
+#+mcclim
 (defun display-launcher-menu-item (entry pane)
   (if (consp entry)
       (progn
@@ -66,14 +68,17 @@
             (display-launcher-menu-item sub-entry pane))))
       (clim:present entry 'nullary-function-name :stream pane)))
 
+#+mcclim
 (defmethod display-launcher-menu ((frame launcher-frame) (pane clim:pane))
   (clim:with-text-size (pane :larger)
     (display-launcher-menu-item (copy-list +launcher-entries+) pane))
   (clim:with-text-size (pane :small)
     (format pane "~3%Click the name of any function to launch it")))
 
+#+mcclim
 (clim:define-presentation-type nullary-function-name () :inherit-from 'symbol)
 
+#+mcclim
 (clim:define-presentation-method clim:present
     (function-name (type nullary-function-name) stream view &key)
   (clim:with-text-size (stream :larger)
@@ -82,16 +87,19 @@
     (format stream "~%~a" (first-line doc)))
   (terpri stream))
 
+#+mcclim
 (define-launcher-frame-command (com-run-nullary-function :menu nil :name t)
     ((function-name 'nullary-function-name :gesture :select))
   (clim-sys:make-process (lambda () (funcall function-name))
-               :name (cl-change-case:title-case (string function-name))))
+                         :name (cl-change-case:title-case (string function-name))))
 
+#+mcclim
 (defun check-for-absent-assets-in-project-folder ()
   "Check the project folder for assets that are not mentioned in the Assets.index"
   (clim-simple-interactor:run-in-simple-interactor #'check-for-absent-assets
                                                    :process-name "Check for absent assets"))
 
+#+mcclim
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"
   (clim-simple-interactor:run-in-simple-interactor (lambda ()
@@ -101,12 +109,14 @@
                                                      (room))
                                                    :process-name "Room"))
 
+#+mcclim
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"
   (clim-simple-interactor:run-in-simple-interactor
    (lambda () (push-7800gd-bin (format nil "Dist/~a.Public.NTSC.bin" *game-title*)))
    :process-name "Push binary"))
 
+#+mcclim
 (defun shove-binary-into-running-7800-game-drive ()
   "Update the running game with a new binary image
  
@@ -165,12 +175,14 @@ The signal code was ~a" break-code)
           (explain-error-code fault-code))))
     (terpri) (terpri) (force-output))) 
 
+#+mcclim
 (defun analyze-faults-from-dump (&optional (dump-pathname #p"/tmp/dump"))
   "Report on the fault codes logged in a core dump at DUMP-PATHNAME in a new window"
   (clim-simple-interactor:run-in-simple-interactor (lambda ()
                                                      (analyze-dump-faults dump-pathname))
                                                    :process-name "Analyze Dump Faults"))
 
+#+mcclim
 (defun reload-skyline-tool-from-sources ()
   "Recompile and reload this utility from the current sources on disk."
   (clim-simple-interactor:run-in-simple-interactor (lambda ()
@@ -180,6 +192,7 @@ The signal code was ~a" break-code)
                                                      (run-launcher))
                                                    :process-name "Recompile Skyline-Tool"))
 
+#+mcclim
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
   (let ((frame (clim:make-application-frame 'launcher-frame)))
@@ -194,11 +207,12 @@ The signal code was ~a" break-code)
       (sb-posix:chdir (namestring *default-pathname-defaults*))
       (clim:run-frame-top-level frame))))
 
+#+mcclim
 (defun run-launcher ()
   "Open the Skyline Tool launcher (main menu) in its own thread"
   (let ((*trace-output* (make-synonym-stream '*trace-output*)))
     (clim-sys:make-process (lambda () (launcher))
-                 :name "Skyline Tool GUI Launcher")))
+                           :name "Skyline Tool GUI Launcher")))
 
 (defun cl-user::skyline-tool ()
   "Open the Skyline Tool launcher (main menu)"

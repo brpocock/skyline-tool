@@ -61,20 +61,35 @@
       :vizier :sentinel :sailor :enemy :block1 :block2 :block3 :block4)
   :test 'equalp)
 
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-index () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-major-kind () :inherit-from 'symbol)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-decal-kind () :inherit-from 'symbol)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-decal-body () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-label () :inherit-from 'string)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-tile-sheet-name () :inherit-from 'string)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-frame-rate-scalar () :inherit-from 'rational)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-frame-count () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type simple-animation-sequence-frame-reference () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type animation-assignment-slot () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type anim-seq-action () :inherit-from 'symbol)
+#+mcclim
 (clim:define-presentation-type anim-seq-facing () :inherit-from 'symbol)
+#+mcclim
 (clim:define-presentation-type anim-seq-assign-sequence () :inherit-from 'integer)
+#+mcclim
 (clim:define-presentation-type magic-four-ways-button () :inherit-from 'symbol)
+#+mcclim
 (clim:define-presentation-type new-animation-sequence () :inherit-from 'symbol)
 
 (defclass simple-animation-sequence ()
@@ -115,6 +130,7 @@
                   ((:nefertem :sentinel :enemy) :160a)
                   (otherwise :160b))))))
 
+#+mcclim
 (clim:define-application-frame anim-seq-editor-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
    (%sequence :accessor anim-seq-editor-sequence)
@@ -128,16 +144,17 @@
           (anim-seq-preview-pane :application :height 250 :width 700
                                               :display-function 'display-anim-preview))
   (:layouts (default (clim:vertically ()
-                       anim-seq-filmstrip-pane
-                       (clim:horizontally ()
-                         interactor
-                         anim-seq-detail-pane
-                         anim-seq-preview-pane)))))
+                                      anim-seq-filmstrip-pane
+                                      (clim:horizontally ()
+                                                         interactor
+                                                         anim-seq-detail-pane
+                                                         anim-seq-preview-pane)))))
 
 (defun find-animation-sequence (id)
   (when id
     (elt *animation-sequences* id)))
 
+#+mcclim
 (defmethod initialize-instance :after ((frame anim-seq-editor-frame)
                                        &key sequence palette &allow-other-keys)
   (setf (anim-seq-editor-sequence frame) (find-animation-sequence sequence))
@@ -152,6 +169,7 @@
                                                      (otherwise 0)))))
     (clim:redisplay-frame-panes frame)))
 
+#+mcclim
 (defmethod update-params ((frame anim-seq-editor-frame))
   (unless (slot-boundp frame '%sequence)
     (setf (anim-seq-editor-sequence frame)
@@ -246,19 +264,22 @@
                (aref colors 12) (aref palettes palette-index 0))))
       colors)))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-set-label :name t) ((label 'string))
   (setf (simple-animation-sequence-label
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
         label)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-set-label
     (simple-animation-sequence-label com-set-label anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Change label")
-    (object)
+                                     :gesture :select :menu nil
+                                     :documentation "Change label")
+  (object)
   (list))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-change-frame :name t) ((sequence-frame 'integer)
                                                                   (sprite-frame '(or null integer)))
   (if sprite-frame
@@ -285,11 +306,12 @@
                               :palette (anim-seq-editor-palette *anim-seq-editor-frame*))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-change-frame
     (simple-animation-sequence-frame-reference com-change-frame anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Change the frame selected")
-    (sequence-frame sprite-frame)
+                                               :gesture :select :menu nil
+                                               :documentation "Change the frame selected")
+  (sequence-frame sprite-frame)
   (list sequence-frame sprite-frame))
 
 (defun create-new-animation-sequence (&key major-kind decal-kind body)
@@ -312,6 +334,7 @@
     (save-all-animation-sequences)
     new-seq))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-create-new-sequence :name t :menu t) ()
   (save-all-animation-sequences)
   (let ((new-seq (create-new-animation-sequence)))
@@ -320,6 +343,7 @@
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-to-sequence :name t :menu t) ((id 'integer))
   (save-all-animation-sequences)
   (setf (anim-seq-editor-index *anim-seq-editor-frame*) id
@@ -329,13 +353,15 @@
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-switch-sequence
     (simple-animation-sequence-index com-switch-sequence anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Switch to another sequence")
-    (object)
+                                     :gesture :select :menu nil
+                                     :documentation "Switch to another sequence")
+  (object)
   (list))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-frame-rate-scalar :name t) ()
   (setf (simple-animation-sequence-frame-rate-scalar
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -347,14 +373,16 @@
           (1/8 1)))
   (update-params *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-rotate-speed-scalar
     (simple-animation-sequence-frame-rate-scalar com-switch-frame-rate-scalar
-     anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Change frame rate scalar")
-    (object)
+                                                 anim-seq-editor-frame
+                                                 :gesture :select :menu nil
+                                                 :documentation "Change frame rate scalar")
+  (object)
   (list))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-frame-count :name t) ()
   (setf (simple-animation-sequence-frame-count
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -366,14 +394,16 @@
           (8 1)))
   (update-params *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-rotate-frame-count
     (simple-animation-sequence-frame-count com-switch-frame-count
-     anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Change number of frames in the sequence")
-    (object)
+                                           anim-seq-editor-frame
+                                           :gesture :select :menu nil
+                                           :documentation "Change number of frames in the sequence")
+  (object)
   (list))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-set-decal-body :name t) ((body 'integer))
   (setf (simple-animation-sequence-decal-body
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -389,13 +419,15 @@
                (:block4 8))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-set-body
     (simple-animation-sequence-decal-body com-set-decal-body anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Change body number")
-    (object)
+                                          :gesture :select :menu nil
+                                          :documentation "Change body number")
+  (object)
   (list))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-next-palette :name t) ()
   (setf (anim-seq-editor-palette *anim-seq-editor-frame*)
         (ecase (simple-animation-sequence-write-mode 
@@ -405,13 +437,15 @@
                      4 0))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-next-palette
     (palette-selector com-next-palette anim-seq-editor-frame
-     :gesture :select :menu nil
-     :documentation "Switch to next palette")
-    (frame)
+                      :gesture :select :menu nil
+                      :documentation "Switch to next palette")
+  (frame)
   ())
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-palette :name t) ((palette 'integer))
   (setf (anim-seq-editor-palette *anim-seq-editor-frame*)
         (ecase (simple-animation-sequence-write-mode 
@@ -420,6 +454,7 @@
           (:160b (if (zerop palette) 0 4))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-tileset :name t)
     ((name 'simple-animation-sequence-tile-sheet-name))
   (cond
@@ -461,26 +496,29 @@
   (eql :scenery (simple-animation-sequence-tile-sheet
                  (anim-seq-editor-sequence *anim-seq-editor-frame*))))
 
+#+mcclim
 (dolist (tileset (all-tilesets))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
                              (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
-              :menu t :tester anim-seq-editing-background-p
-              :documentation ,(format nil "Switch to tile sheet ~a" tileset))
-             (frame)
+                                                        :menu t :tester anim-seq-editing-background-p
+                                                        :documentation ,(format nil "Switch to tile sheet ~a" tileset))
+           (frame)
            (list ,tileset))))
 
+#+mcclim
 (dolist (tileset (all-scenery-decals))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
                              (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
-              :menu t :tester anim-seq-editing-scenery-p
-              :documentation ,(format nil "Switch to tile sheet ~a" tileset))
-             (frame)
+                                                        :menu t :tester anim-seq-editing-scenery-p
+                                                        :documentation ,(format nil "Switch to tile sheet ~a" tileset))
+           (frame)
            (list ,tileset))))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-select-decal-kind :name t)
     ((name 'simple-animation-sequence-decal-kind))
   (assert (member name +decal-kinds+) (name)
@@ -491,20 +529,22 @@
         name)
   (update-params *anim-seq-editor-frame*))
 
+#+mcclim
 (dolist (kind +decal-kinds+)
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-decal-kind-~a" kind)
              (simple-animation-sequence-decal-kind  com-select-decal-kind anim-seq-editor-frame
-              :menu t
-              :documentation ,(format nil "Switch to ~a decal kind" kind))
-             (frame)
+                                                    :menu t
+                                                    :documentation ,(format nil "Switch to ~a decal kind" kind))
+           (frame)
            (list ,kind))))
 
+#+mcclim
 (clim:define-presentation-to-command-translator select-specific-palette
     (palette-selector com-switch-palette anim-seq-editor-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to a specific")
-    (frame)
+                      :gesture :edit :menu nil
+                      :documentation "Switch to a specific")
+  (frame)
   ())
 
 (defun prefix-match-length (a b)
@@ -516,6 +556,7 @@
           do (return count)
         finally (return count)))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-major-kind :name t) ()
   (let ((new-kind (ecase (simple-animation-sequence-major-kind
                           (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -527,21 +568,24 @@
           new-kind)
     (update-params *anim-seq-editor-frame*)))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-select-major-kind :name t) ((kind 'symbol))
   (setf (simple-animation-sequence-major-kind
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
         kind)
   (update-params *anim-seq-editor-frame*))
 
+#+mcclim
 (dolist (major-kind (list :background :scenery :npc))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-major-kind-~a" major-kind)
              (simple-animation-sequence-major-kind com-select-major-kind anim-seq-editor-frame
-              :menu t
-              :documentation ,(format nil "Switch to ~a major kind" major-kind))
-             (object)
+                                                   :menu t
+                                                   :documentation ,(format nil "Switch to ~a major kind" major-kind))
+           (object)
            (list ,major-kind))))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-switch-decal-kind :name t) ()
   (when (eql :npc (simple-animation-sequence-major-kind
                    (anim-seq-editor-sequence *anim-seq-editor-frame*)))
@@ -555,181 +599,183 @@
                     (length +decal-kinds+)))))
   (update-params *anim-seq-editor-frame*))
 
+#+mcclim
 (defmethod display-anim-seq-filmstrip ((window anim-seq-editor-frame) pane)
   (let ((seq (anim-seq-editor-sequence window)))
     (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (dotimes (n (simple-animation-sequence-frame-count seq))
-          (let ((frame (or (elt (simple-animation-sequence-frames seq) n) 0)))
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane n 'simple-animation-sequence-frame-reference)
-                (display-maria-art pane
-                                   :dump (load-tile-sheet-object-by-name
-                                          (simple-animation-sequence-tile-sheet seq)
-                                          (ecase
-                                              (simple-animation-sequence-major-kind seq)
-                                            ((:background :scenery) nil)
-                                            (:npc t)))
-                                   :mode (simple-animation-sequence-write-mode seq)
-                                   :address (* (simple-animation-sequence-bytes-width seq)
-                                               frame)
-                                   :colors (read-palette-for-tile-sheet
-                                            (simple-animation-sequence-tile-sheet seq)
-                                            (anim-seq-editor-palette window)
-                                            :write-mode
-                                            (simple-animation-sequence-write-mode seq))
-                                   :var-colors #(#x48 #x88 #xc8)
-                                   :width (simple-animation-sequence-bytes-width seq))
-                (terpri pane)
-                (format pane "~10tFrame ~d: $~2,'0x" (1+ n) frame)))))))
+                           (clim:formatting-row (pane)
+                                                (dotimes (n (simple-animation-sequence-frame-count seq))
+                                                  (let ((frame (or (elt (simple-animation-sequence-frames seq) n) 0)))
+                                                    (clim:formatting-cell (pane)
+                                                                          (clim:with-output-as-presentation (pane n 'simple-animation-sequence-frame-reference)
+                                                                            (display-maria-art pane
+                                                                                               :dump (load-tile-sheet-object-by-name
+                                                                                                      (simple-animation-sequence-tile-sheet seq)
+                                                                                                      (ecase
+                                                                                                          (simple-animation-sequence-major-kind seq)
+                                                                                                        ((:background :scenery) nil)
+                                                                                                        (:npc t)))
+                                                                                               :mode (simple-animation-sequence-write-mode seq)
+                                                                                               :address (* (simple-animation-sequence-bytes-width seq)
+                                                                                                           frame)
+                                                                                               :colors (read-palette-for-tile-sheet
+                                                                                                        (simple-animation-sequence-tile-sheet seq)
+                                                                                                        (anim-seq-editor-palette window)
+                                                                                                        :write-mode
+                                                                                                        (simple-animation-sequence-write-mode seq))
+                                                                                               :var-colors #(#x48 #x88 #xc8)
+                                                                                               :width (simple-animation-sequence-bytes-width seq))
+                                                                            (terpri pane)
+                                                                            (format pane "~10tFrame ~d: $~2,'0x" (1+ n) frame)))))))
     (let ((pal (anim-seq-editor-palette window)))
       (clim:with-output-as-presentation (pane pal 'palette-selector)
         (format pane "~2%Palette: ~d" pal)))))
 
+#+mcclim
 (defmethod display-anim-seq-properties ((frame anim-seq-editor-frame) pane)
   (block nil
     (let ((seq (anim-seq-editor-sequence frame)))
       (if seq
           (progn (format pane "~10t")
                  (clim:formatting-table (pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (clim:with-text-size (pane :large)
-                           (clim:with-output-as-presentation (pane (anim-seq-editor-index frame)
-                                                                   'simple-animation-sequence-index)
-                             (format pane "Sequence:")))))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation (pane (anim-seq-editor-index frame)
-                                                               'simple-animation-sequence-index)
-                         (clim:with-text-size (pane :large)
-                           (format pane "~d" (anim-seq-editor-index frame))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Label:")))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation (pane (simple-animation-sequence-label seq)
-                                                               'simple-animation-sequence-label)
-                         (let ((label (simple-animation-sequence-label seq)))
-                           (format pane "~a" (if (emptyp label)
-                                                 " — "
-                                                 label))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Major Kind:")))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation
-                           (pane (simple-animation-sequence-major-kind seq)
-                                 'simple-animation-sequence-major-kind)
-                         (let ((kind (simple-animation-sequence-major-kind seq)))
-                           (format pane (ecase kind
-                                          (:npc "Non-Player Character")
-                                          (:background "Background (map tiles)")
-                                          (:scenery "Scenery decals")))))))
-                   (when (eql :npc (simple-animation-sequence-major-kind seq))
-                     (terpri pane)
-                     (clim:formatting-row (pane)
-                       (clim:formatting-cell (pane)
-                         (clim:with-text-face (pane :bold)
-                           (format pane "Decal Kind:")))
-                       (clim:formatting-cell (pane)
-                         (clim:with-output-as-presentation
-                             (pane (simple-animation-sequence-decal-kind seq)
-                                   'simple-animation-sequence-decal-kind)
-                           (format pane "~a"
-                                   (decal-kind-name
-                                    (simple-animation-sequence-decal-kind seq)))))))
-                   (when (and (eql :npc (simple-animation-sequence-major-kind seq))
-                              (member (simple-animation-sequence-decal-kind seq)
-                                      '(:human :enemy :sailor :block1 :block2 :block3 :block4)))
-                     (terpri pane)
-                     (clim:formatting-row (pane)
-                       (clim:formatting-cell (pane)
-                         (clim:with-text-face (pane :bold)
-                           (format pane "Body Number:")))
-                       (clim:formatting-cell (pane)
-                         (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-body seq)
-                                                                 'simple-animation-sequence-decal-body)
-                           (format pane "~d"
-                                   (simple-animation-sequence-decal-body seq))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Tile Sheet:")))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation (pane (simple-animation-sequence-tile-sheet seq)
-                                                               'simple-animation-sequence-tile-sheet-name)
-                         (format pane "~a"
-                                 (simple-animation-sequence-tile-sheet seq)))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Frames:")))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-count seq)
-                                                               'simple-animation-sequence-frame-count)
-                         (format pane "~r frame~:p"
-                                 (simple-animation-sequence-frame-count seq)))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Speed Scalar:")))
-                     (clim:formatting-cell (pane)
-                       (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-rate-scalar seq)
-                                                               'simple-animation-sequence-frame-rate-scalar)
-                         (format pane "~a"
-                                 (rationalize (simple-animation-sequence-frame-rate-scalar seq))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Frame Rate:")))
-                     (clim:formatting-cell (pane)
-                       (format pane "~{~d ~a~} FPS (frames per second)"
-                               (substitute
-                                #\Space 0
-                                (multiple-value-list
-                                 (floor (* 10 (simple-animation-sequence-frame-rate-scalar seq))))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Duration:")))
-                     (clim:formatting-cell (pane)
-                       (format pane "~{~d ~a~} sec (~0,2fs)"
-                               (substitute
-                                #\Space 0
-                                (multiple-value-list
-                                 (floor (/ (simple-animation-sequence-frame-count seq)
-                                           (* 10
-                                              (simple-animation-sequence-frame-rate-scalar seq))))))
-                               (/ (simple-animation-sequence-frame-count seq)
-                                  (* 10.0
-                                     (simple-animation-sequence-frame-rate-scalar seq))))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Write Mode:")))
-                     (clim:formatting-cell (pane)
-                       (format pane "~a"
-                               (simple-animation-sequence-write-mode seq))))
-                   (terpri pane)
-                   (clim:formatting-row (pane)
-                     (clim:formatting-cell (pane)
-                       (clim:with-text-face (pane :bold)
-                         (format pane "Bytes Width:")))
-                     (clim:formatting-cell (pane)
-                       (format pane "~d byte~:p"
-                               (simple-animation-sequence-bytes-width seq))))
-                   (force-output pane)))
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (clim:with-text-size (pane :large)
+                                                                                       (clim:with-output-as-presentation (pane (anim-seq-editor-index frame)
+                                                                                                                               'simple-animation-sequence-index)
+                                                                                         (format pane "Sequence:")))))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation (pane (anim-seq-editor-index frame)
+                                                                                                                           'simple-animation-sequence-index)
+                                                                                     (clim:with-text-size (pane :large)
+                                                                                       (format pane "~d" (anim-seq-editor-index frame))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Label:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation (pane (simple-animation-sequence-label seq)
+                                                                                                                           'simple-animation-sequence-label)
+                                                                                     (let ((label (simple-animation-sequence-label seq)))
+                                                                                       (format pane "~a" (if (emptyp label)
+                                                                                                             " — "
+                                                                                                             label))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Major Kind:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation
+                                                                                       (pane (simple-animation-sequence-major-kind seq)
+                                                                                             'simple-animation-sequence-major-kind)
+                                                                                     (let ((kind (simple-animation-sequence-major-kind seq)))
+                                                                                       (format pane (ecase kind
+                                                                                                      (:npc "Non-Player Character")
+                                                                                                      (:background "Background (map tiles)")
+                                                                                                      (:scenery "Scenery decals")))))))
+                                        (when (eql :npc (simple-animation-sequence-major-kind seq))
+                                          (terpri pane)
+                                          (clim:formatting-row (pane)
+                                                               (clim:formatting-cell (pane)
+                                                                                     (clim:with-text-face (pane :bold)
+                                                                                       (format pane "Decal Kind:")))
+                                                               (clim:formatting-cell (pane)
+                                                                                     (clim:with-output-as-presentation
+                                                                                         (pane (simple-animation-sequence-decal-kind seq)
+                                                                                               'simple-animation-sequence-decal-kind)
+                                                                                       (format pane "~a"
+                                                                                               (decal-kind-name
+                                                                                                (simple-animation-sequence-decal-kind seq)))))))
+                                        (when (and (eql :npc (simple-animation-sequence-major-kind seq))
+                                                   (member (simple-animation-sequence-decal-kind seq)
+                                                           '(:human :enemy :sailor :block1 :block2 :block3 :block4)))
+                                          (terpri pane)
+                                          (clim:formatting-row (pane)
+                                                               (clim:formatting-cell (pane)
+                                                                                     (clim:with-text-face (pane :bold)
+                                                                                       (format pane "Body Number:")))
+                                                               (clim:formatting-cell (pane)
+                                                                                     (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-body seq)
+                                                                                                                             'simple-animation-sequence-decal-body)
+                                                                                       (format pane "~d"
+                                                                                               (simple-animation-sequence-decal-body seq))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Tile Sheet:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation (pane (simple-animation-sequence-tile-sheet seq)
+                                                                                                                           'simple-animation-sequence-tile-sheet-name)
+                                                                                     (format pane "~a"
+                                                                                             (simple-animation-sequence-tile-sheet seq)))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Frames:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-count seq)
+                                                                                                                           'simple-animation-sequence-frame-count)
+                                                                                     (format pane "~r frame~:p"
+                                                                                             (simple-animation-sequence-frame-count seq)))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Speed Scalar:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-rate-scalar seq)
+                                                                                                                           'simple-animation-sequence-frame-rate-scalar)
+                                                                                     (format pane "~a"
+                                                                                             (rationalize (simple-animation-sequence-frame-rate-scalar seq))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Frame Rate:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (format pane "~{~d ~a~} FPS (frames per second)"
+                                                                                           (substitute
+                                                                                            #\Space 0
+                                                                                            (multiple-value-list
+                                                                                             (floor (* 10 (simple-animation-sequence-frame-rate-scalar seq))))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Duration:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (format pane "~{~d ~a~} sec (~0,2fs)"
+                                                                                           (substitute
+                                                                                            #\Space 0
+                                                                                            (multiple-value-list
+                                                                                             (floor (/ (simple-animation-sequence-frame-count seq)
+                                                                                                       (* 10
+                                                                                                          (simple-animation-sequence-frame-rate-scalar seq))))))
+                                                                                           (/ (simple-animation-sequence-frame-count seq)
+                                                                                              (* 10.0
+                                                                                                 (simple-animation-sequence-frame-rate-scalar seq))))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Write Mode:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (format pane "~a"
+                                                                                           (simple-animation-sequence-write-mode seq))))
+                                        (terpri pane)
+                                        (clim:formatting-row (pane)
+                                                             (clim:formatting-cell (pane)
+                                                                                   (clim:with-text-face (pane :bold)
+                                                                                     (format pane "Bytes Width:")))
+                                                             (clim:formatting-cell (pane)
+                                                                                   (format pane "~d byte~:p"
+                                                                                           (simple-animation-sequence-bytes-width seq))))
+                                        (force-output pane)))
           
           (clim:with-output-as-presentation (pane nil 'simple-animation-sequence-index)
             (format pane "~&No sequence selected"))))))
@@ -911,20 +957,22 @@
         (setf (elt *animation-sequences* index) sequence)))
   (save-all-animation-sequences))
 
+#+mcclim
 (define-anim-seq-editor-frame-command (com-save-sequence :name t :menu t) ()
   (save-animation-sequence (anim-seq-editor-sequence *anim-seq-editor-frame*)))
 
+#+mcclim
 (defun edit-animation-sequence (&optional (sequence 0))
   "Select which frames go together to form an animation sequence"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*anim-seq-editor-frame*
-                         (clim:make-application-frame 'anim-seq-editor-frame
-                                                      :sequence sequence)))
-                   (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
-                         "Edit Animation Sequence")
-                   (clim:run-frame-top-level *anim-seq-editor-frame*)))
-               :name "Edit Animation Sequence"))
+                           (load-all-animation-sequences)
+                           (let ((*anim-seq-editor-frame*
+                                   (clim:make-application-frame 'anim-seq-editor-frame
+                                                                :sequence sequence)))
+                             (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
+                                   "Edit Animation Sequence")
+                             (clim:run-frame-top-level *anim-seq-editor-frame*)))
+                         :name "Edit Animation Sequence"))
 
 (define-constant +all-actions+
     '(:idle :climbing :hurt :flying
@@ -933,6 +981,7 @@
       :dance :panic :special-walk-with-shield :special-idle-with-shield)
   :test 'equalp)
 
+#+mcclim
 (clim:define-application-frame anim-seq-assign-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-assign-index :initarg :sequence)
    (%sequence :accessor anim-seq-assign-sequence)
@@ -947,9 +996,10 @@
                                              :display-function 'display-anim-seq-assignment)
           (interactor :interactor :height 150 :width 400))
   (:layouts (default (clim:vertically ()
-                         anim-seq-detail-pane
-                       interactor))))
+                                      anim-seq-detail-pane
+                                      interactor))))
 
+#+mcclim
 (defmethod display-anim-seq-assignment ((frame anim-seq-assign-frame) pane)
   (block nil
     (clim:with-text-size (pane :large)
@@ -1016,161 +1066,164 @@
         (return))
       (format pane "~10t")
       (clim:formatting-table (pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (clim:with-text-size (pane :large)
-                (clim:with-output-as-presentation (pane (anim-seq-assign-index frame)
-                                                        'simple-animation-sequence-index)
-                  (format pane "Sequence:")))))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (anim-seq-assign-index frame)
-                                                    'simple-animation-sequence-index)
-              (clim:with-text-size (pane :large)
-                (format pane "~d" (anim-seq-assign-index frame))))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Label:")))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (simple-animation-sequence-label seq)
-                                                    'simple-animation-sequence-label)
-              (if-let ((label (simple-animation-sequence-label seq)))
-                (format pane "~a" label)
-                (format pane "(no label)")))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Major Kind:")))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (simple-animation-sequence-major-kind seq)
-                                                    'simple-animation-sequence-major-kind)
-              (let ((kind (simple-animation-sequence-major-kind seq)))
-                (format pane (ecase kind
-                               (:npc "Non-Player Character")
-                               (:background "Background (map tiles)")
-                               (:scenery "Scenery decals")))))))
-        (when (eql :npc (simple-animation-sequence-major-kind seq))
-          (terpri pane)
-          (clim:formatting-row (pane)
-            (clim:formatting-cell (pane)
-              (clim:with-text-face (pane :bold)
-                (format pane "Decal Kind:")))
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-kind seq)
-                                                      'simple-animation-sequence-decal-kind)
-                (format pane "~a"
-                        (decal-kind-name (simple-animation-sequence-decal-kind seq)))))))
-        (when (and (eql :npc (simple-animation-sequence-major-kind seq))
-                   (member (simple-animation-sequence-decal-kind seq)
-                           '(:human :enemy :sailor :block1 :block2 :block3 :block4)))
-          (terpri pane)
-          (clim:formatting-row (pane)
-            (clim:formatting-cell (pane)
-              (clim:with-text-face (pane :bold)
-                (format pane "Body Number:")))
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-body seq)
-                                                      'simple-animation-sequence-decal-body)
-                (format pane "~d"
-                        (simple-animation-sequence-decal-body seq))))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Tile Sheet:")))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (simple-animation-sequence-tile-sheet seq)
-                                                    'simple-animation-sequence-tile-sheet-name)
-              (format pane "~a"
-                      (simple-animation-sequence-tile-sheet seq)))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Frames:")))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-count seq)
-                                                    'simple-animation-sequence-frame-count)
-              (format pane "~d frame~:p"
-                      (simple-animation-sequence-frame-count seq)))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Speed Scalar:")))
-          (clim:formatting-cell (pane)
-            (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-rate-scalar seq)
-                                                    'simple-animation-sequence-frame-rate-scalar)
-              (format pane "~a"
-                      (rationalize (simple-animation-sequence-frame-rate-scalar seq))))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Frame Rate:")))
-          (clim:formatting-cell (pane)
-            (format pane "~{~d ~a~} FPS (frames per second)"
-                    (substitute
-                     #\Space 0
-                     (multiple-value-list
-                      (floor (* 10 (simple-animation-sequence-frame-rate-scalar seq))))))))
-        (terpri pane)
-        (clim:formatting-row (pane)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (format pane "Duration:")))
-          (clim:formatting-cell (pane)
-            (format pane "~{~d ~a~} sec (~0,2fs)"
-                    (substitute
-                     #\Space 0
-                     (multiple-value-list
-                      (floor (/ (simple-animation-sequence-frame-count seq)
-                                (* 10
-                                   (simple-animation-sequence-frame-rate-scalar seq))))))
-                    (/ (simple-animation-sequence-frame-count seq)
-                       (* 10.0
-                          (simple-animation-sequence-frame-rate-scalar seq))))))
-        (terpri pane)
-        (clim:with-output-as-presentation (pane (simple-animation-sequence-index seq)
-                                                'anim-seq-assign-sequence)
-          (format pane "~%~20t(Click here to edit sequence)"))
-        (terpri pane)
-        (force-output pane)))))
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (clim:with-text-size (pane :large)
+                                                                            (clim:with-output-as-presentation (pane (anim-seq-assign-index frame)
+                                                                                                                    'simple-animation-sequence-index)
+                                                                              (format pane "Sequence:")))))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (anim-seq-assign-index frame)
+                                                                                                                'simple-animation-sequence-index)
+                                                                          (clim:with-text-size (pane :large)
+                                                                            (format pane "~d" (anim-seq-assign-index frame))))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Label:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (simple-animation-sequence-label seq)
+                                                                                                                'simple-animation-sequence-label)
+                                                                          (if-let ((label (simple-animation-sequence-label seq)))
+                                                                            (format pane "~a" label)
+                                                                            (format pane "(no label)")))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Major Kind:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (simple-animation-sequence-major-kind seq)
+                                                                                                                'simple-animation-sequence-major-kind)
+                                                                          (let ((kind (simple-animation-sequence-major-kind seq)))
+                                                                            (format pane (ecase kind
+                                                                                           (:npc "Non-Player Character")
+                                                                                           (:background "Background (map tiles)")
+                                                                                           (:scenery "Scenery decals")))))))
+                             (when (eql :npc (simple-animation-sequence-major-kind seq))
+                               (terpri pane)
+                               (clim:formatting-row (pane)
+                                                    (clim:formatting-cell (pane)
+                                                                          (clim:with-text-face (pane :bold)
+                                                                            (format pane "Decal Kind:")))
+                                                    (clim:formatting-cell (pane)
+                                                                          (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-kind seq)
+                                                                                                                  'simple-animation-sequence-decal-kind)
+                                                                            (format pane "~a"
+                                                                                    (decal-kind-name (simple-animation-sequence-decal-kind seq)))))))
+                             (when (and (eql :npc (simple-animation-sequence-major-kind seq))
+                                        (member (simple-animation-sequence-decal-kind seq)
+                                                '(:human :enemy :sailor :block1 :block2 :block3 :block4)))
+                               (terpri pane)
+                               (clim:formatting-row (pane)
+                                                    (clim:formatting-cell (pane)
+                                                                          (clim:with-text-face (pane :bold)
+                                                                            (format pane "Body Number:")))
+                                                    (clim:formatting-cell (pane)
+                                                                          (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-body seq)
+                                                                                                                  'simple-animation-sequence-decal-body)
+                                                                            (format pane "~d"
+                                                                                    (simple-animation-sequence-decal-body seq))))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Tile Sheet:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (simple-animation-sequence-tile-sheet seq)
+                                                                                                                'simple-animation-sequence-tile-sheet-name)
+                                                                          (format pane "~a"
+                                                                                  (simple-animation-sequence-tile-sheet seq)))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Frames:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-count seq)
+                                                                                                                'simple-animation-sequence-frame-count)
+                                                                          (format pane "~d frame~:p"
+                                                                                  (simple-animation-sequence-frame-count seq)))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Speed Scalar:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-output-as-presentation (pane (simple-animation-sequence-frame-rate-scalar seq)
+                                                                                                                'simple-animation-sequence-frame-rate-scalar)
+                                                                          (format pane "~a"
+                                                                                  (rationalize (simple-animation-sequence-frame-rate-scalar seq))))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Frame Rate:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (format pane "~{~d ~a~} FPS (frames per second)"
+                                                                                (substitute
+                                                                                 #\Space 0
+                                                                                 (multiple-value-list
+                                                                                  (floor (* 10 (simple-animation-sequence-frame-rate-scalar seq))))))))
+                             (terpri pane)
+                             (clim:formatting-row (pane)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (format pane "Duration:")))
+                                                  (clim:formatting-cell (pane)
+                                                                        (format pane "~{~d ~a~} sec (~0,2fs)"
+                                                                                (substitute
+                                                                                 #\Space 0
+                                                                                 (multiple-value-list
+                                                                                  (floor (/ (simple-animation-sequence-frame-count seq)
+                                                                                            (* 10
+                                                                                               (simple-animation-sequence-frame-rate-scalar seq))))))
+                                                                                (/ (simple-animation-sequence-frame-count seq)
+                                                                                   (* 10.0
+                                                                                      (simple-animation-sequence-frame-rate-scalar seq))))))
+                             (terpri pane)
+                             (clim:with-output-as-presentation (pane (simple-animation-sequence-index seq)
+                                                                     'anim-seq-assign-sequence)
+                               (format pane "~%~20t(Click here to edit sequence)"))
+                             (terpri pane)
+                             (force-output pane)))))
 
+#+mcclim
 (defmethod initialize-instance :after ((frame anim-seq-assign-frame) &key sequence &allow-other-keys)
   (setf (anim-seq-assign-sequence frame) (find-animation-sequence sequence)))
 
+#+mcclim
 (defun assign-animation-sequence (decal-kind body action facing)
   "Select which animation sequence applies to which action(s)"
   (let ((parent *anim-seq-assigns-frame*))
     (clim-sys:make-process (lambda ()
-                   (let ((*anim-seq-assign-frame*
-                           (clim:make-application-frame
-                            'anim-seq-assign-frame
-                            :sequence (when-let (seq (gethash (list decal-kind body action facing)
-                                                              *animation-assignments*))
-                                        (simple-animation-sequence-index seq))
-                            :decal-kind decal-kind
-                            :body body
-                            :action action
-                            :facing facing
-                            :parent parent)))
-                     (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
-                           "Assign Animation Sequence")
-                     (clim:run-frame-top-level *anim-seq-assign-frame*)))
-                 :name "Assign Animation Sequence")))
+                             (let ((*anim-seq-assign-frame*
+                                     (clim:make-application-frame
+                                      'anim-seq-assign-frame
+                                      :sequence (when-let (seq (gethash (list decal-kind body action facing)
+                                                                        *animation-assignments*))
+                                                  (simple-animation-sequence-index seq))
+                                      :decal-kind decal-kind
+                                      :body body
+                                      :action action
+                                      :facing facing
+                                      :parent parent)))
+                               (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
+                                     "Assign Animation Sequence")
+                               (clim:run-frame-top-level *anim-seq-assign-frame*)))
+                           :name "Assign Animation Sequence")))
 
+#+mcclim
 (clim:define-application-frame anim-seq-assigns-frame ()
   ()
   (:panes (anim-seq-assignments-pane :application :height 600 :width 1600
                                                   :display-function 'display-anim-seq-assignments)
           (interactor :interactor :height 200 :width 400))
   (:layouts (default (clim:vertically ()
-                       anim-seq-assignments-pane
-                       interactor))))
+                                      anim-seq-assignments-pane
+                                      interactor))))
 
 (defun body-count-for-decal-kind (kind)
   (case kind
@@ -1207,6 +1260,7 @@
                                                   decal-kind body)
               do (return (elt *animation-sequences* i)))))
 
+#+mcclim
 (defmethod display-anim-seq-assignments ((frame anim-seq-assigns-frame) pane)
   (block nil
     (clim:with-text-size (pane :large)
@@ -1214,68 +1268,70 @@
     (terpri pane)
     (terpri pane)
     (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (clim:with-text-size (pane :large)
-              (format pane "  Decal Kind"))))
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (clim:with-text-size (pane :large)
-              (format pane "  Body"))))
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (clim:with-text-size (pane :large)
-              (format pane "  Facing"))))
-        (dolist (action +all-actions+)
-          (clim:formatting-cell (pane)
-            (clim:with-text-face (pane :bold)
-              (clim:with-text-size (pane :large)
-                (format pane "  ~a" (title-case (string action))))))))
-      (terpri pane)
-      (let (printed-decal-kind)
-        (dolist (decal-kind +decal-kinds+)
-          (let (printed-body)
-            (dotimes (body (body-count-for-decal-kind decal-kind))
-              (clim:formatting-row (pane)
-                (clim:formatting-cell (pane :min-height 15)
-                  (format pane "~3%")))
-              (dolist (facing '(:north :south :east :west))
-                (clim:formatting-row (pane)
-                  (clim:formatting-cell (pane)
-                    (unless (eql printed-decal-kind decal-kind)
-                      (format pane "  ~a" (title-case (string decal-kind)))
-                      (setf printed-decal-kind decal-kind)))
-                  (clim:formatting-cell (pane)
-                    (unless (eql printed-body body)
-                      (format pane "~d" body)
-                      (setf printed-body body)))
-                  (clim:formatting-cell (pane)
-                    (format pane "~a" (title-case (string facing))))
-                  (dolist (action +all-actions+)
-                    (clim:formatting-cell (pane)
-                      (clim:with-output-as-presentation (pane (list decal-kind body action facing)
-                                                              'animation-assignment-slot)
-                        (if-let ((seq (find-assigned-animation-sequence
-                                       decal-kind body action facing)))
-                          (format pane "    ~a~@[ (~a)~]"
-                                  (title-case
-                                   (simple-animation-sequence-index seq))
-                                  (simple-animation-sequence-label seq))
-                          (format pane "   —   ")))))))))))
-      (force-output pane))))
+                           (clim:formatting-row (pane)
+                                                (clim:formatting-cell (pane)
+                                                                      (clim:with-text-face (pane :bold)
+                                                                        (clim:with-text-size (pane :large)
+                                                                          (format pane "  Decal Kind"))))
+                                                (clim:formatting-cell (pane)
+                                                                      (clim:with-text-face (pane :bold)
+                                                                        (clim:with-text-size (pane :large)
+                                                                          (format pane "  Body"))))
+                                                (clim:formatting-cell (pane)
+                                                                      (clim:with-text-face (pane :bold)
+                                                                        (clim:with-text-size (pane :large)
+                                                                          (format pane "  Facing"))))
+                                                (dolist (action +all-actions+)
+                                                  (clim:formatting-cell (pane)
+                                                                        (clim:with-text-face (pane :bold)
+                                                                          (clim:with-text-size (pane :large)
+                                                                            (format pane "  ~a" (title-case (string action))))))))
+                           (terpri pane)
+                           (let (printed-decal-kind)
+                             (dolist (decal-kind +decal-kinds+)
+                               (let (printed-body)
+                                 (dotimes (body (body-count-for-decal-kind decal-kind))
+                                   (clim:formatting-row (pane)
+                                                        (clim:formatting-cell (pane :min-height 15)
+                                                                              (format pane "~3%")))
+                                   (dolist (facing '(:north :south :east :west))
+                                     (clim:formatting-row (pane)
+                                                          (clim:formatting-cell (pane)
+                                                                                (unless (eql printed-decal-kind decal-kind)
+                                                                                  (format pane "  ~a" (title-case (string decal-kind)))
+                                                                                  (setf printed-decal-kind decal-kind)))
+                                                          (clim:formatting-cell (pane)
+                                                                                (unless (eql printed-body body)
+                                                                                  (format pane "~d" body)
+                                                                                  (setf printed-body body)))
+                                                          (clim:formatting-cell (pane)
+                                                                                (format pane "~a" (title-case (string facing))))
+                                                          (dolist (action +all-actions+)
+                                                            (clim:formatting-cell (pane)
+                                                                                  (clim:with-output-as-presentation (pane (list decal-kind body action facing)
+                                                                                                                          'animation-assignment-slot)
+                                                                                    (if-let ((seq (find-assigned-animation-sequence
+                                                                                                   decal-kind body action facing)))
+                                                                                      (format pane "    ~a~@[ (~a)~]"
+                                                                                              (title-case
+                                                                                               (simple-animation-sequence-index seq))
+                                                                                              (simple-animation-sequence-label seq))
+                                                                                      (format pane "   —   ")))))))))))
+                           (force-output pane))))
 
+#+mcclim
 (defun assign-animation-sequences ()
   "Select which animation sequence applies to which action(s)"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*anim-seq-assigns-frame*
-                         (clim:make-application-frame 'anim-seq-assigns-frame)))
-                   (setf (clim:frame-pretty-name *anim-seq-assigns-frame*)
-                         "Assign Animation Sequences to Actions")
-                   (clim:run-frame-top-level *anim-seq-assigns-frame*)))
-               :name "Assign Animation Sequences"))
+                           (load-all-animation-sequences)
+                           (let ((*anim-seq-assigns-frame*
+                                   (clim:make-application-frame 'anim-seq-assigns-frame)))
+                             (setf (clim:frame-pretty-name *anim-seq-assigns-frame*)
+                                   "Assign Animation Sequences to Actions")
+                             (clim:run-frame-top-level *anim-seq-assigns-frame*)))
+                         :name "Assign Animation Sequences"))
 
+#+mcclim
 (define-anim-seq-assigns-frame-command (com-edit-assignment :name t)
     ((decal-kind 'simple-animation-sequence-decal-kind)
      (body 'simple-animation-sequence-decal-body)
@@ -1283,14 +1339,16 @@
      (facing 'anim-seq-facing))
   (assign-animation-sequence decal-kind body action facing))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-edit-assignment
     (animation-assignment-slot com-edit-assignment
-     anim-seq-assigns-frame
-     :gesture :select :menu nil
-     :documentation "Change the sequence assigned to this action")
-    (parts)
+                               anim-seq-assigns-frame
+                               :gesture :select :menu nil
+                               :documentation "Change the sequence assigned to this action")
+  (parts)
   parts)
 
+#+mcclim
 (defun accept-chosen-sequence (assign-frame sequence-id all-facings-p)
   (setf (anim-seq-assign-index assign-frame) sequence-id
         (anim-seq-assign-sequence assign-frame) (find-animation-sequence sequence-id))
@@ -1319,6 +1377,7 @@
   (when-let (parent (anim-seq-assign-parent assign-frame))
     (clim:redisplay-frame-panes parent)))
 
+#+mcclim
 (define-anim-seq-assign-frame-command (com-choose-sequence :name t :menu t) ()
   (choose-animation-sequence
    :major-kind :npc
@@ -1327,14 +1386,16 @@
    :selection (anim-seq-assign-index *anim-seq-assign-frame*)
    :callback (curry #'accept-chosen-sequence *anim-seq-assign-frame*)))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-choose-sequence
     (simple-animation-sequence-index com-choose-sequence
-     anim-seq-assign-frame
-     :gesture :select :menu nil
-     :documentation "Choose a sequence to assign to this action")
-    (object)
+                                     anim-seq-assign-frame
+                                     :gesture :select :menu nil
+                                     :documentation "Choose a sequence to assign to this action")
+  (object)
   (list))
 
+#+mcclim
 (clim:define-application-frame show-tileset-frame ()
   ((%tileset :type string :initarg :tileset :accessor show-which-tileset)
    (%artp :type boolean :initarg :artp :accessor show-tileset-artp)
@@ -1345,9 +1406,10 @@
                                      :display-function 'display-tileset)
           (interactor :interactor :height 100 :width 1600))
   (:layouts (default (clim:vertically ()
-                       tileset-pane
-                       interactor))))
+                                      tileset-pane
+                                      interactor))))
 
+#+mcclim
 (defmethod display-tileset ((frame show-tileset-frame) pane)
   (let ((columns (ecase (show-tileset-write-mode frame)
                    (:160a 16) (:160b 8)))
@@ -1362,56 +1424,60 @@
         (width (ecase (show-tileset-write-mode frame)
                  (:160a 2) (:160b 4))))
     (clim:formatting-table (pane :x-spacing 5 :y-spacing 5)
-      (dotimes (row 8)
-        (clim:formatting-row (pane)
-          (dotimes (column columns)
-            (let ((n (+ column (* row columns))))
-              (clim:formatting-cell (pane)
-                (clim:with-output-as-presentation (pane n 'simple-animation-sequence-frame-reference)
-                  (display-maria-art pane
-                                     :dump dump
-                                     :mode (show-tileset-write-mode frame)
-                                     :address (* width n)
-                                     :colors colors
-                                     :var-colors #(#x48 #x88 #xc8)
-                                     :width width 
-                                     :unit 5/2)))))))))
+                           (dotimes (row 8)
+                             (clim:formatting-row (pane)
+                                                  (dotimes (column columns)
+                                                    (let ((n (+ column (* row columns))))
+                                                      (clim:formatting-cell (pane)
+                                                                            (clim:with-output-as-presentation (pane n 'simple-animation-sequence-frame-reference)
+                                                                              (display-maria-art pane
+                                                                                                 :dump dump
+                                                                                                 :mode (show-tileset-write-mode frame)
+                                                                                                 :address (* width n)
+                                                                                                 :colors colors
+                                                                                                 :var-colors #(#x48 #x88 #xc8)
+                                                                                                 :width width 
+                                                                                                 :unit 5/2)))))))))
   (terpri pane)
   (terpri pane)
   (let ((pal (show-tileset-palette frame)))
     (clim:with-output-as-presentation (pane pal 'palette-selector)
       (format pane "~2%Palette: ~d" pal))))
 
+#+mcclim
 (defun choose-tile-from-set (&key tileset callback artp write-mode palette)
   "Choose a tile from a set"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*show-tileset-frame*
-                         (clim:make-application-frame 'show-tileset-frame
-                                                      :tileset tileset
-                                                      :callback callback
-                                                      :artp artp
-                                                      :write-mode write-mode
-                                                      :palette palette)))
-                   (setf (clim:frame-pretty-name *show-tileset-frame*)
-                         (format nil "Show Tileset ~a"
-                                 (title-case tileset)))
-                   (clim:run-frame-top-level *show-tileset-frame*)))
-               :name "Show Tileset"))
+                           (load-all-animation-sequences)
+                           (let ((*show-tileset-frame*
+                                   (clim:make-application-frame 'show-tileset-frame
+                                                                :tileset tileset
+                                                                :callback callback
+                                                                :artp artp
+                                                                :write-mode write-mode
+                                                                :palette palette)))
+                             (setf (clim:frame-pretty-name *show-tileset-frame*)
+                                   (format nil "Show Tileset ~a"
+                                           (title-case tileset)))
+                             (clim:run-frame-top-level *show-tileset-frame*)))
+                         :name "Show Tileset"))
 
+#+mcclim
 (define-show-tileset-frame-command (com-choose-tile :name t)
     ((index 'integer))
   (funcall (show-tileset-callback *show-tileset-frame*) index)
   (clim:frame-exit *show-tileset-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-choose-tile
     (simple-animation-sequence-frame-reference com-choose-tile
-     show-tileset-frame
-     :gesture :select :menu nil
-     :documentation "Change the tile assigned to this frame")
-    (object)
+                                               show-tileset-frame
+                                               :gesture :select :menu nil
+                                               :documentation "Change the tile assigned to this frame")
+  (object)
   (list object))
 
+#+mcclim
 (clim:define-application-frame choose-sequence-frame ()
   ((%major-kind :accessor choose-sequence-major-kind :initarg :major-kind)
    (%decal-kind :accessor choose-sequence-decal-kind :initarg :decal-kind)
@@ -1422,8 +1488,8 @@
                                   :display-function 'display-sequences-list)
           (interactor :interactor :height 100 :width 400))
   (:layouts (default (clim:vertically ()
-                       list-pane
-                       interactor))))
+                                      list-pane
+                                      interactor))))
 
 (defun find-sequences-matching (&key major-kind decal-kind body)
   (ecase major-kind
@@ -1462,6 +1528,7 @@
                            (t (< (simple-animation-sequence-index a)
                                  (simple-animation-sequence-index b)))))))))))
 
+#+mcclim
 (defmethod display-sequences-list ((frame choose-sequence-frame) pane)
   (let ((matches (sort (find-sequences-matching
                         :major-kind (choose-sequence-major-kind frame)
@@ -1503,30 +1570,35 @@
 
 (defvar *choose-sequence-frame* nil)
 
+#+mcclim
 (define-choose-sequence-frame-command (com-choose-this-sequence :name t)
     ((index 'integer))
   (funcall (choose-sequence-callback *choose-sequence-frame*) index nil)
   (clim:frame-exit *choose-sequence-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-choose-sequence
     (simple-animation-sequence-index com-choose-this-sequence
-     choose-sequence-frame
-     :gesture :select :menu nil
-     :documentation "Choose the animation sequence")
-    (object)
+                                     choose-sequence-frame
+                                     :gesture :select :menu nil
+                                     :documentation "Choose the animation sequence")
+  (object)
   (list object))
 
+#+mcclim
 (define-anim-seq-assign-frame-command (com-edit-this-sequence :name t :menu t)
     ((index 'integer))
   (edit-animation-sequence index))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-edit-this-sequence
     (anim-seq-assign-sequence com-edit-this-sequence anim-seq-assign-frame
-     :gesture :select
-     :documentation "Edit the animation sequence")
-    (object)
+                              :gesture :select
+                              :documentation "Edit the animation sequence")
+  (object)
   (list object))
 
+#+mcclim
 (define-anim-seq-assign-frame-command (com-choose-this-sequence-four-ways :name t)
     ((index 'integer))
   (accept-chosen-sequence *anim-seq-assign-frame* index t)
@@ -1534,13 +1606,15 @@
     (clim:redisplay-frame-panes parent))
   (clim:redisplay-frame-panes *anim-seq-assign-frame*))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-choose-sequence-four-ways
     (magic-four-ways-button com-choose-this-sequence-four-ways anim-seq-assign-frame
-     :gesture :select :menu t
-     :documentation "Choose the animation sequence to go in all four facing directions")
-    (object)
+                            :gesture :select :menu t
+                            :documentation "Choose the animation sequence to go in all four facing directions")
+  (object)
   (list object))
 
+#+mcclim
 (defun choose-animation-sequence (&key major-kind decal-kind body callback
                                        selection)
   (let ((frame
@@ -1557,14 +1631,17 @@
     (setf *choose-sequence-frame* frame
           (clim:frame-pretty-name frame) name)
     (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
-                 :name name)))
+                           :name name)))
 
+#+mcclim
 (define-anim-seq-assigns-frame-command (com-save-all-animations :name t :menu t) ()
   (save-all-animation-sequences))
 
+#+mcclim
 (define-anim-seq-assigns-frame-command (com-load-all-animations :name t :menu t) ()
   (load-all-animation-sequences))
 
+#+mcclim
 (define-choose-sequence-frame-command (com-create-sequence :name t :menu t) ()
   (let ((seq
           (create-new-animation-sequence :major-kind (choose-sequence-major-kind
@@ -1575,11 +1652,12 @@
                                                 *choose-sequence-frame*))))
     (edit-animation-sequence (simple-animation-sequence-index seq))))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-create-sequence
     (new-animation-sequence com-create-sequence choose-sequence-frame
-     :gesture :select
-     :documentation "Create a new animation sequence matching these criteria")
-    (object)
+                            :gesture :select
+                            :documentation "Create a new animation sequence matching these criteria")
+  (object)
   (list))
 
 (defun display-anim-preview (_window pane)

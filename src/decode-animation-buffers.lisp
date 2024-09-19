@@ -1,8 +1,10 @@
 (in-package :skyline-tool)
 
 ;; duplicated declaration
+#+mcclim
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 
+#+mcclim
 (clim:define-application-frame anim-buffer-frame ()
   ((%anim-buffer-index :initform 0 :accessor anim-buffer-index :initarg :index)
    (%mode :initform :160b :accessor anim-buffer-mode :initarg :mode)
@@ -46,80 +48,92 @@
                                             (- i 13))))
                 (t nil)))))
 
+#+mcclim
 (defmethod initialize-instance :after ((self anim-buffer-frame) &rest _)
   (declare (ignore _))
   (set-animation-buffer-colors self))
 
 (defvar *anim-buffer-frame* nil)
 
+#+mcclim
 (define-anim-buffer-frame-command (com-switch-buffer :menu t :name t) ((new-buffer 'integer))
   (setf (anim-buffer-index *anim-buffer-frame*) new-buffer)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+#+mcclim
 (define-anim-buffer-frame-command (com-find-decal :menu t :name t)
     ((decal 'decal-index-value))
   (clim-sys:make-process (lambda () (show-decal decal))
-               :name "Show decal"))
+                         :name "Show decal"))
 
-(clim:define-presentation-type palette-color () :inherit-from 'integer)
-(clim:define-presentation-type palette-reference () :inherit-from 'integer)
-(clim:define-presentation-type palette-register () :inherit-from 'integer)
-(clim:define-presentation-type palette-indirect-register () :inherit-from 'integer)
-(clim:define-presentation-type palette-selector () :inherit-from 'integer)
-(clim:define-presentation-type offset-selector () :inherit-from 'integer)
-(clim:define-presentation-type anim-buffer-mode () :inherit-from 'keyword)
-(clim:define-presentation-type anim-buffer-index-value () :inherit-from 'integer)
+#+mcclim
+(progn
+  (clim:define-presentation-type palette-color () :inherit-from 'integer)
+  (clim:define-presentation-type palette-reference () :inherit-from 'integer)
+  (clim:define-presentation-type palette-register () :inherit-from 'integer)
+  (clim:define-presentation-type palette-indirect-register () :inherit-from 'integer)
+  (clim:define-presentation-type palette-selector () :inherit-from 'integer)
+  (clim:define-presentation-type offset-selector () :inherit-from 'integer)
+  (clim:define-presentation-type anim-buffer-mode () :inherit-from 'keyword)
+  (clim:define-presentation-type anim-buffer-index-value () :inherit-from 'integer)
 
-(clim:define-presentation-to-command-translator click-to-edit-color
-    (palette-register com-change-color anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Change the color in this palette register")
+  (clim:define-presentation-to-command-translator click-to-edit-color
+      (palette-register com-change-color anim-buffer-frame
+                        :gesture :edit :menu nil
+                        :documentation "Change the color in this palette register")
     (frame)
-  ())
+    ()))
 
+#+mcclim
 (clim:define-drag-and-drop-translator change-palette-color-value
     (palette-color palette-register palette-register
                    anim-buffer-frame
                    :gesture :select
                    :documentation "Set the palette register to a certain color")
-    (frame color reg)
+  (frame color reg)
   (setf (elt (anim-buffer-palette frame) reg) color))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-toggle-mode
     (anim-buffer-mode com-toggle-mode anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Toggle interpretation in mode 160A/B")
-    (frame)
+                      :gesture :edit :menu nil
+                      :documentation "Toggle interpretation in mode 160A/B")
+  (frame)
   ())
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-next-palette
     (palette-selector com-next-palette anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to next palette")
-    (frame)
+                      :gesture :edit :menu nil
+                      :documentation "Switch to next palette")
+  (frame)
   ())
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-next-color
     (palette-indirect-register com-switch-indirect-color anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to next color in palette")
-    (frame)
+                               :gesture :edit :menu nil
+                               :documentation "Switch to next color in palette")
+  (frame)
   ())
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-next-offset
     (offset-selector com-next-offset anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to next offset")
-    (frame)
+                     :gesture :edit :menu nil
+                     :documentation "Switch to next offset")
+  (frame)
   ())
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-to-switch-to-buffer
     (anim-buffer-index-value com-switch-buffer anim-buffer-frame
-     :gesture :select :menu nil
-     :documentation "Switch to viewing this buffer")
-    (object)
+                             :gesture :select :menu nil
+                             :documentation "Switch to viewing this buffer")
+  (object)
   (list object))
 
+#+mcclim
 (defmethod display-anim-buffer-palette ((frame anim-buffer-frame) (display-pane clim:pane))
   (let ((stream display-pane))
     (clim:window-clear stream)
@@ -162,6 +176,7 @@
     (print-machine-palette stream)
     (force-output stream)))
 
+#+mcclim
 (defmethod display-anim-buffer-contents ((frame anim-buffer-frame) (display-pane clim:pane))
   (let ((stream display-pane)
         (address (+ #x5000
@@ -231,6 +246,7 @@
       (format stream "~%This is the Animation Back Buffer."))
     (force-output stream)))
 
+#+mcclim
 (define-anim-buffer-frame-command (com-change-color :name t :menu t)
     ((palette-color 'palette-register) (color-index '(or integer null)))
   (assert (<= 0 palette-color 15) (palette-color)
@@ -252,6 +268,7 @@
   (setf (elt (anim-buffer-colors *anim-buffer-frame*) palette-color) color-index)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+#+mcclim
 (define-anim-buffer-frame-command (com-switch-indirect-color :name t :menu t)
     ((palette-indirect-color 'palette-indirect-register)
      (register-with-direct-color 'palette-register))
@@ -272,6 +289,7 @@
   (setf (elt (anim-buffer-colors *anim-buffer-frame*) palette-indirect-color) register-with-direct-color)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+#+mcclim
 (define-anim-buffer-frame-command (com-toggle-mode :name t :menu t) ()
   (setf (anim-buffer-mode *anim-buffer-frame*)
         (ecase (anim-buffer-mode *anim-buffer-frame*)
@@ -286,6 +304,7 @@
   (set-animation-buffer-colors *anim-buffer-frame*)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+#+mcclim
 (define-anim-buffer-frame-command (com-next-palette :name t :menu t) ()
   (setf (anim-buffer-palette *anim-buffer-frame*)
         (ecase (anim-buffer-mode *anim-buffer-frame*)
@@ -299,6 +318,7 @@
     (list 0 (- #x1000) #x1000)
   :test 'equalp)
 
+#+mcclim
 (define-anim-buffer-frame-command (com-next-offset :name t :menu t) ()
   (let* ((current-offset-index (or (position (anim-buffer-offset *anim-buffer-frame*)
                                              +anim-buffer-offsets+)
@@ -311,6 +331,7 @@
     (setf (anim-buffer-offset *anim-buffer-frame*) new-offset))
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+#+mcclim
 (defun show-animation-buffer (&optional (index 0) &key (mode :160b) (palette 4)
                                                        (dump (load-dump-into-mem)))
   "Show (from a core dump) the state of the animation buffers"
@@ -326,11 +347,12 @@
                (clim:run-frame-top-level frame)))))
     (run)))
 
+#+mcclim
 (clim:define-presentation-to-command-translator click-for-decal
     (decal-index-value com-find-decal anim-buffer-frame
-     :gesture :select :menu nil
-     :documentation "Show the decal")
-    (id)
+                       :gesture :select :menu nil
+                       :documentation "Show the decal")
+  (id)
   (list id))
 
 (defun decode-animation-buffers (&optional (dump (load-dump-into-mem)))

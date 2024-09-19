@@ -54,7 +54,8 @@
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
-  (if (x11-p)
+  (if (and #+mcclim t (x11-p))
+      #+mcclim
       (make-thread (lambda ()
                      (clim-listener:run-listener :process-name "Skyline Tool REPL"
                                                  :package :skyline-tool))
@@ -102,7 +103,7 @@
 (defun prompt-function (prompt)
   (lambda (s)
     (let ((*query-io* s))
-      (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
+      (if (and (not (tty-xterm-p)) (and #+mcclim t (x11-p)))
           #+mcclim
           (clim-simple-interactor:run-in-simple-interactor
            (lambda () (prompt prompt)))
@@ -110,7 +111,7 @@
           (prompt prompt)))))
 
 (defun dialog (title message &rest args)
-  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t)
       (or #+mcclim (clim-simple-interactor:run-in-simple-interactor
                     (lambda ()
                       (apply #'format *query-io* message args)
@@ -451,6 +452,7 @@ See COPYING for details
 
 "))
 
+#+mcclim
 (defun run-gui ()
   (clim-debugger:with-debugger ()
     (launcher)))

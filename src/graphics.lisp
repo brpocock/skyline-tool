@@ -2585,68 +2585,71 @@ Columns: ~d
                                        #'string)
                               +intv-color-names+)))
 
-(defun display-maria-art (stream &key dump mode address colors width (unit #x10)
-                                      var-colors)
+#+mcclim
+(defun display-maria-art (stream
+                          &key dump mode address colors width
+                               var-colors (unit #x10))
   (flet ((peek (offset)
            (if (< (+ address offset) (length dump))
                (aref dump (+ address offset))
                #xff)))
     (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-      (dotimes (y #x10)
-        (clim:formatting-row (stream)
-          (ecase mode
-            (:160a (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte))))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b11000000 bits) -6))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00110000 bits) -4))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00001100 bits) -2))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (logand #b00000011 bits))
-                                           stream :unit unit)))))
-            (:160b (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte)))
-                            (left-pixel-c (ash (logand #b11000000 bits) -6))
-                            (right-pixel-c (ash (logand #b00110000 bits) -4))
-                            (left-pixel-p (ash (logand #b00001100 bits) -2))
-                            (right-pixel-p (logand #b00000011 bits))
-                            (left-color (logior (ash left-pixel-p 2) left-pixel-c))
-                            (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member left-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member left-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors left-color) #x100)
-                                              stream :unit unit))))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member right-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member right-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors right-color) #x100)
-                                              stream :unit unit)))))))))))))
+                           (dotimes (y #x10)
+                             (clim:formatting-row (stream)
+                                                  (ecase mode
+                                                    (:160a (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b11000000 bits) -6))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00110000 bits) -4))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00001100 bits) -2))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (logand #b00000011 bits))
+                                                                                                       stream :unit unit)))))
+                                                    (:160b (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte)))
+                                                                    (left-pixel-c (ash (logand #b11000000 bits) -6))
+                                                                    (right-pixel-c (ash (logand #b00110000 bits) -4))
+                                                                    (left-pixel-p (ash (logand #b00001100 bits) -2))
+                                                                    (right-pixel-p (logand #b00000011 bits))
+                                                                    (left-color (logior (ash left-pixel-p 2) left-pixel-c))
+                                                                    (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member left-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member left-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors left-color) #x100)
+                                                                                                          stream :unit unit))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member right-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member right-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors right-color) #x100)
+                                                                                                          stream :unit unit)))))))))))))
+#+mcclim
 (defun print-clim-color (color stream)
   (clim:with-output-as-presentation (stream color 'palette-color)
     (clim:with-room-for-graphics (stream :height 24)
