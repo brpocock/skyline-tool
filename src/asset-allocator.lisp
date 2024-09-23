@@ -378,7 +378,8 @@
       (aref match 0))))
 
 (defun include-paths-for-current-bank (&key cwd testp)
-  (let* ((bank (if (= *bank* *last-bank*)
+  (let* ((bank (if (and (= *machine* 7800)
+			(= *bank* *last-bank*))
                    "LastBank"
                    (format nil "Bank~(~2,'0x~)" *bank*)))
          (includes (list (list :relative "Source")
@@ -830,9 +831,27 @@ Object/Bank~(~2,'0x~).~a.~a.o: Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
             (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
                     (include-paths-for-current-bank)))))
 
+(defmethod assembler-for-machine ((machine (eql 7800)))
+  "${AS7800}")
+
+(defmethod assembler-for-machine ((machine (eql 5200)))
+  "${AS5200}")
+
+(defmethod assembler-for-machine ((machine (eql 2600)))
+  "${AS2600}")
+
+(defmethod assembler-for-machine ((machine (eql 20)))
+  "${ASVIC}")
+
+(defmethod assembler-for-machine ((machine (eql 64)))
+  "${AS64}")
+
+(defun assembler (&optional (machine *machine*))
+  (assembler-for-machine machine))
+
 (defun write-bank-makefile (bank-source &key build video)
   "Writes the Makefile entry for a ROM bank"
-  (when (= *bank* *last-bank*)
+  (when (and (= *machine* 7800) (= *bank* *last-bank*))
     (format t "~%
 ~*Source/Generated/LastBankDefs.~a.~a.s: ~0@*Object/Bank~(~2,'0x~).~a.~a.o \\
 ~10t~0@*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt
@@ -842,16 +861,18 @@ Object/Bank~(~2,'0x~).~a.~a.o: Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
   (format t "~%
 Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 	mkdir -p Object
-	${AS7800} -DTV=~a \\
+	~a -DTV=~a \\
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt"
           *bank* build video (recursive-read-deps bank-source)
-          (when (< *bank* *last-bank*)
+          (when (and (< *bank* *last-bank*) (= *machine* 7800))
             (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
+	  (assembler)
           video
-          (when (= *bank* *last-bank*) *bank*)
+          (when (and (= *bank* *last-bank*) (= *machine* 7800))
+	    *bank*)
           (first-assets-bank build)
           (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                 ((equal build "Demo") "-DDEMO=true")
@@ -1022,14 +1043,14 @@ exit
   "Write the sources for test memory banks"
   (let ((*last-bank* (1- (number-of-banks :public :ntsc))))
     (dotimes (*bank* (1+ *last-bank*))
-      (let* ((bank (if (= *bank* *last-bank*)
+      (let* ((bank (if (and (= *machine* 7800) (= *bank* *last-bank*))
                        "LastBank"
                        (format nil "Bank~(~2,'0x~)" *bank*)))
              (bank-source (make-pathname
                            :directory (list :relative "Source" "Banks" bank)
                            :name bank
                            :type "s")))
-        (when (= *bank* *last-bank*)
+        (when (and (= *bank* *last-bank*) (= *machine* 7800))
           (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt: Object/Bank~(~:*~2,'0x~).Test.o
 	$(MAKE) -f Source/Generated/Makefile $<
@@ -1039,6 +1060,7 @@ Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/B
 		c000 ffff LastBankDefs.Test.NTSC"
                   *bank* *last-bank*))
         (if (and (= #x3f *last-bank*)
+		 (= 7800 *machine*)
                  (= #x3e *bank*))
             (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
@@ -1053,7 +1075,7 @@ Object/Bank~(~2,'0x~).Test.o:
             (format t "~%
 Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastBankDefs.Test.NTSC.s~]
 	mkdir -p Object
-	${AS7800} ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
+	~a ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
 	-DFIRSTASSETSBANK=~d ~{ \\~%		-I ~a ~} \\
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt
@@ -1064,8 +1086,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                         (list (make-pathname :directory (list :relative "Source" "Generated")
                                              :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
                                              :type "s")))
-                    (< *bank* *last-bank*)
-                    (when (= *bank* *last-bank*)
+                    (and (< *bank* *last-bank*) (= *machine* 7800))
+		    (assembler)
+                    (when (and (= *bank* *last-bank*) (= *machine* 7800))
                       (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
                     (first-assets-bank "Test")
                     (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
@@ -1121,9 +1144,11 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
     (dolist (build +all-builds+)
       (dolist (video +all-video+)
         (let ((*last-bank* (1- (number-of-banks build video))))
-          (write-makefile-top-line :build build :video video)
-          (write-bank-makefile bank-source
-                               :build build :video video))))))
+          (dotimes (*bank* (1+ *last-bank*))
+            (let ((bank-source (bank-source-pathname)))
+              (write-makefile-top-line :build build :video video)
+              (write-bank-makefile bank-source
+				   :build build :video video))))))))
 
 (defmethod write-master-makefile-for ((machine (eql 7800)))
   "Write  out   Source/Generated/Makefile  for  building   everything  not
@@ -1148,10 +1173,11 @@ mentioned in the top-level Makefile."
           (dotimes (*bank* (1+ *last-bank*))
             (let ((bank-source (bank-source-pathname)))
               (cond
-                ((= *bank* *last-bank*)
+                ((and (= *bank* *last-bank*) (= *machine* 7800))
                  (write-bank-makefile (last-bank-source-pathname)
                                       :build build :video video))
                 ((and (= *last-bank* #x3f)
+		      (= *machine* 7800)
                       (= *bank* #x3e))
                  (write-ram-bank-makefile :build build :video video))
                 ((probe-file bank-source)
