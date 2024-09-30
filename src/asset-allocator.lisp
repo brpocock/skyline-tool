@@ -273,8 +273,10 @@
 (define-constant +all-builds+ '("AA" "Public" "Demo")
   :test #'equalp)
 
-(define-constant +all-video+ '("NTSC" "PAL")
-  :test #'equalp)
+(defun all-video (&optional (machine *machine*))
+  (ecase machine
+    (2600 '("NTSC" "PAL" "SECAM"))
+    ((5200 7800) '("NTSC" "PAL"))))
 
 (defvar *first-assets-bank* nil)
 
@@ -312,7 +314,7 @@
   (assert (member build +all-builds+ :test 'equal) (build)
           "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
   (let ((assets-list (all-assets-for-build build)))
-    (dolist (video +all-video+)
+    (dolist (video (all-video))
       (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
               build video)
       (loop with allocation = (find-best-allocation assets-list
@@ -652,11 +654,11 @@ file ~a.s in bank $~(~2,'0x~)~
     (cond ((equal kind "Songs")
            (format nil "Source/Generated/Assets/Song.~a.s \\~%~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                    name
-                   (loop for video in +all-video+
+                   (loop for video in (all-video)
                          collecting (list name video))))
           ((equal kind "Maps")
            (format nil "~{~25t~a~^ \\~%~}"
-                   (loop for video in +all-video+
+                   (loop for video in (all-video)
                          collect (asset->object-name asset-indicator :video video))))
           ((equal kind "Blob")
            (format nil "Source/Generated/Assets/Blob.~a.s" name))
@@ -702,12 +704,12 @@ file ~a.s in bank $~(~2,'0x~)~
     (ensure-directories-exist source-pathname)
     (with-output-to-file (source source-pathname :if-exists :supersede)
       (format source ";; This is a generated file~2%")
-      (dolist (video +all-video+)
+      (dolist (video (all-video))
         (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
                 video basename video)))
-    (dolist (video +all-video+)
+    (dolist (video (all-video))
       (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -718,7 +720,7 @@ file ~a.s in bank $~(~2,'0x~)~
               (asset-compilation-line asset-indicator :video video)))))
 
 (defun write-asset-compilation/map (asset-indicator)
-  (dolist (video +all-video+)
+  (dolist (video (all-video))
     (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -729,7 +731,7 @@ file ~a.s in bank $~(~2,'0x~)~
             (asset-compilation-line asset-indicator :video video))))
 
 (defun write-asset-compilation/blob (asset-indicator)
-  (dolist (video +all-video+)
+  (dolist (video (all-video))
     (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -1142,13 +1144,13 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                                           :if-exists :supersede)
     (write-makefile-header)
     (dolist (build +all-builds+)
-      (dolist (video +all-video+)
+      (dolist (video (all-video))
         (let ((*last-bank* (1- (number-of-banks build video))))
           (dotimes (*bank* (1+ *last-bank*))
             (let ((bank-source (bank-source-pathname)))
               (write-makefile-top-line :build build :video video)
               (write-bank-makefile bank-source
-				   :build build :video video))))))))
+			     :build build :video video))))))))
 
 (defmethod write-master-makefile-for ((machine (eql 7800)))
   "Write  out   Source/Generated/Makefile  for  building   everything  not
@@ -1166,7 +1168,7 @@ mentioned in the top-level Makefile."
     (write-test-header-script)
     (write-makefile-test-banks)
     (dolist (build +all-builds+)
-      (dolist (video +all-video+)
+      (dolist (video (all-video))
         (let ((*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
           (write-header-script :build build :video video)
@@ -1177,7 +1179,7 @@ mentioned in the top-level Makefile."
                  (write-bank-makefile (last-bank-source-pathname)
                                       :build build :video video))
                 ((and (= *last-bank* #x3f)
-		      (= *machine* 7800)
+		  (= *machine* 7800)
                       (= *bank* #x3e))
                  (write-ram-bank-makefile :build build :video video))
                 ((probe-file bank-source)
