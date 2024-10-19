@@ -118,6 +118,7 @@
               (8 "Walking") (9 "Waving Arms") (10 "Gesturing")
               (11 "Sleep") (12 "Non-interactive") (13 "Dance")
               (14 "Panic") (15 "Walk (with shield)") (16 "Idle (with shield)")
+              (17 "Boating")
               (otherwise "unknown"))))
   (:method ((field (eql :actor-course)) value s)
     (if (zerop (second value))
