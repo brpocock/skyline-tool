@@ -2519,8 +2519,6 @@ Character_~0@*~a:
 ~10t.byte $~2,'0x ~32t; shield
 * = Character_~0@*~a + CharacterEquipment ~14@*
 ~10t.byte $~2,'0x ~32t; equipment item
-* = Character_~0@*~a + CharacterAuxItem ~15@*
-~10t.byte $~2,'0x ~32t; auxiliary item
 * = Character_~0@*~a + CharacterArmorClass ~16@*
 ~10t.byte ~d ~32t; armor class
 * = Character_~0@*~a + CharacterCharacterID ~17@*
@@ -2576,8 +2574,8 @@ Character_~0@*~a:
                 #x80
                 ;; Equipment
                 #x80
-                ;; AuxItem
-                #x80
+                ;; ARG 15 UNUSED
+                nil
                 ;; ArmorClass
                 (or ac 10)
                 ;; CharacterID
@@ -2589,8 +2587,7 @@ Character_~0@*~a:
                 ;; SpeechSpeed
                 (or speed 100)
                 ;; SpeechColor
-                (pascal-case
-                 (or speech-color "Gray"))
+                (pascal-case (or speech-color "Gray"))
                 ;; NameLength + Name
                 name)))
     #+ () (format *trace-output* "~&//* Character ~a entering scene ~@[… but they were already here~]"
