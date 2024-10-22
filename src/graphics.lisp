@@ -2,6 +2,15 @@
 
 (defvar *tileset*)
 
+(define-constant +lynx-palette+
+    (loop for r from 0 below #x10
+          append
+          (loop for g from 0 below #x10
+                append
+                (loop for b from 0 below #x10
+                      collect (list (* r #x10) (* g #x10) (* b #x10)))))
+  :test 'equalp)
+
 (define-constant +c64-names+
     '(black white red cyan
       purple green blue yellow
@@ -309,6 +318,7 @@
   "Get the palette for MACHINE in REGION"
   (copy-list (ecase machine
                (20 (subseq +c64-palette+ 0 7))
+               (200 +lynx-palette+)
                ((64 128) +c64-palette+)
                (2 +apple-hires-palette+)
                (8 (ecase region
@@ -318,7 +328,7 @@
                        (:ntsc +vcs-ntsc-palette+)
                        (:pal +vcs-pal-palette+)
                        (:secam +vcs-secam-palette+)))
-               (2609 +intv-palette+)
+               (1591 +intv-palette+)
                (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
@@ -331,7 +341,7 @@
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-    (2609 +intv-color-names+)))
+    (1591 +intv-color-names+)))
 
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"
@@ -2540,7 +2550,8 @@ Columns: ~d
               ((16 32 64) 16)
               (128 8)
               (256 16)
-              (512 32))
+              (512 32)
+              (4096 16))
             (if color-names
                 (mapcan (lambda (rgb n) (append rgb (list n)))
                         colors color-names)
@@ -2549,19 +2560,17 @@ Columns: ~d
   (format *trace-output* "~&Wrote ~:d color~:p palette “~a”~%"
           (length colors)
           (substitute #\Space #\- name))
-  (let ((i 0))
-    (dolist (color colors)
-      (print-wide-pixel color *trace-output*)
-      (cond
-        ((< (length colors) 20)
-         (format *trace-output* " ~a~%"(elt color-names i)))
-        ((<= (length colors) 256)
-         (when (= 15 (mod i 16))
-           (terpri *trace-output*)))
-        (t
-         (when (= 31 (mod i 32))
-           (terpri *trace-output*))))
-      (incf i)))
+  (when (<= (length colors) 256)
+    (let ((i 0))
+      (dolist (color colors)
+        (print-wide-pixel color *trace-output*)
+        (cond
+          ((< (length colors) 20)
+           (format *trace-output* " ~a~%"(elt color-names i)))
+          (t
+           (when (= 15 (mod i 16))
+             (terpri *trace-output*))))
+        (incf i))))
   (format *trace-output* "~C[0m" #\Escape))
 
 (defun write-gimp-palettes ()
@@ -2580,6 +2589,7 @@ Columns: ~d
   (write-gimp-palette "NES-NTSC" +nes-palette-ntsc+)
   (write-gimp-palette "NES-PAL" +nes-palette-pal+)
   (write-gimp-palette "TurboGrafx-16" +tg16-palette+)
+  (write-gimp-palette "Lynx" +lynx-palette+)
   (write-gimp-palette "Intellivision" +intv-palette+
                       (mapcar (compose #'cl-change-case:title-case
                                        #'string)
