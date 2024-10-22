@@ -893,7 +893,10 @@ inventory_end = *
     (200 "Lynx")
     (223 "BBC")
     (264 "Plus/4")
+    (1591 "Intv")
+    (1601 "SMD")
     (2600 "VCS")
+    (3010 "SMS")
     (5200 "SuperSystem")
     (7800 "ProSystem")))
 
@@ -910,7 +913,10 @@ inventory_end = *
     (200 "Atari Lynx")
     (223 "BBC Micro")
     (264 "Commodore Plus/4 (16)")
+    (1591 "Intellivision")
+    (1601 "Sega Genesis (MegaDrive)")
     (2600 "Atari Video Computer System CX-2600")
+    (3010 "Sega Master System")
     (5200 "Atari Video SuperSystem CX-5200")
     (7800 "Atari Video ProSystem CX-7800")))
 
