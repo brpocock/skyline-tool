@@ -7,6 +7,8 @@
 (defvar *invocation*
   (list :--help 'about-skyline-tool
         :-h 'about-skyline-tool
+        :--port 'run-for-port
+        :-p 'run-for-port
         :help 'about-skyline-tool
         :allocate-assets 'allocate-assets
         :atari800-label-file 'atari800-label-file
@@ -455,10 +457,30 @@ See COPYING for details
   (clim-debugger:with-debugger ()
     (launcher)))
 
+(defun run-for-port (port-label &rest subcommand)
+  (setf *project.json*
+        (json:decode-json-from-source
+         (asdf:system-relative-pathname
+          :skyline-tool (make-pathname :directory '(:relative :up)
+                                       :name (format nil "Project.~a" port-label) :type "json" )))
+        *game-title* (cdr (assoc :*game *project.json*))
+        *part-number*  (cdr (assoc :*part-number *project.json*))
+        *studio* (cdr (assoc :*studio *project.json*))
+        *publisher* (cdr (assoc :*publisher *project.json*))
+        *machine* (cdr (assoc :*machine *project.json*))
+        *sound* (cdr (assoc :*sound *project.json*))
+        *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
+        *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
+        *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
+        *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+  (format *trace-output* "~&Running for port: ~a" port-label)
+  (command (append '("port") subcommand)))
+
 (defun command (argv)
   (format *trace-output* "~&Skyline tool (© 2024) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
   (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
