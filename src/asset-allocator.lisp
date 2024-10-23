@@ -381,6 +381,11 @@
                    "LastBank"
                    (format nil "Bank~(~2,'0x~)" *bank*)))
          (includes (list (list :relative "Source")
+                         (list :relative "Source" "Common" (machine-folder-name))
+                         (list :relative "Source" "Routines" (machine-folder-name))
+                         (list :relative "Object" "Assets" (machine-folder-name))
+                         (list :relative "Source" "Generated" (machine-folder-name))
+                         (list :relative "Source" "Generated" "Assets" (machine-folder-name))
                          (list :relative "Source" "Common")
                          (list :relative "Source" "Routines")
                          (list :relative "Source" "Classes")
@@ -398,27 +403,33 @@
   (cond 
     ((equalp path '(:relative "Source" "Common"))
      (list :relative "Source" "Generated" "Common"))
+    ((equalp path (list :relative "Source" "Common" (machine-folder-name)))
+     (list :relative "Source" "Generated" "Common" (machine-folder-name)))
     ((equalp (subseq path 0 3) '(:relative "Source" "Banks"))
      (append (list :relative "Source" "Generated") (subseq path 3)))
     (t (error "Don't know how to find a generated path from ~a" path))))
 
 (defun write-blob-generation (pathname)
-  (format t "~%
+  (ecase *machine*
+    (7800
+     (format t "~%
 Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/Assets
 	bin/skyline-tool blob-rip-7800 $<"
-          (pathname-name pathname)
-          (pathname-name pathname)))
+             (pathname-name pathname)
+             (pathname-name pathname)))))
 
 (defun write-art-generation (pathname)
-  (format t "~%
+  (ecase *machine*
+    (7800
+     (format t "~%
 Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%~10t~a \\~}~%~10tbin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-7800 $@ $<"
-          (pathname-name pathname)
-          (pathname-name pathname)
-          (mapcar (compose #'enough-namestring #'second)
-                  (read-7800-art-index pathname))))
+             (pathname-name pathname)
+             (pathname-name pathname)
+             (mapcar (compose #'enough-namestring #'second)
+                     (read-7800-art-index pathname))))))
 
 (defun write-tsx-generation (pathname)
   (if (and (search "Decals" (pathname-name pathname))
@@ -685,11 +696,15 @@ file ~a.s in bank $~(~2,'0x~)~
       ((equal kind "Maps")
        (format nil "bin/skyline-tool compile-map $<"))
       ((equal kind "Songs")
-       (format nil "bin/skyline-tool compile-music $@ $< 7800 POKEY ~a" video))
+       (ecase *machine*
+         (7800
+          (format nil "bin/skyline-tool compile-music $@ $< 7800 POKEY ~a" video))))
       ((equal kind "Scripts")
        (format nil "bin/skyline-tool compile-script $< $@"))
       ((equal kind "Blobs")
-       (format nil "bin/skyline-tool blob-rip-7800 $<"))
+       (ecase *machine*
+         (7800
+          (format nil "bin/skyline-tool blob-rip-7800 $<"))))
       (t (error "Asset kind ~a not known" kind)))))
 
 (defun write-asset-compilation/music (asset-indicator)
@@ -797,7 +812,9 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s"
   "Writes the Makefile for an asset ROM bank"
   (let* ((all-assets (all-assets-for-build build))
          (asset-objects (mapcar (rcurry #'asset->deps-list build) all-assets)))
-    (format t "~%
+    (ecase *machine*
+      (7800
+       (format t "~%
 Source/Generated/Bank~(~2,'0x~).~a.~a.list: Source/Assets.index \\
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool allocate-assets ~a
@@ -813,32 +830,34 @@ Object/Bank~(~2,'0x~).~a.~a.o: Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
 		-l $@.LABELS.txt -L $@.list.txt \\
 		$< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt"
-            bank build video
-            asset-objects
-            build
-            bank build video
-            bank build video
-            asset-objects
-            bank build video
-            bank build video
-            bank build video
-            (append asset-objects (asset-loaders asset-objects))
-            video (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
-                        ((equal build "Demo") "-DDEMO=true")
-                        (t ""))
-            (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
-                    (include-paths-for-current-bank)))))
+               bank build video
+               asset-objects
+               build
+               bank build video
+               bank build video
+               asset-objects
+               bank build video
+               bank build video
+               bank build video
+               (append asset-objects (asset-loaders asset-objects))
+               video (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
+                           ((equal build "Demo") "-DDEMO=true")
+                           (t ""))
+               (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                       (include-paths-for-current-bank)))))))
 
 (defun write-bank-makefile (bank-source &key build video)
   "Writes the Makefile entry for a ROM bank"
-  (when (= *bank* *last-bank*)
-    (format t "~%
-~*Source/Generated/LastBankDefs.~a.~a.s: ~0@*Object/Bank~(~2,'0x~).~a.~a.o \\
+  (ecase *machine*
+    (7800
+     (when (= *bank* *last-bank*)
+       (format t "~%
+~*Source/Generated/7800/LastBankDefs.~a.~a.s: ~0@*Object/Bank~(~2,'0x~).~a.~a.o \\
 ~10t~0@*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt
 	bin/skyline-tool labels-to-include ~0@*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
 		c000 ffff ~1@*LastBankDefs.~a.~a"
-            *bank* build video))
-  (format t "~%
+               *bank* build video))
+     (format t "~%
 Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 	mkdir -p Object
 	${AS7800} -DTV=~a \\
@@ -846,17 +865,17 @@ Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 		~a \\~{~%		-I ~a \\~}
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt"
-          *bank* build video (recursive-read-deps bank-source)
-          (when (< *bank* *last-bank*)
-            (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
-          video
-          (when (= *bank* *last-bank*) *bank*)
-          (first-assets-bank build)
-          (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
-                ((equal build "Demo") "-DDEMO=true")
-                (t ""))
-          (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
-                  (include-paths-for-current-bank))))
+             *bank* build video (recursive-read-deps bank-source)
+             (when (< *bank* *last-bank*)
+               (format nil "Source/Generated/7800/LastBankDefs.~a.~a.s" build video))
+             video
+             (when (= *bank* *last-bank*) *bank*)
+             (first-assets-bank build)
+             (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
+                   ((equal build "Demo") "-DDEMO=true")
+                   (t ""))
+             (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                     (include-paths-for-current-bank))))))
 
 (defun write-ram-bank-makefile (&key build video)
   "Writes the Makefile entry for the RAM bank used by 7800GD"
@@ -1006,27 +1025,28 @@ exit
 
 (defun write-makefile-test-banks ()
   "Write the sources for test memory banks"
-  (let ((*last-bank* (1- (number-of-banks :public :ntsc))))
-    (dotimes (*bank* (1+ *last-bank*))
-      (let* ((bank (if (= *bank* *last-bank*)
-                       "LastBank"
-                       (format nil "Bank~(~2,'0x~)" *bank*)))
-             (bank-source (make-pathname
-                           :directory (list :relative "Source" "Banks" bank)
-                           :name bank
-                           :type "s")))
-        (when (= *bank* *last-bank*)
-          (format t "~%
+  (ecase *machine*
+    (7800 (let ((*last-bank* (1- (number-of-banks :public :ntsc))))
+            (dotimes (*bank* (1+ *last-bank*))
+              (let* ((bank (if (= *bank* *last-bank*)
+                               "LastBank"
+                               (format nil "Bank~(~2,'0x~)" *bank*)))
+                     (bank-source (make-pathname
+                                   :directory (list :relative "Source" "Banks" bank)
+                                   :name bank
+                                   :type "s")))
+                (when (= *bank* *last-bank*)
+                  (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt: Object/Bank~(~:*~2,'0x~).Test.o
-	$(MAKE) -f Source/Generated/Makefile $<
+	$(MAKE) -f Source/Generated/7800/Makefile $<
 
-Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt
+Source/Generated/7800/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt
 	bin/skyline-tool labels-to-include Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt \\
 		c000 ffff LastBankDefs.Test.NTSC"
-                  *bank* *last-bank*))
-        (if (and (= #x3f *last-bank*)
-                 (= #x3e *bank*))
-            (format t "~%
+                          *bank* *last-bank*))
+                (if (and (= #x3f *last-bank*)
+                         (= #x3e *bank*))
+                    (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
 	mkdir -p Object/
 	echo \";;; nop\" > $@
@@ -1035,27 +1055,27 @@ Object/Bank~(~2,'0x~).Test.o:
 	mkdir -p Object/
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
-                    *bank*)
-            (format t "~%
-Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastBankDefs.Test.NTSC.s~]
+                            *bank*)
+                    (format t "~%
+Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/7800/LastBankDefs.Test.NTSC.s~]
 	mkdir -p Object
 	${AS7800} ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
 	-DFIRSTASSETSBANK=~d ~{ \\~%		-I ~a ~} \\
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool prepend-fundamental-mode $@.list.txt
 "
-                    *bank*
-                    (if (probe-file bank-source)
-                        (recursive-read-deps bank-source)
-                        (list (make-pathname :directory (list :relative "Source" "Generated")
-                                             :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
-                                             :type "s")))
-                    (< *bank* *last-bank*)
-                    (when (= *bank* *last-bank*)
-                      (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
-                    (first-assets-bank "Test")
-                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
-                            (include-paths-for-current-bank))))))))
+                            *bank*
+                            (if (probe-file bank-source)
+                                (recursive-read-deps bank-source)
+                                (list (make-pathname :directory (list :relative "Source" "Generated")
+                                                     :name (format nil "Bank~(~2,'0x~).Public.NTSC" *bank*)
+                                                     :type "s")))
+                            (< *bank* *last-bank*)
+                            (when (= *bank* *last-bank*)
+                              (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
+                            (first-assets-bank "Test")
+                            (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                                    (include-paths-for-current-bank))))))))))
 
 (defun write-makefile-for-blobs ()
   (dolist (blob (remove-duplicates
@@ -1096,40 +1116,42 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
    :name "LastBank" :type "s"))
 
 (defun write-master-makefile ()
-  "Write  out   Source/Generated/Makefile  for  building   everything  not
+  "Write  out   Source/Generated/*/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
-  (let ((*machine* 7800))
-    (ensure-directories-exist #p"Source/Generated/")
-    (format *trace-output* "~&Writing master Makefile content …")
-    (with-output-to-file (*standard-output* #p"Source/Generated/Makefile" :if-exists :supersede)
-      (write-makefile-header)
-      (write-makefile-for-bare-assets)
-      (write-makefile-for-tilesets)
-      (write-makefile-for-art)
-      (write-makefile-for-blobs)
-      (write-makefile-test-target)
-      (write-test-header-script)
-      (write-makefile-test-banks)
-      (dolist (build +all-builds+)
-        (dolist (video +all-video+)
-          (let ((*last-bank* (1- (number-of-banks build video))))
-            (write-makefile-top-line :build build :video video)
-            (write-header-script :build build :video video)
-            (dotimes (*bank* (1+ *last-bank*))
-              (let ((bank-source (bank-source-pathname)))
-                (cond
-                  ((= *bank* *last-bank*)
-                   (write-bank-makefile (last-bank-source-pathname)
-                                        :build build :video video))
-                  ((and (= *last-bank* #x3f)
-                        (= *bank* #x3e))
-                   (write-ram-bank-makefile :build build :video video))
-                  ((probe-file bank-source)
-                   (write-bank-makefile bank-source
-                                        :build build :video video))
-                  (t (write-asset-bank-makefile *bank*
-                                                :build build :video video))))))))
-      (format *trace-output* " … done writing master Makefile.~%"))))
+  (ecase *machine*
+    (7800
+     (ensure-directories-exist #p"Source/Generated/7800/")
+     (format *trace-output* "~&Writing master Makefile content …")
+     (with-output-to-file (*standard-output* #p"Source/Generated/7800/Makefile" :if-exists :supersede)
+       (write-makefile-header)
+       (write-makefile-for-bare-assets)
+       (write-makefile-for-tilesets)
+       (write-makefile-for-art)
+       (write-makefile-for-blobs)
+       (write-makefile-test-target)
+       (write-test-header-script)
+       (write-makefile-test-banks)
+       (dolist (build +all-builds+)
+         (dolist (video +all-video+)
+           (let ((*last-bank* (1- (number-of-banks build video))))
+             (write-makefile-top-line :build build :video video)
+             (write-header-script :build build :video video)
+             (dotimes (*bank* (1+ *last-bank*))
+               (let ((bank-source (bank-source-pathname)))
+                 (cond
+                   ((= *bank* *last-bank*)
+                    (write-bank-makefile (last-bank-source-pathname)
+                                         :build build :video video))
+                   ((and (= *last-bank* #x3f)
+                         (= *bank* #x3e)
+                         (= *machine* 7800))
+                    (write-ram-bank-makefile :build build :video video))
+                   ((probe-file bank-source)
+                    (write-bank-makefile bank-source
+                                         :build build :video video))
+                   (t (write-asset-bank-makefile *bank*
+                                                 :build build :video video))))))))
+       (format *trace-output* " … done writing master Makefile.~%")))))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"
@@ -1388,10 +1410,16 @@ EndOfBinary = *
                    "--verbose-list" "-DTV=NTSC" 
                    "-I" 
                    (namestring
-                    (merge-pathnames #p"Source/Common/")) 
+                    (merge-pathnames #p"Source/Common/"))
+                   "-I"
+                   (namestring
+                    (merge-pathnames (machine-source-folder "Common")))
                    "-I" 
                    (namestring
-                    (merge-pathnames #p"Source/Generated/")) 
+                    (merge-pathnames #p"Source/Generated/"))
+                   "-I" 
+                   (namestring
+                    (merge-pathnames (machine-source-folder "Generated")))
                    (enough-namestring source-name)
                    "-o"
                    (enough-namestring object-name))))

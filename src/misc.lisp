@@ -880,8 +880,32 @@ inventory_end = *
 
 
 
-(defun machine-short-name ()
-  (ecase *machine*
+(defun machine-source-folder (fragment &optional (machine *machine*))
+  (make-pathname :directory (list :relative "Source" fragment (machine-folder-name))))
+
+(defun machine-folder-name (&optional (machine *machine*))
+  (ecase machine
+    (1 "Oric")
+    (2 "A2")
+    (8 "NES")
+    (16 "TG16")
+    (20 "VIC20")
+    (64 "C64")
+    (88 "SNES")
+    (128 "C128")
+    (200 "Lynx")
+    (222 "2GS")
+    (223 "BBC")
+    (264 "Plus4")
+    (1591 "Intv")
+    (1601 "SMD")
+    (2600 "2600")
+    (3010 "SMS")
+    (5200 "5200")
+    (7800 "7800")))
+
+(defun machine-short-name  (&optional (machine *machine*))
+  (ecase machine
     (1 "Oric-1")
     (2 "Apple ][")
     (8 "NES")
@@ -901,8 +925,8 @@ inventory_end = *
     (5200 "SuperSystem")
     (7800 "ProSystem")))
 
-(defun machine-long-name ()
-  (ecase *machine*
+(defun machine-long-name (&optional (machine *machine*))
+  (ecase machine
     (1 "Oric-1")
     (2 "Apple ][ (][plus, //c, //e)")
     (8 "Nintendo Entertainment System")
