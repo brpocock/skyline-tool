@@ -136,6 +136,10 @@
                 (if (plusp (logand #x80 (fetch "DecalFlags")))
                     (logand 4 (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5))
                     (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5)))
+        (when (plusp (logand #x80 (fetch "DecalAnimationState")))
+          (format t "~%~10tAnimation state is dirty (fresh frame wanted)"))
+        (when (plusp (logand #x40 (fetch "DecalAnimationState")))
+          (format t "~%~10tAnimation should occur"))
         (format t "~%~10tWidth: ~d byte~:p"
                 (1+ (logxor #x1f (logand #x1f (fetch "DecalPalWidth")))))
         (format t "~%~10tDisplay List Position: ~:[none~;@ $~2,'0x~2,'0x (~a)~]"
