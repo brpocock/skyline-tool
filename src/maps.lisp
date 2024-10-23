@@ -1467,7 +1467,7 @@ range is 0 - #xffffffff (4,294,967,295)"
             (dotimes (col* 4)
               (when (and (= target-color (aref adjusted-palettes pal* col*))
                          (/= (aref palettes palette-index color-index)
-                             (ared palettes pal* col*)))
+                             (aref palettes pal* col*)))
                 (setf target-color (mod (+ target-color #x10) #x100)))))
           (setf (aref adjusted-palettes palette-index color-index)
                 target-color))))
