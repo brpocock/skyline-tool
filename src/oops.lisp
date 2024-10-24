@@ -89,11 +89,12 @@ Invoke~a~a:"
                                    class-name method)
                            (dolist (class class-ancestry)
                              (format class-methods "
-~10t.if Method~a~a~0@* > 0 && Method~a~a~0@* != MissingMethod
+~10t.if Method~a~a~0@* != MissingMethod
 ~12tjmp Method~a~a
 ~10t.else"
                                      class method))
                            (format class-methods "
+~12tjmp MissingMethod
 ~12t.warn ~
 \"There is no implementation of the generic function Method~a~a ~
 and no ancestor provides an implementation (searched ~{~a~^, ~})\""
