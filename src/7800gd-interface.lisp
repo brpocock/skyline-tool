@@ -59,7 +59,8 @@ When ready, hit Return, and I'll try to locate the path to the interface.")
                        (mapcar #'thread-name thread-pool))))
            (sleep 3/2))))))
 
-(defun push-7800gd (binary-pathname &key (serial-pathname (uiop:getenv "TTY")) (executep t))
+(defun push-7800gd (binary-pathname &key (serial-pathname (uiop:getenv "TTY"))
+                                         (executep t) (skip-bank-62-p nil))
   "Push the BINARY-PATHNAME file in BIN format to the 7800GD on serial port SERIAL-PATHNAME.
 
 If SERIAL-PATHNAME is not supplied, search for the 7800GD on any serial port.
@@ -80,7 +81,10 @@ If EXECUTEP is T then boot the uploaded code freshly."
                                                 (first (find-7800gd-serial-port))))
     (with-open-file (binary binary-pathname :element-type '(unsigned-byte 8))
       (ignore-errors (7800gd-debug:cmd-break port))
-      (7800gd-debug:upload port binary 0 0 (file-length binary))
+      (if (and skip-bank-62-p (= (file-length binary) #x100000))
+          (progn (7800gd-debug:upload port binary 0 0 (* #x4000 62))
+                 (7800gd-debug:upload port binary (* #x4000 63) (* #x4000 63) #x4000))
+          (7800gd-debug:upload port binary 0 0 (file-length binary)))
       (when executep
         (7800gd-debug:cmd-execute
          port
@@ -96,7 +100,7 @@ If EXECUTEP is T then boot the uploaded code freshly."
                                                              bump-version-p)
   (let ((serial (or serial-pathname
                     (first (find-7800gd-serial-port)))))
-    (push-7800gd binary-pathname :serial-pathname serial :executep nil)
+    (push-7800gd binary-pathname :serial-pathname serial :executep nil :skip-bank-62-p t)
     (when bump-version-p
       (7800gd-bump-version serial))))
 
