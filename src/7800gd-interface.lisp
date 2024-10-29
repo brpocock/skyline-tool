@@ -108,10 +108,10 @@ If EXECUTEP is T then boot the uploaded code freshly."
 
 (defun 7800gd-bump-version (serial-pathname)
   "Shove a new version number into the 7800GD over serial"
-  (incf *7800gd-version-cookie*)
+  (setf *7800gd-version-cookie* (mod (1+ *7800gd-version-cookie*) #x100))
   (7800gd-debug:with-open-7800gd-port (port serial-pathname)
     (ignore-errors (7800gd-debug:cmd-break port))
-    (format *trace-output* "~&Pushing over version cookie $~2,'0x" (mod *7800gd-version-cookie* #x100))
-    (7800gd-debug:upload port (vector (mod *7800gd-version-cookie* #x100))
+    (format *trace-output* "~&Pushing over version cookie $~2,'0x" *7800gd-version-cookie*)
+    (7800gd-debug:upload port (vector *7800gd-version-cookie*)
                          (find-label-from-files "CurrentRunningVersion") 0 1)))
 
