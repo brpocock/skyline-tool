@@ -20,22 +20,21 @@ node [shape=Mrecord];
                     (enough-namestring class-defs-pathname))
             (format class-constants "
 ;;; BasicObject class (builtin to OOPS concept)
-~10tBasicObjectClass = $01
-~10tClassMethodsPointerOffset = 0
+~10tBasicObjectClass = 1
+~10tBasicObjectClassID = 0
+~10tClassIDOffset = 0
 
-~10tCallBasicObjectClassP = $00
-~10tCallBasicObjectDestroy = $03
+~10tCallBasicObjectDestroy = 0
 ")
-            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Methods (2 bytes) | # Class P | # Destroy}\"];")
+            (format class-graph "~&BasicObject [label=\"{ Basic Object | . Class ID (1 byte) | # Destroy}\"];")
             (let ((methods-set (make-hash-table :test 'equal))
                   (class-slots (make-hash-table :test 'equal))
                   (class-bases (make-hash-table :test 'equal))
                   (class-size (make-hash-table :test #'equal)))
               (setf (gethash "BasicObject" class-bases) nil
-                    (gethash "BasicObject" class-size) 2)
+                    (gethash "BasicObject" class-size) 1)
               (let ((basic-object-methods (make-hash-table :test 'equal)))
-                (setf (gethash "ClassP" basic-object-methods) "BasicObject"
-                      (gethash "Destroy" basic-object-methods) "BasicObject"
+                (setf (gethash "Destroy" basic-object-methods) "BasicObject"
                       (gethash "BasicObject" methods-set) basic-object-methods))
               (labels
                   ((finalize-oops-class (class-name last-slot-offset)
@@ -107,20 +106,6 @@ and no ancestor provides an implementation (searched ~{~a~^, ~})\""
                                      collecting class
                                      do (setf class (gethash class class-bases)))))
                          (format class-methods "
-* = ~aClassMethods + ~d
-
-Method~aClassP: .proc
-~10tlda Class~{
-~10tcmp # ~aClass
-~10tbeq Found~}
-~10tlda # 0
-Found:
-~10tsta Class + 1
-~10trts
-~10t.pend~%"
-                                 class-name (* 3 (hash-table-count methods))
-                                 class-name class-ancestry)
-                         (format class-methods "
 Method~aDestroy: .proc
 ~10t.mvap Source, Self
 ~10t.mvaw Size, ~:*~aSize
@@ -129,7 +114,7 @@ Method~aDestroy: .proc
 ~10t.pend~%"
                                  class-name)))))
                 (loop with parent-class = "BasicObject" with current-class = "BasicObject"
-                      with class-index = 1 with slot-offset = 2
+                      with class-index = 1 with slot-offset = 1
                       for line = (read-line class-file nil nil) while line
                       do (cond
                            ;; blank line
@@ -204,8 +189,13 @@ Method~aDestroy: .proc
                            (t (error "Unrecognized line in class definitions: ~s" line)))
                       finally
                          (when current-class
-                           (finalize-oops-class current-class slot-offset)))))
-            (format class-constants "~3&;;; Finis.~%"))
+                           (finalize-oops-class current-class slot-offset))))
+              (format class-methods
+                      "~2%;;; ~|~2%ParentClass:
+~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
+                      (mapcan (lambda (class)
+                                (list (gethash class class-bases) class))
+                              (reverse all-classes-sequentially)))))
           (format class-methods "
 ;;; 
 ;;; Set up method dispatch jump table pointers
@@ -214,7 +204,6 @@ GenericFunctionTables = (BasicObjectClassMethods, BasicObjectClassMethods, ~{~aC
 
 ClassMethodsL: .byte <(GenericFunctionTables)
 ClassMethodsH: .byte >(GenericFunctionTables)
-
 
 ;;; Finis.~%"
                   (reverse all-classes-sequentially)))

@@ -2610,9 +2610,7 @@ Character_~0@*~a:
               ;; else not found in scene
               (format t "
 ~10t.mvaw Proto, Character_~a
-~10t.mva Class, # CharacterClass
-~10t.FarJSR BankBehavior, ServiceFindClass
-
+~10t.mva ClassID, # CharacterClass
 ~10t.mva Size, # CharacterSize
 ~10tjsr Lib.MakeInstanceSub
 
@@ -2745,7 +2743,7 @@ Character_~0@*~a:
                    :graphic "GrBangEmote"
                    :class "Pivitz")))
       (format t "
-~10t.mva Class, # ~aClass
+~10t.mva ClassID, # ~aClass
 ~10t.mva Size, # ~:*~aSize
 ~10t.mva CurrentCharacterID, # CharacterID_~a
 ~10t.mva RelativePlacement, # ~:[0~;1~]
