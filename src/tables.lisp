@@ -331,39 +331,42 @@ ProjectionTables:~20t.block")
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
 (defun write-inventory-tables (&optional (source-text "Source/Tables/Inventory.txt")
-                                         (source-code "Source/Generated/InventoryLabels.s"))
+                                         (source-code "Source/Generated/InventoryLabels.s")
+                                         (label "Item"))
   "Collect the names of all inventory items and write them out"
-  (format *trace-output* "~&Reading inventory item names from ~a…"
-          (enough-namestring source-text))
+  (format *trace-output* "~&Reading inventory ~(~a~) names from ~a…"
+          label (enough-namestring source-text))
   (finish-output *trace-output*)
   (with-output-to-file (code source-code :if-exists :supersede)
     (format code ";;; Generated from ~a
 
-ItemNames: .block~2%"
-            (enough-namestring source-text))
+~aNames: .block~2%"
+            (enough-namestring source-text)
+            label)
     (with-input-from-file (text source-text)
       (loop for counter from 0 below (* 16 8)
             for line = (read-line text nil nil)
             while (and line (not (emptyp line)))
-            do (format code "~&Item~x:~10t.ptext ~s~60t; ~d (~{~d.~d~})"
+            do (format code "~&~a~x:~10t.ptext ~s~60t; ~d (~{~d.~d~})"
+                       label
                        counter
                        (subseq line 0 (position #\; line))
                        counter
                        (multiple-value-list (floor counter 8)))
             finally
                (progn
-                 (format *trace-output* " …read ~:d item name~:p (of ~:d max), done.~%"
-                         (1+ counter) (* 16 8))
-                 (when (< counter (* 16 8))
-                   (loop for i from counter below (* 16 8)
-                         do (format code "~&Item~x:~10t.ptext \"untitled item ~(~:*~x~)\"" i))))))
-    (format code "~2%~10tAllItemNames=(~{Item~x~^,~})
-Low:~10t.byte <(AllItemNames)
-High:~10t.byte >(AllItemNames)
-~10t.bend
-;;; end of file~%"
-            (loop for counter from 0 below (* 16 8)
-                  collecting counter))))
+                 (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
+                         (1+ counter) label (* 16 8))
+                 (format code (format nil "~~2%~~10tAll~0@*~aNames=(~~{~0@*~a~~x~~^,~~})
+Low:~~10t.byte <(All~0@*~aNames)
+High:~~10t.byte >(All~0@*~aNames)
+~~10t.bend
+;;; end of file~~%" label)
+                         (loop for i from 0 below counter
+                               collecting i)))))))
+
+(defun write-keys-tables ()
+  (write-inventory-tables #p"Source/Tables/Keys.txt" #p"Source/Generated/KeyLabels.s" "Key"))
 
 (defun write-characters-tables (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
                                           (source-pathname "Source/Generated/CharacterTables.s"))

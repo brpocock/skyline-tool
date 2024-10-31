@@ -51,6 +51,7 @@
         :write-docks-index 'write-docks-index
         :write-gimp-palettes 'write-gimp-palettes
         :write-inventory-tables 'write-inventory-tables
+        :write-keys-tables 'write-keys-tables
         :write-projection-tables.s 'write-projection-tables.s
         :write-master-makefile 'write-master-makefile))
 
