@@ -102,15 +102,13 @@
     (terpri *query-io*)
     (finish-output *query-io*)))
 
-(defun prompt-function (prompt)
-  (lambda (s)
-    (let ((*query-io* s))
-      (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
-          #+mcclim
-          (clim-simple-interactor:run-in-simple-interactor
-           (lambda () (prompt prompt)))
-          #-mcclim nil
-          (prompt prompt)))))
+(defun prompt-function ()
+  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
+      #+mcclim
+      (clim-simple-interactor:run-in-simple-interactor
+       (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
+      #-mcclim nil
+      (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
   (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
@@ -295,7 +293,8 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
        (sb-ext:exit :code 4))
       ((= 1 (length restarts))
        (friendly-offer-single-restart (first restarts)))
-      (t (friendly-offer-restart-list (class-name (class-of condition)) restarts)))))
+      (t (friendly-offer-restart-list (class-name (class-of condition))
+                                      restarts)))))
 
 (defun recompile-tool ()
   (compile-file (make-pathname
@@ -326,20 +325,20 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
           (change-directory (new-directory)
             :report (lambda (s) (format s "Change the working directory from ~a"
                                         *default-pathname-defaults*))
-            :interactive-function (prompt-function "Change to directory?")
+            :interactive prompt-function
             (setf *default-pathname-defaults* new-directory)
             (sb-posix:chdir new-directory))
           (invoke-make (target)
             :report "Ask GNU Make to generate a file"
-            :interactive-function (prompt-function "What file should be regenerated?")
+            :interactive prompt-function
             (uiop:run-program (list "make" "-r" target "AUTOCONTINUE=t")))
           (gimp (file)
             :report "Edit a file in Gimp"
-            :interactive-function (prompt-function "Edit which file in Gimp?")
+            :interactive prompt-function
             (uiop:run-program (list "gimp" file)))
           (tiled (file)
             :report "Edit a file in Tiled"
-            :interactive-function (prompt-function "Edit which file in Tiled?")
+            :interactive prompt-function
             (uiop:run-program (list "tiled" file)))
           #+mcclim (start-repl ()
                      :report "Open a read-eval-print-loop listener"
@@ -358,7 +357,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
             (go do-over))
           #+mcclim (edit-in-climacs (file)
                      :report "Edit in Climacs"
-                     :interactive-function (prompt-function "Edit which file in Climacs?")
+                     :interactive prompt-function
                      (edit-myself-in-climacs file)
                      (format t "Climacs now open … ~
 recompile when you've corrected the error. (C-c C-k) and restart.")
