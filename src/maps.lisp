@@ -247,9 +247,9 @@
   "Reduce the LIST of numbers (ignoring NILs) using `LOGIOR'"
   (reduce #'logior (remove-if #'null (flatten list))))
 
-(defun collect-decal-object (object enemies base-tileset decal-tileset)
+(defun collect-decal-object (object enemies base-tileset decal-tileset &key (tile-width 8))
   (declare (ignore enemies)) ; TODO
-  (let ((x (floor (parse-number (assocdr "x" (second object))) 8))
+  (let ((x (floor (parse-number (assocdr "x" (second object))) tile-width))
         (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
         (name (or (assocdr "name" (second object) nil) "(Unnamed decal)")))
     (when-let (gid$ (assocdr "gid" (second object) nil))
@@ -300,7 +300,7 @@
                       (tile-property-value "Speech" object)))
           collect (list x y #xff (logior-numbers (decal-properties->binary object)))))
 
-(defun parse-tile-grid (layers objects base-tileset decal-tileset)
+(defun parse-tile-grid (layers objects base-tileset decal-tileset &key tile-width)
   (let* ((ground (parse-layer (first layers)))
          (detail (and (= 2 (length layers))
                       (parse-layer (second layers))))
@@ -352,7 +352,8 @@
               (appendf decals-table decals))))))
     (dolist (object objects)
       (when-let (decal (collect-decal-object object enemies
-                                             base-tileset decal-tileset))
+                                             base-tileset decal-tileset
+                                             :tile-width tile-width))
         (appendf decals-table (list decal))))
     (mark-palette-transitions output attributes-table)
     (values output
@@ -1244,13 +1245,14 @@ range is 0 - #xffffffff (4,294,967,295)"
             "The map file must be in orthogonal orientation")
     (assert (equal "right-down" (assocdr "renderorder" (second xml))) ()
             "The map file must be in right-down render order")
-    (assert (equal "8" (assocdr "tilewidth" (second xml))) ()
-            "The map file must have 8px wide tiles")
+    (assert (member (assocdr "tilewidth" (second xml)) '("8" "16") :test #'string-equal) ()
+            "The map file must have 8px or 16px wide tiles")
     (assert (equal "16" (assocdr "tileheight" (second xml))) ()
             "The map file must have 16px high tiles")
     (let* ((tilesets (mapcar (lambda (tileset) (load-tileset tileset pathname))
                              (xml-matches "tileset" xml)))
            (layers (xml-matches "layer" xml))
+           (tile-width (parse-integer (assocdr "tilewidth" (second xml))))
            (object-groups (xml-matches "objectgroup" xml))
            (animations-list (parse-tile-animation-set (first tilesets)))
            (decal-animations-list
@@ -1281,7 +1283,7 @@ range is 0 - #xffffffff (4,294,967,295)"
         (multiple-value-bind (tile-grid
                               attributes-table decals-table
                               exits-table enemies-list)
-            (parse-tile-grid layers objects base-tileset decal-tileset)
+            (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
           (dolist (tv '(:ntsc :pal))
             (format *trace-output* "~&About to write map ~a for ~a… "
                     (title-case canon-name) tv)
