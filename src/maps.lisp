@@ -705,7 +705,7 @@ or correct the TMX file (add the ID) and DO-OVER."
                                                            (declare (ignore value))
                                                            (equalp key "x")))
                                                        (second object))))
-                                     8))
+                                     (parse-integer (assocdr "tilewidth" (second xml)))))
                            (y (floor (parse-number
                                       (second (find-if (lambda (kv)
                                                          (destructuring-bind (key value) kv
