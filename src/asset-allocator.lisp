@@ -559,6 +559,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "ShoppingTable" 'compile-shops
           "ClassConstants" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops
+          "ClassInheritance" 'make-classes-for-oops
           "InventoryLabels" 'write-inventory-tables
           "KeyLabels" 'write-keys-tables)
   :test 'equalp)

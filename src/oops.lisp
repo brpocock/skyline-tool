@@ -190,12 +190,16 @@ Method~aDestroy: .proc
                       finally
                          (when current-class
                            (finalize-oops-class current-class slot-offset))))
-              (format class-methods
-                      "~2%;;; ~|~2%ParentClass:
+              (with-output-to-file (inheritance #p"./Source/Generated/ClassInheritance.s"
+                                                :if-exists :supersede)
+                (format inheritance ";;; Class inheritances derived from ~s~2%"
+                        (enough-namestring class-defs-pathname))
+                (format inheritance
+                        "~2%;;; ~|~2%ParentClass:
 ~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
-                      (mapcan (lambda (class)
-                                (list (gethash class class-bases) class))
-                              (reverse all-classes-sequentially)))))
+                        (mapcan (lambda (class)
+                                  (list (gethash class class-bases) class))
+                                (reverse all-classes-sequentially))))))
           (format class-methods "
 ;;; 
 ;;; Set up method dispatch jump table pointers
