@@ -82,7 +82,7 @@ node [shape=Mrecord];
                                    (mapcan (lambda (class) (list class method))
                                            class-ancestry))
                            (format class-methods "
-* = ~aClassMethods + Call~a~a
+~10t* = ~aClassMethods + Call~a~a
 Invoke~a~a:"
                                    class-name original-class method
                                    class-name method)
@@ -100,19 +100,17 @@ and no ancestor provides an implementation (searched ~{~a~^, ~})\""
                                    class-name method class-ancestry)
                            (dotimes (_ (length class-ancestry))
                              (format class-methods "~%~10t.fi"))))
-                       (let ((class-ancestry
-                               (loop with class = class-name
-                                     while class
-                                     collecting class
-                                     do (setf class (gethash class class-bases)))))
-                         (format class-methods "
+                       (format class-methods "
+~10t* = ~aClassMethods + 3 * ~d"
+                               class-name (length (hash-table-keys methods)))
+                       (format class-methods "
 Method~aDestroy: .proc
 ~10t.mvap Source, Self
 ~10t.mvaw Size, ~:*~aSize
 ~10t.mva Ref, #-1
 ~10tjmp Lib.DestroyObject~32t; tail call
 ~10t.pend~%"
-                                 class-name)))))
+                               class-name))))
                 (loop with parent-class = "BasicObject" with current-class = "BasicObject"
                       with class-index = 1 with slot-offset = 1
                       for line = (read-line class-file nil nil) while line

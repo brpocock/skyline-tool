@@ -2477,7 +2477,7 @@ but now also ~s."
     (destructuring-bind (&key name kind hp ac pitch speed
                               hair-color skin-color clothes-color
                               speech-color bend
-                              head body character-id
+                              head body character-id class
                          &allow-other-keys)
         actor
       (unless (member name '(player narrator) :test 'string-equal)
@@ -2490,7 +2490,7 @@ but now also ~s."
 ~10tCharacter_Defined_P_~0@*~a := true
 ~10tCharacterID_~0@*~a = $~17@*~2,'0x
 Character_~0@*~a:
-~10t.word CharacterClass
+~10t.byte ~15@*~aClass
 * = Character_~0@*~a + EntityDecal~1@*
 ~10t.byte $~2,'0x ~32t; Decal ID is needed
 * = Character_~0@*~a + ActorHP~2@*
@@ -2574,8 +2574,8 @@ Character_~0@*~a:
                 #x80
                 ;; Equipment
                 #x80
-                ;; ARG 15 UNUSED
-                nil
+                ;; Class
+                (or class "Character")
                 ;; ArmorClass
                 (or ac 10)
                 ;; CharacterID
