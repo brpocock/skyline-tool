@@ -347,7 +347,7 @@ ProjectionTables:~20t.block")
       (loop for counter from 0 below (* 16 8)
             for line = (read-line text nil nil)
             while (and line (not (emptyp line)))
-            do (format code "~&~a~x:~10t.ptext ~s~60t; ~d (~{~d.~d~})"
+            do (format code "~&~a~x:~10t.text ~s~60t; ~d (~{~d.~d~})"
                        label
                        counter
                        (subseq line 0 (position #\; line))
@@ -357,9 +357,11 @@ ProjectionTables:~20t.block")
                (progn
                  (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
                          (1+ counter) label (* 16 8))
-                 (format code (format nil "~~2%~~10tAll~0@*~aNames=(~~{~0@*~a~~x~~^,~~})
-Low:~~10t.byte <(All~0@*~aNames)
-High:~~10t.byte >(All~0@*~aNames)
+                 (format code (format nil "
+~~10tEndOf~0@*~aNames := *
+~~10tAll~0@*~aNames=(~~{~0@*~a~~x~~^,~~})
+Low:~~10t.byte <(All~0@*~aNames), <EndOf~0@*~aNames
+High:~~10t.byte >(All~0@*~aNames), >EndOf~0@*~aNames
 ~~10t.bend
 ;;; end of file~~%" label)
                          (loop for i from 0 below counter
