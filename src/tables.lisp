@@ -368,6 +368,7 @@ High:~~10t.byte >(All~0@*~aNames), >EndOf~0@*~aNames
                                collecting i)))))))
 
 (defun write-keys-tables ()
+  "Write the file out with the enumerated key names"
   (write-inventory-tables #p"Source/Tables/Keys.txt" #p"Source/Generated/KeyLabels.s" "Key"))
 
 (defun write-characters-tables (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
