@@ -72,14 +72,15 @@
   (when *run-script-frame*
     (clim:frame-exit *run-script-frame*)))
 
-(define-run-script-frame-command (com-edit-script :menu t :name t) ((script-full-name 'script-name))
+(define-run-script-frame-command (com-edit-script :menu t :name t)
+    ((script-full-name 'script-name :gesture :edit))
   (if swank::*emacs-connection*
       (swank:ed-in-emacs (format nil "Source/~a.fountain" script-full-name))
       (clim-sys:make-process (lambda ()
-                     (uiop:run-program
-                      (list "emacsclient" "-n"
-                            (format nil "Source/~a.fountain" script-full-name))))
-                   :name (format nil "Running ~a" script-full-name))))
+                               (uiop:run-program
+                                (list "emacsclient" "-n"
+                                      (format nil "Source/~a.fountain" script-full-name))))
+                             :name (format nil "Running ~a" script-full-name))))
 
 (clim:define-presentation-to-command-translator click-to-edit
     (script-name com-edit-script run-script-frame
