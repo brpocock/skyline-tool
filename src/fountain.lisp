@@ -2194,7 +2194,7 @@ but now also ~s."
       (require-actor actor)
     (format t "
 ~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
+~10tjsr Lib.FindCharacterInScene
 
 ~10tbcs ~a
 
