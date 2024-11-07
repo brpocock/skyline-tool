@@ -141,7 +141,7 @@
     )
   (:method ((kind (eql :script)) record-count)
     (ecase *machine* 
-      (7800 (+ 94 (* (1+ record-count) 4)))))
+      (7800 (+ 128 (* (1+ record-count) 4)))))
   (:method ((kind (eql :blob)) record-count)
     (ecase *machine* 
       (7800 (+ 284 1 (* record-count 3)))))

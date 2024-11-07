@@ -3118,7 +3118,7 @@ Character_~0@*~a:
                                   (split-sequence #\/ value))))))
   (format t "
 ~10t.mva NextMap, # Map_~a_ID
-~10tjsr Lib.WipeMap
+~10t.FarJSR BankText, ServiceWipeMap
 ~%" (substitute #\_ #\/ *current-scene*))
   (setf *actors* nil))
 
