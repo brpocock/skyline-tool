@@ -2199,7 +2199,7 @@ but now also ~s."
 ~10tbcs ~a
 
 ~10t.mvaw HurtHP, ~d
-~10t.CallMethod CallActorHurt
+~10t.CallMethod CallActorHurt, ActorClass
 ~1@*~a:~%"
             (pascal-case (string name))
             (genlabel "DoneHurt")
