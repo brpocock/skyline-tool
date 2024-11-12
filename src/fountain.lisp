@@ -3452,7 +3452,12 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
   (format nil "~10t.byte ~d" (or (getf actor :chalice) 0)))
 
 (defmethod output-actor-value (actor (column (eql :character-gender)))
-  (format nil "~10t.byte Gender~a" (pascal-case (string (or (getf actor :gender) :nonbinary)))))
+  (format nil "~10t.byte Gender~a" (pascal-case (string (or (when-let (g (getf actor :gender))
+                                                              (ecase (char (string g) 0)
+                                                                (#\M :male)
+                                                                (#\F :female)
+                                                                (#\N :nonbinary)))
+                                                            :nonbinary)))))
 
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
   (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
