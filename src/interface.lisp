@@ -45,9 +45,11 @@
         :repl 'run-repl
         :run-script 'run-script
         :read-script 'play-script-on-atarivox
+        :write-actor-prototypes 'write-actor-prototypes
         :write-asset-bank 'write-asset-bank
         :write-asset-ids 'write-asset-ids
         :write-cart-header 'write-cart-header
+        :write-character-ids 'write-character-ids
         :write-docks-index 'write-docks-index
         :write-gimp-palettes 'write-gimp-palettes
         :write-inventory-tables 'write-inventory-tables

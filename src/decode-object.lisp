@@ -44,7 +44,7 @@
 (defun read-class-fields-from-defs (class-name &optional (pathname #p"Source/Classes/Classes.Defs"))
   (when (string= "BasicObject" class-name)
     (return-from read-class-fields-from-defs
-      (list (cons (cons "ClassID" 0) nil)
+      (list (cons (cons "BasicObjectClassID" 0) nil)
             1)))
   (let ((class-name-< (concatenate 'string class-name " < "))
         (offset 0)
@@ -61,12 +61,14 @@
         (loop for line = (read-line classes.defs nil nil)
               while (and line
                          (plusp (length line))
-                         (char= #\. (char line 0)))
-              do (destructuring-bind (field-name field-bytes$)
-                     (split-sequence #\Space (subseq line 1))
-                   (let ((field-bytes (parse-integer field-bytes$)))
-                     (push (cons (concatenate 'string class-name field-name) offset) fields)
-                     (incf offset field-bytes))))
+                         (or (char= #\. (char line 0))
+                             (char= #\; (char line 0))))
+              do (when (char= #\. (char line 0))
+                   (destructuring-bind (field-name field-bytes$)
+                       (split-sequence #\Space (subseq line 1))
+                     (let ((field-bytes (parse-integer field-bytes$)))
+                       (push (cons (concatenate 'string class-name field-name) offset) fields)
+                       (incf offset field-bytes)))))
         (list fields offset)))))
 
 (clim:define-presentation-type ext-file-link () :inherit-from 'pathname)
@@ -270,47 +272,47 @@
                                               (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))))
                     (terpri))))
         (t (clim:formatting-table (t)
-             (loop for i from (1- (length class-fields)) downto 0
-                   for info = (elt class-fields i)
-                   for field-name = (car info)
-                   for field-start = (cdr info)
-                   for next-offset = (if (zerop i)
-                                         class-size
-                                         (cdr (elt class-fields (1- i))))
-                   for length = (- next-offset field-start)
-                   do (clim:formatting-row (t)
-                        (clim:formatting-cell (t)
-                          (format t "~10t~22a" field-name))
-                        (clim:formatting-cell (t)
-                          (format t "@ $~2,'0x" field-start))
-                        (clim:formatting-cell (t)
-                          (format t " = "))
-                        (clim:formatting-cell (t)
-                          (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
-                                  (coerce (subseq dump field-start next-offset)
-                                          'list))
-                          (if (string= "CharacterName" field-name)
-                              (format t "~%“~a”"
-                                      (minifont->unicode
-                                       (subseq dump field-start
-                                               (+ field-start
-                                                  (elt dump (cdr (elt class-fields (1+ i))))))))
-                              (print-field-value (make-keyword
-                                                  (string-upcase
-                                                   (cl-change-case:param-case field-name)))
-                                                 (coerce (subseq dump field-start next-offset)
-                                                         'list)
-                                                 t))
-                          (if (string= "ActorCourse" field-name)
-                              (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                                    (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
-                        (terpri)))
-             (clim:formatting-row (t)
-               (clim:formatting-cell (t))
-               (clim:formatting-cell (t))
-               (clim:formatting-cell (t))
-               (clim:formatting-cell (t)
-                 (format t "~32t >~%")))))))
+                                  (loop for i from (1- (length class-fields)) downto 0
+                                        for info = (elt class-fields i)
+                                        for field-name = (car info)
+                                        for field-start = (cdr info)
+                                        for next-offset = (if (zerop i)
+                                                              class-size
+                                                              (cdr (elt class-fields (1- i))))
+                                        for length = (- next-offset field-start)
+                                        do (clim:formatting-row (t)
+                                                                (clim:formatting-cell (t)
+                                                                                      (format t "~10t~22a" field-name))
+                                                                (clim:formatting-cell (t)
+                                                                                      (format t "@ $~2,'0x" field-start))
+                                                                (clim:formatting-cell (t)
+                                                                                      (format t " = "))
+                                                                (clim:formatting-cell (t)
+                                                                                      (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
+                                                                                              (coerce (subseq dump field-start next-offset)
+                                                                                                      'list))
+                                                                                      (if (string= "CharacterName" field-name)
+                                                                                          (format t "~%“~a”"
+                                                                                                  (minifont->unicode
+                                                                                                   (subseq dump field-start
+                                                                                                           (+ field-start
+                                                                                                              (elt dump (cdr (elt class-fields (1+ i))))))))
+                                                                                          (print-field-value (make-keyword
+                                                                                                              (string-upcase
+                                                                                                               (cl-change-case:param-case field-name)))
+                                                                                                             (coerce (subseq dump field-start next-offset)
+                                                                                                                     'list)
+                                                                                                             t))
+                                                                                      (if (string= "ActorCourse" field-name)
+                                                                                          (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
+                                                                                                                (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
+                                                                (terpri)))
+                                  (clim:formatting-row (t)
+                                                       (clim:formatting-cell (t))
+                                                       (clim:formatting-cell (t))
+                                                       (clim:formatting-cell (t))
+                                                       (clim:formatting-cell (t)
+                                                                             (format t "~32t >~%")))))))
     (values class-name actor-course)))
 
 (defun decode-object-at (dump &optional (offset 0))

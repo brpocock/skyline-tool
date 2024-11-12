@@ -551,12 +551,14 @@ file ~a.s in bank $~(~2,'0x~)~
                    #p"Source/Generated/EnemyStatsTable.s"))
 
 (define-constant +skyline-writes-files+
-    (list "AnimationTable" 'compile-animation-sequences
+    (list "ActorPrototypes" 'write-actor-prototypes
+          "AnimationTable" 'compile-animation-sequences
           "AssetIDs" 'write-asset-ids
           "EnemyStatsTable" 'compile-enemy-stats
           "ItemDropTable" 'compile-item-drops
           "DocksIndex.s" 'write-docks-index
           "ShoppingTable" 'compile-shops
+          "CharacterIDs" 'write-character-ids
           "ClassConstants" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops
           "ClassInheritance" 'make-classes-for-oops

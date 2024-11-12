@@ -2010,12 +2010,36 @@ but now also ~s."
                 "Voice bend not specified~@[ for actor ~:(~a~)~]" name)
         100)))
 
+(defmethod npc-interpret-field (crowns (field (eql :crowns)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp crowns) 0
+      (abs (parse-integer crowns))))
+
+(defmethod npc-interpret-field (arrows (field (eql :arrows)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp arrows) 0
+      (abs (parse-integer arrows))))
+
+(defmethod npc-interpret-field (potions (field (eql :potions)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp potions) 0
+      (abs (parse-integer potions))))
+
+(defmethod npc-interpret-field (gender (field (eql :gender)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp gender) "Nonbinary"
+      (ecase (make-keyword (string-upcase (char gender 0)))
+        (:m "Male")
+        (:f "Female")
+        ((:x :n) "Nonbinary"))))
+
 (defun load-actor (actor)
   (tagbody top
      (restart-case
          (destructuring-bind  (&key name decal body head hair skin clothing
                                     voice-pitch voice-speed voice-bend speech-color
-                                    hp ac character-id nicks
+                                    hp ac character-id nicks class gender
+                                    crowns arrows potions chalice
                                &allow-other-keys)
              (find-npc-stats actor)
            (unless character-id
@@ -2045,6 +2069,12 @@ but now also ~s."
                                                                      :speech-color :name name)
                                   :character-id character-id
                                   :nicks nicks
+                                  :class class
+                                  :gender (npc-interpret-field gender :gender :name name)
+                                  :crowns (npc-interpret-field crowns :crowns :name name)
+                                  :arrows (npc-interpret-field arrows :arrows :name name)
+                                  :potions (npc-interpret-field potions :potions :name name)
+                                  :chalice (npc-interpret-field chalice :chalice :name name)
                                   :hair-color (npc-interpret-field hair :hair-color :name name)
                                   :skin-color (npc-interpret-field skin :skin-color :name name)
                                   :clothes-color (npc-interpret-field clothing :clothes-color
@@ -2474,122 +2504,6 @@ but now also ~s."
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
     (unless found-in-scene-p
       (push actor *actors*))
-    (destructuring-bind (&key name kind hp ac pitch speed
-                              hair-color skin-color clothes-color
-                              speech-color bend
-                              head body character-id class
-                         &allow-other-keys)
-        actor
-      (unless (member name '(player narrator) :test 'string-equal)
-        (format t "
-~10t.section BankData
-~10t.weak
-~10t  Character_Defined_P_~0@*~a := false
-~10t.endweak
-~10t.if !Character_Defined_P_~0@*~a
-~10tCharacter_Defined_P_~0@*~a := true
-~10tCharacterID_~0@*~a = $~17@*~2,'0x
-Character_~0@*~a:
-~10t.byte ~15@*~aClass
-* = Character_~0@*~a + EntityDecal~1@*
-~10t.byte $~2,'0x ~32t; Decal ID is needed
-* = Character_~0@*~a + ActorHP~2@*
-~10t.word ~d ~32t; HP
-* = Character_~0@*~a + ActorMaxHP~3@*
-~10t.word ~d ~32t; Max HP
-* = Character_~0@*~a + ActorAction~4@*
-~10t.byte ~a
-* = Character_~0@*~a + ActorFacing ~5@*
-~10t.byte CharacterFacing~a
-* = Character_~0@*~a + ActorFlags ~6@*
-~10t.byte ~d ~32t; flags
-* = Character_~0@*~a + CharacterDecalKind ~7@*
-~10t.byte DecalKind~a
-* = Character_~0@*~a + CharacterSkinColor ~8@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterHairColor ~9@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterClothesColor ~10@*
-~10t.byte ~a
-* = Character_~0@*~a + CharacterHead ~11@*
-~10t.byte ~d ~32t; head
-* = Character_~0@*~a + CharacterBody ~12@*
-~10t.byte ~d ~32t; body
-* = Character_~0@*~a + CharacterShield ~13@*
-~10t.byte $~2,'0x ~32t; shield
-* = Character_~0@*~a + CharacterEquipment ~14@*
-~10t.byte $~2,'0x ~32t; equipment item
-* = Character_~0@*~a + CharacterArmorClass ~16@*
-~10t.byte ~d ~32t; armor class
-* = Character_~0@*~a + CharacterCharacterID ~17@*
-~10t.byte $~2,'0x ~32t; character ID
-* = Character_~0@*~a + CharacterSpeechPitch ~18@*
-~10t.byte ~d ~32t; speech pitch
-* = Character_~0@*~a + CharacterSpeechBend ~19@*
-~10t.byte ~d ~32t; speech bend
-* = Character_~0@*~a + CharacterSpeechSpeed ~20@*
-~10t.byte ~d ~32t; speech speed
-* = Character_~0@*~a + CharacterSpeechColor ~21@*
-~10t.byte CoLu(COL~:@(~a~), $f) ~32t; speech color
-* = Character_~0@*~a + CharacterNameLength ~22@*
-~10t.ptext \"~a\" ~32t; name
-~10t;; This relies upon the knowledge that the CharacterName
-~10t;; is the final field, so * will be pointing at the first
-~10t;; free byte (after using the bare minimum for the actual
-~10t;; length of the character name, so probably at least a
-~10t;; couple of bytes less than CharacterSize)
-~10t.fi
-~10t.send
-"
-                (pascal-case (string name))
-                ;; --- Entity
-                ;; Decal
-                #xff
-                ;; --- Actor
-                ;; HP
-                (or hp 10)
-                ;; Max HP
-                (or hp 10)
-                ;; Action
-                "ActionIdle"
-                ;; Facing
-                "Down"
-                ;; Flags
-                0
-                ;; --- Character
-                ;; DecalKind
-                (pascal-case
-                 (string kind))
-                ;; SkinColor
-                (or skin-color (format nil "PaletteColor_~:(~a~)" *default-skin-color*))
-                ;; HairColor
-                (or hair-color (format nil "PaletteColor_~:(~a~)" *default-hair-color*))
-                ;; ClothesColor
-                (or clothes-color (format nil "PaletteColor_~:(~a~)" *default-clothes-color*))
-                ;; Head
-                (or head 0)
-                ;; Body
-                (or body 0)
-                ;; Shield
-                #x80
-                ;; Equipment
-                #x80
-                ;; Class
-                (or class "Character")
-                ;; ArmorClass
-                (or ac 10)
-                ;; CharacterID
-                character-id
-                ;; SpeechPitch
-                (or pitch 80)
-                ;; SpeechBend
-                (or bend 100)
-                ;; SpeechSpeed
-                (or speed 100)
-                ;; SpeechColor
-                (pascal-case (or speech-color "Gray"))
-                ;; NameLength + Name
-                name)))
     #+ () (format *trace-output* "~&//* Character ~a entering scene ~@[… but they were already here~]"
                   (sentence-case (getf actor :name)) found-in-scene-p)
     (if (eql :oc where)
@@ -2599,20 +2513,21 @@ Character_~0@*~a:
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
+~10tbcs ~a
+
 ~10t.GetProp EntityDecal
 ~10ttax
 ~10tlda # 161
 ~10tsta DecalXH, x
 ~10tlda # 127
 ~10tsta DecalYH, x
+
+~:*~a
 "
-                      (pascal-case (string name)))
+                      (pascal-case (string name)) (genlabel "NoChar"))
               ;; else not found in scene
               (format t "
-~10t.mvaw Proto, Character_~a
-~10t.mva ClassID, # CharacterClass
-~10t.mva Size, # CharacterSize
-~10tjsr Lib.MakeInstanceSub
+~10tjsr Lib.FindCharacterInScene
 
 ~10t.GetProp EntityDecal
 ~10ttax
@@ -2643,13 +2558,13 @@ Character_~0@*~a:
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
                 (format t "
-~10t.mvaw Proto, Character_~a
 ~10t.mva DestX, #~d
 ~10t.mva DestY, #~d
+~10tlda # CharacterID_~a
 ~10tjsr Lib.EnterCharacter
 
 "
-                        (pascal-case (string name)) x y)))))))
+                        x y (pascal-case (string name)))))))))
 
 (defvar *boat-ids* nil)
 (defvar *boat-classes* nil)
@@ -3459,3 +3374,192 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
         (format *trace-output* "~&//* Script “~:(~a~)” is scene ~:d; id $~4,'0x"
                 script-moniker (logand #x7ff id) id)
         id))))
+
+
+
+(defmethod output-actor-value (actor (column (eql :basic-object-class-i-d)))
+  (format nil "~10t.byte ~aClass" (or (pascal-case (string (getf actor :class)))
+                                      "NonPlayerCharacter")))
+
+(defmethod output-actor-value (actor (column (eql :entity-decal)))
+  (format nil "~10t.byte $ff"))
+
+(defmethod output-actor-value (actor (column (eql :actor-h-p)))
+  (format nil "~10t.word ~5,'0d" (or (getf actor :hp) 2)))
+
+(defmethod output-actor-value (actor (column (eql :actor-max-h-p)))
+  (format nil "~10t.word ~5,'0d" (or (getf actor :hp) 2)))
+
+(defmethod output-actor-value (actor (column (eql :actor-action)))
+  (format nil "~10t.byte ActionIdle"))
+
+(defmethod output-actor-value (actor (column (eql :actor-facing)))
+  (format nil "~10t.byte CharacterFacingDown"))
+
+(defmethod output-actor-value (actor (column (eql :actor-flags)))
+  (format nil "~10t.byte 0"))
+
+(defmethod output-actor-value (actor (column (eql :actor-course)))
+  (format nil "~10t.word $0000"))
+
+(defmethod output-actor-value (actor (column (eql :character-decal-kind)))
+  (format nil "~10t.byte DecalKind~a" (pascal-case (string (getf actor :decal)))))
+
+(defmethod output-actor-value (actor (column (eql :character-skin-color)))
+  (format nil "~10t.byte PaletteColor_~a"
+          (pascal-case (or (getf actor :skin-color) *default-skin-color*))))
+
+(defmethod output-actor-value (actor (column (eql :character-hair-color)))
+  (format nil "~10t.byte PaletteColor_~a"
+          (pascal-case (or (getf actor :hair-color) *default-hair-color*))))
+
+(defmethod output-actor-value (actor (column (eql :character-clothes-color)))
+  (format nil "~10t.byte PaletteColor_~a"
+          (pascal-case (or (getf actor :clothes-color) *default-clothes-color*))))
+
+(defmethod output-actor-value (actor (column (eql :character-head)))
+  (format nil "~10t.byte ~d" (or (getf actor :head) 0)))
+
+(defmethod output-actor-value (actor (column (eql :character-body)))
+  (format nil "~10t.byte ~d" (let ((body (getf actor :body)))
+                                 (cond
+                                   ((string-equal body "tunic") 0)
+                                   ((string-equal body "robe") 1)
+                                   (t (or (ignore-errors (parse-integer body)) 0))))))
+
+(defmethod output-actor-value (actor (column (eql :character-shield)))
+  (format nil "~10t.byte $~2,'0x" (or (getf actor :shield) #x80)))
+
+(defmethod output-actor-value (actor (column (eql :character-equipment)))
+  (format nil "~10t.byte $~2,'0x" (or (getf actor :equipment) #x80)))
+
+(defmethod output-actor-value (actor (column (eql :character-armor-class)))
+  (format nil "~10t.byte $~2,'0x" (or (getf actor :armor-class) 10)))
+
+(defmethod output-actor-value (actor (column (eql :character-inventory)))
+  (format nil "~10t.dword 0, 0"))
+
+(defmethod output-actor-value (actor (column (eql :character-crowns)))
+  (format nil "~10t.word ~5,'0d" (or (getf actor :crowns) 0)))
+
+(defmethod output-actor-value (actor (column (eql :character-arrows)))
+  (format nil "~10t.byte ~d" (or (getf actor :arrows) 0)))
+
+(defmethod output-actor-value (actor (column (eql :character-potions)))
+  (format nil "~10t.byte ~d" (or (getf actor :potions) 0)))
+
+(defmethod output-actor-value (actor (column (eql :character-chalice)))
+  (format nil "~10t.byte ~d" (or (getf actor :chalice) 0)))
+
+(defmethod output-actor-value (actor (column (eql :character-gender)))
+  (format nil "~10t.byte Gender~a" (pascal-case (string (or (getf actor :gender) :nonbinary)))))
+
+(defmethod output-actor-value (actor (column (eql :character-character-i-d)))
+  (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
+
+(defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 80)))
+
+(defmethod output-actor-value (actor (column (eql :character-speech-bend)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 100)))
+
+(defmethod output-actor-value (actor (column (eql :character-speech-speed)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 100)))
+
+(defmethod output-actor-value (actor (column (eql :character-speech-color)))
+  (format nil "~10t.byte CoLu(COL~a, $f)" (string-upcase (pascal-case (or (getf actor :speech-color) "Gray")))))
+
+(defmethod output-actor-value (actor (column (eql :non-player-character-tactical-goal)))
+  (format nil "~10t.byte 0"))
+
+(defmethod output-actor-value (actor (column (eql :non-player-character-tactical-object)))
+  (format nil "~10t.word 0"))
+
+(defmethod output-actor-value (actor (column (eql :non-player-character-strategic-goal)))
+  (format nil "~10t.byte 0"))
+
+(defmethod output-actor-value (actor (column (eql :non-player-character-strategic-object)))
+  (format nil "~10t.word 0"))
+
+(defmethod output-actor-value (actor (column (eql :character-name-length)))
+  (format nil "~10t.ptext \"~a\"" (getf actor :name)))
+
+(defun print-actor-prototypes ()
+  (format t "~&;;; Generated character prototype data from NPC Stats file")
+  (format t "~%~10tAllActors := []")
+  (dolist (actor (load-npc-stats))
+    (destructuring-bind (&key name decal hp ac pitch speed
+                              hair-color skin-color clothes-color
+                              speech-color bend
+                              head body character-id class
+                         &allow-other-keys)
+        actor
+      (unless (member name '(player narrator) :test 'string-equal)
+        (format t "~%;;;~|~2%~10tAllActors ..= [[ CharacterID_~a, Character_~a, ~aClass, ~aSize ]]"
+                (pascal-case (string name))
+                (pascal-case (string name))
+                (pascal-case (string class))
+                (pascal-case (string class)))
+        (format t "~%Character_~a:" (pascal-case (string name)))
+        (dolist (column '(basic-object-class-i-d entity-decal actor-h-p actor-max-h-p actor-action actor-facing
+                          actor-flags actor-course character-decal-kind character-skin-color character-hair-color
+                          character-clothes-color character-head character-body character-shield character-equipment
+                          character-armor-class character-crowns character-arrows character-potions
+                          character-chalice character-gender character-character-i-d character-speech-pitch
+                          character-speech-bend character-speech-speed character-speech-color
+                          non-player-character-tactical-goal non-player-character-tactical-object
+                          non-player-character-strategic-goal non-player-character-strategic-object
+                          character-name-length))
+          (format t "~2%~10t* = Character_~a + ~a~%~a"
+                  (pascal-case (string name)) (pascal-case (string column))
+                  (output-actor-value actor (make-keyword (string-upcase (string column)))))))))
+  (format t "
+~10tSortedActors := sort(AllActors)
+ActorCharacterID:
+~10t.for ci := 0, ci < len(AllActors), ci += 1
+~12t.byte SortedActors[ci][0]
+~10t.next
+ActorPointerL:
+~10t.for ci := 0, ci < len(AllActors), ci += 1
+~12t.byte <SortedActors[ci][1]
+~10t.next
+ActorPointerH:
+~10t.for ci := 0, ci < len(AllActors), ci += 1
+~12t.byte >SortedActors[ci][1]
+~10t.next
+ActorClassID:
+~10t.for ci := 0, ci < len(AllActors), ci += 1
+~12t.byte SortedActors[ci][2]
+~10t.next
+ActorClassSize:
+~10t.for ci := 0, ci < len(AllActors), ci += 1
+~12t.byte SortedActors[ci][3]
+~10t.next
+
+~10tActorsCount = len(AllActors)
+"))
+
+(defun write-actor-prototypes ()
+  "Write the prototype data for NPCs to ActorPrototypes.s"
+  (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
+  (ensure-directories-exist #p"Source/Generated/")
+  (with-output-to-file (*standard-output* #p"Source/Generated/ActorPrototypes.s"
+                                          :if-exists :supersede)
+    (print-actor-prototypes))
+  (format *trace-output* " …done."))
+
+(defun write-character-ids ()
+  "Write the character IDs enumeration CharacterIDs.s"
+  (format *trace-output* "~&Writing CharacterIDs.s …")
+  (ensure-directories-exist #p"Source/Generated/")
+  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.s"
+                                          :if-exists :supersede)
+    (format t "~&;;; Generated character ID data from NPC Stats file~2%")
+    (dolist (actor (load-npc-stats))
+      (destructuring-bind (&key name character-id
+                           &allow-other-keys)
+          actor
+        (unless (member name '(player narrator) :test 'string-equal)
+          (format t "~%~10tCharacterID_~a = $~2,'0x"
+                  (pascal-case (string name)) character-id))))
+    (format *trace-output* " …done.")))
