@@ -327,7 +327,7 @@
             do (ensure-directories-exist allocation-list-name)
             do (with-output-to-file (allocation-file allocation-list-name
                                                      :if-exists :supersede)
-                 (format *trace-output* " ~(~2,'0x~) (~:d asset~:p) " 
+                 (format *trace-output* " $~(~2,'0x~) (#~:*~d; ~:d asset~:p) " 
                          bank (length (hash-table-keys assets)))
                  (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
             do (ensure-directories-exist allocation-size-name)
