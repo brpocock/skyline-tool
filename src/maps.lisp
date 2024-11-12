@@ -1176,7 +1176,8 @@ range is 0 - #xffffffff (4,294,967,295)"
                "Mechanism" 9
                "Cityscape" #xa
                "Arturos" #xb
-               "Shipboard" #xc)
+               "Shipboard" #xc
+               "Undersea" #xd)
         by #'cddr
         when (some (lambda (match)
                      (search string (assocdr "source" (second match))))
@@ -1318,8 +1319,8 @@ range is 0 - #xffffffff (4,294,967,295)"
                       (length animations-list)
                       (length enemies-list))
               (format *trace-output* "~&Ready to write binary output for ~a … " tv)
-              (let (
-                    (outfile (make-pathname
+              (force-output *trace-output*)
+              (let ((outfile (make-pathname
                               :name (format nil "Map.~a.~a.~a"
                                             (last-elt (pathname-directory pathname))
                                             (pathname-name pathname) tv)
@@ -1356,12 +1357,14 @@ range is 0 - #xffffffff (4,294,967,295)"
                   ;; offset 18-19, run-commands pointer
                   (if run-commands-content
                       (write-word (incf offset (+ 1 (array-total-size enemies-list))) object)
-                      (write-word #x2770 object))
+                      (write-word 0 object))
                   ;; offset 20, name (Pascal string)
                   (write-byte (length (unicode->minifont name)) object)
                   (write-bytes (unicode->minifont name) object)
                   ;; compressed art map
                   (write-bytes compressed-map-data object)
+                  (format *trace-output* "Wrote compressed map data … ")
+                  (force-output *trace-output*)
                   ;; decals list
                   (write-byte (length decals-table) object)
                   (assert (every (lambda (decal) (= 4 (length decal))) decals-table)
@@ -1373,9 +1376,11 @@ range is 0 - #xffffffff (4,294,967,295)"
                     )
                   ;; enemies list
                   (write-byte (length enemies-list) object)
+                  (write-bytes run-commands-content object)
                   (loop for enemy across enemies-list
                         do (write-bytes enemy object))
-                  (format *trace-output* "end of file at $~4,'0x … " (file-position object))))
+                  (format *trace-output* "end of file at $~4,'0x … " (file-position object))
+                  (force-output *trace-output*)))
               (format *trace-output* "done."))))))))
 
 (defun rip-tiles-from-tileset (tileset images &optional (start-i 0))
