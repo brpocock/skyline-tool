@@ -7,9 +7,9 @@
    (%dump :initform (load-dump-into-mem) :accessor decal-from-dump :initarg :dump))
   (:panes (display-pane :application :height 500 :width 800
                                      :display-function 'display-decal-contents)
-          (palette-pane :application :height 200 :width 800
+          (palette-pane :application :height 400 :width 800
                                      :display-function 'display-decal-palette)
-          (interactor :interactor :height 200 :width 800))
+          (interactor :interactor :height 50 :width 800))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
@@ -107,17 +107,23 @@
                (elt dump (+ (cdr (assoc field addresses :test #'string=)) index))))
       (let* ((absolute-x (+ (/ (fetch "DecalXFraction") #x100)
                             (fetch "DecalXL") (* #x08 (fetch "DecalXH"))))
+             (absolute-y (+ (/ (fetch "DecalYFraction") #x100)
+                            (fetch "DecalYL") (* #x10 (fetch "DecalYH"))))
              (expected-x (- absolute-x
                             (+ (* 8 (elt dump (cdr (assoc "MapLeftColumn" addresses :test #'string=))))
                                (elt dump (cdr (assoc "MapLeftPixel" addresses :test #'string=))))
                             7)))
         (format t "~2&#<Decal # $~2,'0x info:" index)
-        (format t "~%~10tLocation: ($~2,'0x.~1x.~2,'0x, $~2,'0x.~1x.~2,'0x) @ (~6f, ~6f)"
+        (format t "~%~10tLocation: ($~2,'0x.~1x.~2,'0x, $~2,'0x.~1x.~2,'0x) = (~6f, ~6f)px = (~a, ~a)tiles"
                 (fetch "DecalXH") (fetch "DecalXL") (fetch "DecalXFraction")
                 (fetch "DecalYH") (fetch "DecalYL") (fetch "DecalYFraction")
-                absolute-x
-                (+ (/ (fetch "DecalYFraction") #x100)
-                   (fetch "DecalYL") (* #x10 (fetch "DecalYH"))))
+                absolute-x absolute-y
+                (rationalize (+ (fetch "DecalXH")
+                                (/ (fetch "DecalXL") #x08)
+                                (/ (fetch "DecalXFraction") #x800)))
+                (rationalize (+ (fetch "DecalYH")
+                                (/ (fetch "DecalYL") #x10)
+                                (/ (fetch "DecalYFraction") #x1000))))
         (when (plusp (fetch "DecalObjectH"))
           (format t "~%~10tObject: @ $~2,'0x~2,'0x"
                   (fetch "DecalObjectH") (fetch "DecalObjectL")))
@@ -211,12 +217,6 @@
                      (aref (decal-from-dump frame)
                            (+ (decal-index frame)
                               (find-label-from-files "DecalArtL")))))
-         (object-address (+ (* #x100 (aref (decal-from-dump frame)
-                                           (+ (decal-index frame)
-                                              (find-label-from-files "DecalObjectH")))) 
-                            (aref (decal-from-dump frame)
-                                  (+ (decal-index frame)
-                                     (find-label-from-files "DecalObjectL")))))
          (palette-index (ash
                          (logand #xe0 (aref (decal-from-dump frame)
                                             (+ (decal-index frame)
@@ -264,24 +264,24 @@
                                   (+ (decal-index frame)
                                      (find-label-from-files "DecalFlags")))))
         (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream)
-              (display-maria-art stream
-                                 :dump (decal-from-dump frame)
-                                 :mode decal-mode
-                                 :address address
-                                 :colors palette
-                                 :width width
-                                 :unit 8)))
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream)
-              (display-maria-art stream
-                                 :dump (decal-from-dump frame)
-                                 :mode decal-mode
-                                 :address (+ #x10 address)
-                                 :colors palette
-                                 :width width
-                                 :unit 8))))
+                               (clim:formatting-row (stream)
+                                                    (clim:formatting-cell (stream)
+                                                                          (display-maria-art stream
+                                                                                             :dump (decal-from-dump frame)
+                                                                                             :mode decal-mode
+                                                                                             :address address
+                                                                                             :colors palette
+                                                                                             :width width
+                                                                                             :unit 8)))
+                               (clim:formatting-row (stream)
+                                                    (clim:formatting-cell (stream)
+                                                                          (display-maria-art stream
+                                                                                             :dump (decal-from-dump frame)
+                                                                                             :mode decal-mode
+                                                                                             :address (+ #x10 address)
+                                                                                             :colors palette
+                                                                                             :width width
+                                                                                             :unit 8))))
         (display-maria-art stream
                            :dump (decal-from-dump frame)
                            :mode decal-mode
@@ -291,7 +291,6 @@
     (terpri stream)
     (clim:with-output-as-presentation (stream decal-mode 'decal-write-mode)
       (format stream "~&Write Mode: ~a" decal-mode))
-    (terpri stream)
     (terpri stream)
     (let ((num-decals (aref (decal-from-dump frame)
                             (find-label-from-files "NumDecals"))))
@@ -308,10 +307,6 @@
                                                :roman
                                                :italic)))
             (format stream " [ $~x ] " i)))))
-    (terpri stream)
-    (let ((*standard-output* stream))
-      (decode-decal (decal-from-dump frame) (decal-index frame))
-      (decode-object-at (decal-from-dump frame) object-address))
     (force-output stream)))
 
 (defmethod display-decal-palette ((frame show-decal-frame) (display-pane clim:pane))
@@ -390,7 +385,18 @@
                          (princ entry-name stream))
                        (princ " is set to " stream)
                        (print-clim-color color-index stream)))))))
-    (print-machine-palette stream)
+    (terpri stream)
+    (terpri stream)
+    (let ((*standard-output* stream))
+      (decode-decal (decal-from-dump frame) (decal-index frame))
+      (let ((object-address (+ (* #x100 (aref (decal-from-dump frame)
+                                              (+ (decal-index frame)
+                                                 (find-label-from-files "DecalObjectH")))) 
+                               (aref (decal-from-dump frame)
+                                     (+ (decal-index frame)
+                                        (find-label-from-files "DecalObjectL"))))))
+        (decode-object-at (decal-from-dump frame) object-address)))
+    #+ () (print-machine-palette stream)
     (force-output stream)))
 
 (define-show-decal-frame-command (com-find-animation-buffer :menu t :name t) ((buffer 'anim-buffer-index-value))
