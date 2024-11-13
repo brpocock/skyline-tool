@@ -3517,7 +3517,9 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
                           character-name-length))
           (format t "~2%~10t* = Character_~a + ~a~%~a"
                   (pascal-case (string name)) (pascal-case (string column))
-                  (output-actor-value actor (make-keyword (string-upcase (string column)))))))))
+                  (output-actor-value actor (make-keyword (string-upcase (string column))))))
+        (format t "~%~10t* = Character_~a + ~aSize"
+                (pascal-case (string name)) (pascal-case (string class))))))
   (format t "
 ~10tSortedActors := sort(AllActors)
 ActorCharacterID:
