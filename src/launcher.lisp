@@ -197,8 +197,11 @@ The signal code was ~a" break-code)
 (defun run-launcher ()
   "Open the Skyline Tool launcher (main menu) in its own thread"
   (let ((*trace-output* (make-synonym-stream '*trace-output*)))
-    (clim-sys:make-process (lambda () (launcher))
-                 :name "Skyline Tool GUI Launcher")))
+    (handler-case
+        (clim-sys:make-process (lambda () (launcher))
+                               :name "Skyline Tool GUI Launcher")
+      (xlib:window-error ()
+        (invoke-restart 'restart-event-loop) ))))
 
 (defun cl-user::skyline-tool ()
   "Open the Skyline Tool launcher (main menu)"

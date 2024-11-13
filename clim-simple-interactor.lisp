@@ -7,7 +7,7 @@
 (in-package :clim-simple-interactor)
 
 (defclass interactor-view (textual-view) ())
-(defclass input-view (textual-view) ())
+#+ () (defclass input-view (textual-view) ())
 
 (define-presentation-method present :around
   ((object sequence) (type sequence) stream (view interactor-view)
@@ -29,18 +29,18 @@
             :name 'interactor :scroll-bars t
             :height 1000
             :default-view (make-instance 'interactor-view)))
-          (input-container
-           (make-clim-stream-pane
-            :type 'interactor-pane
-            :name 'input :scroll-bars t
-            :height 100
-            :default-view (make-instance 'input-view))))
+          #+ () (input-container
+                 (make-clim-stream-pane
+                  :type 'interactor-pane
+                  :name 'input :scroll-bars t
+                  :height 100
+                  :default-view (make-instance 'input-view))))
   (:top-level (default-frame-top-level :prompt 'simple-interaction-prompt))
   (:command-table (simple-interactor))
-  (:layouts (default
-             (vertically ()
-               interactor-container
-               input-container))))
+  (:layouts (default interactor-container
+                     #+ ()             (vertically ()
+                                                   interactor-container
+                                                   input-container))))
 
 (defmethod frame-standard-output ((frame simple-interactor))
   (get-frame-pane frame 'interactor))
@@ -49,7 +49,7 @@
   (get-frame-pane frame 'interactor))
 
 (defmethod frame-standard-input ((frame simple-interactor))
-  (get-frame-pane frame 'input))
+  (get-frame-pane frame 'interactor))
 
 (define-presentation-type empty-input ())
 
@@ -91,7 +91,7 @@
                                         :height height))
          (process (clim-sys:make-process (lambda ()
                                            (run-frame-top-level frame)
-                                           (disown-frame fm frame))
+                                           #+ () (disown-frame fm frame))
                                          :name process-name))
          (*query-io* (make-two-way-stream pipe (frame-standard-output frame)))
          (*trace-output* (if (null *trace-output*)
@@ -104,7 +104,7 @@
       (force-output *standard-output*)
       (force-output *trace-output*)
       (force-output *error-output*)
-      (format *query-io* "~&Work complete. Type anything to dismiss ")
+      (format *query-io* "~3&Work complete. Type anything to dismiss ")
       (force-output *query-io*)
       (read-line *query-io*)
       (clim-sys:destroy-process process)
