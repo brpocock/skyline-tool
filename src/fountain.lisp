@@ -1941,6 +1941,11 @@ but now also ~s."
   (declare (ignore name kind))
   (when moniker (npc-interpret-color moniker)))
 
+(defmethod npc-interpret-field (chalice (field (eql :chalice)) &key kind name)
+  (if (emptyp chalice)
+      0
+      (parse-integer chalice)))
+
 (defmethod npc-interpret-field (head (field (eql :head)) &key kind name)
   (when (or (null kind) (eql kind 'human))
     (if (emptyp head)
@@ -3407,15 +3412,21 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
 
 (defmethod output-actor-value (actor (column (eql :character-skin-color)))
   (format nil "~10t.byte PaletteColor_~a"
-          (pascal-case (or (getf actor :skin-color) *default-skin-color*))))
+          (pascal-case (or (getf actor :skin)
+                           (prog1 *default-skin-color*
+                             (warn "Character ~a missing skin color" (getf actor :name)))))))
 
 (defmethod output-actor-value (actor (column (eql :character-hair-color)))
   (format nil "~10t.byte PaletteColor_~a"
-          (pascal-case (or (getf actor :hair-color) *default-hair-color*))))
+          (pascal-case (or (getf actor :hair)
+                           (prog1 *default-hair-color*
+                             (warn "Character ~a missing hair color" (getf actor :name)))))))
 
 (defmethod output-actor-value (actor (column (eql :character-clothes-color)))
   (format nil "~10t.byte PaletteColor_~a"
-          (pascal-case (or (getf actor :clothes-color) *default-clothes-color*))))
+          (pascal-case (or (getf actor :clothes)
+                           (prog1 *default-clothes-color*
+                             (warn "Character ~a missing clothes color" (getf actor :name)))))))
 
 (defmethod output-actor-value (actor (column (eql :character-head)))
   (format nil "~10t.byte ~d" (or (getf actor :head) 0)))
