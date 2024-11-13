@@ -74,7 +74,7 @@
       (t (print object (frame-pipe frame))
          (force-output (frame-pipe frame))))))
 
-(defun run-in-simple-interactor (function &key (width 600)
+(defun run-in-simple-interactor (function &key (width 800)
                                                (height 400)
                                                port
                                                frame-manager
@@ -101,6 +101,9 @@
          (*standard-output* (frame-standard-output frame))
          (*error-output* (frame-error-output frame)))
     (prog1 (funcall function)
+      (force-output *standard-output*)
+      (force-output *trace-output*)
+      (force-output *error-output*)
       (format *query-io* "~&Work complete. Type anything to dismiss ")
       (force-output *query-io*)
       (read-line *query-io*)
