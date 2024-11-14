@@ -3413,30 +3413,33 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
 (defmethod output-actor-value (actor (column (eql :character-skin-color)))
   (format nil "~10t.byte PaletteColor_~a"
           (pascal-case (or (getf actor :skin)
-                           (prog1 *default-skin-color*
-                             (warn "Character ~a missing skin color" (getf actor :name)))))))
+                           (progn (cerror (format nil "Continue, using default ~a" *default-skin-color*)
+                                          "Character ~:(~a~) missing skin color" (getf actor :name))
+                                  *default-skin-color*)))))
 
 (defmethod output-actor-value (actor (column (eql :character-hair-color)))
   (format nil "~10t.byte PaletteColor_~a"
           (pascal-case (or (getf actor :hair)
-                           (prog1 *default-hair-color*
-                             (warn "Character ~a missing hair color" (getf actor :name)))))))
+                           (progn (cerror (format nil "Continue, using default ~a" *default-hair-color*)
+                                          "Character ~:(~a~) missing hair color" (getf actor :name))
+                                  *default-hair-color*)))))
 
 (defmethod output-actor-value (actor (column (eql :character-clothes-color)))
   (format nil "~10t.byte PaletteColor_~a"
-          (pascal-case (or (getf actor :clothes)
-                           (prog1 *default-clothes-color*
-                             (warn "Character ~a missing clothes color" (getf actor :name)))))))
+          (pascal-case (or (getf actor :clothing)
+                           (progn (cerror (format nil "Continue, using default ~a" *default-clothes-color*)
+                                          "Character ~:(~a~) missing clothes color" (getf actor :name))
+                                  *default-clothes-color*)))))
 
 (defmethod output-actor-value (actor (column (eql :character-head)))
   (format nil "~10t.byte ~d" (or (getf actor :head) 0)))
 
 (defmethod output-actor-value (actor (column (eql :character-body)))
   (format nil "~10t.byte ~d" (let ((body (getf actor :body)))
-                                 (cond
-                                   ((string-equal body "tunic") 0)
-                                   ((string-equal body "robe") 1)
-                                   (t (or (ignore-errors (parse-integer body)) 0))))))
+                               (cond
+                                 ((string-equal body "tunic") 0)
+                                 ((string-equal body "robe") 1)
+                                 (t (or (ignore-errors (parse-integer body)) 0))))))
 
 (defmethod output-actor-value (actor (column (eql :character-shield)))
   (format nil "~10t.byte $~2,'0x" (or (getf actor :shield) #x80)))
