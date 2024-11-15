@@ -1286,7 +1286,8 @@ This gives the X position of the top-left corner of a 16×16 pixel tile
 cell (where the cell's number is (+ (* tile 4) cell)) within an image
 of the given width."
   (mod (+ (* (floor cell 4) 16)
-          (* (mod cell 2) 8)) width))
+          (* (mod cell 2) 8))
+       width))
 
 (defun tile-cell-vic2-y (cell width)
   (+ (* (floor (floor cell 4) (floor width 16)) 16)
