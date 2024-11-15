@@ -1689,7 +1689,10 @@ position within a larger image I."
   "Convert IMAGE to 160A bytes.
 
 BYTE-WIDTH  is the  width of  IMAGE in  bytes; HEIGHT  is the  height in
-pixels; PALETTE is the palette to which to hold the image."
+pixels; PALETTE is the palette to which to hold the image. If BEST-FIT-P
+is generally  true, then allow #'PIXELS-INTO-PALETTE  to use the
+best-fit color from  the palette; otherwise, allow  it to signal
+an error."
   (let ((bytes-across (list)))
     (dotimes (b byte-width)
       (let ((bytes (list)))
