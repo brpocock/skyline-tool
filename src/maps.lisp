@@ -75,7 +75,7 @@
                                          1000)))
                         (push frame-tile sequence)
                         (push duration sequence)))
-                    ;; If  the sequence  uses a  frame already  defined as
+                    ;; TODO If  the sequence  uses a  frame already  defined as
                     ;; a part of another sequence, omit it.
                     (add-animation (reverse sequence))))))))))
     animations))
@@ -1184,8 +1184,22 @@ range is 0 - #xffffffff (4,294,967,295)"
                    (xml-matches "tileset" xml))
           do (return id)))
 
+(defun write-binary-animations-list (animations-list s &key frame-rate)
+  #+ () (format *trace-output* "~%WRITE-BINARY-ANIMATIONS-LIST: ~2%~s~2%" animations-list)
+  (dolist (animation animations-list)
+    (vector-push-extend 0 s)
+    (loop for (frame duration) on animation by #'cddr
+          do (vector-push-extend (* 2 frame) s)))
+  (vector-push-extend 0 s)
+  (dolist (animation animations-list)
+    (vector-push-extend 0 s)
+    (loop for (frame duration) on animation by #'cddr
+          do (vector-push-extend (round (* duration frame-rate)) s)))
+  (vector-push-extend 0 s)
+  (vector-push-extend 0 s))
+
 (defun map-data-vector (&key width height tile-grid attributes-table
-                             exits-table animations-list tv)
+                             exits-table animations-list decals-animations-list tv)
   (let ((s (make-byte-array-with-fill-pointer))
         (frame-rate (ecase tv (:ntsc 1/60) (:pal 1/50))))
     (adjust-array s #x1000)
@@ -1215,22 +1229,13 @@ range is 0 - #xffffffff (4,294,967,295)"
     ;; exits list
     (setf (fill-pointer s) #xc00)
     (dolist (exit exits-table)
-      (dolist (byte exit) ; map/locale asset ID, x, y
+      (dolist (byte exit)               ; map/locale asset ID, x, y
         (vector-push-extend byte s))
       (assert (< (fill-pointer s) #xe00)))
     ;; animations list
     (setf (fill-pointer s) #xe00)
-    (dolist (animation animations-list)
-      (vector-push-extend 0 s)
-      (loop for (frame duration) on animation by #'cddr
-            do (vector-push-extend (* 2 frame) s)))
-    (vector-push-extend 0 s)
-    (dolist (animation animations-list)
-      (vector-push-extend 0 s)
-      (loop for (frame duration) on animation by #'cddr
-            do (vector-push-extend (round (* duration frame-rate)) s)))
-    (vector-push-extend 0 s)
-    (vector-push-extend 0 s)
+    (write-binary-animations-list animations-list s :frame-rate frame-rate)
+    (write-binary-animations-list decals-animations-list s :frame-rate frame-rate)
     s))
 
 (defun compile-map (pathname)
@@ -1256,8 +1261,8 @@ range is 0 - #xffffffff (4,294,967,295)"
            (tile-width (parse-integer (assocdr "tilewidth" (second xml))))
            (object-groups (xml-matches "objectgroup" xml))
            (animations-list (parse-tile-animation-set (first tilesets)))
-           (decal-animations-list
-             (mapcar #'parse-tile-animation-set (rest tilesets))))
+           (decals-animations-list (when (rest tilesets)
+                                     (apply #'parse-tile-animation-set (rest tilesets)))))
       (assert (<= 1 (length layers) 2) ()
               "This tool requires 1-2 tile layers, found ~:d tile map layer~:p in ~a"
               (length layers) pathname)
@@ -1301,6 +1306,7 @@ range is 0 - #xffffffff (4,294,967,295)"
                                        :attributes-table attributes-table
                                        :exits-table exits-table
                                        :animations-list animations-list
+                                       :decals-animations-list decals-animations-list
                                        :tv tv)
                       :base-name (concatenate 'string "Map."
                                               canon-name
