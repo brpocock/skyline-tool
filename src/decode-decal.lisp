@@ -21,9 +21,9 @@
 
 (clim:define-presentation-to-command-translator click-to-switch-to-decal
     (decal-index-value com-switch-decal show-decal-frame
-     :gesture :select :menu nil
-     :documentation "Switch to viewing this decal")
-    (object)
+                       :gesture :select :menu nil
+                       :documentation "Switch to viewing this decal")
+  (object)
   (list object))
 
 (define-show-decal-frame-command (com-next-palette :name t :menu t) ()
@@ -118,12 +118,12 @@
                 (fetch "DecalXH") (fetch "DecalXL") (fetch "DecalXFraction")
                 (fetch "DecalYH") (fetch "DecalYL") (fetch "DecalYFraction")
                 absolute-x absolute-y
-                (rationalize (+ (fetch "DecalXH")
-                                (/ (fetch "DecalXL") #x08)
-                                (/ (fetch "DecalXFraction") #x800)))
-                (rationalize (+ (fetch "DecalYH")
-                                (/ (fetch "DecalYL") #x10)
-                                (/ (fetch "DecalYFraction") #x1000))))
+                (floor (+ (fetch "DecalXH")
+                          (/ (fetch "DecalXL") #x08)
+                          (/ (fetch "DecalXFraction") #x800)))
+                (floor (+ (fetch "DecalYH")
+                          (/ (fetch "DecalYL") #x10)
+                          (/ (fetch "DecalYFraction") #x1000))))
         (when (plusp (fetch "DecalObjectH"))
           (format t "~%~10tObject: @ $~2,'0x~2,'0x"
                   (fetch "DecalObjectH") (fetch "DecalObjectL")))
@@ -142,10 +142,6 @@
                 (if (plusp (logand #x80 (fetch "DecalFlags")))
                     (logand 4 (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5))
                     (ash (logxor #xe0 (logand #xe0 (fetch "DecalPalWidth"))) -5)))
-        (when (plusp (logand #x80 (fetch "DecalAnimationState")))
-          (format t "~%~10tAnimation state is dirty (fresh frame wanted)"))
-        (when (plusp (logand #x40 (fetch "DecalAnimationState")))
-          (format t "~%~10tAnimation should occur"))
         (format t "~%~10tWidth: ~d byte~:p"
                 (1+ (logxor #x1f (logand #x1f (fetch "DecalPalWidth")))))
         (format t "~%~10tDisplay List Position: ~:[none~;@ $~2,'0x~2,'0x (~a)~]"
@@ -182,6 +178,23 @@
         (format t "~%~10tZone 2 format: ~a"
                 (if (plusp (logand #x40 (fetch "DecalFlags")))
                     "aligned" "floating"))
+        (format t "~%~10tDisposal mode: ~a"
+                (if (plusp (logand #x20 (fetch "DecalFlags")))
+                    "particle" "sprite"))
+        (format t "~%~10tZ-order: $~2,'0x (~a normal)"
+                (fetch "DecalZ") (cond
+                                   ((< #x80 (fetch "DecalZ")) "under")
+                                   ((> #x80 (fetch "DecalZ")) "above")
+                                   (t "just")))
+        (format t "~%~10tFlash time: ~d" (fetch "DecalFlashTime"))
+        (format t "~%~10tAnimation State: ~a, ~a"
+                (if (plusp (logand #x80 (fetch "DecalAnimationState")))
+                    "on tick"
+                    "on demand")
+                (if (plusp (logand #x40 (fetch "DecalAnimationState")))
+                    "redraw demanded"
+                    "ready")
+                )
         (format t " >~%")
         (finish-output)))))
 
@@ -401,7 +414,7 @@
 
 (define-show-decal-frame-command (com-find-animation-buffer :menu t :name t) ((buffer 'anim-buffer-index-value))
   (clim-sys:make-process (lambda () (show-animation-buffer buffer))
-               :name "Show animation buffer"))
+                         :name "Show animation buffer"))
 
 (clim:define-presentation-to-command-translator click-for-animation-buffer
     (anim-buffer-index-value com-find-animation-buffer show-decal-frame

@@ -80,10 +80,22 @@
 
 (clim:define-presentation-to-command-translator click-for-ext-file
     (ext-file-link com-open-ext-file show-decal-frame
-     :gesture :edit :menu nil
-     :documentation "Open spreadsheet file for editing")
-    (pathname)
+                   :gesture :edit :menu nil
+                   :documentation "Open spreadsheet file for editing")
+  (pathname)
   (list pathname))
+
+(defvar *inventory-items* nil)
+
+(defun load-inventory-items (&optional (pathname #p"Source/Tables/Inventory.txt"))
+  (with-input-from-file (names pathname)
+    (setf *inventory-items* (loop for line = (read-line names nil nil)
+                                  while line collect line))))
+
+(defun inventory-item-name (number)
+  (unless *inventory-items*
+    (load-inventory-items))
+  (elt *inventory-items* number))
 
 (defgeneric print-field-value (field-keyword-name field-value stream)
   (:documentation "Print the FIELD-VALUE for FIELD-KEYWORD-NAME to STREAM")
@@ -111,9 +123,9 @@
   (:method ((field (eql :character-potions)) value s)
     (format s " = ~d potion~:p" (first value)))
   (:method ((field (eql :character-chalice)) value s)
-    (if (zerop (first value))
-        (format s " = (empty)")
-        (format s " = contents are type ~r" (first value))))
+    (cond ((zerop (first value)) (format s " = no chalice"))
+          ((plusp (logand #x80 (first value))) (format s " = empty chalice"))
+          (t (format s " = contents are type ~r" (first value)))))
   (:method ((field (eql :palette-color)) value s)
     (format s " = ~a"
             (case (first value)
@@ -128,6 +140,16 @@
     (print-field-value :palette-color value s))
   (:method ((field (eql :character-clothes-color)) value s)
     (print-field-value :palette-color value s))
+  (:method ((field (eql :character-inventory)) value s)
+    (if (every #'zerop value)
+        (format s " = nil")
+        (format s "~@< = ~;~{~:(~a~)~^,~_~5t~}~;~:>"
+                (let ((bignum (reduce #'logior (loop for i from 0 by 8
+                                                     for byte in value
+                                                     collecting (ash byte i)))))
+                  (loop for bit from 0 below #x80
+                        when (plusp (logand (expt 2 bit) bignum))
+                          collect (inventory-item-name bit))))))
   (:method ((field (eql :character-speech-color)) value s)
     (if (= #x0f (logand #x0f (first value)))
         (format s " = ~a" (atari-color-name (ash (logand #xf0 (first value)) -4)))
