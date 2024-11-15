@@ -188,10 +188,10 @@
                                    (t "just")))
         (format t "~%~10tFlash time: ~d" (fetch "DecalFlashTime"))
         (format t "~%~10tAnimation State: ~a, ~a"
-                (if (plusp (logand #x80 (fetch "DecalAnimationState")))
+                (if (plusp (logand #x40 (fetch "DecalAnimationState")))
                     "on tick"
                     "on demand")
-                (if (plusp (logand #x40 (fetch "DecalAnimationState")))
+                (if (plusp (logand #x80 (fetch "DecalAnimationState")))
                     "redraw demanded"
                     "ready")
                 )
