@@ -28,24 +28,17 @@
                                          (process-name (format nil "Echo from ~s" function))
                                          (window-title process-name))
   (let* ((fm (or frame-manager (find-frame-manager :port (or port (find-port)))))
-         (pipe (make-string-output-stream))
+         (pipe function)
          (frame (make-application-frame 'simple-echo
                                         :pretty-name window-title
                                         :function function
                                         :frame-manager fm
                                         :pipe pipe
                                         :width width
-                                        :height height))
-         (*query-io* pipe)
-         (*trace-output* (if (null *trace-output*)
-                             nil
-                             pipe))
-         (*standard-output* pipe)
-         (*error-output* pipe))
-    (funcall function)
+                                        :height height)))
     (clim-sys:make-process (lambda ()
                              (run-frame-top-level frame))
                            :name process-name)))
 
 (defun echo-echo (frame pane)
-  (princ (get-output-stream-string (frame-pipe frame)) pane))
+  (funcall (frame-pipe frame)))
