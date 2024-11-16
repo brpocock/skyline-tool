@@ -42,10 +42,10 @@
                              pipe))
          (*standard-output* pipe)
          (*error-output* pipe))
+    (funcall function)
     (clim-sys:make-process (lambda ()
                              (run-frame-top-level frame))
-                           :name process-name)
-    (funcall function)))
+                           :name process-name)))
 
 (defun echo-echo (frame pane)
   (princ (get-output-stream-string (frame-pipe frame)) pane))
