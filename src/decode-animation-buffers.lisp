@@ -14,7 +14,7 @@
                                      :display-function 'display-anim-buffer-contents)
           (palette-pane :application :height 300 :width 800
                                      :display-function 'display-anim-buffer-palette)
-          (interactor :interactor :height 200 :width 800))
+          (interactor :interactor :height 75 :width 800))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
 
 (defun set-animation-buffer-colors (frame)
