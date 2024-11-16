@@ -192,8 +192,8 @@
   (:method ((field (eql :character-gender)) value s)
     (format s " = ~a" (case (first value)
                         (1 "♂ Male")
-                        (2 "♀ Female")
-                        (3 "☿ Nonbinary")
+                        (2 "☿ Nonbinary")
+                        (3 "♀ Female")
                         (otherwise "(invalid)"))))
   (:method ((field (eql :character-shield)) value s)
     (format s " = ~a"
