@@ -148,7 +148,7 @@
                                             (:160b 4)
                                             (:160a (case (simple-animation-sequence-decal-kind
                                                           (anim-seq-editor-sequence frame))
-                                                     (:nefertem 6)
+                                                     ((:enemy :nefertem) 6)
                                                      (otherwise 0)))))
     (clim:redisplay-frame-panes frame)))
 
@@ -401,7 +401,7 @@
         (ecase (simple-animation-sequence-write-mode 
                 (anim-seq-editor-sequence *anim-seq-editor-frame*))
           (:160a (mod (1+ (anim-seq-editor-palette *anim-seq-editor-frame*)) 8))
-          (:160b (if (zerop (anim-seq-editor-palette *anim-seq-editor-frame*))
+          (:160b (if (zerop (logand 4 (anim-seq-editor-palette *anim-seq-editor-frame*)))
                      4 0))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 

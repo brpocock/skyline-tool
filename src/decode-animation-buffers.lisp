@@ -93,10 +93,10 @@
   ())
 
 (clim:define-presentation-to-command-translator click-for-next-palette
-    (palette-selector com-next-palette anim-buffer-frame
-     :gesture :edit :menu nil
-     :documentation "Switch to next palette")
-    (frame)
+    (palette-selector com-change-palette-for-buffer anim-buffer-frame
+                      :gesture :edit :menu nil
+                      :documentation "Switch to next palette")
+  (frame)
   ())
 
 (clim:define-presentation-to-command-translator click-for-next-color
@@ -189,8 +189,24 @@
     (terpri stream)
     (clim:with-output-as-presentation (stream (anim-buffer-mode frame) 'anim-buffer-mode)
       (format stream "~&Write Mode: ~a" (anim-buffer-mode frame)))
+    (loop for decal below #x40
+          when (and (= #x50
+                       (dump-peek (+ decal (find-label-from-files "DecalArtH"))
+                                  (anim-buffer-from-dump frame)))
+                    (= (* 4 (anim-buffer-index *anim-buffer-frame*))
+                       (dump-peek (+ decal (find-label-from-files "DecalArtL"))
+                                  (anim-buffer-from-dump frame))))
+            do (clim:with-output-as-presentation (stream decal 'decal-index-value)
+                 (format stream "~%In use by decal $~x in mode ~a" decal
+                         (if (plusp (logand #x80 (dump-peek (+ decal (find-label-from-files "DecalFlags"))
+                                                            (anim-buffer-from-dump frame))))
+                             :160b :160a))))
+    (when (= (dump-peek "AnimationBackBuffer")
+             (* 4 (anim-buffer-index frame)))
+      (format stream "~%This is the Animation Back Buffer."))
     (terpri stream)
-    (format stream "~&All buffers: ")
+    (clim:with-text-face (stream :bold)
+      (format stream "~&All buffers:~%"))
     (dotimes (buf #x10)
       (clim:with-output-as-presentation (stream buf 'anim-buffer-index-value)
         (clim:with-text-face
@@ -214,21 +230,8 @@
                                    (dump-peek "AnimationBackBuffer"))
                                 :roman
                                 :italic))))
-          (format stream " [ $~x ] " buf))))
-    (terpri stream)
-    (terpri stream)
-    (loop for decal below #x40
-          when (and (= #x50
-                       (dump-peek (+ decal (find-label-from-files "DecalArtH"))
-                                  (anim-buffer-from-dump frame)))
-                    (= (* 4 (anim-buffer-index *anim-buffer-frame*))
-                       (dump-peek (+ decal (find-label-from-files "DecalArtL"))
-                                  (anim-buffer-from-dump frame))))
-            do (clim:with-output-as-presentation (stream decal 'decal-index-value)
-                 (format stream "~%In use by decal $~x" decal)))
-    (when (= (dump-peek "AnimationBackBuffer")
-             (* 4 (anim-buffer-index frame)))
-      (format stream "~%This is the Animation Back Buffer."))
+          (format stream " [ $~x ] " buf)
+          (when (zerop (mod (1+ buf) 8)) (terpri stream)))))
     (force-output stream)))
 
 (define-anim-buffer-frame-command (com-change-color :name t :menu t)
@@ -286,11 +289,11 @@
   (set-animation-buffer-colors *anim-buffer-frame*)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
-(define-anim-buffer-frame-command (com-next-palette :name t :menu t) ()
+(define-anim-buffer-frame-command (com-change-palette-for-buffer :name t :menu t) ()
   (setf (anim-buffer-palette *anim-buffer-frame*)
         (ecase (anim-buffer-mode *anim-buffer-frame*)
           (:160a (mod (1+ (anim-buffer-palette *anim-buffer-frame*)) 8))
-          (:160b (if (zerop (anim-buffer-palette *anim-buffer-frame*))
+          (:160b (if (zerop (logand 4 (anim-buffer-palette *anim-buffer-frame*)))
                      4 0))))
   (set-animation-buffer-colors *anim-buffer-frame*)
   (clim:redisplay-frame-panes *anim-buffer-frame*))

@@ -1958,13 +1958,13 @@ but now also ~s."
   (cond
     ((and (eql kind 'sailor)
           (let ((n (ignore-errors (parse-number body))))
-            (or (null n) (not (< 0 n 9)))))
-     (cerror "Continue with sailor “1”"
-             "Sailor body should be 1-8, but got “~a”~@[ for actor ~:(~a~)~]"
+            (or (null n) (not (<= 0 n 7)))))
+     (cerror "Continue with sailor “0”"
+             "Sailor body should be 0-7, but got “~a”~@[ for actor ~:(~a~)~]"
              body name)
      0)
     ((eql kind 'sailor)
-     (1- (parse-number body)))
+     (parse-number body))
     ((not (eql kind 'human))
      0)
     ((emptyp body)
