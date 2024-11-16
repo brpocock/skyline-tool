@@ -107,14 +107,14 @@
 (defun prompt-function ()
   (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
-      (clim-simple-interactor:run-in-simple-interactor
+      (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
       #-mcclim nil
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
   (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
-      (or #+mcclim (clim-simple-interactor:run-in-simple-interactor
+      (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)
                       (finish-output *query-io*)
@@ -504,7 +504,7 @@ See COPYING for details
                    (fresh-line)))
             (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
                 #+mcclim
-                (clim-simple-interactor:run-in-simple-interactor
+                (clim-simple-echo:run-in-simple-echo
                  #'runner
                  :process-name
                  (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"

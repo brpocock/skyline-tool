@@ -460,21 +460,21 @@ Room for objects:
 
 (defun show-self-object ()
   "Describe the object pointed-to by the Self pointer from a dump"
-  (clim-simple-interactor:run-in-simple-interactor #'decode-self-object
+  (clim-simple-echo:run-in-simple-echo #'decode-self-object
                                                    :height 850
                                                    :process-name "Decode Self Objects"
                                                    :window-title "Object “Self”"))
 
 (defun show-all-objects ()
   "Decode all objects currently in the object heap"
-  (clim-simple-interactor:run-in-simple-interactor #'decode-all-objects
+  (clim-simple-echo:run-in-simple-echo #'decode-all-objects
                                                    :height 850
                                                    :process-name "All Objects"
                                                    :window-title "All Objects"))
 
 (defun show-player-object ()
   "Describe the Player object from a dump"
-  (clim-simple-interactor:run-in-simple-interactor #'decode-player-object
+  (clim-simple-echo:run-in-simple-echo #'decode-player-object
                                                    :height 850
                                                    :process-name "Player Object"
                                                    :window-title "Player Object"))

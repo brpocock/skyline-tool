@@ -89,12 +89,12 @@
 
 (defun check-for-absent-assets-in-project-folder ()
   "Check the project folder for assets that are not mentioned in the Assets.index"
-  (clim-simple-interactor:run-in-simple-interactor #'check-for-absent-assets
+  (clim-simple-echo:run-in-simple-echo #'check-for-absent-assets
                                                    :process-name "Check for absent assets"))
 
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"
-  (clim-simple-interactor:run-in-simple-interactor (lambda ()
+  (clim-simple-echo:run-in-simple-echo (lambda ()
                                                      (format t "~&Running a full garbage collection…")
                                                      (force-output)
                                                      (sb-ext:gc :full t)
@@ -103,7 +103,7 @@
 
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"
-  (clim-simple-interactor:run-in-simple-interactor
+  (clim-simple-echo:run-in-simple-echo
    (lambda () (push-7800gd-bin (format nil "Dist/~a.Public.NTSC.bin" *game-title*)))
    :process-name "Push binary"))
 
@@ -112,7 +112,7 @@
  
 Should try to just reload the current scene, if there were no code (only
 asset) changes, this may work."
-  (clim-simple-interactor:run-in-simple-interactor
+  (clim-simple-echo:run-in-simple-echo
    (lambda ()
      (push-7800gd-bin-no-execute (format nil "Dist/~a.Public.NTSC.bin" *game-title*)
                                  (find-7800gd-serial-port) t))
@@ -167,13 +167,13 @@ The signal code was ~a" break-code)
 
 (defun analyze-faults-from-dump (&optional (dump-pathname #p"/tmp/dump"))
   "Report on the fault codes logged in a core dump at DUMP-PATHNAME in a new window"
-  (clim-simple-interactor:run-in-simple-interactor (lambda ()
+  (clim-simple-echo:run-in-simple-echo (lambda ()
                                                      (analyze-dump-faults dump-pathname))
                                                    :process-name "Analyze Dump Faults"))
 
 (defun reload-skyline-tool-from-sources ()
   "Recompile and reload this utility from the current sources on disk."
-  (clim-simple-interactor:run-in-simple-interactor (lambda ()
+  (clim-simple-echo:run-in-simple-echo (lambda ()
                                                      (when *launcher-frame*
                                                        (clim:frame-exit *launcher-frame*))
                                                      (recompile-tool)

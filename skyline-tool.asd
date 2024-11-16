@@ -47,7 +47,7 @@
   
   :components
   (;;(:file "gray-streams-pipe")
-   ;;(:file "clim-simple-interactor")
+   (:file "clim-simple-echo")
    (:module "src"
     :components ((:file "package")
                  (:file "utils")
