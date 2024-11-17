@@ -2755,10 +2755,10 @@ but now also ~s."
 (defun stage-facing-value (direction &key (playerp nil))
   (declare (ignore playerp))
   (ecase direction
-    (north "CharacterFacingUp")
-    (south "CharacterFacingDown")
-    (east "CharacterFacingRight")
-    (west "CharacterFacingLeft")))
+    (north "ActorFacingUp")
+    (south "ActorFacingDown")
+    (east "ActorFacingRight")
+    (west "ActorFacingLeft")))
 
 (defstage face (who where)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -3399,7 +3399,7 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
   (format nil "~10t.byte ActionIdle"))
 
 (defmethod output-actor-value (actor (column (eql :actor-facing)))
-  (format nil "~10t.byte CharacterFacingDown"))
+  (format nil "~10t.byte ActorFacingDown"))
 
 (defmethod output-actor-value (actor (column (eql :actor-flags)))
   (format nil "~10t.byte 0"))
