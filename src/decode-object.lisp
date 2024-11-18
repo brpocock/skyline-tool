@@ -429,25 +429,37 @@
                                                j (bam-block->object-address j)))))))
 
 (defun room-for-objects (&optional (dump (load-dump-into-mem)))
+  (format t "~%Object pool map (○ available)")
   (loop for i from 0 below #xc0
         with longest-span = 0
         with span-blocks = 0
         with free-blocks = 0
         for bam = (elt dump (+ #x6240 i))
+        if (zerop (mod i 24))
+          do (progn (setf span-blocks 0)
+                    (terpri))
         if (zerop bam)
           do (progn (incf free-blocks)
                     (incf span-blocks)
                     (when (> span-blocks longest-span)
-                      (setf longest-span span-blocks)))
-        else do (setf span-blocks 0)
-        if (zerop (mod i 24))
-          do (setf span-blocks 0)
+                      (setf longest-span span-blocks))
+                    (format t "○"))
+        else do (progn (setf span-blocks 0)
+                       (format t "●"))
+        if (zerop (mod (1+ i) 24))
+          do (progn (setf span-blocks 0)
+                    (format t "~26t Block ~d ($~4,'0x)" (floor i 24)
+                            (+ (find-label-from-files "Objects0") (* #x100 (floor i 24)))))
         finally (format t "~&
 Room for objects:
 ~10tTotal: $C0 (192) blocks = $600 (1,536) bytes
-~10tFree: $~x (~:*~d) blocks = $~x (~:*~:d) bytes
+~10tUsed: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
+~10tFree: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
 ~10tLargest free span: $~x (~:*~d) blocks = $~x (~:*~:d) bytes"
+                        (- #xc0 free-blocks) (* 8 (- #xc0 free-blocks))
+                        (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
                         free-blocks (* 8 free-blocks)
+                        (round (* 100 (/ free-blocks #xc0)))
                         longest-span (* 8 longest-span))))
 
 (defun decode-self-object (&optional (dump (load-dump-into-mem)))
