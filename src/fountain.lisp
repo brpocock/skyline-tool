@@ -2309,7 +2309,7 @@ but now also ~s."
 ~10tjmp ~a
 
 ~a:
-~10t.SetProp ActorAction, # ActionSleep
+~10t.SetProp CharacterAction, # ActionSleep
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
@@ -2339,7 +2339,7 @@ but now also ~s."
 ~10tjmp ~a
 
 ~a:
-~10t.SetProp ActorAction, # ActionDance
+~10t.SetProp CharacterAction, # ActionDance
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
@@ -2368,7 +2368,7 @@ but now also ~s."
 ~10tjmp ~a
 
 ~a:
-~10t.SetProp ActorAction, # ActionIdle
+~10t.SetProp CharacterAction, # ActionIdle
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 ~a:
 "
@@ -2720,7 +2720,7 @@ but now also ~s."
 ~10tlda # CharacterID_~a
 ~10tjsr Lib.FindCharacter
 
-~10t.GetProp ActorCourse + 1
+~10t.GetProp CharacterCourse + 1
 ~10tbne ~0@*~a
                     (genlabel "WaitToArrive")
 |#
@@ -2755,10 +2755,10 @@ but now also ~s."
 (defun stage-facing-value (direction &key (playerp nil))
   (declare (ignore playerp))
   (ecase direction
-    (north "ActorFacingUp")
-    (south "ActorFacingDown")
-    (east "ActorFacingRight")
-    (west "ActorFacingLeft")))
+    (north "CharacterFacingUp")
+    (south "CharacterFacingDown")
+    (east "CharacterFacingRight")
+    (west "CharacterFacingLeft")))
 
 (defstage face (who where)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2779,7 +2779,7 @@ but now also ~s."
 ~10tjmp ~a
 
 ~a:
-~10t.SetProp ActorFacing, # ~a
+~10t.SetProp CharacterFacing, # ~a
 ~10t.FarJSR BankPlayer, ServiceComposeCharacter
 
 ~a:
@@ -3147,7 +3147,7 @@ Speech_~a:~
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
           actor-name)
     (compile-stage-direction 'enter (list actor-name :oc))
-    (format t "~10t.SetProp ActorAction, # ActionNonInteractive"))
+    (format t "~10t.SetProp CharacterAction, # ActionNonInteractive"))
   (if (string-equal actor-name 'narrator)
       (format t "
 ~10tlda # CharacterID_Narrator
@@ -3389,22 +3389,22 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
 (defmethod output-actor-value (actor (column (eql :entity-decal)))
   (format nil "~10t.byte $ff"))
 
-(defmethod output-actor-value (actor (column (eql :actor-h-p)))
+(defmethod output-actor-value (actor (column (eql :character-h-p)))
   (format nil "~10t.word ~5,'0d" (or (getf actor :hp) 2)))
 
-(defmethod output-actor-value (actor (column (eql :actor-max-h-p)))
+(defmethod output-actor-value (actor (column (eql :character-max-h-p)))
   (format nil "~10t.word ~5,'0d" (or (getf actor :hp) 2)))
 
-(defmethod output-actor-value (actor (column (eql :actor-action)))
+(defmethod output-actor-value (actor (column (eql :character-action)))
   (format nil "~10t.byte ActionIdle"))
 
-(defmethod output-actor-value (actor (column (eql :actor-facing)))
-  (format nil "~10t.byte ActorFacingDown"))
+(defmethod output-actor-value (actor (column (eql :character-facing)))
+  (format nil "~10t.byte CharacterFacingDown"))
 
 (defmethod output-actor-value (actor (column (eql :actor-flags)))
   (format nil "~10t.byte 0"))
 
-(defmethod output-actor-value (actor (column (eql :actor-course)))
+(defmethod output-actor-value (actor (column (eql :character-course)))
   (format nil "~10t.word $0000"))
 
 (defmethod output-actor-value (actor (column (eql :character-decal-kind)))
@@ -3520,8 +3520,9 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
                 (pascal-case (string class))
                 (pascal-case (string class)))
         (format t "~%Character_~a:" (pascal-case (string name)))
-        (dolist (column '(basic-object-class-i-d entity-decal actor-h-p actor-max-h-p actor-action actor-facing
-                          actor-flags actor-course character-decal-kind character-skin-color character-hair-color
+        (dolist (column '(basic-object-class-i-d entity-decal character-h-p character-max-h-p
+                          character-action character-facing
+                          character-course character-decal-kind character-skin-color character-hair-color
                           character-clothes-color character-head character-body character-shield character-equipment
                           character-armor-class character-crowns character-arrows character-potions
                           character-character-i-d character-speech-pitch
