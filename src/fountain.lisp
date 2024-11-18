@@ -3524,7 +3524,7 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
                           actor-flags actor-course character-decal-kind character-skin-color character-hair-color
                           character-clothes-color character-head character-body character-shield character-equipment
                           character-armor-class character-crowns character-arrows character-potions
-                          character-chalice character-gender character-character-i-d character-speech-pitch
+                          character-character-i-d character-speech-pitch
                           character-speech-bend character-speech-speed character-speech-color
                           non-player-character-tactical-goal non-player-character-tactical-object
                           non-player-character-strategic-goal non-player-character-strategic-object
