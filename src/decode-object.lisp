@@ -391,8 +391,8 @@
 
 (defun size-of-object-at (dump address)
   (let* ((subseq (subseq dump address))
-         (class-methods (+ (elt subseq 0) (* #x100 (elt subseq 1))))
-         (class-name (dereference-class class-methods)))
+         (class-id (elt subseq 0))
+         (class-name (dereference-class class-id)))
     (destructuring-bind (class-fields class-size) (read-class-fields-from-defs class-name)
       (declare (ignore class-fields))
       (* 8 (ceiling class-size 8)))))
@@ -407,60 +407,81 @@
             object-start size)
       (setf size (- #xc0 (object-address->bam-block object-start))))
     (dotimes (i size)
-      (setf (aref visited (+ i bam)) (object-address->bam-block object-start)))))
+      (setf (aref visited (+ i bam)) object-start))))
 
-(defun mark-and-sweep-objects (&optional (dump (load-dump-into-mem)))
+(defun mark-and-sweep-objects (&key (dump (load-dump-into-mem)) (quietp nil))
   (loop for i from 0 below #x40
-        for object-start = (+ (elt dump (+ #x6440 i))
-                              (* #x100 (elt dump (+ #x6540 i))))
+        for object-start = (+ (elt dump (+ i (find-label-from-files "ObjectL")))
+                              (* #x100 (elt dump (+ i (find-label-from-files "ObjectH")))))
         with visited = (make-array (list #xc0) :initial-element nil)
-        unless (zerop object-start)
+        unless (< object-start (find-label-from-files "Objects0"))
           do (mark-object-visited dump object-start visited)
         finally (loop for j from 0 below #xc0
-                      for bam = (elt dump (+ #x6240 j))
+                      for bam = (elt dump (+ j (find-label-from-files "ObjectsBAM")))
                       for visitation = (aref visited j)
+                      with unreachable = (list)
+                      with overcommitted = (list)
                       do (cond
                            ((or (and (plusp bam) visitation)
                                 (and (zerop bam) (not visitation)))
-                            (format t "~& ( $~2,'0x used by $~2,'0x )" j visitation))
-                           ((plusp bam) (format t "~& Block allocated in BAM ($~2,'0x) but not reachable: $~2,'0x ($~4,'0x)"
-                                                bam j (bam-block->object-address j)))
-                           (visitation (format t "~& Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
-                                               j (bam-block->object-address j)))))))
+                            #+ () (format t "~& ( $~2,'0x used by $~2,'0x )" j visitation))
+                           ((plusp bam)
+                            (unless quietp
+                              (format t "~& Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
+                                      j bam (bam-block->object-address j)))
+                            (push j unreachable ))
+                           (visitation
+                            (unless quietp
+                              (format t "~& Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
+                                      j (bam-block->object-address j)))
+                            (push j overcommitted)))
+                      finally (return-from mark-and-sweep-objects
+                                (values unreachable overcommitted)))))
 
 (defun room-for-objects (&optional (dump (load-dump-into-mem)))
-  (format t "~%Object pool map (○ available)")
-  (loop for i from 0 below #xc0
-        with longest-span = 0
-        with span-blocks = 0
-        with free-blocks = 0
-        for bam = (elt dump (+ #x6240 i))
-        if (zerop (mod i 24))
-          do (progn (setf span-blocks 0)
-                    (terpri))
-        if (zerop bam)
-          do (progn (incf free-blocks)
-                    (incf span-blocks)
-                    (when (> span-blocks longest-span)
-                      (setf longest-span span-blocks))
-                    (format t "○"))
-        else do (progn (setf span-blocks 0)
-                       (format t "●"))
-        if (zerop (mod (1+ i) 24))
-          do (progn (setf span-blocks 0)
-                    (format t "~26t Block ~d ($~4,'0x)" (floor i 24)
-                            (+ (find-label-from-files "Objects0") (* #x100 (floor i 24)))))
-        finally (format t "~&
+  (multiple-value-bind (unreachable overcommitted) (mark-and-sweep-objects :dump dump :quietp t)
+    (format t "~%Object pool map (○ available, ● used~@[, ☠ unreachable, ★overcommitted~])"
+            (or unreachable overcommitted))
+    (loop for i from 0 below #xc0
+          with longest-span = 0
+          with span-blocks = 0
+          with free-blocks = 0
+          for bam = (elt dump (+ #x6240 i))
+          if (zerop (mod i 24))
+            do (progn (setf span-blocks 0)
+                      (terpri))
+          if (zerop bam)
+            do (if (member i overcommitted)
+                   (progn (when (> span-blocks longest-span)
+                            (setf longest-span span-blocks))
+                          (setf span-blocks 0)
+                          (format t "★"))
+                   (progn (incf free-blocks)
+                          (incf span-blocks)
+                          (when (> span-blocks longest-span)
+                            (setf longest-span span-blocks))
+                          (format t "○")))
+          else do (if (member i unreachable)
+                      (progn (setf span-blocks 0)
+                             (format t "☠"))
+                      (progn (setf span-blocks 0)
+                             (format t "●")))
+          if (zerop (mod (1+ i) 24))
+            do (progn (setf span-blocks 0)
+                      (format t "~26t Pool ~d ($~2,'0xXX)" (floor i 24)
+                              (floor (+ (find-label-from-files "Objects0") (* #x100 (floor i 24)))
+                                     #x100)))
+          finally (format t "~&
 Room for objects:
 ~10tTotal: $C0 (192) blocks = $600 (1,536) bytes
 ~10tUsed: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
 ~10tFree: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
 ~10tLargest free span: $~x (~:*~d) blocks = $~x (~:*~:d) bytes"
-                        (- #xc0 free-blocks) (* 8 (- #xc0 free-blocks))
-                        (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
-                        free-blocks (* 8 free-blocks)
-                        (round (* 100 (/ free-blocks #xc0)))
-                        longest-span (* 8 longest-span))))
+                          (- #xc0 free-blocks) (* 8 (- #xc0 free-blocks))
+                          (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
+                          free-blocks (* 8 free-blocks)
+                          (round (* 100 (/ free-blocks #xc0)))
+                          longest-span (* 8 longest-span)))))
 
 (defun decode-self-object (&optional (dump (load-dump-into-mem)))
   (multiple-value-bind (low pointer) (dump-peek "Self")
