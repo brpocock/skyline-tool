@@ -441,51 +441,66 @@
   (multiple-value-bind (unreachable overcommitted) (mark-and-sweep-objects :dump dump :quietp t)
     (format t "~%Object pool map (○ available, ● used~@[, ☠ unreachable, ★overcommitted~])"
             (or unreachable overcommitted))
-    (loop for i from 0 below #xc0
-          with longest-span = 0
-          with span-blocks = 0
-          with free-blocks = 0
-          for bam = (elt dump (+ #x6240 i))
-          if (zerop (mod i 24))
-            do (progn (setf span-blocks 0)
-                      (terpri))
-          if (zerop bam)
-            do (if (member i overcommitted)
-                   (progn (when (> span-blocks longest-span)
-                            (setf longest-span span-blocks))
-                          (setf span-blocks 0)
-                          (format t "★"))
-                   (progn (incf free-blocks)
-                          (incf span-blocks)
-                          (when (> span-blocks longest-span)
-                            (setf longest-span span-blocks))
-                          (format t "○")))
-          else do (if (member i unreachable)
-                      (progn (setf span-blocks 0)
-                             (format t "☠"))
-                      (progn (setf span-blocks 0)
-                             (format t "●")))
-          if (zerop (mod (1+ i) 24))
-            do (progn (setf span-blocks 0)
-                      (format t "~26t Pool ~d ($~2,'0xXX)" (floor i 24)
-                              (floor (+ (find-label-from-files "Objects0") (* #x100 (floor i 24)))
-                                     #x100)))
-          finally (format t "~&
+    (let ((longest-span 0)
+          (span-blocks 0)
+          (free-blocks 0)
+          (rows (list)))
+      (loop for i from 0 below #xc0
+            for bam = (elt dump (+ #x6240 i))
+            with current-row = (list)
+            if (zerop (mod i 24))
+              do (setf span-blocks 0)
+            if (zerop bam)
+              do (if (member i overcommitted)
+                     (progn (when (> span-blocks longest-span)
+                              (setf longest-span span-blocks))
+                            (setf span-blocks 0)
+                            (push "★" current-row))
+                     (progn (incf free-blocks)
+                            (incf span-blocks)
+                            (when (> span-blocks longest-span)
+                              (setf longest-span span-blocks))
+                            (push "○" current-row)))
+            else do (if (member i unreachable)
+                        (progn (setf span-blocks 0)
+                               (push "☠" current-row))
+                        (progn (setf span-blocks 0)
+                               (push "●" current-row)))
+            if (zerop (mod (1+ i) 24))
+              do (progn (setf span-blocks 0)
+                        (push (format nil "Pool ~d ($~2,'0xXX)" (floor i 24)
+                                      (floor (+ (find-label-from-files "Objects0") (* #x100 (floor i 24)))
+                                             #x100))
+                              current-row)
+                        (setf rows (append rows (list (reverse current-row))))
+                        (setf current-row (list))))
+      (etypecase *standard-output*
+        (swank/gray::slime-output-stream
+         (format t "~{~%~{~a~^ ~}~}" rows))
+        (t (terpri)
+         (clim:formatting-table (t)
+                                (dolist (row rows)
+                                  (clim:formatting-row (t)
+                                                       (dolist (el row)
+                                                         (clim:formatting-cell (t)
+                                                                               (princ el))))))))
+      
+      (format t "~&
 Room for objects:
 ~10tTotal: $C0 (192) blocks = $600 (1,536) bytes
 ~10tUsed: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
 ~10tFree: $~x (~:*~d) block~:p = $~x (~:*~:d) bytes = ~d%
 ~10tLargest free span: $~x (~:*~d) blocks = $~x (~:*~:d) bytes"
-                          (- #xc0 free-blocks) (* 8 (- #xc0 free-blocks))
-                          (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
-                          free-blocks (* 8 free-blocks)
-                          (round (* 100 (/ free-blocks #xc0)))
-                          longest-span (* 8 longest-span)))))
+              (- #xc0 free-blocks) (* 8 (- #xc0 free-blocks))
+              (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
+              free-blocks (* 8 free-blocks)
+              (round (* 100 (/ free-blocks #xc0)))
+              longest-span (* 8 longest-span)))))
 
-(defun decode-self-object (&optional (dump (load-dump-into-mem)))
-  (multiple-value-bind (low pointer) (dump-peek "Self")
-    (let ((high (dump-peek (1+ pointer))))
-      (decode-object-at dump (+ (* #x100 high) low)))))
+  (defun decode-self-object (&optional (dump (load-dump-into-mem)))
+    (multiple-value-bind (low pointer) (dump-peek "Self")
+      (let ((high (dump-peek (1+ pointer))))
+        (decode-object-at dump (+ (* #x100 high) low)))))
 
 (defun decode-player-object (&optional (dump (load-dump-into-mem)))
   (decode-object-at dump (find-label-from-files "PlayerValues")))
@@ -512,5 +527,6 @@ Room for objects:
 (defun show-room-for-objects ()
   "Show how much room objects take up in the dump"
   (clim-simple-echo:run-in-simple-echo #'room-for-objects
-                                       :height 500
+                                       :width 950
+                                       :height 600
                                        :process-name "Room for Objects"))
