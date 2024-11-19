@@ -46,7 +46,8 @@
        show-decal
        show-player-object
        show-self-object
-       show-all-objects)
+       show-all-objects
+       show-room-for-objects)
       (lisp
        run-repl
        show-lisp-room

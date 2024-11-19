@@ -374,8 +374,7 @@
                             (reverse (sort (hash-table-alist summary)
                                            #'string>
                                            :key #'car)))))
-                 summary)
-             (room-for-objects))))
+                 summary))))
 
 (defun object-address->bam-block (address)
   (let ((relative (- address (find-label-from-files "Objects0"))))
@@ -501,13 +500,17 @@ Room for objects:
 (defun show-all-objects ()
   "Decode all objects currently in the object heap"
   (clim-simple-echo:run-in-simple-echo #'decode-all-objects
-                                                   :height 850
-                                                   :process-name "All Objects"
-                                                   :window-title "All Objects"))
+                                       :height 850
+                                       :process-name "All Objects"))
 
 (defun show-player-object ()
   "Describe the Player object from a dump"
   (clim-simple-echo:run-in-simple-echo #'decode-player-object
-                                                   :height 850
-                                                   :process-name "Player Object"
-                                                   :window-title "Player Object"))
+                                       :height 850
+                                       :process-name "Player Object"))
+
+(defun show-room-for-objects ()
+  "Show how much room objects take up in the dump"
+  (clim-simple-echo:run-in-simple-echo #'room-for-objects
+                                       :height 600
+                                       :process-name "Room for Objects"))
