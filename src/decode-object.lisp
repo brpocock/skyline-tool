@@ -512,5 +512,5 @@ Room for objects:
 (defun show-room-for-objects ()
   "Show how much room objects take up in the dump"
   (clim-simple-echo:run-in-simple-echo #'room-for-objects
-                                       :height 600
+                                       :height 500
                                        :process-name "Room for Objects"))
