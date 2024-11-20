@@ -442,19 +442,25 @@
                             #+ () (format t "~& ( $~2,'0x used by $~2,'0x )" j visitation))
                            ((plusp bam)
                             (unless quietp
-                              (format t "~& Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
-                                      j bam (bam-block->object-address j)))
+                              (terpri)
+                              (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                                      :ink clim:+red+)
+                                                                   (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
+                                                                           j bam (bam-block->object-address j))))
                             (push j unreachable ))
                            (visitation
                             (unless quietp
-                              (format t "~& Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
-                                      j (bam-block->object-address j)))
+                              (terpri)
+                              (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                                      :ink clim:+red+)
+                                                                   (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
+                                                                           j (bam-block->object-address j))))
                             (push j squatters)))
                       finally (return-from mark-and-sweep-objects
                                 (values unreachable squatters)))))
 
 (defun room-for-objects (&optional (dump (load-dump-into-mem)))
-  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump :quietp t)
+  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump)
     (format t "~%Object pool map (○ available, ● used~@[, ☠ unreachable~]~@[, ✗squatters~])"
             unreachable squatters)
     (let ((longest-span 0)
@@ -515,12 +521,24 @@ Room for objects:
               (round (* 100 (/ (- #xc0 free-blocks) #xc0)))
               free-blocks (* 8 free-blocks)
               (round (* 100 (/ free-blocks #xc0)))
-              longest-span (* 8 longest-span)))))
+              longest-span (* 8 longest-span)))
+    (when unreachable
+      (terpri) (terpri)
+      (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                              :ink clim:+red+)
+                                           (if (= 1 (length unreachable))
+                                               (format t "⚠ An unreachable leaked object exists:")
+                                               (format t "⚠ Unreachable leaked objects exist:")))
+      (dolist (bam unreachable)
+        (let ((address (bam-block->object-address bam)))
+          (format t "~2&Unreachable object? block $~2,'0x for address $~4,'0x:"
+                  bam address)
+          (decode-object-at dump address))))))
 
-  (defun decode-self-object (&optional (dump (load-dump-into-mem)))
-    (multiple-value-bind (low pointer) (dump-peek "Self")
-      (let ((high (dump-peek (1+ pointer))))
-        (decode-object-at dump (+ (* #x100 high) low)))))
+(defun decode-self-object (&optional (dump (load-dump-into-mem)))
+  (multiple-value-bind (low pointer) (dump-peek "Self")
+    (let ((high (dump-peek (1+ pointer))))
+      (decode-object-at dump (+ (* #x100 high) low)))))
 
 (defun decode-player-object (&optional (dump (load-dump-into-mem)))
   (decode-object-at dump (find-label-from-files "PlayerValues")))
