@@ -105,7 +105,6 @@ and no ancestor provides an implementation (searched ~{~a~^, ~})\""
                                class-name (length (hash-table-keys methods)))
                        (format class-methods "
 Method~aDestroy: .proc
-~10t.mvap Source, Self
 ~10t.mvaw Size, ~:*~aSize
 ~10t.mva Ref, #-1
 ~10tjmp Lib.DestroyObject~32t; tail call
