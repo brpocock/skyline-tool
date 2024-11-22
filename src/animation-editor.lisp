@@ -1725,7 +1725,7 @@ MatchDecalBodyH:
                 (setf last-kind kind))
               (let* ((seq (gethash key *animation-assignments*))
                      (i (simple-animation-sequence-index seq)))
-                (format s "~%~10t.byte Action~20,,1a | DecalFacingMatch~:(~6,,1a~) << 6~%~10t;; ~d. ~a~%"
+                (format s "~%~10t.byte Action~20,,1a | DecalFacingMatch~:(~6,,1a~) << DecalFacingOffset~%~10t;; ~d. ~a~%"
                         (pascal-case (string action))
                         facing
                         i
