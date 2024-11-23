@@ -29,7 +29,8 @@
       (files
        open-file-manager
        run-tiled
-       check-for-absent-assets-in-project-folder)
+       check-for-absent-assets-in-project-folder
+       show-rom-budget)
       (animation-editor
        assign-animation-sequences
        edit-animation-sequence)
@@ -169,17 +170,55 @@ The signal code was ~a" break-code)
 (defun analyze-faults-from-dump (&optional (dump-pathname #p"/tmp/dump"))
   "Report on the fault codes logged in a core dump at DUMP-PATHNAME in a new window"
   (clim-simple-echo:run-in-simple-echo (lambda ()
-                                                     (analyze-dump-faults dump-pathname))
-                                                   :process-name "Analyze Dump Faults"))
+                                         (analyze-dump-faults dump-pathname))
+                                       :process-name "Analyze Dump Faults"))
 
 (defun reload-skyline-tool-from-sources ()
   "Recompile and reload this utility from the current sources on disk."
   (clim-simple-echo:run-in-simple-echo (lambda ()
-                                                     (when *launcher-frame*
-                                                       (clim:frame-exit *launcher-frame*))
-                                                     (recompile-tool)
-                                                     (run-launcher))
-                                                   :process-name "Recompile Skyline-Tool"))
+                                         (when *launcher-frame*
+                                           (clim:frame-exit *launcher-frame*))
+                                         (recompile-tool))
+                                       :process-name "Recompile Skyline-Tool"))
+
+(defun read-asset-bank-size (bank build region)
+  (with-input-from-file (size-file (allocation-size-name bank build region))
+    (loop for line = (read-line size-file)
+          when (let ((at-pos (position #\@ line))
+                     (tab-pos (position #\Tab line)))
+                 (and at-pos (zerop at-pos) tab-pos (= 1 tab-pos)))
+            do (return-from read-asset-bank-size (parse-integer line :start 2)))
+    (error "Could not figure out size of bank $~2,'0x for ~a ~a" bank build region)))
+
+(defun rom-budget ()
+  (format t "(writing master Makefile first …")
+  (force-output)
+  (write-master-makefile)
+  (format t "ready.)")
+  (dolist (build '("Public"))
+    (dolist (region '(ntsc) )
+      (format t "~2&Build: ~a~20tRegion: ~a" build region)
+      (let ((sum 0))
+        (dotimes (bank #x40)
+          (cond
+            ((or (< bank (first-assets-bank build)) (= bank #x3f))
+             (format t "~%Bank $~2,'0x — fill" bank)
+             (incf sum #x4000))
+            ((= bank #x3e)
+             (format t "~%Bank $3e — unavailable on 7800GD")
+             (incf sum #x4000))
+            (t
+             (let ((size (read-asset-bank-size bank build region)))
+               (format t "~&Bank $~2,'0x — $~4,'0x (~:d)" bank size size)
+               (incf sum size)))))
+        (format t "~% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)"
+                build region sum sum (floor sum 1024) (round (* 100 (/ sum (* 1024 1024)))))))))
+
+(defun show-rom-budget ()
+  "ROM Budget report"
+  (clim-simple-echo:run-in-simple-echo (lambda ()
+                                         (rom-budget))
+                                       :process-name "Show ROM Budget"))
 
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
