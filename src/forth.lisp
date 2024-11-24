@@ -1,28 +1,42 @@
 (in-package :skyline-tool)
 
 (defun read-forth-word ()
+  (when (member (peek-char nil *standard-input* nil)
+                '(#\Space #\Page #\Tab #\Newline))
+    (loop for char = (read-char *standard-input* nil nil)
+          while (member (peek-char nil *standard-input* nil)
+                        '(#\Space #\Page #\Tab #\Newline))))
   (loop for char = (read-char *standard-input* nil nil)
-        with word = (make-array 16 :element-type 'character :adjustable t :fill-pointer 0)
+        with word = (make-array 16 :element-type 'character
+                                   :adjustable t :fill-pointer 0)
         if (or (null char) (member char '(#\Space #\Page #\Tab #\Newline)))
-          do (return (cond ((emptyp word) nil)
-                           ((every #'digit-char-p word) (parse-integer word))
-                           (t word)))
-        else do (vector-push-extend char word)))
+          do (return-from read-forth-word
+               (cond ((emptyp word) nil)
+                     ((every #'digit-char-p word) (parse-integer word))
+                     (t word)))
+        else do (vector-push-extend char word)
+        finally (return-from read-forth-word
+               (cond ((emptyp word) nil)
+                     ((every #'digit-char-p word) (parse-integer word))
+                     (t word)))))
 
 (defvar *words* nil)
 (defvar *forth-bootstrap-pathname* #p"Source/Scripts/Forth/Forth.fs")
 
 (defun forth/colon ()
   (let ((name (read-forth-word)))
+    (if (gethash name *words*)
+        (warn "redefining ~a" name)
+        (warn "defining ~a" name))
     (loop for word = (read-forth-word)
           with def = (list)
           do (cond ((null word)
                     (error "End of file while trying to define ~a" name))
-                   ((string-equal ";" word)
+                   ((string-equal ";" (princ-to-string word))
                     (setf (gethash name *words*) (cons def nil))
                     (return-from forth/colon name))
                    (t
-                    (appendf def word))))))
+                    (appendf def (cons word nil)))))))
 
 (defun forth/c-quote ()
   (loop for char = (read-char *standard-input* nil nil)
@@ -36,13 +50,15 @@
         else do (vector-push-extend char string)))
 
 (defun forth/include ()
-  (let ((pathname (parse-namestring (read-forth-word)
-                                    :defaults (make-pathname
-                                               :directory (list :relative "Source" "Scripts" "Forth")
-                                               :type "fs"))))
-    (format *trace-output* " including Forth ~a ")
+  (let ((pathname (merge-pathnames (parse-namestring (read-forth-word))
+                                   (make-pathname
+                                    :directory (list :relative "Source" "Scripts" "Forth")
+                                    :type "fs"))))
+    (format *trace-output* " including Forth ~a " (enough-namestring pathname))
     (with-input-from-file (fs pathname)
-      (setf *words* (compile-forth-script)))))
+      (format *trace-output* "~% \\ beginning ~a" (enough-namestring pathname))
+      (setf *words* (compile-forth-script :dictionary *words*))
+      (format *trace-output* "~% \\ done with ~a~%" (enough-namestring pathname)))))
 
 (defun forth/comment-parens ()
   (loop for word = (read-forth-word)
@@ -61,20 +77,20 @@
 
 (defun initialize-forth-dictionary ()
   (let ((dict (make-hash-table :test 'equal)))
-    (dolist (sdef '(
-                    ("include" nil forth/include)
+    (dolist (sdef '(("include" nil forth/include)
                     (":" nil forth/colon)
                     (".\"" nil forth/trace)
                     ("(" nil forth/comment-parens)
                     ("!" forth/bang)
                     ("c\"" nil forth/c-quote)
-                    ))
+                    ("SpeakJet[" nil forth/speakjet-quote)))
       (destructuring-bind (word runtime &optional compile-time) sdef
         (setf (gethash word dict) (cons runtime compile-time))))
     (with-input-from-file (*standard-input* *forth-bootstrap-pathname*)
       (format *trace-output* " reading Forth bootstrap ~a … "
               (enough-namestring *forth-bootstrap-pathname*))
-      (compile-forth-script :dictionary dict))))
+      (compile-forth-script :dictionary dict))
+   dict))
 
 (defun forth-eval (expr)
   (if (function expr)
@@ -83,18 +99,22 @@
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
-    (format *trace-output* " compiling Forth …")
+    (format *trace-output* " compiling Forth … dictionary starts with ~:d word~:p"
+                           (hash-table-count *words*))
     (force-output *trace-output*)
     (loop for word = (read-forth-word)
           while word
+          do (format *trace-output* "~% \\ ~a" word)
           do (if (numberp word)
-                 (format t "~&~10t.word $~2,'0x~20t; ~:*~:d" word)
+                 (format t "~&~10t.word $~4,'0x~20t; ~:*~:d" word)
                  (if-let (def (gethash word *words*))
-                   (destructuring-bind (run . compile) def
-                     (if compile
-                         (forth-eval compile)
-                         (format t "~&~10t.word Forth.~a" word)))
-                   (error "Unprocessable word: “ ~a ” not in dictionary" word))))
+                         (destructuring-bind (run . compile) def
+                           (if compile
+                               (forth-eval compile)
+                               (format t "~{~%~10t.word ~a~}" run)))
+                         (error "Unprocessable word: “ ~a ” not in dictionary" word))))
     (format *trace-output* " ok")
+    (format *trace-output* "~% \\ after compilation ~:d word~:p in dictionary"
+                           (hash-table-count *words*))
     (force-output *trace-output*)
     *words*))

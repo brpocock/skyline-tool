@@ -2205,17 +2205,17 @@ but now also ~s."
 
 
 (defstage prepare (&rest directions)
-  (format t "~%0 AllowPageFlipP !")
+  (format t "~%0 AllowPageFlipP C!")
   (map nil #'stage-directions->code directions)
   (format t "~%Lib.SceneReady jsr,~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
-  (format t "~% Lighting~a FadingTarget C! 0 FadingLastFrame C! FadeSpeed~a FadingSpeed !"
+  (format t "~% #Lighting~a FadingTarget C! 0 FadingLastFrame C! #FadeSpeed~a FadingSpeed !"
           (pascal-case (string target))
           (pascal-case (string speed))))
 
 (defstage lighting (target)
-  (format t "~% Lighting~a LightingKind C! Lib.AnimateLighting jsr,"
+  (format t "~% #Lighting~a LightingKind C! Lib.AnimateLighting jsr,"
           (pascal-case (string target))))
 
 (defstage sleep (actor)
@@ -2251,7 +2251,7 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage weather (&optional kind)
-  (format t "~%~10t.mva WeatherKind, # Weather~:(~a~)" (or kind "None")))
+  (format t "~% #Weather~:(~a~) WeatherKind C!" (or kind "None")))
 
 (defstage wake (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2268,13 +2268,14 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
-  (format t "FadeSpeed~a FadingSpeed C! LightingNormal FadingTarget C! FadeActualColor~:(~a~) flood-palette"
+  (format t "~% #FadeSpeed~a FadingSpeed C! #LightingNormal FadingTarget C!
+  #FadeActualColor~:(~a~) flood-palette"
           (pascal-case (string speed))
           (pascal-case (string from-color))))
 
 (defstage fade-out (to-color &optional (speed 'normal))
-  (format t "
-FadeSpeed~a~ FadingSpeed C! FadeColor~a FadingTarget C! BEGIN FadingTarget 0? WHILE PAUSE REPEAT ;"
+  (format t "~% #FadeSpeed~a FadingSpeed C! #FadeColor~a FadingTarget C!
+  BEGIN FadingTarget C@ 0<> WHILE PAUSE REPEAT ;"
           (pascal-case (string speed))
           (pascal-case (string to-color))))
 
@@ -2291,9 +2292,11 @@ FadeSpeed~a~ FadingSpeed C! FadeColor~a FadingTarget C! BEGIN FadingTarget 0? WH
                  (beat (/ duration 2))
                  (second duration))))
     (if (< secs 255/60)
-        (format t " ] FramesPerSecond ~7f * [ FrameCounter C! BEGIN FrameCounter 0? WHILE PAUSE REPEAT ;"
+        (format t "~% ] FramesPerSecond ~7f * [ FrameCounter C!
+        BEGIN FrameCounter C@ 0<> WHILE PAUSE REPEAT ;"
                 secs)
-        (format t " 0 FrameCounter C! ~d ManyFramesCounter C! BEGIN ManyFramesCounter 0? WHILE PAUSE REPEAT ;
+        (format t " 0 FrameCounter C! ~d ManyFramesCounter C!
+         BEGIN ManyFramesCounter C@ 0<> WHILE PAUSE REPEAT ;
 "
                 (floor secs 256)
                 (script-auto-label "WaitForManyFramesCounter")))))
@@ -2347,11 +2350,13 @@ FadeSpeed~a~ FadingSpeed C! FadeColor~a FadingTarget C! BEGIN FadingTarget 0? WH
     (if (eql :oc where)
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
-              (format t "~%CharacterID_~a find-character EntityDecal @prop tax, 
-161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
+              (format t "~% #CharacterID_~a find-character
+  entity-decal->x 
+  161 DecalXH !decal 
+  127 DecalYH !decal"
                       (pascal-case (string name)))
               ;; else not found in scene
-              (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+              (format t "~% #CharacterID_~a find-character-in-scene EntityDecal @prop tax,
 161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
                       (pascal-case (string name)))))
         ;; else, on camera
@@ -2359,12 +2364,12 @@ FadeSpeed~a~ FadingSpeed C! FadeColor~a FadingTarget C! BEGIN FadingTarget 0? WH
           (assert (eql abs/rel :absolute))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
-                (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+                (format t "~% #CharacterID_~a find-character-in-scene EntityDecal @prop tax,
 161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,
 Lib.UpdateOneDecal jsr,"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
-                (format t "~% CharacterID_~a ~d ~d enter-character"
+                (format t "~% #CharacterID_~a ~d ~d enter-character"
                         (pascal-case (string name)) x y)))))))
 
 (defvar *boat-ids* nil)
@@ -2406,20 +2411,12 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
       (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
       (format t " find-boat")
       (ecase east/west
-        (east (format t "~%BoatDestX #MapWidth C! BoatState #BoatStateSailEast !prop"))
-        (west (format t "~%BoatDestX -3 C! BoatState #BoatStateSailWest !prop")))
-      (format t "
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tldx #~d~32t; Boat “~a”
-~10tjsr Lib.FindBoat
-
-~10tldy # BoatState
-~10tlda (Self), y
-~10t;; cmp # BoatStateAnchored~32t; zero
-~10tbne ~0@*~a"
-              (genlabel "WaitForBoat")
+        (east (format t "~%#MapWidth BoatDestX C! #BoatStateSailEast BoatState !prop"))
+        (west (format t "~%-24 BoatDestX C! #BoatStateSailWest BoatState !prop")))
+      (format t "~% BEGIN
+  ~d ( Boat “~a” ) find-boat BoatState @prop #BoatStateAnchored <> WHILE
+ PAUSE
+REPEAT"
               boat-id ship-name))))
 
 (defstage emote (actor emotion)
@@ -2435,13 +2432,9 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
           (! (list :position :above
                    :graphic "GrBangEmote"
                    :class "Pivitz")))
-      (format t "
-~10t.mva ClassID, # ~aClass
-~10t.mva Size, # ~:*~aSize
-~10t.mva CurrentCharacterID, # CharacterID_~a
-~10t.mva RelativePlacement, # ~:[0~;1~]
-~10t.mva FillPattern, # ~a
-~10tjsr Lib.Emote
+      (format t "~% #~aClass ClassID C! #~:*~aSize Size C!
+  #CharacterID_~a CurrentCharacterID C!
+  #~:[0~;1~] RelativePlacement C! #~a FillPattern C! Lib.Emore jsr,
 "
               class
               (pascal-case (string name))
@@ -2449,14 +2442,14 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
               graphic))))
 
 (defstage embarks (actor ship-name)
-  (format t "~%~10t;; TODO actor ~a embarks upon ship ~a" actor ship-name))
+  (format t "~% ( TODO actor ~a embarks upon ship ~a )" actor ship-name))
 
 (defstage disembarks (actor ship-name)
-  (format t "~%~10t;; TODO actor ~a disembarks from ship ~a" actor ship-name))
+  (format t "~% ( TODO actor ~a disembarks from ship ~a )" actor ship-name))
 
 (defstage walk (who where &key (waitp t))
   (if (eql who 'player)
-      (format t "~%~10t;; TODO: Move the player") ; TODO #151
+      (format t "~% ( TODO: Move the player )") ; TODO #151
       (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
           (require-actor who)
         (destructuring-bind (abs/rel x y) (interpret-place where)
@@ -2472,31 +2465,13 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
                                "Actor ~a was not in scene when requested to walk relative to their current position"
                                who)
                        (return))))
-          (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-
-~10t.mva DestX, #~d
-~10t.mva DestY, #~d
-
-~10tjsr Lib.DoWalk~@[Relative~]
-"
-                  (pascal-case (string name))
-                  x y (ecase abs/rel
-                        (:absolute nil)
-                        (:relative t)))
+          (format t "~% ~d ~d #CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
+                  x y (pascal-case (string name))
+                  (ecase abs/rel
+                        (:absolute 0)
+                        (:relative 1)))
           (when waitp
-            (format t "~%~10tlda # CharacterID_~a~%~10tjsr Lib.SettleActor~%"
-            #|~a:
-~10tjsr Lib.ScriptYield
-
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-
-~10t.GetProp CharacterCourse + 1
-~10tbne ~0@*~a
-                    (genlabel "WaitToArrive")
-|#
+            (format t "~% #CharacterID_~a settle-actor"
                     (pascal-case (string name))))))))
 
 (defstage look (who how)
@@ -2543,25 +2518,14 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
     (let ((ok-label (genlabel "SetFacing"))
           (done-label (genlabel "DoneFacing")))
       (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-
-~10tbcc ~a
-
-~10t.LogFault \"nfac\"~32t; \"Can't find someone for facing manœver\"
-~10tjmp ~a
-
-~a:
-~10t.SetProp CharacterFacing, # ~a
-~10t.FarJSR BankPlayer, ServiceComposeCharacter
-
-~a:
+CharacterID_~a find-character
+carry? IF
+  C\" nfac\" ( \"Can't find someone for facing manœver\" ) log-fault THEN
+  ~a CharacterFacing !prop
+  BankPlayer ServiceComposeCharacter far-call ELSE
 "
               (pascal-case (string name))
-              ok-label done-label
-              ok-label
-              (stage-facing-value where)
-              done-label))))
+              (stage-facing-value where)))))
 
 (defgeneric compile-stage-math (fun args)
   (:method ((fun t) (args t))
@@ -2574,7 +2538,7 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
          ,@body))))
 
 (defun asm-number (n)
-  (format nil "#$~2,'0x~20t; ~:*~d" n))
+  (format nil "~d ( ~:*$~4,'0x )" n))
 
 (defmacro define-simple-math ((fun) &body asm)
   (let ((asm* (gensym "ASM-")))
@@ -2666,19 +2630,19 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
 (defun stage-directions->acc (expr)
   (etypecase expr
     (number
-     (check-type expr (integer (0) (#xff)))
-     (format t "~%~10tlda #$~2,'0x~20t; ~d" expr expr))
+     (check-type expr (integer 0 #xffff))
+     (format t " ~d ( ~:*$~4,'0x )" expr))
     (cons
      (let ((const (stage/constant-value expr)))
        (cond
          ((and const
-               (typep const '(integer 0 #xff)))
-          (format t "~%~10tlda #$~2,'0x~20t; ~d" const const))
+               (typep const '(integer 0 #xffff)))
+          (format t " ~d ( ~:*~4,'0x ) " const))
          (const
           (error "Cannot fit the value ~s (from ~s) into a byte"
                  const expr))
          ((eql 'var (car expr))
-          (format t "~%~10tlda ~a" (field->label expr)))
+          (format t " ~a " (field->label expr)))
          (t (error "Unknown expression kind: ~s" expr)))))))
 
 (defun stage/constant-zero-p (x)
@@ -2809,10 +2773,8 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
           (string (format nil "~{~a~^/~}"
                           (mapcar #'pascal-case
                                   (split-sequence #\/ value))))))
-  (format t "
-~10t.mva NextMap, # Map_~a_ID
-~10t.FarJSR BankText, ServiceWipeMap
-~%" (substitute #\_ #\/ *current-scene*))
+  (format t "~% #Map_~a_ID NextMap C! #ServiceWipeMap #BankText far-call"
+   (substitute #\_ #\/ *current-scene*))
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
@@ -2821,38 +2783,28 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
   (restart-case
-      (format t "
-~10t.section BankData
-~10t.weak
-~10t  Defined_Dialogue_P_~a~:* := false
-~10t.endweak
-~10t.if !Defined_Dialogue_P_~a~:*
-~10tDefined_Dialogue_P_~a~:* := true
-Dialogue_~a:
-~10t.ptext ~s
-Speech_~a:~
-~{~%~10t.byte ~15a~^, ~15a~^, ~15a~^, ~15a~}
-~10t.fi
-~10t.send
+      (format t "~%
+  C\" ~a\"
+  SpeakJet[ ~{~%~10t #~a~}  ]SpeakJet
+  Dialogue_~a ~:* Speech_~a
+  define-dialogue-text
 "
-              (dialogue-hash text)
               (prepare-dialogue text)
-              (dialogue-hash text)
-              (convert-for-atarivox text))
+              (convert-for-atarivox text)
+	      (dialogue-hash text))
     (reload-dictionary ()
       :report "Reload the AtariVox (SpeakJet) dictionary"
       (reload-atarivox-dictionary)
       (fountain/write-speech text)))
-  (format t "
-~10t.mvaw DialoguePointer, Dialogue_~d~32t ; ~s
-~10t.mvaw SpeechPointer, Speech_~0@*~d~*
-~10tjsr Lib.DoDialogue
-
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tlda ScriptInput
-~10tbeq ~:*~a~%"
+  (format t "~% ( ~s )
+    #Dialogue_~a~32t DialoguePointer !
+    #Speech_~1@*~a SpeechPointer !
+    Lib.DoDialogue jsr,
+  BEGIN
+    ScriptInput C@ 0= WHILE
+    PAUSE
+  REPEAT"
+          text
           (dialogue-hash text)
           text
           (script-auto-label "WaitForDialogueInput")))
@@ -2894,21 +2846,18 @@ Speech_~a:~
          :report "Reload the AtariVox (SpeakJet) dictionary"
          (reload-atarivox-dictionary)
          (go top))))
-  (format t "
-~10t.mvaw DialoguePointer, Dialogue_~a~32t ; ~s
-~10t.mvaw SpeechPointer, Speech_~0@*~d~*
-~10t.mvaw Pointer2, ~a
-~10tjsr Lib.DoBranchingDialogue
-
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tlda ScriptInput
-~10tbpl ~:*~a~%"
-          (dialogue-hash text)
-          text
+  (format t " ( ~s )
+    Dialogue_~a~32t DialoguePointer !
+    Speech_~1@*~d SpeechPointer !
+    ~s Pointer2 !
+    Lib.DoBranchingDialogue jsr,
+    BEGIN
+      ScriptInput C@ 0= WHILE
+    PAUSE
+    REPEAT"
+          text (dialogue-hash text)
           (if (string-equal "CONTINUE" option)
-              "0 ; (continue)"
+              "0 ( continue )"
               (concatenate 'string "ScriptLabel_"
                            (pascal-case option)))
           (script-auto-label "WaitForUserInput"))
@@ -2920,27 +2869,19 @@ Speech_~a:~
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
           actor-name)
     (compile-stage-direction 'enter (list actor-name :oc))
-    (format t "~10t.SetProp CharacterAction, # ActionNonInteractive"))
+    (format t "~% #ActionNonInteractive character-action!"))
   (if (string-equal actor-name 'narrator)
-      (format t "
-~10tlda # CharacterID_Narrator
-~10tsta DialogueSpeakerDecal
-~10tldx # 0
-~10tstx DialogueSpeakerNameLength
-~10tdex
-~10tstx DialogueSpeakerX")
-      (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-
-~10tstx DialogueSpeakerDecal
-~10tlda #$ff
-~10tsta DialogueSpeakerX"
+      (format t "~% DialogueSpeakerDecal #CharacterID_Narrator C!
+  DialogueSpeakerNameLength 0 C!
+  DialogueSpeakerX -1 C!")
+      (format t "~% #CharacterID_~a find-character abort-if-carry-set
+  DialogueSpeakerDecal stx,
+  DialogueSpeakerX -1 C!"
               (pascal-case (string actor-name)))))
 
 (defun compile-fountain-stream (fountain)
   "Compile the contents of the stream FOUNTAIN into assembly language"
-  (format t "~&
+  (format t "~%
 ~10t.enc \"minifont\"
 
 Script_~a_~a: .block
@@ -2958,21 +2899,21 @@ Script_~a_~a: .block
               (restart-case (funcall lexer)
                 (continue ()
                   :report (lambda (s) (format s "End the script there"))
-                  (format t "~&~10t;; Abnormal Ending~%~10t.bend")
+                  (format t "~3% C\" abnd\" ( \"Abnormal ending\" ) log-fault~3%")
                   (return 'abend)))
             #+() (format *trace-output* "~%~s: ~s" sym value)
             (case sym
               (stage (stage-directions->code value))
               (jump
-               (format t "~&( Script continues in another asset… )")
+               (format t "~2%( Script continues in another asset… )")
                (compile-stage-direction 'jump value)
                (return))
               (metadata
-               (format t "~%( ~a )" value))
+               (format t "~% ( ~a )" value))
               (comment
-               (format t "~%~10t( ~a )" value))
+               (format t "~% ( ~a )" value))
               (label
-               (format t "~%ScriptLabel_~a:"
+               (format t "~% ( ~a LABEL FIXME )"
                        (pascal-case value)))
               (scene
                (fountain/write-scene-start value))
@@ -2986,7 +2927,7 @@ Script_~a_~a: .block
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
                    (found-in-scene-p
-                    (format t "~%CharacterID_~a dialogue-set-speaker"
+                    (format t "~% #CharacterID_~a dialogue-set-speaker"
                             (pascal-case (string name))))
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
@@ -3007,13 +2948,13 @@ Script_~a_~a: .block
                (return))
               (fade-to
                (format t "
-FadeSpeedNormal FadingSpeed !
-FadeColor~:(~a~) FadingTarget !"
+#FadeSpeedNormal FadingSpeed C!
+#FadeColor~:(~a~) FadingTarget C!"
                        (pascal-case (string value))))
               (branch
                (destructuring-bind (option . text) value
                  (fountain/write-speech-branch option text)))
-              (go (format t "~%~10tjmp ScriptLabel_~a~%"
+              (go (format t "~%~10t ( jmp ScriptLabel_~a FIXME )~%"
                           (pascal-case value)))
               (otherwise
                (cerror "Insert a no-op"
