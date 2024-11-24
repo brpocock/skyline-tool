@@ -2198,24 +2198,24 @@ but now also ~s."
     (format t "~%CharacterID_~a " (pascal-case (string name))))
   (let ((item (format nil "~{~a~^ ~}" (ensure-list item-ident))))
     (if (search "SHIELD" (string-upcase item))
-        (format t " find-character CharacterShield Shield~a !prop"
+        (format t " find-character CharacterShield Shield~a prop!"
                 (pascal-case (string item)))
-        (format t " find-character CharacterEquipment Equip~a !prop"
+        (format t " find-character CharacterEquipment Equip~a prop!"
                 (pascal-case (string item))))))
 
 
 (defstage prepare (&rest directions)
-  (format t "~%0 AllowPageFlipP C!")
+  (format t "~%FALSE AllowPageFlipP C!")
   (map nil #'stage-directions->code directions)
-  (format t "~%Lib.SceneReady jsr,~%"))
+  (format t "~%scene-ready~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
-  (format t "~% #Lighting~a FadingTarget C! 0 FadingLastFrame C! #FadeSpeed~a FadingSpeed !"
+  (format t "~% Lighting~a FadeSpeed~a change-lighting"
           (pascal-case (string target))
           (pascal-case (string speed))))
 
 (defstage lighting (target)
-  (format t "~% #Lighting~a LightingKind C! Lib.AnimateLighting jsr,"
+  (format t "~% Lighting~a lighting!"
           (pascal-case (string target))))
 
 (defstage sleep (actor)
@@ -2227,7 +2227,7 @@ but now also ~s."
       (return))
     (let ((ok-label (genlabel "FoundCharacter"))
           (done-label (genlabel "DoneSleep")))
-      (format t "~% CharacterID_~a ActionSleep character-action!"
+      (format t "~% ActionSleep CharacterID_~a character-action!"
               (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
@@ -2262,27 +2262,25 @@ but now also ~s."
       (return))
     (let ((ok-label (genlabel "WakeUp"))
           (done-label (genlabel "DoneWaking")))
-      (format t "~% CharacterID_~a ActionIdle character-action!"
+      (format t "~% ActionIdle CharacterID_~a character-action!"
               (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
-  (format t "~% #FadeSpeed~a FadingSpeed C! #LightingNormal FadingTarget C!
-  #FadeActualColor~:(~a~) flood-palette"
+  (format t "~% FadeSpeed~a FadeActualColor~:(~a~) fade-in"
           (pascal-case (string speed))
           (pascal-case (string from-color))))
 
 (defstage fade-out (to-color &optional (speed 'normal))
-  (format t "~% #FadeSpeed~a FadingSpeed C! #FadeColor~a FadingTarget C!
-  BEGIN FadingTarget C@ 0<> WHILE PAUSE REPEAT ;"
+  (format t "~% FadeSpeed~a FadeColor~a fade-out"
           (pascal-case (string speed))
           (pascal-case (string to-color))))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
     (assert (eql abs/rel :absolute))
-    (format t "~% ~d DestX C! ~d DestY C! Lib.CenterCamera jsr," x y)))
+    (format t "~% ~d ~d center-camera" x y)))
 
 (defstage jump (script-id)
   (format t "~% ~d ( ~:*$~4,'0x ) load-script" script-id))
@@ -2291,14 +2289,11 @@ but now also ~s."
   (let* ((secs (ecase beat/second
                  (beat (/ duration 2))
                  (second duration))))
-    (if (< secs 255/60)
-        (format t "~% ] FramesPerSecond ~7f * [ FrameCounter C!
-        BEGIN FrameCounter C@ 0<> WHILE PAUSE REPEAT ;"
-                secs)
-        (format t " 0 FrameCounter C! ~d ManyFramesCounter C!
-         BEGIN ManyFramesCounter C@ 0<> WHILE PAUSE REPEAT ;
-"
-                (floor secs 256)
+    (if (< secs 255/50)
+        (format t "~% ~d wait-deciseconds"
+                (round (* 10 secs)))
+        (format t "~% ~d wait-long"
+                (floor (* 10 secs) 256)
                 (script-auto-label "WaitForManyFramesCounter")))))
 
 (defstage wait-for (actor)
@@ -2350,13 +2345,12 @@ but now also ~s."
     (if (eql :oc where)
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
-              (format t "~% CharacterID_~a find-character
-  entity-decal->x 
-  161 DecalXH !decal 
-  127 DecalYH !decal"
+              (format t "~% CharacterID_~a find-character entity-decal@
+  161 DecalXH decal! 
+  127 DecalYH decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
-              (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+              (format t "~% CharacterID_~a find-character-in-scene entity-decal@
 161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
                       (pascal-case (string name)))))
         ;; else, on camera
@@ -2364,9 +2358,8 @@ but now also ~s."
           (assert (eql abs/rel :absolute))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
-                (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
-161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,
-Lib.UpdateOneDecal jsr,"
+                (format t "~% CharacterID_~a find-character-in-scene entity-decal@
+161 DecalXH decal! 127 DecalYH decal! update-one-decal"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
                 (format t "~% ~d ~d CharacterID_~a enter-character"
@@ -2397,8 +2390,8 @@ Lib.UpdateOneDecal jsr,"
         (when (eql east/west 'at)
           (return))
         (ecase east/west
-          (east (format t "~%BoatStateSailWest BoatState !prop "))
-          (west (format t "~%BoatStateSailEast BoatState !prop")))
+          (east (format t "~%BoatStateSailWest BoatState prop! "))
+          (west (format t "~%BoatStateSailEast BoatState prop!")))
         (format t "~d BoatDestX C! 
 BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHILE PAUSE REPEAT"
                 x
@@ -2408,15 +2401,11 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*)))
-      (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
-      (format t " find-boat")
+      (format t "~%~d ( Boat “~a” ) find-boat" boat-id ship-name)
       (ecase east/west
-        (east (format t "~%MapWidth BoatDestX C! BoatStateSailEast BoatState !prop"))
-        (west (format t "~%-24 BoatDestX C! BoatStateSailWest BoatState !prop")))
-      (format t "~% BEGIN
-  ~d ( Boat “~a” ) find-boat BoatState @prop BoatStateAnchored <> WHILE
- PAUSE
-REPEAT"
+        (east (format t "~%MapWidth BoatDestX C! BoatStateSailEast BoatState prop!"))
+        (west (format t "~%-24 BoatDestX C! BoatStateSailWest BoatState prop!")))
+      (format t "~% ~d ( the “~a” ) wait-for-boat"
               boat-id ship-name))))
 
 (defstage emote (actor emotion)
@@ -2517,15 +2506,9 @@ REPEAT"
       (return))
     (let ((ok-label (genlabel "SetFacing"))
           (done-label (genlabel "DoneFacing")))
-      (format t "
-CharacterID_~a find-character
-carry? IF
-  C\" nfac\" ( \"Can't find someone for facing manœver\" ) log-fault THEN
-  ~a CharacterFacing !prop
-  BankPlayer ServiceComposeCharacter far-call ELSE
-"
-              (pascal-case (string name))
-              (stage-facing-value where)))))
+      (format t "~% ~a CharacterID_~a character-facing!"
+              (stage-facing-value where)
+              (pascal-case (string name))))))
 
 (defgeneric compile-stage-math (fun args)
   (:method ((fun t) (args t))
