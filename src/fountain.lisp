@@ -1904,7 +1904,7 @@ but now also ~s."
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
   (with-input-from-file (fountain pathname)
-    (format t ";;; Compiled from ~a" pathname)
+    (format t "( Compiled from ~a )" pathname)
     (let ((*current-pathname* pathname))
       (compile-fountain-stream fountain))))
 
@@ -2176,50 +2176,9 @@ but now also ~s."
   (destructuring-bind (&key x y gid) (find-named-object-in-scene item-name)
     (let ((x (floor (the real x) 8))
           (y (1- (floor (the real y) 16)))
-          (art (logand #xff (* 2 (1- (the real gid)))))
-          (bye (genlabel "NextPickUp"))
-          (loop (genlabel "LoopPickUp"))
-          (done (genlabel "DonePickUp")))
-      (format t "
-~10t;; Find “~a” at (~d, ~d)
-~10tldx NumDecals
-~a:
-~10tlda DecalXH, x
-~10tcmp #~d
-~10tbne ~a
-
-~10tlda DecalYH, x
-~10tcmp #~d
-~10tbne ~a
-
-~10tlda DecalArtL, x
-~10tcmp #$~2,'0x
-~10tbne ~a
-
-~10tjsr Lib.DestroyDecal
-
-~10tldx Ref
-~10t.mvaw Size, BasicScenerySize
-~10tlda DecalObjectL, x
-~10tsta Self
-~10tlda DecalObjectH, x
-~10tsta Self + 1
-~10tlda #-1
-~10tsta Ref
-~10tjsr Lib.DestroyObject
-
-~10tjmp ~a
-
-~a:
-~10tdex
-~10tbpl ~a
-
-~a:"
-              item-name x y
-              loop
-              x bye y bye art bye
-              done
-              bye loop done))))
+          (art (logand #xff (* 2 (1- (the real gid))))))
+      (format t "~% ~d ~d  ( ~a = ) ~d destroy-decal"
+              x y item-name art))))
 
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
@@ -2227,68 +2186,36 @@ but now also ~s."
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
       (require-actor actor)
-    (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacterInScene
-
-~10tbcs ~a
-
-~10t.mvaw HurtHP, ~d
+    (format t "~d CharacterID_~a hurt-actor
 ~10t.CallMethod CallActorHurt, ActorClass
 ~1@*~a:~%"
             (pascal-case (string name))
-            (genlabel "DoneHurt")
             (round amount))))
 
 (defstage equip (actor item-ident)
   (destructuring-bind (&key name &allow-other-keys)
       (require-actor actor)
-    (format t "~%~10tlda # CharacterID_~a" (pascal-case (string name))))
+    (format t "~%CharacterID_~a " (pascal-case (string name))))
   (let ((item (format nil "~{~a~^ ~}" (ensure-list item-ident))))
     (if (search "SHIELD" (string-upcase item))
-        (format t "
-~10tjsr Lib.FindCharacter
-
-~10tbcs ~a
-
-~10t.SetProp CharacterShield, # Shield~a
-~0@*~a:~%"
-                (genlabel "DoneEquip")
+        (format t " find-character CharacterShield Shield~a !prop"
                 (pascal-case (string item)))
-        (format t "
-~10tjsr Lib.FindCharacter
-
-~10tbcs ~a
-
-~10t.SetProp CharacterEquipment, # Equip~a
-~0@*~a:~%"
-                (genlabel "DoneEquip")
+        (format t " find-character CharacterEquipment Equip~a !prop"
                 (pascal-case (string item))))))
 
 
 (defstage prepare (&rest directions)
-  (format t "~%~10t.mva AllowPageFlipP, # 0~%")
+  (format t "~%0 AllowPageFlipP !")
   (map nil #'stage-directions->code directions)
-  (format t "~%~10tjsr Lib.SceneReady~%"))
+  (format t "~%Lib.SceneReady jsr,~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
-  (format t "
-~10tlda # Lighting~a
-~10tsta FadingTarget
-~10tlda # 0
-~10tsta FadingLastFrame
-~10tlda # FadeSpeed~a
-~10tsta FadingSpeed
-"
+  (format t "~% Lighting~a FadingTarget ! 0 FadingLastFrame ! FadeSpeed~a FadingSpeed !"
           (pascal-case (string target))
           (pascal-case (string speed))))
 
 (defstage lighting (target)
-  (format t "
-~10tlda # Lighting~a
-~10tsta LightingKind
-~10tjsr Lib.AnimateLighting
-"
+  (format t "~% Lighting~a LightingKind ! Lib.AnimateLighting jsr,"
           (pascal-case (string target))))
 
 (defstage sleep (actor)
@@ -2300,19 +2227,7 @@ but now also ~s."
       (return))
     (let ((ok-label (genlabel "FoundCharacter"))
           (done-label (genlabel "DoneSleep")))
-      (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-~10tbcc ~a
-
-~10t.LogFault \"nesp\"~32t; Can't find actor to sleep
-~10tjmp ~a
-
-~a:
-~10t.SetProp CharacterAction, # ActionSleep
-~10t.FarJSR BankPlayer, ServiceComposeCharacter
-~a:
-"
+      (format t "~% CharacterID_~a ActionSleep character-action!"
               (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
@@ -2330,19 +2245,7 @@ but now also ~s."
       (return))
     (let ((ok-label (genlabel "NoDance"))
           (done-label (genlabel "DoneDance")))
-      (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-~10tbcc ~a
-
-~10t.LogFault \"ndns\"~32t; \"No dancing for you (can't find character)\"
-~10tjmp ~a
-
-~a:
-~10t.SetProp CharacterAction, # ActionDance
-~10t.FarJSR BankPlayer, ServiceComposeCharacter
-~a:
-"
+      (format t "~% CharacterID_~a ActionDance character-action!"
               (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
@@ -2359,45 +2262,18 @@ but now also ~s."
       (return))
     (let ((ok-label (genlabel "WakeUp"))
           (done-label (genlabel "DoneWaking")))
-      (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-~10tbcc ~a
-
-~10t.LogFault \"nwak\"~32t; \"can't find character to wake them\"
-~10tjmp ~a
-
-~a:
-~10t.SetProp CharacterAction, # ActionIdle
-~10t.FarJSR BankPlayer, ServiceComposeCharacter
-~a:
-"
+      (format t "~% CharacterID_~a ActionIdle character-action!"
               (pascal-case (string name))
               ok-label done-label
               ok-label done-label))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
-  (format t "
-~10tlda # FadeSpeed~:(~a~)
-~10tsta FadingSpeed
-~10tlda # LightingNormal
-~10tsta FadingTarget
-~10tlda # FadeActualColor~:(~a~)
-~10tldy # NumColors
-~a:
-~10tsta MapBackground, y
-~10tdey
-~10tbpl ~:*~a
-"
+  (format t "FadeSpeed~a FadingSpeed ! LightingNormal FadingTarget ! FadeActualColor~:(~a~) flood-palette"
           (pascal-case (string speed))
-          (pascal-case (string from-color))
-          (genlabel "FadeInSetPalettes")))
+          (pascal-case (string from-color))))
 
 (defstage fade-out (to-color &optional (speed 'normal))
-  (format t "
-~10tlda # FadeSpeed~:(~a~)
-~10tsta FadingSpeed
-~10tlda # FadeColor~:(~a~)
+  (format t "~% FadeSpeed~a~ FadingSpeed ! FadeColor~a FadingTarget ! BEGIN FadingTarget PAUSE
 ~10tsta FadingTarget
 
 ~a:
@@ -3191,13 +3067,13 @@ Script_~a_~a: .block
             (case sym
               (stage (stage-directions->code value))
               (jump
-               (format t "~&;;; Script continues in another asset…")
+               (format t "~&( Script continues in another asset… )")
                (compile-stage-direction 'jump value)
                (return))
               (metadata
-               (format t "~%;;; ~a" value))
+               (format t "~%( ~a )" value))
               (comment
-                (format t "~%~10t;; ~a" value))
+               (format t "~%~10t( ~a )" value))
               (label
                (format t "~%ScriptLabel_~a:"
                        (pascal-case value)))
@@ -3213,44 +3089,29 @@ Script_~a_~a: .block
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
                    (found-in-scene-p
-                    (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-~10tstx DialogueSpeakerDecal
-~10tlda DecalXH, x
-~10tsta DialogueSpeakerX"
+                    (format t "~%CharacterID_~a dialogue-set-speaker"
                             (pascal-case (string name))))
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
                       (write-off-camera-speaker name)))))
               (speech (fountain/write-speech value))
               (reboot
-               (format t "
-~10tjmp Lib.WarmStart
-~10t.bend")
+               (format t "~% reboot")
                (return))
               (game-over
                (assert (member value '("TITLE" "LOST" "WON") :test 'string-equal)
                        (value)
                        "GAME OVER currently supports LOST or WON only, not ~s" value)
-               (format t "
-~10tldx # GameOverKind~:(~a~)
-~10tjmp Lib.GameOver
-"
+               (format t "~% GameOverKind~:(~a~) game-over"
                        value))
               (end
-               (format t "
-~10tjmp Lib.ScriptFinis~32t; ~a
-~10t.bend
-"
-                       (or value "(End of file.)"))
+               (format t "~% quit ( ~a )"
+                       (or value "End of file."))
                (return))
               (fade-to
                (format t "
-~10tlda # FadeSpeedNormal
-~10tsta FadingSpeed
-~10tlda # FadeColor~:(~a~)
-~10tsta FadingTarget"
+FadeSpeedNormal FadingSpeed !
+FadeColor~:(~a~) FadingTarget !"
                        (pascal-case (string value))))
               (branch
                (destructuring-bind (option . text) value
@@ -3274,14 +3135,27 @@ Script_~a_~a: .block
                                       (length string))))
       (compile-fountain-stream fountain))))
 
+(defmacro with-forth-file-wrappers (() &body body)
+  `(prog2
+       (format t "~&( This file is compiled from Fountain sources. )
+( Alterations to this generated file will be discarded. )")
+       (progn ,@body)
+     (format t "~2&( End of Forth sources. )~%")))
+
 (defun compile-script (from to)
-  "Compile Fountain file with pathname FROM into assembly source code file with pathname TO"
+  "Compile Fountain file with pathname FROM into Forth-alike source code file with pathname TO"
   (tagbody top
      (let ((*actors* (list nil)))
        (restart-case
-           (with-output-to-file (*standard-output* to :if-does-not-exist :create
-                                                      :if-exists :supersede)
-             (compile-fountain-script from))
+           (let ((fs (make-pathname :defaults to :type "fs")))
+             (with-output-to-file (*standard-output* fs :if-does-not-exist :create
+                                                        :if-exists :supersede)
+               (compile-fountain-script from))
+             (with-output-to-file (*standard-output* to :if-does-not-exist :create
+                                                        :if-exists :supersede)
+               (with-input-from-file (*standard-input* fs)
+                 (with-forth-file-wrappers ()
+                   (compile-forth-script)))))
          (reload-script ()
            :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
            (go top))

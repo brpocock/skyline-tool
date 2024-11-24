@@ -642,7 +642,7 @@ file ~a.s in bank $~(~2,'0x~)~
              (format nil "Object/Assets/Map.~a.~a.~a.o" dir map video)))
           ((equal kind "Scripts")
            (destructuring-bind (dir scene) (split-sequence #\/ name)
-             (format nil "Source/Generated/Assets/Script.~a.~a.s" dir scene)))
+             (format nil "Source/Generated/Assets/Script.~a.~a.fs" dir scene)))
           ((equal kind "Blobs")
            (format nil "Source/Generated/Assets/Blob.~a.s" name))
           (t 

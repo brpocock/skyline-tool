@@ -58,6 +58,7 @@
                   :depends-on ("7800gd-debug" "eprom"))
                  (:file "music")
                  (:file "eprom")
+                 (:file "forth")
                  (:file "fountain")
                  (:file "graphics")
                  (:file "maps")
