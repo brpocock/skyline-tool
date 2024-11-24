@@ -2210,12 +2210,12 @@ but now also ~s."
   (format t "~%Lib.SceneReady jsr,~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
-  (format t "~% Lighting~a FadingTarget ! 0 FadingLastFrame ! FadeSpeed~a FadingSpeed !"
+  (format t "~% Lighting~a FadingTarget C! 0 FadingLastFrame C! FadeSpeed~a FadingSpeed !"
           (pascal-case (string target))
           (pascal-case (string speed))))
 
 (defstage lighting (target)
-  (format t "~% Lighting~a LightingKind ! Lib.AnimateLighting jsr,"
+  (format t "~% Lighting~a LightingKind C! Lib.AnimateLighting jsr,"
           (pascal-case (string target))))
 
 (defstage sleep (actor)
@@ -2268,66 +2268,32 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
-  (format t "FadeSpeed~a FadingSpeed ! LightingNormal FadingTarget ! FadeActualColor~:(~a~) flood-palette"
+  (format t "FadeSpeed~a FadingSpeed C! LightingNormal FadingTarget C! FadeActualColor~:(~a~) flood-palette"
           (pascal-case (string speed))
           (pascal-case (string from-color))))
 
 (defstage fade-out (to-color &optional (speed 'normal))
-  (format t "~% FadeSpeed~a~ FadingSpeed ! FadeColor~a FadingTarget ! BEGIN FadingTarget PAUSE
-~10tsta FadingTarget
-
-~a:
-~10tjsr Lib.ScriptYield
-~10tlda FadingTarget
-~10tbne ~:*~a"
+  (format t "
+FadeSpeed~a~ FadingSpeed C! FadeColor~a FadingTarget C! BEGIN FadingTarget 0? WHILE PAUSE REPEAT ;"
           (pascal-case (string speed))
-          (pascal-case (string to-color))
-          (genlabel "FadeOut")))
+          (pascal-case (string to-color))))
 
 (defstage camera-center (where)
   (destructuring-bind (abs/rel x y) (interpret-place where)
     (assert (eql abs/rel :absolute))
-    (format t "
-~10t.mva DestX, #~d
-~10t.mva DestY, #~d
-~10tjsr Lib.CenterCamera
-"
-            x y)))
+    (format t "~% ~d DestX C! ~d DestY C! Lib.CenterCamera jsr," x y)))
 
 (defstage jump (script-id)
-  (format t "
-~10t.mvaw NextScript, $~4,'0x
-~10tlda # <JLoadScript
-~10tjmp Lib.LoadAsset
-"
-          script-id))
+  (format t "~% ~d ( ~:*$~4,'0x ) load-script" script-id))
 
 (defstage wait (beat/second duration)
   (let* ((secs (ecase beat/second
                  (beat (/ duration 2))
                  (second duration))))
     (if (< secs 255/60)
-        (format t "
-~10tlda # ~7f * FramesPerSecond
-~10tsta FrameCounter
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tlda FrameCounter
-~10tbne ~:*~a
-"
-                secs
-                (script-auto-label "WaitForFrameCounter"))
-        (format t "
-~10tlda # 0
-~10tsta FrameCounter
-~10tlda # ~d
-~10tsta ManyFramesCounter
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tlda ManyFramesCounter
-~10tbne ~:*~a
+        (format t " ] FramesPerSecond ~7f * [ FrameCounter C! BEGIN FrameCounter 0? WHILE PAUSE REPEAT ;"
+                secs)
+        (format t " 0 FrameCounter C! ~d ManyFramesCounter C! BEGIN ManyFramesCounter 0? WHILE PAUSE REPEAT ;
 "
                 (floor secs 256)
                 (script-auto-label "WaitForManyFramesCounter")))))
@@ -2339,8 +2305,7 @@ but now also ~s."
       (cerror "Continue, ignoring wait request"
               "Asked to wait for actor ~:(~a~), but they are not in the scene" actor)
       (return))
-    (format t "~%~10tlda # CharacterID_~a~%~10tjsr Lib.SettleActor~%"
-            (pascal-case (string name)))))
+    (format t "~%CharacterID_~a settle-actor" (pascal-case (string name)))))
 
 (defvar *dict-words* nil)
 
@@ -2369,15 +2334,7 @@ but now also ~s."
         (cerror "Continue, ignoring “exit” direction"
                 "Asked for ~:(~a~) to exit the scene, which they were not in" name)
         (return)) 
-      (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter~32t; get object index in X
-
-~10tbcs ~a
-
-~10tjsr Lib.ExitCharacter
-
-~:*~a:"
+      (format t "~% CharacterID_~a exit-character"
               (pascal-case (string name))
               not-found-character-label))))
 
@@ -2390,62 +2347,25 @@ but now also ~s."
     (if (eql :oc where)
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
-              (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacter
-
-~10tbcs ~a
-
-~10t.GetProp EntityDecal
-~10ttax
-~10tlda # 161
-~10tsta DecalXH, x
-~10tlda # 127
-~10tsta DecalYH, x
-
-~:*~a
-"
-                      (pascal-case (string name)) (genlabel "NoChar"))
+              (format t "~%CharacterID_~a find-character EntityDecal @prop tax, 
+161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
+                      (pascal-case (string name)))
               ;; else not found in scene
-              (format t "
-~10tjsr Lib.FindCharacterInScene
-
-~10t.GetProp EntityDecal
-~10ttax
-~10tlda # 161
-~10tsta DecalXH, x
-~10tlda # 127
-~10tsta DecalYH, x
-"
+              (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
                       (pascal-case (string name)))))
         ;; else, on camera
         (destructuring-bind (abs/rel x y) (interpret-place where)
           (assert (eql abs/rel :absolute))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
-                (format t "
-~10tlda # CharacterID_~a
-~10tjsr Lib.FindCharacterInScene
-
-~10t.GetProp EntityDecal
-~10ttax
-~10tlda #~d
-~10tsta DecalXH, x
-~10tlda #~d
-~10tsta DecalYH, x
-~10tjsr Lib.UpdateOneDecal
-
-"
+                (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,
+Lib.UpdateOneDecal jsr,"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
-                (format t "
-~10t.mva DestX, #~d
-~10t.mva DestY, #~d
-~10tlda # CharacterID_~a
-~10tjsr Lib.EnterCharacter
-
-"
-                        x y (pascal-case (string name)))))))))
+                (format t "~% CharacterID_~a ~d ~d enter-character"
+                        (pascal-case (string name)) x y)))))))
 
 (defvar *boat-ids* nil)
 (defvar *boat-classes* nil)
@@ -2456,61 +2376,38 @@ but now also ~s."
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*))
           (boat-class (gethash ship-name *boat-classes*)))
-      (format t "~%~10t;; Boat “~:(~a~)” appears~%~10t;; headed to ~a" ship-name target)
+      (format t "~%~10t( Boat “~:(~a~)” appears, headed to ~a )" ship-name target)
       (destructuring-bind (kind x y) (interpret-place target)
         (assert (eql kind :absolute) (kind)
                 "KIND of location for positioning a boat must be absolute, but got ~s" kind)
+        (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
+        (format t " Boat~:(~a~) " boat-class)
         (ecase east/west
-          (at (format t "~%~10t.mva DestX, #~d" x))
-          (east (format t "~%~10t.mva DestX, MapWidth"))
-          (west (format t "~%~10t.mva DestX, #-3")))
-        (format t "~%~10t.mva DestY, #~d" y)
-        (format t "~%~10tldx #~d~32t; Boat “~a”" boat-id ship-name)
-        (format t "~%~10tldy # Boat~:(~a~)" boat-class)
-        (format t "~%~10tjsr Lib.MakeBoat~%")
+          (at (format t " ~d " x))
+          (east (format t " #MapWidth "))
+          (west (format t " -3 ")))
+        (format t " ~d " y)
+        (format t " make-boat")
         ;; TODO put people on the boat
         (when (eql east/west 'at)
           (return))
         (ecase east/west
-          (east (format t "~%~10t.SetProp BoatState, # BoatStateSailWest"))
-          (west (format t "~%~10t.SetProp BoatState, # BoatStateSailEast")))
-        (format t "
-~10t.mva BoatDestX, #~d
-~10tldx #~d~32t; Boat “~a”
-~10tjsr Lib.FindBoat
-
-~a:
-~10tjsr Lib.ScriptYield
-
-~10tldx #~d~32t; Boat “~a”
-~10tjsr Lib.FindBoat
-
-~10tldy # BoatState
-~10tlda (Self), y
-~10t;; cmp # BoatStateAnchored~32t; zero
-~10tbne ~3@*~a"
+          (east (format t "~%BoatState #BoatStateSailWest !prop "))
+          (west (format t "~%BoatState #BoatStateSailEast !prop")))
+        (format t "~d BoatDestX C! 
+BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHILE PAUSE REPEAT"
                 x
-                boat-id ship-name
-                (genlabel "WaitForBoat")
-                boat-id ship-name)        ))))
+                boat-id ship-name)))))
 
 (defstage sail-away (ship-name east/west)
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*)))
-      (format t "~%~10tldx #~d~32t; Boat “~a”" boat-id ship-name)
-      (format t "
-~10tjsr Lib.FindBoat
-
-~10tbcc ~a
-
-~10t.DebugBreak \"dwmb\" ; \"Dude, where's my boat?\"
-~:*~a:
-"
-              (script-auto-label "FoundBoat"))
+      (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
+      (format t " find-boat")
       (ecase east/west
-        (east (format t "~%~10t.mva BoatDestX, MapWidth~%~10t.SetProp BoatState, # BoatStateSailEast"))
-        (west (format t "~%~10t.mva BoatDestX, #-3~%~10t.SetProp BoatState, # BoatStateSailWest")))
+        (east (format t "~%BoatDestX #MapWidth C! BoatState #BoatStateSailEast !prop"))
+        (west (format t "~%BoatDestX -3 C! BoatState #BoatStateSailWest !prop")))
       (format t "
 ~a:
 ~10tjsr Lib.ScriptYield
