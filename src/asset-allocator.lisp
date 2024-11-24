@@ -638,11 +638,9 @@ file ~a.s in bank $~(~2,'0x~)~
            (format nil "Object/Assets/Song.~a.~a.o" name video))
           ((equal kind "Maps")
            (assert (not (null video)))
-           (destructuring-bind (dir map) (split-sequence #\/ name)
-             (format nil "Object/Assets/Map.~a.~a.~a.o" dir map video)))
+           (format nil "Object/Assets/Map.~a.~a.o" (substitute #\. #\/ name) video))
           ((equal kind "Scripts")
-           (destructuring-bind (dir scene) (split-sequence #\/ name)
-             (format nil "Source/Generated/Assets/Script.~a.~a.fs" dir scene)))
+           (format nil "Source/Generated/Assets/Script.~a.s" (substitute #\. #\/ name)))
           ((equal kind "Blobs")
            (format nil "Source/Generated/Assets/Blob.~a.s" name))
           (t 
@@ -684,14 +682,15 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun asset-compilation-line (asset-indicator &key video)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
-    (declare (ignore name))
     (cond
       ((equal kind "Maps")
        (format nil "bin/skyline-tool compile-map $<"))
       ((equal kind "Songs")
        (format nil "bin/skyline-tool compile-music $@ $< 7800 POKEY ~a" video))
       ((equal kind "Scripts")
-       (format nil "bin/skyline-tool compile-script $< $@"))
+       (format nil "bin/skyline-tool compile-script $< Source/Generated/Assets/Script.~{~a~^.~}.forth
+	bin/skyline-tool compile-forth ~:*Source/Generated/Assets/Script.~{~a~^.~}.forth $@"
+               name))
       ((equal kind "Blobs")
        (format nil "bin/skyline-tool blob-rip-7800 $<"))
       (t (error "Asset kind ~a not known" kind)))))
@@ -784,7 +783,7 @@ Currently just enumerates all four asset loaders."
                                   (infile-pathname #p"Source/Assets.index"))
   "Computes the hashes of assets from INFILE-PATHNAME and writes OUTFILE-PATHNAME.
 
-Defaults are Source/Assets.index → Source/Generated/AssetIDs.s"
+Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
   (ensure-directories-exist outfile-pathname)
   (with-output-to-file (outfile outfile-pathname :if-exists :supersede)
     (format outfile ";;; Asset IDs are auto-generated")
@@ -795,6 +794,19 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s"
             do (terpri outfile)
             do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
                      do (format outfile "~%~10t~:(~a~)_~{~a~^_~}_ID = $~2,'0x" 
+                                kind (split-sequence #\/ asset-name) asset-hash)))))
+
+  (with-output-to-file (outfile (merge-pathnames (make-pathname :type "forth")
+                                                 outfile-pathname)
+                                :if-exists :supersede)
+    (format outfile " ( -*- forth -*- Asset IDs are auto-generated )")
+    (multiple-value-bind (asset-builds asset-ids) (read-assets-list infile-pathname)
+      (declare (ignore asset-builds))
+      (format *trace-output* "~&Writing AssetIDs.forth for ~:d asset~:p" (hash-table-count asset-ids))
+      (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
+            do (terpri outfile)
+            do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
+                     do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;" 
                                 kind (split-sequence #\/ asset-name) asset-hash))))))
 
 (defun write-asset-bank-makefile (bank &key build video)
@@ -1357,6 +1369,36 @@ EndOfBinary = *
                 do (format incs "~&~10t~a = $~x" label number)))
         (format incs "~2%~10t.bend~%")
         (format *trace-output* "Done.")))))
+
+(defun labels-to-forth (labels-file include-file-name)
+  "Extract labels between LOWER and UPPER (hex) from LABELS-FILE into Source/Generated/INCLUDE-FILE-NAME"
+  (let ((include-file include-file-name))
+    (with-input-from-file (labs labels-file)
+      (ensure-directories-exist include-file)
+      (with-output-to-file (incs include-file :if-exists :supersede)
+        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a… " 
+                labels-file include-file-name)
+        (finish-output *trace-output*)
+        (format incs " ( -*- forth -*- Generated file ) ~2%")
+        (let ((table (make-hash-table)))
+          (loop for line = (read-line labs nil nil)
+                while line
+                do (destructuring-bind (label value) 
+                       (mapcar (lambda (each)
+                                 (string-trim #(#\Space #\Newline) each)) 
+                               (split-sequence #\= line))
+                     (let ((number (cond 
+                                     ((char= #\$ (char value 0))
+                                      (parse-integer (subseq value 1) :radix 16))
+                                     ((every #'digit-char-p value)
+                                      (parse-integer value))
+                                     (t 0))))
+                       (setf (gethash label table) number))))
+          (loop for label in (sort (copy-list (hash-table-keys table)) #'string-lessp)
+                for number = (gethash label table) 
+                do (format incs "~% : ~a ~d ( ~:*$~4,'0x ) ; " label number)))
+        (terpri incs)))
+    (format *trace-output* " Done.")))
 
 (defun check-for-absent-assets ()
   "Looks into Assets.index and searches Source directories for “forgotten” files."

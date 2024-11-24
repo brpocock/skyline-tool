@@ -1714,9 +1714,9 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                 (continue () :report "Continue with a gunshot sound"
                   "M1"))
            collect (if (every #'digit-char-p (subseq phoneme 1))
-		       (format nil "$~2,'0x"
-			       (logand #xff (parse-number (subseq phoneme 1))))
-		       (concatenate 'string "SpeakJet." (subseq phoneme 1)))))))
+		   (format nil "$~2,'0x"
+			 (logand #xff (parse-number (subseq phoneme 1))))
+		   (subseq phoneme 1))))))
 
 (defun load-atarivox-dictionary ()
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
@@ -1759,9 +1759,9 @@ but now also ~s."
 
 (defun speakjet-pause+ (x y)
   "Sum together the SpeakJet pauses X and Y into one longer pause"
-  (format nil "SpeakJet.Pause~d"
-          (+ (parse-integer x :start 14)
-             (parse-integer y :start 14))))
+  (format nil "Pause~d"
+          (+ (parse-integer x :start 5)
+             (parse-integer y :start 5))))
 
 (defun log-missing-word-for-speakjet (word)
   (with-output-to-file (missing-words #p"Object/SpeakJet.missing.words"
@@ -1783,7 +1783,7 @@ but now also ~s."
                         (or (let ((n (position-if
                                       (lambda (tok)
                                         (and (stringp tok)
-                                             (starts-with-subseq "SpeakJet.Pause" tok)))
+                                             (starts-with-subseq "Pause" tok)))
                                       seq
                                       :end bang :from-end t)))
                               (when n (1+ n)))
@@ -1801,11 +1801,11 @@ but now also ~s."
                     (reduce (curry #'concatenate 'list)
                             (list
                              before
-                             (list "SpeakJet.Bend" "$04")
+                             (list "Bend" "$04")
                              (mapcan (lambda (phoneme)
                                        (list "SpeakJet.Stress" phoneme))
                                      phrase)
-                             (list "SpeakJet.Bend" "$05")
+                             (list "Bend" "$05")
                              after)))
                    (:query
                     (warn "handling of “?” is poor")
@@ -1813,24 +1813,24 @@ but now also ~s."
                             (list
                              before
                              (case (length phrase)
-                               (1 (list "SpeakJet.Bend" "$08" (car phrase)))
-                               (2 (list "SpeakJet.Bend" "$06" (first phrase)
-                                        "SpeakJet.Bend" "$08" (second phrase)))
-                               (3 (list "SpeakJet.Bend" "$06" (first phrase)
-                                        "SpeakJet.Bend" "$08" (second phrase)
-                                        "SpeakJet.Bend" "$0a" (third phrase)))
-                               (4 (list "SpeakJet.Bend" "$06" (first phrase)
-                                        "SpeakJet.Bend" "$08" (second phrase)
-                                        "SpeakJet.Bend" "$0a" (third phrase)
-                                        "SpeakJet.Bend" "$08" (fourth phrase)))
+                               (1 (list "Bend" "$08" (car phrase)))
+                               (2 (list "Bend" "$06" (first phrase)
+                                        "Bend" "$08" (second phrase)))
+                               (3 (list "Bend" "$06" (first phrase)
+                                        "Bend" "$08" (second phrase)
+                                        "Bend" "$0a" (third phrase)))
+                               (4 (list "Bend" "$06" (first phrase)
+                                        "Bend" "$08" (second phrase)
+                                        "Bend" "$0a" (third phrase)
+                                        "Bend" "$08" (fourth phrase)))
                                (otherwise
                                 (cons (subseq phrase 0 (- (length phrase) 5))
-                                      (list "SpeakJet.Bend" "$06" (elt phrase (- (length phrase) 5))
-                                            "SpeakJet.Bend" "$08" (elt phrase (- (length phrase) 4))
-                                            "SpeakJet.Bend" "$0a" (elt phrase (- (length phrase) 3))
-                                            "SpeakJet.Bend" "$0c" (elt phrase (- (length phrase) 2))
-                                            "SpeakJet.Bend" "$09" (elt phrase (- (length phrase) 1))))))
-                             (list "SpeakJet.Bend" "$05")
+                                      (list "Bend" "$06" (elt phrase (- (length phrase) 5))
+                                            "Bend" "$08" (elt phrase (- (length phrase) 4))
+                                            "Bend" "$0a" (elt phrase (- (length phrase) 3))
+                                            "Bend" "$0c" (elt phrase (- (length phrase) 2))
+                                            "Bend" "$09" (elt phrase (- (length phrase) 1))))))
+                             (list "Bend" "$05")
                              after)))))))
        (return-from fixup-exclamations seq))))
 
@@ -1840,20 +1840,20 @@ but now also ~s."
         for b = (elt bytes (1+ i))
         if (and (stringp a)
                 (stringp b)
-                (starts-with-subseq "SpeakJet.Pause" a)
-                (starts-with-subseq "SpeakJet.Pause" b))
+                (starts-with-subseq "Pause" a)
+                (starts-with-subseq "Pause" b))
           collect (prog1 (speakjet-pause+ a b)
                     (incf i))
         else
           if (and (stringp a)
                   (member b '(:bang :query))
-                  (starts-with-subseq "SpeakJet.Pause" a))
+                  (starts-with-subseq "Pause" a))
             collect (prog1 b
                       (incf i))
         else
           if (and (stringp a)
-                  (starts-with-subseq "SpeakJet.Pause" a)
-                  (string= b "SpeakJet.EndOfPhrase"))
+                  (starts-with-subseq "Pause" a)
+                  (string= b "EndOfPhrase"))
             collect (prog1 b
                       (incf i))
         else
@@ -1878,7 +1878,7 @@ but now also ~s."
                    with index = 0
                    while (< index (length string))
                    for word in words
-                   append (cond ((emptyp word) (list "SpeakJet.Pause1"))
+                   append (cond ((emptyp word) (list "Pause1"))
                                 ((equalp word "?!") (list :bang :query))
                                 ((equalp word "!") (list :bang))
                                 ((equalp word "?") (list :query))
@@ -1895,11 +1895,11 @@ but now also ~s."
                                          (cerror "Continue with a gunshot sound"
                                                  "Word not in dictionary: “~a” not found"
                                                  word)
-                                         (list "SpeakJet.M1"))))))))
+                                         (list "M1"))))))))
       (flatten
        (append (remove-if #'null
                           (fixup-exclamations (combine-adjacent-pauses bytes)))
-               (cons "SpeakJet.EndOfPhrase" nil))))))
+               (cons "EndOfPhrase" nil))))))
 
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
@@ -2350,13 +2350,13 @@ but now also ~s."
     (if (eql :oc where)
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
-              (format t "~% #CharacterID_~a find-character
+              (format t "~% CharacterID_~a find-character
   entity-decal->x 
   161 DecalXH !decal 
   127 DecalYH !decal"
                       (pascal-case (string name)))
               ;; else not found in scene
-              (format t "~% #CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+              (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
 161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
                       (pascal-case (string name)))))
         ;; else, on camera
@@ -2364,13 +2364,13 @@ but now also ~s."
           (assert (eql abs/rel :absolute))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
-                (format t "~% #CharacterID_~a find-character-in-scene EntityDecal @prop tax,
+                (format t "~% CharacterID_~a find-character-in-scene EntityDecal @prop tax,
 161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,
 Lib.UpdateOneDecal jsr,"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
-                (format t "~% #CharacterID_~a ~d ~d enter-character"
-                        (pascal-case (string name)) x y)))))))
+                (format t "~% ~d ~d CharacterID_~a enter-character"
+                        x y (pascal-case (string name)))))))))
 
 (defvar *boat-ids* nil)
 (defvar *boat-classes* nil)
@@ -2389,7 +2389,7 @@ Lib.UpdateOneDecal jsr,"
         (format t " Boat~:(~a~) " boat-class)
         (ecase east/west
           (at (format t " ~d " x))
-          (east (format t " #MapWidth "))
+          (east (format t " MapWidth "))
           (west (format t " -3 ")))
         (format t " ~d " y)
         (format t " make-boat")
@@ -2397,8 +2397,8 @@ Lib.UpdateOneDecal jsr,"
         (when (eql east/west 'at)
           (return))
         (ecase east/west
-          (east (format t "~%BoatState #BoatStateSailWest !prop "))
-          (west (format t "~%BoatState #BoatStateSailEast !prop")))
+          (east (format t "~%BoatStateSailWest BoatState !prop "))
+          (west (format t "~%BoatStateSailEast BoatState !prop")))
         (format t "~d BoatDestX C! 
 BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHILE PAUSE REPEAT"
                 x
@@ -2411,10 +2411,10 @@ BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHI
       (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
       (format t " find-boat")
       (ecase east/west
-        (east (format t "~%#MapWidth BoatDestX C! #BoatStateSailEast BoatState !prop"))
-        (west (format t "~%-24 BoatDestX C! #BoatStateSailWest BoatState !prop")))
+        (east (format t "~%MapWidth BoatDestX C! BoatStateSailEast BoatState !prop"))
+        (west (format t "~%-24 BoatDestX C! BoatStateSailWest BoatState !prop")))
       (format t "~% BEGIN
-  ~d ( Boat “~a” ) find-boat BoatState @prop #BoatStateAnchored <> WHILE
+  ~d ( Boat “~a” ) find-boat BoatState @prop BoatStateAnchored <> WHILE
  PAUSE
 REPEAT"
               boat-id ship-name))))
@@ -2432,9 +2432,9 @@ REPEAT"
           (! (list :position :above
                    :graphic "GrBangEmote"
                    :class "Pivitz")))
-      (format t "~% #~aClass ClassID C! #~:*~aSize Size C!
-  #CharacterID_~a CurrentCharacterID C!
-  #~:[0~;1~] RelativePlacement C! #~a FillPattern C! Lib.Emore jsr,
+      (format t "~% ~aClass ClassID C! ~:*~aSize Size C!
+  CharacterID_~a CurrentCharacterID C!
+  ~:[0~;1~] RelativePlacement C! ~a FillPattern C! Lib.Emore jsr,
 "
               class
               (pascal-case (string name))
@@ -2465,13 +2465,13 @@ REPEAT"
                                "Actor ~a was not in scene when requested to walk relative to their current position"
                                who)
                        (return))))
-          (format t "~% ~d ~d #CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
+          (format t "~% ~d ~d CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
                   x y (pascal-case (string name))
                   (ecase abs/rel
                         (:absolute 0)
                         (:relative 1)))
           (when waitp
-            (format t "~% #CharacterID_~a settle-actor"
+            (format t "~% CharacterID_~a settle-actor"
                     (pascal-case (string name))))))))
 
 (defstage look (who how)
@@ -2537,7 +2537,7 @@ carry? IF
        (destructuring-bind (,@args) args
          ,@body))))
 
-(defun asm-number (n)
+(defun forth-number (n)
   (format nil "~d ( ~:*$~4,'0x )" n))
 
 (defmacro define-simple-math ((fun) &body asm)
@@ -2551,24 +2551,20 @@ carry? IF
             (return (,fun a* b*)))
            (a*
             (stage-directions->acc b)
-            (dolist (asm ,asm*)
-              (format t asm (asm-number  a*))))
+            (format t asm (forth-number  a*)))
            (b*
             (stage-directions->acc a)
-            (dolist (asm ,asm*)
-              (format t asm (asm-number b*))))
+            (format t asm (forth-number b*)))
            (t
             (stage-directions->acc a)
-            (format t "~%~10tsta ScriptTemp0")
             (stage-directions->acc b)
-            (dolist (asm ,asm*)
-              (format t asm "ScriptTemp0"))))))))
+            (princ asm)))))))
 
-(define-simple-math (+) "~%~10tadc ~a")
-(define-simple-math (-) "~%~10tsbc ~a")
-(define-simple-math (logand) "~%~10tand ~a")
-(define-simple-math (logior) "~%~10tora ~a")
-(define-simple-math (logxor) "~%~10teor ~a")
+(define-simple-math (+) "+")
+(define-simple-math (-) "-")
+(define-simple-math (logand) "and")
+(define-simple-math (logior) "or")
+(define-simple-math (logxor) "xor")
 
 (defgeneric compile-time-math (fun args)
   (:method ((fun t) (args t))
@@ -2773,8 +2769,8 @@ carry? IF
           (string (format nil "~{~a~^/~}"
                           (mapcar #'pascal-case
                                   (split-sequence #\/ value))))))
-  (format t "~% #Map_~a_ID NextMap C! #ServiceWipeMap #BankText far-call"
-   (substitute #\_ #\/ *current-scene*))
+  (format t "~% Map_~a_ID load-map"
+          (substitute #\_ #\/ *current-scene*))
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
@@ -2783,31 +2779,17 @@ carry? IF
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
   (restart-case
-      (format t "~%
+      (format t "
   C\" ~a\"
-  SpeakJet[ ~{~%~10t #~a~}  ]SpeakJet
-  Dialogue_~a ~:* Speech_~a
-  define-dialogue-text
-"
+  SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
               (prepare-dialogue text)
-              (convert-for-atarivox text)
-	      (dialogue-hash text))
+              (convert-for-atarivox text))
     (reload-dictionary ()
       :report "Reload the AtariVox (SpeakJet) dictionary"
       (reload-atarivox-dictionary)
       (fountain/write-speech text)))
-  (format t "~% ( ~s )
-    #Dialogue_~a~32t DialoguePointer !
-    #Speech_~1@*~a SpeechPointer !
-    Lib.DoDialogue jsr,
-  BEGIN
-    ScriptInput C@ 0= WHILE
-    PAUSE
-  REPEAT"
-          text
-          (dialogue-hash text)
-          text
-          (script-auto-label "WaitForDialogueInput")))
+  (format t "~% ( ~s ) do-dialogue"
+          text))
 
 (defun dialogue-hash (text)
   (let ((intro (format nil "~{~a~}"
@@ -2869,28 +2851,20 @@ Speech_~a:~
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
           actor-name)
     (compile-stage-direction 'enter (list actor-name :oc))
-    (format t "~% #ActionNonInteractive character-action!"))
+    (format t "~% ActionNonInteractive character-action!"))
   (if (string-equal actor-name 'narrator)
-      (format t "~% DialogueSpeakerDecal #CharacterID_Narrator C!
+      (format t "~% DialogueSpeakerDecal CharacterID_Narrator C!
   DialogueSpeakerNameLength 0 C!
   DialogueSpeakerX -1 C!")
-      (format t "~% #CharacterID_~a find-character abort-if-carry-set
+      (format t "~% CharacterID_~a find-character abort-if-carry-set
   DialogueSpeakerDecal stx,
   DialogueSpeakerX -1 C!"
               (pascal-case (string actor-name)))))
 
 (defun compile-fountain-stream (fountain)
   "Compile the contents of the stream FOUNTAIN into assembly language"
-  (format t "~%
-~10t.enc \"minifont\"
-
-Script_~a_~a: .block
-
-"
-
-          (pascal-case (last-elt (pathname-directory
-                                  *current-pathname*)))
-          (pascal-case (pathname-name *current-pathname*)))
+  (format t "~% ( compiled from Fountain source stream ~a )"
+          (enough-namestring *current-pathname*))
   (let ((lexer (make-fountain-lexer fountain))
         (*actors* nil)
         (*line-number* 0)
@@ -2927,7 +2901,7 @@ Script_~a_~a: .block
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
                    (found-in-scene-p
-                    (format t "~% #CharacterID_~a dialogue-set-speaker"
+                    (format t "~% CharacterID_~a dialogue-set-speaker"
                             (pascal-case (string name))))
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
@@ -2944,12 +2918,12 @@ Script_~a_~a: .block
                        value))
               (end
                (format t "~% quit ( ~a )"
-                       (or value "End of file."))
+                       (or (presence value) "End of file."))
                (return))
               (fade-to
                (format t "
-#FadeSpeedNormal FadingSpeed C!
-#FadeColor~:(~a~) FadingTarget C!"
+FadeSpeedNormal FadingSpeed C!
+FadeColor~:(~a~) FadingTarget C!"
                        (pascal-case (string value))))
               (branch
                (destructuring-bind (option . text) value
@@ -2964,7 +2938,7 @@ Script_~a_~a: .block
                (format nil "~2%~10tnop~32t;; ~s ~s~2%"
                        sym value)))
             sym)))
-  (format t "~2%;;; end of script file.~%"))
+  (format t "~2%( end of script file. ) quit~%"))
 
 (defun compile-fountain-string (string)
   "Compile Fountain script in STRING "
@@ -2975,32 +2949,47 @@ Script_~a_~a: .block
 
 (defmacro with-forth-file-wrappers (() &body body)
   `(prog2
-       (format t "~&( This file is compiled from Fountain sources. )
+       (format t "~% ( -*- forth -*- )
+( This file is compiled from Fountain sources. )
 ( Alterations to this generated file will be discarded. )")
        (progn ,@body)
      (format t "~2&( End of Forth sources. )~%")))
 
-(defun compile-script (from to)
-  "Compile Fountain file with pathname FROM into Forth-alike source code file with pathname TO"
+(defun compile-script (from forth)
+  "Compile Fountain file with pathname FROM into Forth-alike source code file with pathname FORTH"
   (tagbody top
      (let ((*actors* (list nil)))
        (restart-case
-           (let ((fs (make-pathname :defaults to :type "fs")))
-             (with-output-to-file (*standard-output* fs :if-does-not-exist :create
-                                                        :if-exists :supersede) 
-                 (with-forth-file-wrappers ()
-              (compile-fountain-script from)))
-             (with-output-to-file (*standard-output* to :if-does-not-exist :create
-                                                        :if-exists :supersede)
-               (with-input-from-file (*standard-input* fs)
-                (let ((*forth-file* fs))
-                   (compile-forth-script)))))
+           (progn (format *trace-output* "~2& Compiling ~a ~%~10t→ ~a …"
+                          (enough-namestring from)
+                          (enough-namestring forth))
+                  (force-output *trace-output*)
+                  (with-output-to-file (*standard-output* forth :if-does-not-exist :create
+                                                                :if-exists :supersede) 
+                    (with-forth-file-wrappers ()
+                      (compile-fountain-script from)))
+                  (format *trace-output* " Forth script ready to compile.")
+                  (force-output *trace-output*))
          (reload-script ()
            :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
            (go top))
          (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
            (load-npc-stats)
            (go top))))))
+
+(defun compile-forth (forth to)
+  "Compile the Forth program FORTH into the assembly sources TO"
+  (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
+          (enough-namestring forth)
+          (enough-namestring to))
+  (force-output *trace-output*)
+  (with-output-to-file (*standard-output* to :if-does-not-exist :create
+                                             :if-exists :supersede)
+    (with-input-from-file (*standard-input* forth)
+      (let ((*forth-file* forth))
+        (compile-forth-script))))
+  (format *trace-output* " Assembly source ready to compile.")
+  (force-output *trace-output*))
 
 (defvar *npc-stats* nil)
 
@@ -3284,7 +3273,7 @@ ActorClassSize:
   (format *trace-output* " …done."))
 
 (defun write-character-ids ()
-  "Write the character IDs enumeration CharacterIDs.s"
+  "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
   (format *trace-output* "~&Writing CharacterIDs.s …")
   (ensure-directories-exist #p"Source/Generated/")
   (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.s"
@@ -3296,5 +3285,19 @@ ActorClassSize:
           actor
         (unless (member name '(player narrator) :test 'string-equal)
           (format t "~%~10tCharacterID_~a = $~2,'0x"
+                  (pascal-case (string name)) character-id))))
+    (format *trace-output* " …done."))
+
+  (format *trace-output* "~&Writing CharacterIDs.forth …")
+  (ensure-directories-exist #p"Source/Generated/")
+  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.forth"
+                                          :if-exists :supersede)
+    (format t "~& ( Generated character ID data from NPC Stats file )~2%")
+    (dolist (actor (load-npc-stats))
+      (destructuring-bind (&key name character-id
+                           &allow-other-keys)
+          actor
+        (unless (member name '(player narrator) :test 'string-equal)
+          (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
                   (pascal-case (string name)) character-id))))
     (format *trace-output* " …done.")))

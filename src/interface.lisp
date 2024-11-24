@@ -21,6 +21,7 @@
         :compile-art 'compile-art
         :compile-enemies 'compile-enemies
         :compile-font 'compile-font-command
+        :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
         :compile-obj 'compile-obj
@@ -36,6 +37,7 @@
         :compile-art-7800 'compile-art-7800
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
+        :labels-to-forth 'labels-to-forth
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops
