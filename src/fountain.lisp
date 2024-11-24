@@ -2987,12 +2987,13 @@ Script_~a_~a: .block
        (restart-case
            (let ((fs (make-pathname :defaults to :type "fs")))
              (with-output-to-file (*standard-output* fs :if-does-not-exist :create
-                                                        :if-exists :supersede)
-               (compile-fountain-script from))
+                                                        :if-exists :supersede) 
+                 (with-forth-file-wrappers ()
+              (compile-fountain-script from)))
              (with-output-to-file (*standard-output* to :if-does-not-exist :create
                                                         :if-exists :supersede)
                (with-input-from-file (*standard-input* fs)
-                 (with-forth-file-wrappers ()
+                (let ((*forth-file* fs))
                    (compile-forth-script)))))
          (reload-script ()
            :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))

@@ -22,6 +22,7 @@
 
 (defvar *words* nil)
 (defvar *forth-bootstrap-pathname* #p"Source/Scripts/Forth/Forth.fs")
+(defvar *forth-file* nil)
 
 (defun forth/colon ()
   (let ((name (read-forth-word)))
@@ -56,9 +57,10 @@
                                     :type "fs"))))
     (format *trace-output* " including Forth ~a " (enough-namestring pathname))
     (with-input-from-file (fs pathname)
+     (let ((*forth-file* pathname))
       (format *trace-output* "~% \\ beginning ~a" (enough-namestring pathname))
       (setf *words* (compile-forth-script :dictionary *words*))
-      (format *trace-output* "~% \\ done with ~a~%" (enough-namestring pathname)))))
+      (format *trace-output* "~% \\ done with ~a~%" (enough-namestring pathname))))))
 
 (defun forth/comment-parens ()
   (loop for word = (read-forth-word)
@@ -87,9 +89,11 @@
       (destructuring-bind (word runtime &optional compile-time) sdef
         (setf (gethash word dict) (cons runtime compile-time))))
     (with-input-from-file (*standard-input* *forth-bootstrap-pathname*)
+     (let ((*forth-file* *forth-bootstrap-pathname*))
       (format *trace-output* " reading Forth bootstrap ~a … "
               (enough-namestring *forth-bootstrap-pathname*))
-      (compile-forth-script :dictionary dict))
+      (compile-forth-script :dictionary dict)))
+   (format *trace-output* " bootstrap complete ")
    dict))
 
 (defun forth-eval (expr)
@@ -104,7 +108,7 @@
     (force-output *trace-output*)
     (loop for word = (read-forth-word)
           while word
-          do (format *trace-output* "~% \\ ~a" word)
+          do (format *trace-output* "~% \\ ~a: ~a" (enough-namestring *forth-file*) word)
           do (if (numberp word)
                  (format t "~&~10t.word $~4,'0x~20t; ~:*~:d" word)
                  (if-let (def (gethash word *words*))
