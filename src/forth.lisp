@@ -136,7 +136,7 @@
 
 (defun forth/if ()
   (let ((*forth-begin-pdl* (genlabel "If")))
-    (format t "~%~10t.byte ForthUnless~%~10t.word ~aElse")
+    (format t "~%~10t.byte ForthUnless~%~10t.word ~aElse" *forth-begin-pdl*)
     (loop for word = (read-forth-word)
           with elsep = nil
           do (cond
@@ -194,7 +194,7 @@
       (error "Can't eval Forth in compile-time context yet: ~a" expr)))
 
 (defun mangle-word-for-internals (word)
-  (format nil " Forth_~{~a~} "
+  (format nil "Forth_~{~a~}"
           (loop for char across word
                 collecting (if (alphanumericp char)
                                (string char)
@@ -221,16 +221,37 @@
     ;; else: No def
     (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
       (format t "~%~10t.byte ForthPush~%~10t.word $~4,'0x~32t; ~:*~d" (logand #xffff num))
-      (progn
-        (warn "Unknown word: ~a (mangles to: ~a)"
-              word (mangle-word-for-internals word))
-        (format t "~%~10t.byte ForthPush~%~10t.word ~a~32t; unknown word ~a, hoping it's a constant"
-                (if (every (lambda (ch)
-                             (or (alphanumericp ch) (char= #\_ ch)))
-                           word)
-                    word
-                    (mangle-word-for-internals word))
-                word)))))
+      (tagbody top
+         (restart-case
+             (error "Unknown word: ~a (mangles to: ~a)"
+                    word (mangle-word-for-internals word))
+           (constant ()
+             :report "Assume it is a constant that will be defined"
+             (format t "~%~10t.byte ForthPush~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a constant"
+                     (if (every (lambda (ch)
+                                  (or (alphanumericp ch) (char= #\_ ch)))
+                                word)
+                         word
+                         (mangle-word-for-internals word))
+                     word))
+           (function ()
+             :report "Assume it is a function that will be called"
+             (format t "~%~10t.byte ForthExecute~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a function"
+                     (if (every (lambda (ch)
+                                  (or (alphanumericp ch) (char= #\_ ch)))
+                                word)
+                         word
+                         (mangle-word-for-internals word))
+                     word))
+           (words ()
+             :report "Review the list of words in the Forth environment"
+             (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
+             (when (x11-p)
+               (let ((words *words*))
+                 (clim-simple-echo:run-in-simple-echo
+                  (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
+                  :process-name "Forth Words")))
+             (go top)))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))

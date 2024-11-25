@@ -2345,9 +2345,9 @@ but now also ~s."
     (if (eql :oc where)
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
-              (format t "~% CharacterID_~a find-character entity-decal@
-  161 DecalXH decal! 
-  127 DecalYH decal!"
+              (format t "~% CharacterID_~a find-character entity-decal@ DUP
+  DecalXH 161 decal! 
+  DecalYH 127 decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
               (format t "~% CharacterID_~a find-character-in-scene entity-decal@
@@ -2421,7 +2421,7 @@ but now also ~s."
                    :class "Pivitz")))
       (format t "~% ~aClass ClassID C! ~:*~aSize Size C!
   CharacterID_~a CurrentCharacterID C!
-  ~:[0~;1~] RelativePlacement C! ~a FillPattern C! Lib.Emore jsr,
+  ~:[0~;1~] RelativePlacement C! ~a FillPattern C! Emote EXECUTE
 "
               class
               (pascal-case (string name))
@@ -2970,13 +2970,12 @@ FadeColor~:(~a~) FadingTarget C!"
     (format t "~%
 ~10t.enc \"minifont\"
 
-Script_~a_~a: .block~2%"
-            (pascal-case (last-elt (pathname-directory to)))
-            (pascal-case (pathname-name to)))
+~{~a~^_~}: .block~2%"
+            (split-sequence #\. (pathname-name to)))
     (with-input-from-file (*standard-input* forth)
       (let ((*forth-file* forth))
         (compile-forth-script)))
-    (format t "~2%~10t.end~%"))
+    (format t "~2%~10t.bend~%"))
   (format *trace-output* " Assembly source ready to compile.")
   (force-output *trace-output*))
 
