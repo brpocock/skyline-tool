@@ -1,6 +1,10 @@
 (in-package :skyline-tool)
 
+(defvar *forth-input-stuffing* nil)
+
 (defun read-forth-word ()
+  (when *forth-input-stuffing*
+    (return-from read-forth-word (pop *forth-input-stuffing*))) 
   (when (member (peek-char nil *standard-input* nil)
                 '(#\Space #\Page #\Tab #\Newline))
     (loop for char = (read-char *standard-input* nil nil)
@@ -27,7 +31,7 @@
     (when-let (def (gethash name *words*))
       (destructuring-bind (runtime compiler meta) def
         (destructuring-bind (&key source source-file) meta
-          (warn "redefining ~a (now from ~a, previously from ~a~@[ ~a~]"
+          (warn "redefining ~a (now from ~a, previously from ~a~@[ ~a~])"
                 name *forth-file* source source-file))))
     (loop for word = (read-forth-word)
           with def = (list)
@@ -48,21 +52,13 @@
           do (let ((tag (dialogue-hash string)))
                (format t "
 ~10t.section BankData
-~a: .ptext \"~a\"
-~10t.send"))
-        else do (vector-push-extend char string)))
-
-(defun forth/c-quote ()
-  (loop for char = (read-char *standard-input* nil nil)
-        with string = (make-array 32 :element-type 'character :fill-pointer 0 :adjustable t)
-        if (char= #\" char)
-          do (let ((tag (dialogue-hash string)))
-               (format t "
-~10t.section BankData
 ~a:
 ~10t.ptext \"~a\"
 ~10t.send
-")
+
+~10t.byte ForthPush
+~10t.word ~a"
+                       tag string tag)
                (return tag))
         else do (vector-push-extend char string)))
 
@@ -75,8 +71,11 @@
 ~10t.section BankData
 ~a: ~{~%~10t.byte SpeakJet.~a~^, ~30tSpeakJet.~a~^, ~50tSpeakJet.~a~^~}
 ~10t.send
+
+~10t.byte ForthPush
+~10t.word ~a
 "
-                       tag string)
+                       tag string tag)
                (return tag))
         else do (appendf string (cons word nil))))
 
@@ -106,20 +105,76 @@
         until (and (stringp word) (string= word ")"))))
 
 (defun forth/trace ()
-  (loop for char = (read-char *standard-input* nil nil)
-        with string = (make-array 32 :element-type 'character :fill-pointer 0 :adjustable t)
-        if (char= #\" char)
-          do (progn (format *trace-output* "~% ~a: ~a" *forth-file* string)
+  (loop for word = (read-forth-word)
+        with string = ""
+        if (char= #\" (last-elt word))
+          do (progn (format *trace-output* "~% ~a: \"~a ~a" *forth-file* string word)
                     (return))
-        else do (vector-push-extend char string)))
+        else do (setf string (format nil "~a ~a" string word))))
+
+(defvar *forth-begin-pdl*)
+
+(defun forth/begin ()
+  (let ((*forth-begin-pdl* (genlabel "Loop")))
+    (format t "~%~aTop:" *forth-begin-pdl*)
+    (loop for word = (read-forth-word)
+          until (string= word "REPEAT")
+          do (forth-interpret word))
+    (format t "~%~aBottom:" *forth-begin-pdl*)))
+
+(defun forth/leave ()
+  (format t "~%~10t.byte ForthGo~%~10t.word ~aBottom" *forth-begin-pdl*))
+
+(defun forth/repeat ()
+  (format t "~%~10t.byte ForthGo~%~10t.word ~aTop" *forth-begin-pdl*))
+
+(defun forth/while ()
+  (format t "~%~10t.byte ForthUnless~%~10t.word ~aBottom" *forth-begin-pdl*))
+
+(defun forth/until ()
+  (format t "~%~10t.byte ForthWhen~%~10t.word ~aBottom" *forth-begin-pdl*))
+
+(defun forth/if ()
+  (let ((*forth-begin-pdl* (genlabel "If")))
+    (format t "~%~10t.byte ForthUnless~%~10t.word ~aElse")
+    (loop for word = (read-forth-word)
+          with elsep = nil
+          do (cond
+               ((string= word "ELSE")
+                (format t "
+~10t.byte ForthGo
+~10t.word ~aThen
+~:*~aElse:"
+                        *forth-begin-pdl*)
+                (setf elsep t))
+               ((string= word "THEN")
+                (when elsep
+                  (format t "~%~aElse:" *forth-begin-pdl*))
+                (format t "~%~aThen:" *forth-begin-pdl*)
+                (return))
+               (t (forth-interpret word))))))
 
 (defun initialize-forth-dictionary ()
   (let ((dict (make-hash-table :test 'equal)))
-    (dolist (sdef '(("include" nil forth/include)
+    (dolist (sdef `(("include" nil forth/include)
                     (":" nil forth/colon)
+                    ("DUP" nil ,(lambda () (format t "~%~10t.byte ForthDup")))
+                    ("C!" nil ,(lambda () (format t "~%~10t.byte ForthSetByte")))
+                    ("C@" nil ,(lambda () (format t "~%~10t.byte ForthGetByte")))
+                    ("!" nil ,(lambda () (format t "~%~10t.byte ForthSetWord")))
+                    ("@" nil ,(lambda () (format t "~%~10t.byte ForthGetWord")))
+                    ("SWAP" nil ,(lambda () (format t "~%~10t.byte ForthSwap")))
+                    ("DROP" nil ,(lambda () (format t "~%~10t.byte ForthDrop")))
+                    ("EXECUTE" nil ,(lambda () (format t "~%~10t.byte ForthExecute")))
+                    ("BEGIN" nil forth/begin)
+                    ("WHILE" nil forth/while)
+                    ("UNTIL" nil forth/until)
+                    ("REPEAT" nil forth/repeat)
+                    ("LEAVE" nil forth/leave)
+                    ("IF" nil forth/if)
                     (".\"" nil forth/trace)
                     ("(" nil forth/comment-parens)
-                    ("c\"" nil forth/c-quote)
+                    ("C\"" nil forth/c-quote)
                     ("SpeakJet[" nil forth/speakjet-quote)))
       (destructuring-bind (word runtime &optional compile-time) sdef
         (setf (gethash word dict) (list runtime compile-time (list :source :system)))))
@@ -133,7 +188,9 @@
 
 (defun forth-eval (expr)
   (if (function expr)
-      (funcall expr)
+      (let ((value (funcall expr)))
+        (when value
+          (format nil "~%~10t.word ~a" value)))
       (error "Can't eval Forth in compile-time context yet: ~a" expr)))
 
 (defun mangle-word-for-internals (word)
@@ -143,32 +200,49 @@
                                (string char)
                                (format nil "_~4,'0x" (char-code char))))))
 
+(defun forth-interpret (word)
+  (if-let (def (or (presence (gethash word *words*))
+                   (gethash (mangle-word-for-internals word) *words*)))
+    (destructuring-bind (run compile &optional metadata) def
+      #+ () (format *trace-output* "~& \ forth-interpret ~a found definition from ~a"
+                    word (getf metadata :source))
+      (if run
+          (progn
+            (format t "~%;;; start of ~a from ~a~@[ ~a~]"
+                    word (getf metadata :source "?") (getf metadata :source-file nil))
+            (let (*forth-input-stuffing*)
+              (dolist (w (reverse (copy-list run)))
+                (push w *forth-input-stuffing*))
+              (loop while *forth-input-stuffing*
+                    do (forth-interpret (read-forth-word))))
+            (force-output *standard-output*)
+            (format t "~%;;; end of ~a" word))
+          (forth-eval compile)))
+    ;; else: No def
+    (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
+      (format t "~%~10t.byte ForthPush~%~10t.word $~4,'0x~32t; ~:*~d" (logand #xffff num))
+      (progn
+        (warn "Unknown word: ~a (mangles to: ~a)"
+              word (mangle-word-for-internals word))
+        (format t "~%~10t.byte ForthPush~%~10t.word ~a~32t; unknown word ~a, hoping it's a constant"
+                (if (every (lambda (ch)
+                             (or (alphanumericp ch) (char= #\_ ch)))
+                           word)
+                    word
+                    (mangle-word-for-internals word))
+                word)))))
+
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
     (loop for word = (read-forth-word)
           while word
-          do (if (numberp word)
-                 (format t "~&~10t.word $~4,'0x~20t; ~:*~:d" word)
-                 (if-let (def (gethash word *words*))
-                   (destructuring-bind (run compile &optional metadata) def
-                     (if compile
-                         (forth-eval compile)
-                         (format t " ( word ~a from ~a~@[ ~a~] )~{~%~10t.word ~a~}"
-                                 word (getf metadata :source "?") (getf metadata :source-file nil) run)))
-                   (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
-                     (format t (forth-number num))
-                     (if-let (def (gethash (mangle-word-for-internals word) *words*))
-                       (destructuring-bind (run compile &optional metadata) def
-                         (if compile
-                             (forth-eval compile)
-                             (format t "~%;;;  ( word ~a from ~a~@[ ~a~] )~{~%~10t.word ~a~}"
-                                     word (getf metadata :source "?") (getf metadata :source-file nil) run)))
-                       (progn
-                         (warn "Unknown word: ~a (mangles to: ~a)"
-                               word (mangle-word-for-internals word))
-                         (format t "~%~10t.word ~a~32t; unknown word ~a, hoping it's a constant"
-                                 (mangle-word-for-internals word) word)))))))
+          do (forth-interpret word))
     (format *trace-output* "~%( now, I know ~:d word~:p ) ok"
             (hash-table-count *words*))
+    #| crazy-level debug dump |#
+    #+ () (format *trace-output* "~2%~{~a~^ ~}~2%" (hash-table-keys *words*))
+    #+ () (dolist (word (hash-table-keys *words*))
+            (format *trace-output* "~% : ~a ~{~a~^ ~} ;" word (car (gethash word *words*))))
     (force-output *trace-output*)
     *words*))
+

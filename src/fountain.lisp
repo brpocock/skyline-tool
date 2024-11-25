@@ -1803,7 +1803,7 @@ but now also ~s."
                              before
                              (list "Bend" "$04")
                              (mapcan (lambda (phoneme)
-                                       (list "SpeakJet.Stress" phoneme))
+                                       (list "Stress" phoneme))
                                      phrase)
                              (list "Bend" "$05")
                              after)))
@@ -2379,23 +2379,21 @@ but now also ~s."
         (assert (eql kind :absolute) (kind)
                 "KIND of location for positioning a boat must be absolute, but got ~s" kind)
         (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
-        (format t " Boat~:(~a~) " boat-class)
-        (ecase east/west
-          (at (format t " ~d " x))
-          (east (format t " MapWidth "))
-          (west (format t " -3 ")))
-        (format t " ~d " y)
-        (format t " make-boat")
+        (format t "Boat~:(~a~) ~a"
+                boat-class
+                (ecase east/west
+                  (at (format nil " ~d " x))
+                  (east " MapWidth ")
+                  (west " -3 ")))
+        (format t " ~d make-boat" y)
         ;; TODO put people on the boat
         (when (eql east/west 'at)
           (return))
         (ecase east/west
           (east (format t "~%BoatStateSailWest BoatState prop! "))
           (west (format t "~%BoatStateSailEast BoatState prop!")))
-        (format t "~d BoatDestX C! 
-BEGIN ~d ( Boat ~a ) Lib.FindBoat jsr, BoatState prop@ #BoatStateAnchored <> WHILE PAUSE REPEAT"
-                x
-                boat-id ship-name)))))
+        (format t " ~d BoatDestX C! wait-for-boat-to-anchor"
+                x)))))
 
 (defstage sail-away (ship-name east/west)
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
@@ -2900,7 +2898,7 @@ Speech_~a:~
                (format t "~% GameOverKind~:(~a~) game-over"
                        value))
               (end
-               (format t "~% quit ( ~a )"
+               (format t "~% BYE ( ~a )"
                        (or (presence value) "End of file."))
                (return))
               (fade-to
@@ -2921,7 +2919,7 @@ FadeColor~:(~a~) FadingTarget C!"
                (format nil "~2%~10tnop~32t;; ~s ~s~2%"
                        sym value)))
             sym)))
-  (format t "~2%( end of script file. ) quit~%"))
+  (format t "~2%( end of script file. ) ~%"))
 
 (defun compile-fountain-string (string)
   "Compile Fountain script in STRING "
