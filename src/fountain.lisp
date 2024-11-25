@@ -2966,9 +2966,17 @@ FadeColor~:(~a~) FadingTarget C!"
   (force-output *trace-output*)
   (with-output-to-file (*standard-output* to :if-does-not-exist :create
                                              :if-exists :supersede)
+    (format t ";;; This is a generated file, from ~s" (enough-namestring forth))
+    (format t "~%
+~10t.enc \"minifont\"
+
+Script_~a_~a: .block~2%"
+            (pascal-case (last-elt (pathname-directory to)))
+            (pascal-case (pathname-name to)))
     (with-input-from-file (*standard-input* forth)
       (let ((*forth-file* forth))
-        (compile-forth-script))))
+        (compile-forth-script)))
+    (format t "~2%~10t.end~%"))
   (format *trace-output* " Assembly source ready to compile.")
   (force-output *trace-output*))
 

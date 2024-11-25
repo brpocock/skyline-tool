@@ -556,7 +556,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "AssetIDs" 'write-asset-ids
           "EnemyStatsTable" 'compile-enemy-stats
           "ItemDropTable" 'compile-item-drops
-          "DocksIndex.s" 'write-docks-index
+          "DocksIndex" 'write-docks-index
           "ShoppingTable" 'compile-shops
           "CharacterIDs" 'write-character-ids
           "ClassConstants" 'make-classes-for-oops
@@ -567,11 +567,11 @@ file ~a.s in bank $~(~2,'0x~)~
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)
-  (and (equal "s" (pathname-type pathname))
+  (and (member (pathname-type pathname) '("s" "forth") :test #'string=)
        (member "Generated" (pathname-directory pathname) :test #'string=)
        (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
                                     :test #'string=))
-             (second found))
+                     (second found))
            (when (search "Palette" (pathname-name pathname))
              (lambda () (extract-palette pathname))))))
 
