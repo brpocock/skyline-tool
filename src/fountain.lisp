@@ -2788,13 +2788,12 @@ but now also ~s."
          (format t "
   C\" ~a\"
   add-dialogue-branch-option "
-                 
                  (prepare-dialogue text))
        (reload-dictionary ()
          :report "Reload the AtariVox (SpeakJet) dictionary"
          (reload-atarivox-dictionary)
          (go top))))
-  (format t " C\" _a\"
+  (format t " C\" ~a\"
 ( TODO SpeakJet )
 do-branching-dialogue "
           text 
