@@ -822,7 +822,8 @@ Source/Generated/Bank~(~2,'0x~).~a.~a.s: Source/Assets.index Source/Generated/Ba
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool write-asset-bank ~x ~a ~a
 
-Object/Bank~(~2,'0x~).~a.~a.o: Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
+Object/Bank~(~2,'0x~).~a.~a.o ~3:*Object/Bank~(~2,'0x~).~a.~a.list.txt ~3:*Object/Bank~(~2,'0x~).~a.~a.LABELS.txt: \\
+		Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
 ~10tSource/Assets.index bin/skyline-tool \\~{~%~10t~a~^ \\~}
 	mkdir -p Object
 	${AS7800} -DTV=~a ~a \\~{~%		-I ~a \\~}
