@@ -2913,46 +2913,56 @@ FadeColor~:(~a~) FadingTarget C!"
 
 (defun compile-script (from forth)
   "Compile Fountain file with pathname FROM into Forth-alike source code file with pathname FORTH"
-  (tagbody top
-     (let ((*actors* (list nil)))
-       (restart-case
-           (progn (format *trace-output* "~2& Compiling ~a ~%~10t→ ~a …"
-                          (enough-namestring from)
-                          (enough-namestring forth))
-                  (force-output *trace-output*)
-                  (with-output-to-file (*standard-output* forth :if-does-not-exist :create
-                                                                :if-exists :supersede) 
-                    (with-forth-file-wrappers ()
-                      (compile-fountain-script from)))
-                  (format *trace-output* " Forth script ready to compile.")
-                  (force-output *trace-output*))
-         (reload-script ()
-           :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
-           (go top))
-         (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
-           (load-npc-stats)
-           (go top))))))
+  (let (victoryp)
+    (unwind-protect
+         (tagbody top
+            (let ((*actors* (list nil)))
+              (restart-case
+                  (progn (format *trace-output* "~2& Compiling ~a ~%~10t→ ~a …"
+                                 (enough-namestring from)
+                                 (enough-namestring forth))
+                         (force-output *trace-output*)
+                         (with-output-to-file (*standard-output* forth :if-does-not-exist :create
+                                                                       :if-exists :supersede) 
+                           (with-forth-file-wrappers ()
+                             (compile-fountain-script from)))
+                         (format *trace-output* " Forth script ready to compile.")
+                         (force-output *trace-output*)
+                         (setf victoryp t))
+                (reload-script ()
+                  :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
+                  (go top))
+                (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
+                  (load-npc-stats)
+                  (go top))))))
+    (unless victoryp
+      (delete-file forth))))
 
 (defun compile-forth (forth to)
   "Compile the Forth program FORTH into the assembly sources TO"
-  (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
-          (enough-namestring forth)
-          (enough-namestring to))
-  (force-output *trace-output*)
-  (with-output-to-file (*standard-output* to :if-does-not-exist :create
-                                             :if-exists :supersede)
-    (format t ";;; This is a generated file, from ~s" (enough-namestring forth))
-    (format t "~%
+  (let (victoryp)
+    (unwind-protect
+         (progn (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
+                        (enough-namestring forth)
+                        (enough-namestring to))
+                (force-output *trace-output*)
+                (with-output-to-file (*standard-output* to :if-does-not-exist :create
+                                                           :if-exists :supersede)
+                  (format t ";;; This is a generated file, from ~s" (enough-namestring forth))
+                  (format t "~%
 ~10t.enc \"minifont\"
 
 ~{~a~^_~}: .block~2%"
-            (split-sequence #\. (pathname-name to)))
-    (with-input-from-file (*standard-input* forth)
-      (let ((*forth-file* forth))
-        (compile-forth-script)))
-    (format t "~2%~10t.bend~%"))
-  (format *trace-output* " Assembly source ready to compile.")
-  (force-output *trace-output*))
+                          (split-sequence #\. (pathname-name to)))
+                  (with-input-from-file (*standard-input* forth)
+                    (let ((*forth-file* forth))
+                      (compile-forth-script)))
+                  (format t "~2%~10t.bend~%"))
+                (format *trace-output* " Assembly source ready to compile.")
+                (force-output *trace-output*)
+                (setf victoryp t))
+      (unless victoryp
+        (delet-file to)))))
 
 (defvar *npc-stats* nil)
 
