@@ -225,11 +225,17 @@
           (progn
             (format t "~%;;; start of ~a from ~a~@[ ~a~]"
                     word (getf metadata :source "?") (getf metadata :source-file nil))
-            (let (*forth-input-stuffing*)
-              (dolist (w (reverse (copy-list run)))
-                (push w *forth-input-stuffing*))
-              (loop while *forth-input-stuffing*
-                    do (forth-interpret (read-forth-word))))
+            (if-let (n (and (= 1 (length run)) (ignore-errors (parse-integer word :radix *forth-base*))))
+              (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
+                      (logand #xff num)
+                      (ash (logand #xff00 num) -8)
+                      (logand #xffff num)
+                      word)
+              (let (*forth-input-stuffing*)
+                (dolist (w (reverse (copy-list run)))
+                  (push w *forth-input-stuffing*))
+                (loop while *forth-input-stuffing*
+                      do (forth-interpret (read-forth-word)))))
             (force-output *standard-output*)
             (format t "~%;;; end of ~a" word))
           (forth-eval compile)))
@@ -238,7 +244,7 @@
       (destructuring-bind (run _compile &optional metadata) asm-def
         (if run
             (let ((num (parse-integer (first run))))
-              (format t "~%~10t.byte ForthExecute, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d internal: ~a (~a)"
+              (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
                       (logand #xff num)
                       (ash (logand #xff00 num) -8)
                       (logand #xffff num)
@@ -253,24 +259,11 @@
            (restart-case
                (error "Unknown word: ~a~%(mangles to: ~a)"
                       word (mangle-word-for-internals word))
-             (constant ()
-               :report "Assume it is a constant that will be defined"
-               (format t "~%~10t.byte ForthPush~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a constant"
-                       (if (every (lambda (ch)
-                                    (or (alphanumericp ch) (char= #\_ ch)))
-                                  word)
-                           word
-                           (mangle-word-for-internals word))
-                       word))
-             (function ()
-               :report "Assume it is a function that will be called"
-               (format t "~%~10t.byte ForthExecute~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a function"
-                       (if (every (lambda (ch)
-                                    (or (alphanumericp ch) (char= #\_ ch)))
-                                  word)
-                           word
-                           (mangle-word-for-internals word))
-                       word))
+             (continue ()
+               :report "Continue, using a literal zero"
+               (format t "~%~10t.byte ForthPush, 0, 0~32t; XXX unknown word ~a (~a)"
+                       word
+                       (mangle-word-for-internals word)))
              (words ()
                :report "Review the list of words in the Forth environment"
                (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
