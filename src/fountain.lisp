@@ -2186,11 +2186,9 @@ but now also ~s."
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
       (require-actor actor)
-    (format t "~d CharacterID_~a hurt-actor
-~10t.CallMethod CallActorHurt, ActorClass
-~1@*~a:~%"
-            (pascal-case (string name))
-            (round amount))))
+    (format t "~%~d CharacterID_~a hurt-actor "
+            (round amount)
+            (pascal-case (string name)))))
 
 (defstage equip (actor item-ident)
   (destructuring-bind (&key name &allow-other-keys)
@@ -2788,37 +2786,18 @@ but now also ~s."
   (tagbody top
      (restart-case
          (format t "
-~10t.section BankData
-~10t.weak
-~10t  Defined_Dialogue_P_~a~:* := false
-~10t.endweak
-~10t.if !Defined_Dialogue_P_~a~:*
-~10tDefined_Dialogue_P_~a~:* := true
-Dialogue_~a:
-~10t.ptext ~s
-Speech_~a:~
-~{~%~10t.byte ~15a~^, ~15a~^, ~15a~^, ~15a~}
-~10t.fi
-~10t.send
-"
-                 (dialogue-hash text)
-                 (prepare-dialogue text)
-                 (dialogue-hash text)
-                 (convert-for-atarivox text))
+  C\" ~a\"
+  add-dialogue-branch-option "
+                 
+                 (prepare-dialogue text))
        (reload-dictionary ()
          :report "Reload the AtariVox (SpeakJet) dictionary"
          (reload-atarivox-dictionary)
          (go top))))
-  (format t " ( ~s )
-    Dialogue_~a~32t DialoguePointer !
-    Speech_~1@*~d SpeechPointer !
-    ~s Pointer2 !
-    Lib.DoBranchingDialogue jsr,
-    BEGIN
-      ScriptInput C@ 0= WHILE
-    PAUSE
-    REPEAT"
-          text (dialogue-hash text)
+  (format t " C\" _a\"
+( TODO SpeakJet )
+do-branching-dialogue "
+          text 
           (if (string-equal "CONTINUE" option)
               "0 ( continue )"
               (concatenate 'string "ScriptLabel_"
@@ -2832,14 +2811,11 @@ Speech_~a:~
     (warn "Teleporting actor ~:(~a~) to the ass-end of nowhere so they can speak off-camera"
           actor-name)
     (compile-stage-direction 'enter (list actor-name :oc))
-    (format t "~% ActionNonInteractive character-action!"))
+    (format t "~% ActionNonInteractive CharacterID_~a character-action!"
+            (pascal-case (string actor-name))))
   (if (string-equal actor-name 'narrator)
-      (format t "~% DialogueSpeakerDecal CharacterID_Narrator C!
-  DialogueSpeakerNameLength 0 C!
-  DialogueSpeakerX -1 C!")
-      (format t "~% CharacterID_~a find-character abort-if-carry-set
-  DialogueSpeakerDecal stx,
-  DialogueSpeakerX -1 C!"
+      (format t "~% off-camera-narrator")
+      (format t "~% CharacterID_~a off-camera-speaker"
               (pascal-case (string actor-name)))))
 
 (defun compile-fountain-stream (fountain)

@@ -16,10 +16,7 @@
         if (or (null char) (member char '(#\Space #\Page #\Tab #\Newline)))
           do (return-from read-forth-word (presence word))
         else do (vector-push-extend char word)
-        finally (return-from read-forth-word
-                  (cond ((emptyp word) nil)
-                        ((every #'digit-char-p word) (parse-integer word))
-                        (t word)))))
+        finally (return-from read-forth-word (presence word))))
 
 (defvar *words* nil)
 (defparameter *forth-bootstrap-pathname* #p"Source/Scripts/Forth/Bootstrap.forth")
@@ -52,8 +49,14 @@
           do (let ((tag (dialogue-hash string)))
                (format t "
 ~10t.section BankData
+~10t.weak
+~10t~a~:*_DefinedP := false
+~10t.endweak
+~10t.if ! ~a~:*_DefinedP
+~10t~a~:*_DefinedP := true
 ~a:
 ~10t.ptext \"~a\"
+~10t.fi
 ~10t.send
 
 ~10t.byte ForthPush
@@ -69,13 +72,25 @@
           do (let ((tag (dialogue-hash (reduce (curry #'concatenate 'string) string))))
                (format t "
 ~10t.section BankData
-~a: ~{~%~10t.byte SpeakJet.~a~^, ~30tSpeakJet.~a~^, ~50tSpeakJet.~a~^~}
+~10t.weak
+~10t~a~:*_DefinedP := false
+~10t.endweak
+~10t.if ! ~a~:*_DefinedP
+~10t~a~:*_DefinedP := true
+~a: ~{~%~10t.byte ~a~^, ~30t~a~^, ~50t~a~^~}
+~10t.fi
 ~10t.send
 
 ~10t.byte ForthPush
 ~10t.word ~a
 "
-                       tag string tag)
+                       tag
+                       (mapcar (lambda (byte)
+                                 (if (position #\$ byte)
+                                     byte
+                                     (format nil "SpeakJet.~a" byte)))
+                               string)
+                       tag)
                (return tag))
         else do (appendf string (cons word nil))))
 
@@ -148,7 +163,7 @@
                         *forth-begin-pdl*)
                 (setf elsep t))
                ((string= word "THEN")
-                (when elsep
+                (unless elsep
                   (format t "~%~aElse:" *forth-begin-pdl*))
                 (format t "~%~aThen:" *forth-begin-pdl*)
                 (return))
@@ -194,6 +209,7 @@
       (error "Can't eval Forth in compile-time context yet: ~a" expr)))
 
 (defun mangle-word-for-internals (word)
+  "Mangle WORD into the form that an internal (assembly) implementation of a word would appear as"
   (format nil "Forth_~{~a~}"
           (loop for char across word
                 collecting (if (alphanumericp char)
@@ -201,8 +217,7 @@
                                (format nil "_~4,'0x" (char-code char))))))
 
 (defun forth-interpret (word)
-  (if-let (def (or (presence (gethash word *words*))
-                   (gethash (mangle-word-for-internals word) *words*)))
+  (if-let (def (presence (gethash word *words*)))
     (destructuring-bind (run compile &optional metadata) def
       #+ () (format *trace-output* "~& \ forth-interpret ~a found definition from ~a"
                     word (getf metadata :source))
@@ -219,39 +234,52 @@
             (format t "~%;;; end of ~a" word))
           (forth-eval compile)))
     ;; else: No def
-    (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
-      (format t "~%~10t.byte ForthPush~%~10t.word $~4,'0x~32t; ~:*~d" (logand #xffff num))
-      (tagbody top
-         (restart-case
-             (error "Unknown word: ~a (mangles to: ~a)"
-                    word (mangle-word-for-internals word))
-           (constant ()
-             :report "Assume it is a constant that will be defined"
-             (format t "~%~10t.byte ForthPush~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a constant"
-                     (if (every (lambda (ch)
-                                  (or (alphanumericp ch) (char= #\_ ch)))
-                                word)
-                         word
-                         (mangle-word-for-internals word))
-                     word))
-           (function ()
-             :report "Assume it is a function that will be called"
-             (format t "~%~10t.byte ForthExecute~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a function"
-                     (if (every (lambda (ch)
-                                  (or (alphanumericp ch) (char= #\_ ch)))
-                                word)
-                         word
-                         (mangle-word-for-internals word))
-                     word))
-           (words ()
-             :report "Review the list of words in the Forth environment"
-             (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
-             (when (x11-p)
-               (let ((words *words*))
-                 (clim-simple-echo:run-in-simple-echo
-                  (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
-                  :process-name "Forth Words")))
-             (go top)))))))
+    (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
+      (destructuring-bind (run _compile &optional metadata) asm-def
+        (if run
+            (let ((num (parse-integer (first run))))
+              (format t "~%~10t.byte ForthExecute, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d internal: ~a (~a)"
+                      (logand #xff num)
+                      (ash (logand #xff00 num) -8)
+                      (logand #xffff num)
+                      word (mangle-word-for-internals word)))
+            (forth-eval compile)))
+      (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
+        (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+                (logand #xff num)
+                (ash (logand #xff00 num) -8)
+                (logand #xffff num))
+        (tagbody top
+           (restart-case
+               (error "Unknown word: ~a~%(mangles to: ~a)"
+                      word (mangle-word-for-internals word))
+             (constant ()
+               :report "Assume it is a constant that will be defined"
+               (format t "~%~10t.byte ForthPush~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a constant"
+                       (if (every (lambda (ch)
+                                    (or (alphanumericp ch) (char= #\_ ch)))
+                                  word)
+                           word
+                           (mangle-word-for-internals word))
+                       word))
+             (function ()
+               :report "Assume it is a function that will be called"
+               (format t "~%~10t.byte ForthExecute~%~10t.word Lib.~a~32t; unknown word ~a, hoping it's a function"
+                       (if (every (lambda (ch)
+                                    (or (alphanumericp ch) (char= #\_ ch)))
+                                  word)
+                           word
+                           (mangle-word-for-internals word))
+                       word))
+             (words ()
+               :report "Review the list of words in the Forth environment"
+               (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
+               (when (x11-p)
+                 (let ((words *words*))
+                   (clim-simple-echo:run-in-simple-echo
+                    (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
+                    :process-name "Forth Words")))
+               (go top))))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
