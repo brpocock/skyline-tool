@@ -2203,9 +2203,9 @@ but now also ~s."
 
 
 (defstage prepare (&rest directions)
-  (format t "~%FALSE AllowPageFlipP C!")
+  (format t "~%prepare-scene ")
   (map nil #'stage-directions->code directions)
-  (format t "~%scene-ready~%"))
+  (format t " scene-ready~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
   (format t "~% Lighting~a FadeSpeed~a change-lighting"
@@ -2249,7 +2249,7 @@ but now also ~s."
               ok-label done-label))))
 
 (defstage weather (&optional kind)
-  (format t "~% Weather~:(~a~) WeatherKind C!" (or kind "None")))
+  (format t "~% Weather~:(~a~) weather! " (or kind "None")))
 
 (defstage wake (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2383,13 +2383,13 @@ but now also ~s."
                   (at (format nil " ~d " x))
                   (east " MapWidth ")
                   (west " -3 ")))
-        (format t " ~d make-boat" y)
+        (format t " ~d make-boat DUP" y)
         ;; TODO put people on the boat
         (when (eql east/west 'at)
           (return))
         (ecase east/west
-          (east (format t "~%boat-sail-west "))
-          (west (format t "~%boat-sail-east ")))
+          (east (format t " boat-sail-west "))
+          (west (format t " boat-sail-east ")))
         (format t " ~d BoatDestX C! wait-for-boat-to-anchor"
                 x)))))
 
@@ -2397,12 +2397,11 @@ but now also ~s."
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*)))
-      (format t "~%~d ( Boat “~a” ) find-boat" boat-id ship-name)
+      (format t "~%~d ( Boat “~a” ) find-boat DUP " boat-id ship-name)
       (ecase east/west
-        (east (format t "~%MapWidth BoatDestX C! BoatStateSailEast BoatState prop!"))
-        (west (format t "~%-24 BoatDestX C! BoatStateSailWest BoatState prop!")))
-      (format t "~% ~d ( the “~a” ) wait-for-boat"
-              boat-id ship-name))))
+        (east (format t " boat-sail-away-east"))
+        (west (format t " boat-sail-away-west")))
+      (format t " wait-for-boat" boat-id ship-name))))
 
 (defstage emote (actor emotion)
   (destructuring-bind (&key name &allow-other-keys) (require-actor actor)
@@ -2938,7 +2937,7 @@ FadeColor~:(~a~) FadingTarget C!"
                   (load-npc-stats)
                   (go top))))))
     (unless victoryp
-      (delete-file forth))))
+      (ignore-errors (delete-file forth)))))
 
 (defun compile-forth (forth to)
   "Compile the Forth program FORTH into the assembly sources TO"
@@ -2964,7 +2963,7 @@ FadeColor~:(~a~) FadingTarget C!"
                 (force-output *trace-output*)
                 (setf victoryp t))
       (unless victoryp
-        (delete-file to)))))
+        (ignore-errors (delete-file to))))))
 
 (defvar *npc-stats* nil)
 
