@@ -5,8 +5,10 @@
   (let ((all-classes-sequentially (list)))
     (with-input-from-file (class-file class-defs-pathname)
       (ensure-directories-exist #p"./Source/Generated/")
-      (with-output-to-file (classes.forth #p"./Source/Generated/Classes.forth")
-        (format classes.forth " ( class accessors and such for Forth code, generated from Classes.Defs )~2%")
+      (with-output-to-file (classes.forth #p"./Source/Generated/Classes.forth"
+                                          :if-exists :supersede)
+        (format classes.forth "( -*- forth -*- )
+ ( class accessors and such for Forth code, generated from Classes.Defs )~2%")
         (with-output-to-file (class-graph #p"./Source/Generated/Classes.dot"
                                           :if-exists :supersede)
           (format class-graph "digraph Classes {
@@ -54,8 +56,22 @@ node [shape=Mrecord];
                                  (when slots
                                    (loop for field
                                            in (sort (hash-table-keys slots) #'string-lessp)
-                                         appending (list (title-case field)
-                                                         (cdr (gethash field slots)))))
+                                         append (list (title-case field)
+                                                      (cdr (gethash field slots)))
+                                         do (format classes.forth "
+ : ~a-~a! ~a~a prop! ;
+ : ~a-~a ~a~a prop@ ; "
+                                                    (param-case class-name)
+                                                    (param-case field)
+                                                    class-name field
+                                                    
+                                                    (param-case class-name)
+                                                    (param-case
+                                                     (if (char= #\P (last-elt field))
+                                                         (format nil "~a?"
+                                                                 (subseq field 0 (1- (length field))))
+                                                         (format nil "~a~c" field #\@)))
+                                                    class-name field)))
                                  (mapcar
                                   (lambda (method)
                                     (concatenate 'string (title-case method)
@@ -121,20 +137,30 @@ Method~aDestroy: .proc
 ~10tjmp Lib.DestroyObject~32t; tail call
 ~10t.pend~%"
                                  class-name))))
-                  (loop with parent-class = "BasicObject" with current-class = "BasicObject"
+                  (loop with parent-class = "BasicObject"
+                        with current-class = "BasicObject"
                         with class-index = 1 with slot-offset = 1
                         for line = (read-line class-file nil nil) while line
                         do (cond
                              ;; blank line
                              ((emptyp line)
                               (fresh-line class-constants)
-                              (fresh-line class-methods))
+                              (fresh-line class-methods)
+                              (fresh-line classes.forth))
                              ;; comment
                              ((char= #\; (char line 0))
                               (fresh-line class-constants)
                               (princ line class-constants)
                               (fresh-line class-methods)
-                              (princ line class-methods))
+                              (princ line class-methods)
+                              (format classes.forth "~& ( ~a ) "
+                                      (subseq line
+                                              (position-if
+                                               (lambda (ch)
+                                                 (and (char/= #\; ch)
+                                                      (char/= #\Space ch)
+                                                      (char/= #\Tab ch)))
+                                               line))))
                              ;; method name
                              ((char= #\# (char line 0))
                               (if current-class
@@ -180,7 +206,7 @@ Method~aDestroy: .proc
                                         parent-class old-class
                                         slot-offset (gethash old-class class-size)
                                         (gethash new-class class-bases) old-class
-
+                                        
                                         (gethash new-class methods-set)
                                         (copy-hash-table (gethash old-class methods-set)))
                                   (finish-output)
