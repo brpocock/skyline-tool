@@ -1904,7 +1904,7 @@ but now also ~s."
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
   (with-input-from-file (fountain pathname)
-    (format t "( Compiled from ~a )" pathname)
+    (format t "~% ( Compiled from ~a ) " pathname)
     (let ((*current-pathname* pathname))
       (compile-fountain-stream fountain))))
 
@@ -2388,8 +2388,8 @@ but now also ~s."
         (when (eql east/west 'at)
           (return))
         (ecase east/west
-          (east (format t "~%BoatStateSailWest BoatState prop! "))
-          (west (format t "~%BoatStateSailEast BoatState prop!")))
+          (east (format t "~%boat-sail-west "))
+          (west (format t "~%boat-sail-east ")))
         (format t " ~d BoatDestX C! wait-for-boat-to-anchor"
                 x)))))
 
@@ -2517,7 +2517,7 @@ but now also ~s."
          ,@body))))
 
 (defun forth-number (n)
-  (format nil "~d ( ~:*$~4,'0x )" n))
+  (format nil " ~d " n))
 
 (defmacro define-simple-math ((fun) &body asm)
   (let ((asm* (gensym "ASM-")))
@@ -2819,8 +2819,10 @@ do-branching-dialogue "
 
 (defun compile-fountain-stream (fountain)
   "Compile the contents of the stream FOUNTAIN into assembly language"
-  (format t "~% ( compiled from Fountain source stream ~a )"
-          (enough-namestring *current-pathname*))
+  (if *current-pathname*
+      (format t "~% ( Compiled from ~a ) "
+              (enough-namestring *current-pathname*))
+      (format t "~% ( Compiled from input stream )  "))
   (let ((lexer (make-fountain-lexer fountain))
         (*actors* nil)
         (*line-number* 0)
@@ -2907,7 +2909,7 @@ FadeColor~:(~a~) FadingTarget C!"
   `(prog2
        (format t "~% ( -*- forth -*- )
 ( This file is compiled from Fountain sources. )
-( Alterations to this generated file will be discarded. )")
+( Alterations to this generated file will be discarded. ) ")
        (progn ,@body)
      (format t "~2&( End of Forth sources. )~%")))
 
@@ -2948,11 +2950,11 @@ FadeColor~:(~a~) FadingTarget C!"
                 (force-output *trace-output*)
                 (with-output-to-file (*standard-output* to :if-does-not-exist :create
                                                            :if-exists :supersede)
-                  (format t ";;; This is a generated file, from ~s" (enough-namestring forth))
-                  (format t "~%
+                  (format t ";;; This is a generated file, from ~s
 ~10t.enc \"minifont\"
 
 ~{~a~^_~}: .block~2%"
+                          (enough-namestring forth)
                           (split-sequence #\. (pathname-name to)))
                   (with-input-from-file (*standard-input* forth)
                     (let ((*forth-file* forth))
@@ -2962,7 +2964,7 @@ FadeColor~:(~a~) FadingTarget C!"
                 (force-output *trace-output*)
                 (setf victoryp t))
       (unless victoryp
-        (delet-file to)))))
+        (delete-file to)))))
 
 (defvar *npc-stats* nil)
 

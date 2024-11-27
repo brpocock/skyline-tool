@@ -1397,7 +1397,7 @@ EndOfBinary = *
                        (setf (gethash label table) number))))
           (loop for label in (sort (copy-list (hash-table-keys table)) #'string-lessp)
                 for number = (gethash label table) 
-                do (format incs "~% : ~a ~d ( ~:*$~4,'0x ) ; " label number)))
+                do (format incs "~% : ~a ~d ; " label number)))
         (terpri incs)))
     (format *trace-output* " Done.")))
 

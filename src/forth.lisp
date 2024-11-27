@@ -135,7 +135,7 @@
     (loop for word = (read-forth-word)
           until (string= word "REPEAT")
           do (forth-interpret word))
-    (format t "~%~aBottom:" *forth-begin-pdl*)))
+    (format t "~%~10t.byte ForthGo~%~10t.word ~aTop~:*~%~aBottom:" *forth-begin-pdl*)))
 
 (defun forth/leave ()
   (format t "~%~10t.byte ForthGo~%~10t.word ~aBottom" *forth-begin-pdl*))
@@ -223,21 +223,31 @@
                     word (getf metadata :source))
       (if run
           (progn
-            (format t "~%;;; start of ~a from ~a~@[ ~a~]"
-                    word (getf metadata :source "?") (getf metadata :source-file nil))
-            (if-let (n (and (= 1 (length run)) (ignore-errors (parse-integer word :radix *forth-base*))))
-              (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
-                      (logand #xff num)
-                      (ash (logand #xff00 num) -8)
-                      (logand #xffff num)
-                      word)
+            (if-let (num (and (= 1 (length run))
+                              (or (numberp (first run))
+                                  (ignore-errors
+                                   (parse-integer (first run) :radix *forth-base*)))))
+              (if (< num #x100)
+                  (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d constant: ~a"
+                          (logand #xff num)
+                          (logand #xff num)
+                          word)
+                  (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
+                          (logand #xff num)
+                          (ash (logand #xff00 num) -8)
+                          (logand #xffff num)
+                          word))
               (let (*forth-input-stuffing*)
+                (when (< 1 (length run))
+                  (format t "~%;;; start of ~a from ~a~@[ ~a~]"
+                          word (getf metadata :source "?") (getf metadata :source-file nil)))
                 (dolist (w (reverse (copy-list run)))
                   (push w *forth-input-stuffing*))
                 (loop while *forth-input-stuffing*
-                      do (forth-interpret (read-forth-word)))))
-            (force-output *standard-output*)
-            (format t "~%;;; end of ~a" word))
+                      do (forth-interpret (read-forth-word)))
+                (when (< 1 (length run))
+                  (format t "~%;;; end of ~a" word))))
+            (force-output *standard-output*))
           (forth-eval compile)))
     ;; else: No def
     (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
@@ -251,17 +261,21 @@
                       word (mangle-word-for-internals word)))
             (forth-eval compile)))
       (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
-        (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
-                (logand #xff num)
-                (ash (logand #xff00 num) -8)
-                (logand #xffff num))
+        (if (< num #x100)
+            (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
+                    (logand #xff num)
+                    (logand #xff num))
+            (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+                    (logand #xff num)
+                    (ash (logand #xff00 num) -8)
+                    (logand #xffff num)))
         (tagbody top
            (restart-case
                (error "Unknown word: ~a~%(mangles to: ~a)"
                       word (mangle-word-for-internals word))
              (continue ()
                :report "Continue, using a literal zero"
-               (format t "~%~10t.byte ForthPush, 0, 0~32t; XXX unknown word ~a (~a)"
+               (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
                        word
                        (mangle-word-for-internals word)))
              (words ()
