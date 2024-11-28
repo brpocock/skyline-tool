@@ -60,7 +60,7 @@ node [shape=Mrecord];
                                                       (cdr (gethash field slots)))
                                          do (format classes.forth "
  : ~a-~a! ~a~a prop! ;
- : ~a-~a ~a~a prop@ ; "
+ : ~a-~a@ ~a~a prop@ ; "
                                                     (param-case class-name)
                                                     (param-case field)
                                                     class-name field
