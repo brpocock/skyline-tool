@@ -48,12 +48,12 @@
        show-player-object
        show-self-object
        show-all-objects
-       show-room-for-objects)
+       show-room-for-objects
+       show-forth-stack)
       (lisp
        run-repl
        show-lisp-room
-       reload-skyline-tool-from-sources)
-      )
+       reload-skyline-tool-from-sources))
   :test 'equalp)
 
 (defun display-launcher-menu-item (entry pane)

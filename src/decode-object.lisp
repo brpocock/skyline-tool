@@ -443,18 +443,20 @@
                            ((plusp bam)
                             (unless quietp
                               (terpri)
-                              (clim:surrounding-output-with-border (t :shape :drop-shadow
-                                                                      :ink clim:+red+)
-                                                                   (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
-                                                                           j bam (bam-block->object-address j))))
+                              (clim:surrounding-output-with-border
+                               (t :shape :drop-shadow
+                                  :ink clim:+red+)
+                               (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
+                                       j bam (bam-block->object-address j))))
                             (push j unreachable ))
                            (visitation
                             (unless quietp
                               (terpri)
-                              (clim:surrounding-output-with-border (t :shape :drop-shadow
-                                                                      :ink clim:+red+)
-                                                                   (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
-                                                                           j (bam-block->object-address j))))
+                              (clim:surrounding-output-with-border
+                               (t :shape :drop-shadow
+                                  :ink clim:+red+)
+                               (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
+                                       j (bam-block->object-address j))))
                             (push j squatters)))
                       finally (return-from mark-and-sweep-objects
                                 (values unreachable squatters)))))
@@ -569,3 +571,23 @@ Room for objects:
                                        :height 555
                                        :process-name "Room for Objects"))
 
+(defun echo-forth-stack ()
+  "Print the status of the Forth stack"
+  (fresh-line)
+  (clim:surrounding-output-with-border
+   (t :shape :drop-shadow)
+   (clim:surrounding-output-with-border
+    (t :shape :drop-shadow)
+    (format t "ForthStack: $~4,'0x" (dump-peek "ForthStack"))
+    (format t "~%     Depth: ~d" (/ (- #x81 (dump-peek "ForthStack")) 2)))
+   (terpri)
+   (loop for i from (1+ (dump-peek "ForthStack")) below #x81 by 2
+         do (format t "~&$~4,'0x ~:*~5d"
+                    (+ (* #x100 (dump-peek (+ 1 (* 2 i) (find-label-from-files "ParamStack"))))
+                       (dump-peek (+ (* 2 i) (find-label-from-files "ParamStack"))))))))
+
+(defun show-forth-stack ()
+  "Show the Forth stack in a window"
+  (clim-simple-echo:run-in-simple-echo #'echo-forth-stack
+                                       :width 400 :height 1000
+                                       :process-name "Forth Stack"))
