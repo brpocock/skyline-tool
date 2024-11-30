@@ -2383,7 +2383,7 @@ but now also ~s."
                   (at (format nil " ~d " x))
                   (east " MapWidth ")
                   (west " -3 ")))
-        (format t " ~d make-boat DUP" y)
+        (format t " ~d make-boat " y)
         ;; TODO put people on the boat
         (when (eql east/west 'at)
           (return))

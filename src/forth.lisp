@@ -59,8 +59,8 @@
 ~10t.fi
 ~10t.send
 
-~10t.byte ForthPush
-~10t.word ~a"
+~10t.byte ForthPushWord, >~a, <~:*~a
+"
                        tag string tag)
                (return tag))
         else do (vector-push-extend char string)))
@@ -81,8 +81,7 @@
 ~10t.fi
 ~10t.send
 
-~10t.byte ForthPush
-~10t.word ~a
+~10t.byte ForthPushWord, >~a, <~:*~a
 "
                        tag
                        (mapcar (lambda (byte)
@@ -232,7 +231,7 @@
                           (logand #xff num)
                           (logand #xff num)
                           word)
-                  (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
+                  (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
                           (logand #xff num)
                           (ash (logand #xff00 num) -8)
                           (logand #xffff num)
@@ -254,7 +253,7 @@
       (destructuring-bind (run _compile &optional metadata) asm-def
         (if run
             (let ((num (parse-integer (first run))))
-              (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
+              (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
                       (logand #xff num)
                       (ash (logand #xff00 num) -8)
                       (logand #xffff num)
@@ -265,7 +264,7 @@
             (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
                     (logand #xff num)
                     (logand #xff num))
-            (format t "~%~10t.byte ForthPush, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+            (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
                     (logand #xff num)
                     (ash (logand #xff00 num) -8)
                     (logand #xffff num)))

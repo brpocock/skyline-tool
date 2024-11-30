@@ -676,8 +676,8 @@ Room for objects:
                   (t)
                   (format t "~@[$~4,'0x~]" 
                           (case (dump-peek forth-cursor)
-                            ((1 9 10 11 12) (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                               (dump-peek (+ 1 forth-cursor))))
+                            ((1 9 10 11) (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
+                                            (dump-peek (+ 1 forth-cursor))))
                             (13 (dump-peek (+ 1 forth-cursor)))
                             (otherwise nil))))
                  (clim:formatting-cell
@@ -685,10 +685,10 @@ Room for objects:
                   (format t "~@[~:d~]"
                           (case (dump-peek forth-cursor)
                             (0 (setf done-yet-p t) nil)
-                            ((1 9 10 11 12) (prog1
-                                                (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                                   (dump-peek (+ 1 forth-cursor)))
-                                              (incf forth-cursor 2)))
+                            ((1 9 10 11) (prog1
+                                             (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
+                                                (dump-peek (+ 1 forth-cursor)))
+                                           (incf forth-cursor 2)))
                             (13 (prog1
                                     (dump-peek (+ 1 forth-cursor))
                                   (incf forth-cursor 1)))
