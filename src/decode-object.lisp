@@ -713,7 +713,13 @@ Room for objects:
                                          (+ 32 (find-label-from-files (format nil "DialogueLine~x" (1+ line)))))))
                  "✗"))
      (when (= (1+ line) last-line)
-       (format t "~%—")))))
+       (format t "~%—"))))
+  (format t "~%
+DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d"
+          (dump-peek "DialogueLines")
+          (dump-peek "DialogueLinesToShow")
+          (dump-peek "DialogueLinesTarget")
+          (dump-peek "DialogueLinesShown")))
 
 (defun show-dialogue-buffers ()
   "Show the contents of the dialogue buffers"
