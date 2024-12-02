@@ -2870,7 +2870,7 @@ do-branching-dialogue "
               (game-over
                (assert (member value '("TITLE" "LOST" "WON") :test 'string-equal)
                        (value)
-                       "GAME OVER currently supports LOST or WON only, not ~s" value)
+                       "GAME OVER currently supports TITLE, LOST, or WON only, not ~s" value)
                (format t "~% GameOverKind~:(~a~) game-over"
                        value))
               (end

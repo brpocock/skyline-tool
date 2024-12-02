@@ -42,7 +42,9 @@
        shove-binary-into-running-7800-game-drive)
       (core-dump-analysis
        analyze-faults-from-dump
+       show-dll-from-dump
        compare-dlls-from-dumps
+       show-dialogue-buffers
        show-animation-buffer
        show-decal
        show-player-object
@@ -87,12 +89,17 @@
 (define-launcher-frame-command (com-run-nullary-function :menu nil :name t)
     ((function-name 'nullary-function-name :gesture :select))
   (clim-sys:make-process (lambda () (funcall function-name))
-               :name (cl-change-case:title-case (string function-name))))
+                         :name (cl-change-case:title-case (string function-name))))
+
+(defun show-dll-from-dump ()
+  "Show the decoded Display List List from the core dump"
+  (clim-simple-echo:run-in-simple-echo #'decode-dll-from-dump
+                                       :process-name "Display List List decoded"))
 
 (defun check-for-absent-assets-in-project-folder ()
   "Check the project folder for assets that are not mentioned in the Assets.index"
   (clim-simple-echo:run-in-simple-echo #'check-for-absent-assets
-                                                   :process-name "Check for absent assets"))
+                                       :process-name "Check for absent assets"))
 
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"

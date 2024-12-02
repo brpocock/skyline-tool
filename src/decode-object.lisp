@@ -699,3 +699,24 @@ Room for objects:
   (clim-simple-echo:run-in-simple-echo #'echo-forth-stack
                                        :width 700 :height 1000
                                        :process-name "Forth Stack"))
+(defun decode-dialogue (&optional (dump (load-dump-into-mem)))
+  (format t "~2%~a: "
+          (minifont->unicode
+           (subseq dump (find-label-from-files "DialogueSpeakerName")
+                   (+ (find-label-from-files "DialogueSpeakerName")
+                      (elt dump (find-label-from-files "DialogueSpeakerNameLength"))))))
+  (let ((last-line (dump-peek "DialogueTextLines")))
+   (dotimes (line 12)
+     (format t "~%“~a”"
+             (or (ignore-errors (minifont->unicode
+                                 (subseq dump (find-label-from-files (format nil "DialogueLine~x" (1+ line)))
+                                         (+ 32 (find-label-from-files (format nil "DialogueLine~x" (1+ line)))))))
+                 "✗"))
+     (when (= (1+ line) last-line)
+       (format t "~%—")))))
+
+(defun show-dialogue-buffers ()
+  "Show the contents of the dialogue buffers"
+  (clim-simple-echo:run-in-simple-echo #'decode-dialogue
+                                       :width 500 :height 500
+                                       :process-name "Dialogue Buffers"))

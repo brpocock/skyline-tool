@@ -59,7 +59,7 @@
 ~10t.fi
 ~10t.send
 
-~10t.byte ForthPushWord, >~a, <~:*~a
+~10t.byte ForthPushWord, <~a, >~:*~a
 "
                        tag string tag)
                (return tag))
@@ -81,7 +81,7 @@
 ~10t.fi
 ~10t.send
 
-~10t.byte ForthPushWord, >~a, <~:*~a
+~10t.byte ForthPushWord, <~a, >~:*~a
 "
                        tag
                        (mapcar (lambda (byte)
