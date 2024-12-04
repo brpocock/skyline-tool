@@ -43,4 +43,10 @@
 (defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))
 (defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
 
+(defparameter *all-builds*
+  (remove-if #'null
+             (list (when *publisher* "AA")
+                   (when (assoc :*demo *project.json*) "Demo")
+                   "Public")))
+
 (defvar *region* :ntsc)

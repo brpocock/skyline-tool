@@ -270,9 +270,6 @@
       (error "Unable to fit ~:d asset~:p into ~:d bank~:p of ROM, tried ~:d permutation~:p"
              (length assets) available-banks tries))))
 
-(define-constant +all-builds+ '("AA" "Public" "Demo")
-  :test #'equalp)
-
 (defun all-video (&optional (machine *machine*))
   (ecase machine
     (2600 '("NTSC" "PAL" "SECAM"))
@@ -311,8 +308,8 @@
 
 (defun allocate-assets (build &optional (*machine* 7800))
   "allocate the banks for assets for BUILD (AA, Public, &c)"
-  (assert (member build +all-builds+ :test 'equal) (build)
-          "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
+  (assert (member build *all-builds* :test 'equal) (build)
+          "BUILD must be one of ~{~a~^ or ~} not “~a”" *all-builds* build)
   (let ((assets-list (all-assets-for-build build)))
     (dolist (video (all-video))
       (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
@@ -1143,7 +1140,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
   (with-output-to-file (*standard-output* #p"Source/Generated/Makefile"
                                           :if-exists :supersede)
     (write-makefile-header)
-    (dolist (build +all-builds+)
+    (dolist (build *all-builds*)
       (dolist (video (all-video))
         (let ((*last-bank* (1- (number-of-banks build video))))
           (dotimes (*bank* (1+ *last-bank*))
@@ -1167,7 +1164,7 @@ mentioned in the top-level Makefile."
     (write-makefile-test-target)
     (write-test-header-script)
     (write-makefile-test-banks)
-    (dolist (build +all-builds+)
+    (dolist (build *all-builds*)
       (dolist (video (all-video))
         (let ((*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
