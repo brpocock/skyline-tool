@@ -443,12 +443,12 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
   (let ((target-prefix (concatenate 'string (typecase target
                                               (pathname (enough-namestring target))
                                               (string target)
-                                              (t (princ-to-string target)))
-                                    ":")))
+                                              (t (princ-to-string target))))))
     (with-input-from-file (makefile #p"Makefile")
       (loop for line = (read-line makefile nil nil)
             while line
-            when (eql 0 (search target-prefix line))
+            when (and (find #\: line)
+                      (eql 0 (search target-prefix line)))
               do (return t)))))
 
 (defun find-included-file (name &key cwd testp)
@@ -482,8 +482,15 @@ file ~a.s in bank $~(~2,'0x~)~
       (make-pathname :directory '(:relative "Object")
                      :name "Stagehand" :type "o")))
   (when (eql 0 (search "Art." name))
+    (princ "HERE I AM" *trace-output*)
     (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
                                         :name (subseq name 4) :type "art")))
+      (when (probe-file possible-file)
+        (return-from find-included-binary-file
+          (make-pathname :directory '(:relative "Object" "Assets") 
+                         :name name :type "o"))))
+    (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
+                                        :name (subseq name 4) :type "png")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
           (make-pathname :directory '(:relative "Object" "Assets") 
@@ -516,7 +523,8 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun recursive-read-deps (source-file &key testp)
   (unless (equal (pathname-type source-file) "o")
     (unless (probe-file source-file)
-      (if (skyline-tool-writes-p source-file)
+      (if (or (skyline-tool-writes-p source-file)
+              (makefile-contains-target-p source-file))
           (write-source-file source-file)
           (error "Can't find “~a” and don't know how to make it~2%(~s)" 
                  (enough-namestring source-file) source-file)))
@@ -560,7 +568,8 @@ file ~a.s in bank $~(~2,'0x~)~
           "ShoppingTable" 'compile-shops
           "ClassConstants" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops
-          "InventoryLabels" 'write-inventory-tables)
+          "InventoryLabels" 'write-inventory-tables
+          "gFont" 'write-2600-24char-font)
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)
@@ -926,9 +935,7 @@ Dist/~a.~a.~a.a26: \\~
                   *game-title*
                   build video
                   (loop for bank below (number-of-banks build video)
-                        appending (list bank build video))
-                  build video
-                  *game-title*))
+                        appending (list bank build video))))
     (7800 (format t "~%
 Dist/~a.~a.~a.a78: ~0@* Dist/~a.~a.~a.bin
 	cp $^ $@

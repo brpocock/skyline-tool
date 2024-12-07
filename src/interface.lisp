@@ -43,6 +43,7 @@
         :repl 'run-repl
         :run-script 'run-script
         :read-script 'play-script-on-atarivox
+        :write-2600-24char-font 'write-2600-24char-font
         :write-asset-bank 'write-asset-bank
         :write-asset-ids 'write-asset-ids
         :write-cart-header 'write-cart-header

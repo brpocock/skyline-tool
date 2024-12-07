@@ -2679,3 +2679,40 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
+
+(defun write-2600-24char-font (&optional (font-pathname #p"Source/Art/Font.png"))
+  (let* ((font-chars (concatenate 'string
+                                  " !\"#$%&'*()+,-./0123456789:;€=¥?"
+                                  "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[÷]©©"
+                                  "£abcdefghijklmnopqrstuvwxyz×¬°•♩"))
+         (png (png-read:read-png-file font-pathname))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (α (png-read:transparency png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)
+                                       α)))
+    (with-output-to-file (font.s "Source/Generated/Assets/Font.s" :if-exists :supersede)
+      (format font.s ";;; Font compiled from ~a
+;;; This is a generated file, edit the source XCF file
+
+Font: .block~%"
+              (enough-namestring font-pathname))
+      (dotimes (input-row 3)
+        (dotimes (input-column #x20)
+          (let ((char (+ input-column (* #x20 input-row)))
+                (indent (* 4 input-column))
+                (bytes (list)))
+            (dotimes (input-line 8)
+              (let ((line-from-top (+ input-line (* 8 input-row)))
+                    (byte 0))
+                (dotimes (input-pixel 4)
+                  (when (plusp (aref palette-pixels (+ indent input-pixel) line-from-top))
+                    (setf byte (logior byte
+                                       (ash #x11 (- 3 input-pixel))))))
+                (push byte bytes)))
+            (format font.s "~%Character_~a:~32t; ~a~{~%~10t.byte %~8,'0b~}~%"
+                    (pascal-case (char-name (aref font-chars char)))
+                    (title-case (char-name (aref font-chars char)))
+                    bytes))))
+      (format font.s "~2%~10t.bend~%"))))
