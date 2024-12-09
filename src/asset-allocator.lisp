@@ -465,11 +465,11 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
         (return-from find-included-file possible-file))))
   (let ((generated-pathname
           (make-pathname :directory '(:relative "Source" "Generated")
-                         :name name :type "s"))) 
+                         :name name :type "s")))
     (when (skyline-tool-writes-p generated-pathname)
       (return-from find-included-file generated-pathname))
-    (if (makefile-contains-target-p generated-pathname)
-        (return-from find-included-file generated-pathname)))
+    (when (makefile-contains-target-p generated-pathname)
+      (return-from find-included-file generated-pathname)))
   (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~(~2,'0x~)~
 ~@[~&Current working directory: ~a~]~
@@ -523,11 +523,13 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun recursive-read-deps (source-file &key testp)
   (unless (equal (pathname-type source-file) "o")
     (unless (probe-file source-file)
-      (if (or (skyline-tool-writes-p source-file)
-              (makefile-contains-target-p source-file))
-          (write-source-file source-file)
-          (error "Can't find “~a” and don't know how to make it~2%(~s)" 
-                 (enough-namestring source-file) source-file)))
+      (cond
+        ((skyline-tool-writes-p source-file)
+         (write-source-file source-file))
+        ((zerop (or (search "Art." (pathname-name source-file)) 1))
+         (return-from recursive-read-deps nil))
+        (t (error "Can't find “~a” and don't know how to make it~2%(~s)" 
+                  (enough-namestring source-file) source-file))))
     (with-input-from-file (source source-file)
       (let* ((testp (or testp
                         (when (search "Tests" (namestring source-file)) t)))
