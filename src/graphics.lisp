@@ -1387,7 +1387,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                            height width image-pixels)
   (let ((out-file-name (merge-pathnames
                         (make-pathname :name
-                                       (pathname-name png-file)
+                                       (concatenate 'string "Art." (pathname-name png-file))
                                        :type "s")
                         out-dir)))
     (format *trace-output* "~% Ripping TIA Player graphics from ~D×~D image"
