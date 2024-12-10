@@ -412,14 +412,19 @@ Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
           (pathname-name pathname)))
 
 (defun write-art-generation (pathname)
-  (format t "~%
+  (if (= 7800 *machine*)
+      (format t "~%
 Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%~10t~a \\~}~%~10tbin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-7800 $@ $<"
-          (pathname-name pathname)
-          (pathname-name pathname)
-          (mapcar (compose #'enough-namestring #'second)
-                  (read-7800-art-index pathname))))
+              (pathname-name pathname)
+              (pathname-name pathname)
+              (mapcar (compose #'enough-namestring #'second)
+                      (read-7800-art-index pathname)))
+      (format t "~%
+Source/Generated/Assets/Art.~a.s: Source/Art/~:*~a.png bin/skyline-tool
+	bin/skyline-tool compile-art $@ $<"
+              (pathname-name pathname))))
 
 (defun write-tsx-generation (pathname)
   (if (and (search "Decals" (pathname-name pathname))
@@ -482,15 +487,8 @@ file ~a.s in bank $~(~2,'0x~)~
       (make-pathname :directory '(:relative "Object")
                      :name "Stagehand" :type "o")))
   (when (eql 0 (search "Art." name))
-    (princ "HERE I AM" *trace-output*)
     (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
                                         :name (subseq name 4) :type "art")))
-      (when (probe-file possible-file)
-        (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets") 
-                         :name name :type "o"))))
-    (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
-                                        :name (subseq name 4) :type "png")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
           (make-pathname :directory '(:relative "Object" "Assets") 

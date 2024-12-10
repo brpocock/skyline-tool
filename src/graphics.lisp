@@ -1236,8 +1236,8 @@ Proceed with caution."))
       (let ((*machine* (or (when (not (eql :unknown *machine*)) *machine*) 7800)))
         (compile-font-generic *machine* nil font font-input)))))
 
-(defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  (declare (ignore))
+(defun compile-font-8×8 (png-file out-dir &optional height width image-nybbles)
+  (declare (ignore height width image-nybbles))
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
@@ -1391,9 +1391,16 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             (zerop (mod width 4))
             (= 48 (* (/ height 5) (/ width 4)))
             (monochrome-image-p palette-pixels))
-       (format *trace-output* "~% Image ~A seems to be a font" png-file)
+       (format *trace-output* "~% Image ~A seems to be an 8×5 font" png-file)
        (compile-font-8×8 png-file target-dir height width palette-pixels))
-
+      
+      ((and (zerop (mod height 8))
+            (zerop (mod width 4))
+            (= 192 (* (/ height 8) (/ width 4)))
+            (monochrome-image-p palette-pixels))
+       (format *trace-output* "~% Image ~A seems to be a 4×8 font" png-file)
+       (write-2600-24char-font png-file))
+      
       ((and (= width 48))
        (format *trace-output* "~% Image ~a seems to be a 48px ~
  “high-resolution” bitmap"
@@ -1412,7 +1419,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                 (zerop (mod height 8))))
        (format *trace-output* "~% Image ~A seems to be sprite (player) data"
                png-file)
-       #+ () (compile-tia-player png-file target-dir height width palette-pixels))
+       (compile-tia-player png-file target-dir height width palette-pixels))
 
       ((and (zerop (mod width 8))
             (zerop (mod height 8)))
@@ -2007,16 +2014,14 @@ pixels; PALETTE is the palette to which to hold the image."
                         (parse-into-7800-bytes
                          (read-7800-art-index index-in))))))
 
-(defun compile-art (index-out &rest png-files)
-  "Compile to create INDEX-OUT from PNG-FILE/s"
-  (let ((*machine* (or (when (every #'digit-char-p (first png-files))
-                         (prog1
-                             (parse-integer (first png-files))
-                           (setf png-files (rest png-files))))
-                       (machine-from-filename index-out)
-                       5200)))
-    (dolist (file png-files)
-      (dispatch-png file index-out))))
+(defun compile-art (source &rest png-files)
+  "Compile to create SOURCE from PNG-FILE/s"
+  (ensure-directories-exist source)
+  (format *trace-output* "~&Compiling ~a from ~:d PNG file~:p ~s"
+          source (length png-files) png-files)
+  (dolist (file png-files)
+    (format *trace-output* "~&Compiling art: ~a" file)
+    (dispatch-png file source)))
 
 (defun def->tile-id (tile-definition x y)
   (destructuring-bind (tag x₀ y₀ x₁ y₁) tile-definition
@@ -2142,15 +2147,15 @@ pixels; PALETTE is the palette to which to hold the image."
   (let ((tiles (make-array (list 4 8) :element-type 'fixnum)))
     (dotimes (y 8)
       (dotimes (2x 4)
-        (let ((big-endian-p (evenp 2x)))
-          (let* ((left (aref screen (* 2x 2) y))
-                 (right (aref screen (1+ (* 2x 2)) y))
-                 #+ ()  (tile-hash (tile-hash left right big-endian-p))
-                 (merged-tile (or (gethash tile-hash *merged-tiles*)
-                                  (setf (gethash tile-hash *merged-tiles*)
-                                        (incf *tile-counter*)))))
-            (assert (<= merged-tile *tile-counter*))
-            (setf (aref tiles 2x y) merged-tile)))))
+        (let* ((big-endian-p (evenp 2x))
+               (left (aref screen (* 2x 2) y))
+               (right (aref screen (1+ (* 2x 2)) y))
+               (tile-hash (tile-hash left right big-endian-p))
+               (merged-tile (or (gethash tile-hash *merged-tiles*)
+                                (setf (gethash tile-hash *merged-tiles*)
+                                      (incf *tile-counter*)))))
+          (assert (<= merged-tile *tile-counter*))
+          (setf (aref tiles 2x y) merged-tile))))
     tiles))
 
 (defun screen-to-grid/tia (screen)
