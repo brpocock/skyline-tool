@@ -1383,6 +1383,42 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 (defun monochrome-image-p (palette-pixels)
   (> 3 (length (image-colours palette-pixels))))
 
+(defun compile-tia-player (png-file out-dir 
+                           height width image-pixels)
+  (let ((out-file-name (merge-pathnames
+                        (make-pathname :name
+                                       (pathname-name png-file)
+                                       :type "s")
+                        out-dir)))
+    (format *trace-output* "~% Ripping TIA Player graphics from ~D×~D image"
+            width height)
+    (finish-output *trace-output*)
+    (ensure-directories-exist out-file-name)
+    (with-output-to-file (source-file out-file-name
+                                      :if-exists :supersede)
+      (multiple-value-bind (shape colors) (tia-player-interpret image-pixels)
+        (format source-file ";;; -*- fundamental -*-
+;;; Compiled sprite data from ~a
+;;; Edit the original (probably art/sprites/~:*~a.xcf),
+;;; editing this file is futile.
+
+~a:     .block
+        Height = ~d
+        Width = ~d
+Shape:~{~a~}
+;CoLu:~{~%      ;.colu ~{~a, $~1x~}~}
+        .bend
+"
+                (pathname-name png-file)
+                (assembler-label-name (pathname-base-name png-file))
+                height width
+                (if (and (mod height 16) (> height 200))
+                    (mapcar #'byte-and-art (reverse-16 shape))
+                    (mapcar #'byte-and-art (reverse-7-or-8 shape)))
+                
+                (mapcar #'atari-colu colors)))
+      (format *trace-output* "~% Done writing to ~A" out-file-name))))
+
 (defmethod dispatch-png% ((machine (eql 2600)) png-file target-dir
                           png height width α palette-pixels)
   (let ((monochrome-lines-p (monochrome-lines-p palette-pixels height width)))
@@ -1393,14 +1429,14 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             (monochrome-image-p palette-pixels))
        (format *trace-output* "~% Image ~A seems to be an 8×5 font" png-file)
        (compile-font-8×8 png-file target-dir height width palette-pixels))
-      
+
       ((and (zerop (mod height 8))
             (zerop (mod width 4))
             (= 192 (* (/ height 8) (/ width 4)))
             (monochrome-image-p palette-pixels))
        (format *trace-output* "~% Image ~A seems to be a 4×8 font" png-file)
        (write-2600-24char-font png-file))
-      
+
       ((and (= width 48))
        (format *trace-output* "~% Image ~a seems to be a 48px ~
  “high-resolution” bitmap"
