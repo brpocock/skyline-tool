@@ -34,6 +34,7 @@
         :compile-art-7800 'compile-art-7800
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
+        :labels-to-dasm 'labels-to-dasm
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops

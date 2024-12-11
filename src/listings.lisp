@@ -72,3 +72,30 @@ printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
                 (or break 0)
                 (or minor-fault 0))))))
+
+(defun labels-to-dasm (labels-file sym-file)
+  "Converts LABELS-FILE into a format like dasm writes as SYM-FILE"
+  (with-output-to-file (sym sym-file :if-exists :supersede)
+    (with-input-from-file (labels labels-file)
+      (let ((symbols (make-hash-table)))
+        (loop for line = (read-line labels nil nil)
+              for (label address &rest ignorep) = (mapcar (curry #'string-trim " :")
+                                                          (split-sequence #\= line))
+              while (and label address)
+              do (unless (and nil ignorep)
+                   (when-let (addr (or (let* ((position (position #\$ address))
+                                              (digits (and position
+                                                           (subseq address (1+ position)))))
+                                         (and digits
+                                              (every (rcurry #'digit-char-p 16) digits)
+                                              (parse-integer digits :radix 16)))
+                                       (when (every #'digit-char-p address)
+                                         (parse-integer address))
+                                       nil))
+                     (when (or (<= #x80 addr #xff)
+                               (<= #xd000 addr #xd3ff)
+                               (<= #xf000 addr))
+                       (setf (gethash addr symbols) (cl-change-case:param-case label))))))
+        (loop for addr being the hash-keys of symbols
+              for label = (gethash addr symbols)
+              do (format sym "~21a ~4,10x ???? ~%" (string-trim " " label) addr))))))
