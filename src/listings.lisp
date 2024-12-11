@@ -98,4 +98,4 @@ printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
                        (setf (gethash addr symbols) (cl-change-case:param-case label))))))
         (loop for addr being the hash-keys of symbols
               for label = (gethash addr symbols)
-              do (format sym "~21a ~4,10x ???? ~%" (string-trim " " label) addr))))))
+              do (format sym "~21a ~4,'0x ???? ~%" (string-trim " " label) addr))))))
