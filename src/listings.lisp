@@ -95,7 +95,7 @@ printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
                      (when (or (<= #x80 addr #xff)
                                (<= #xd000 addr #xd3ff)
                                (<= #xf000 addr))
-                       (setf (gethash addr symbols) (cl-change-case:param-case label))))))
+                       (setf (gethash addr symbols) label)))))
         (loop for addr being the hash-keys of symbols
               for label = (gethash addr symbols)
               do (format sym "~21a ~4,'0x ???? ~%" (string-trim " " label) addr))))))
