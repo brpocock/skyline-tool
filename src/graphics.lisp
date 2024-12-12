@@ -815,7 +815,7 @@ PNG image in an unsuitable format:
 (defun compile-tia-48px (png-file out-dir height image-pixels)
   (let ((out-file-name (merge-pathnames
                         (make-pathname :name
-                                       (pathname-name png-file)
+                                       (format nil "Art.~a" (pathname-name png-file))
                                        :type "s")
                         out-dir)))
     (format *trace-output* "~% Ripping TIA 48px graphics from 48×~D image"
@@ -834,7 +834,7 @@ PNG image in an unsuitable format:
  Height = ~d
  Width = 48
 Shape:~{~{~a~}~2%~}
-;CoLu:~{~%	.byte ~{~a~^ ~}~}
+Colors:~{~%~10t.byte ~a~}
  .bend
 "
                 (pathname-name png-file)
@@ -842,9 +842,7 @@ Shape:~{~{~a~}~2%~}
                 (assembler-label-name (pathname-base-name png-file))
                 height
                 (mapcar (curry #'mapcar #'byte-and-art) shape)
-                (mapcar (lambda (palette)
-                          (mapcar #'atari-colu-string palette))
-                        colors)))
+                (mapcar #'atari-colu-string colors)))
       (format *trace-output* "~% Done writing to ~A" out-file-name))))
 
 (defun reverse-7-or-8 (shape)
@@ -1406,7 +1404,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
         Height = ~d
         Width = ~d
 Shape:~{~a~}
-;CoLu:~{~%      ;.colu ~{~a, $~1x~}~}
+Color:~{~%      ;.byte ~a~}
         .bend
 "
                 (pathname-name png-file)
@@ -1415,8 +1413,7 @@ Shape:~{~a~}
                 (if (and (mod height 16) (> height 200))
                     (mapcar #'byte-and-art (reverse-16 shape))
                     (mapcar #'byte-and-art (reverse-7-or-8 shape)))
-                
-                (mapcar #'atari-colu colors)))
+                (mapcar #'atari-colu-string colors)))
       (format *trace-output* "~% Done writing to ~A" out-file-name))))
 
 (defmethod dispatch-png% ((machine (eql 2600)) png-file target-dir
