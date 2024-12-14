@@ -834,7 +834,7 @@ PNG image in an unsuitable format:
  Height = ~d
  Width = 48
 Shape:~{~{~a~}~2%~}
-Colors:~{~%~10t.byte ~a~}
+;; Colors:~{~%~10t;; .byte ~a~}
  .bend
 "
                 (pathname-name png-file)
