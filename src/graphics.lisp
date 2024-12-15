@@ -2721,7 +2721,7 @@ Columns: ~d
 (defun write-2600-24char-font (&optional (font-pathname #p"Source/Art/Font.png"))
   (let* ((font-chars (concatenate 'string
                                   " !\"#$%&'*()+,-./0123456789:;€=¥?"
-                                  "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[÷]©©"
+                                  "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[÷]©"
                                   "£abcdefghijklmnopqrstuvwxyz×¬°•♩"))
          (png (png-read:read-png-file font-pathname))
          (height (png-read:height png))
