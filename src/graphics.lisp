@@ -2719,6 +2719,7 @@ Columns: ~d
     (t nil)))
 
 (defun write-2600-24char-font (&optional (font-pathname #p"Source/Art/Font.png"))
+  (format *trace-output* "~&Writing 24-character (4×8px) font for the 2600… ")
   (let* ((font-chars (concatenate 'string
                                   " !\"#$%&'*()+,-./0123456789:;€=¥?"
                                   "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[÷]©"
@@ -2754,4 +2755,5 @@ Font: .block~%"
                     (pascal-case (char-name (aref font-chars char)))
                     (title-case (char-name (aref font-chars char)))
                     bytes))))
-      (format font.s "~2%~10t.bend~%"))))
+      (format font.s "~2%~10t.bend~%")))
+  (format *trace-output* " … Done~%"))

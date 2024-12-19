@@ -569,7 +569,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "ClassConstants" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops
           "InventoryLabels" 'write-inventory-tables
-          "gFont" 'write-2600-24char-font)
+          "Font" 'write-2600-24char-font)
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)
