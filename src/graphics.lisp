@@ -2731,8 +2731,8 @@ Columns: ~d
          (palette-pixels (png->palette height width
                                        (png-read:image-data png)
                                        α)))
-    (ensure-directories-exist #p"Source/Generated/Assets/Font.s")
-    (with-output-to-file (font.s #p"Source/Generated/Assets/Font.s" :if-exists :supersede)
+    (ensure-directories-exist #p"Source/Generated/Font.s")
+    (with-output-to-file (font.s #p"Source/Generated/Font.s" :if-exists :supersede)
       (format font.s ";;; Font compiled from ~a
 ;;; This is a generated file, edit the source XCF file
 
