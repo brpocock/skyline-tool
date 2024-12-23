@@ -1202,7 +1202,10 @@ Music:~:*
                       &optional (machine-type$ "2600")
                                 (sound-chip "TIA")
                                 (output-coding "NTSC"))
-  (let ((*machine* (parse-integer machine-type$)))
+  "Compile SOURCE-OUT-NAME from IN-FILE-NAME, a MIDI file
+
+Optional args: MACHINE-TYPE SOUND-CHIP OUTPUT-CODING"
+  (let ((*machine* (or *machine* (parse-integer machine-type$))))
     (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
     (ecase *machine*
       (2600 (compile-music-2600 source-out-name in-file-name))
