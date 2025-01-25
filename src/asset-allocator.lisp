@@ -749,8 +749,10 @@ file ~a.s in bank $~(~2,'0x~)~
          (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a)" asset-indicator))
         ((script-asset-p asset-indicator)
          (format t "~%
-~a: ~a Source/Tables/SpeakJet.dic\\
+~a: ~a \\
+~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth \\
 ~10tSource/Assets.index bin/skyline-tool
+	# FIXME NTSC is not actually right for everyone
 	mkdir -p Object/Assets
 	~a"
                  (asset->object-name asset-indicator)
