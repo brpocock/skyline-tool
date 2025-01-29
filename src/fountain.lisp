@@ -2372,7 +2372,7 @@ but now also ~s."
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*))
           (boat-class (gethash ship-name *boat-classes*)))
-      (format t "~%~10t( Boat “~:(~a~)” appears, headed to ~a )" ship-name target)
+      (format t "~%~10t( Boat “~:(~a~)” appears, headed to ~{~a~^ ~} )" ship-name target)
       (destructuring-bind (kind x y) (interpret-place target)
         (assert (eql kind :absolute) (kind)
                 "KIND of location for positioning a boat must be absolute, but got ~s" kind)
@@ -2381,7 +2381,7 @@ but now also ~s."
                 boat-class
                 (ecase east/west
                   (at (format nil " ~d " x))
-                  (east " MapWidth ")
+                  (east " MapWidth C@ ")
                   (west " -3 ")))
         (format t " ~d make-boat " y)
         ;; TODO put people on the boat
@@ -2842,7 +2842,7 @@ do-branching-dialogue "
               (metadata
                (format t "~% ( ~a )" value))
               (comment
-               (format t "~% ( ~a )" value))
+                (format t "~% ( ~a )" value))
               (label
                (format t "~% ( ~a LABEL FIXME )"
                        (pascal-case value)))
