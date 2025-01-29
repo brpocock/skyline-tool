@@ -1390,7 +1390,12 @@ EndOfBinary = *
                        (mapcar (lambda (each)
                                  (string-trim #(#\Space #\Newline) each)) 
                                (split-sequence #\= line))
-                     (when-let (number (cond 
+                     (when-let (number (cond
+                     			 ((char= #\~ (char value 0))
+                     			  (logxor #xffff
+                     			    (if (char= #\$ (char value 1))
+                                              (parse-integer (subseq value 2) :radix 16)
+                     			      (parse-integer (subseq value 1)))))
                                          ((char= #\$ (char value 0))
                                           (parse-integer (subseq value 1) :radix 16))
                                          ((every #'digit-char-p value)
