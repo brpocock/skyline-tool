@@ -2793,7 +2793,7 @@ but now also ~s."
          (reload-atarivox-dictionary)
          (go top))))
   (format t " C\" ~a\"
-( TODO SpeakJet )
+0 ( TODO SpeakJet )
 do-branching-dialogue "
           text 
           (if (string-equal "CONTINUE" option)
@@ -2858,7 +2858,7 @@ do-branching-dialogue "
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
                    (found-in-scene-p
-                    (format t "~% CharacterID_~a dialogue-set-speaker"
+                    (format t "~% CharacterID_~a "
                             (pascal-case (string name))))
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
