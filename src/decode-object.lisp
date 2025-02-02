@@ -602,10 +602,7 @@ Room for objects:
                                        (+ i (find-label-from-files "ParamStack"))))
                              (clim:formatting-cell
                                  (t)
-                               (format t " $~2,'0x:  "
-                                       i
-                                       (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                          (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                               (format t " $~2,'0x:  " i))
                              (clim:formatting-cell
                                  (t)
                                (format t " $~4,'0x "
@@ -622,8 +619,8 @@ Room for objects:
         (clim:surrounding-output-with-border
             (t :shape :drop-shadow)
           (format t "ForthCursor (@$~4,'0x): $~2,'0x:~4,'0x"
-                  (dump-peek "CurrentBank")
                   (find-label-from-files "ForthCursor")
+                  (dump-peek "CurrentBank")
                   (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
                      (dump-peek (find-label-from-files "ForthCursor"))))
           (format t "~&ForthExecuteOneOpcode: $~4,'0x" (find-label-from-files "ForthExecuteOneOpcode")))
