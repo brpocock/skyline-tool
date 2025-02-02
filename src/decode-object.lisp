@@ -366,7 +366,7 @@
     (multiple-value-bind (class-name other-object)
         (decode-object (subseq dump offset) offset dump)
       (when (and other-object (> other-object #x100))
-        (decode-object-at dump other-object dump))
+        (decode-object-at dump other-object))
       class-name)))
 
 (defun decode-all-objects (&optional (dump (load-dump-into-mem)))
