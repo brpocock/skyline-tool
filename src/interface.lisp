@@ -390,7 +390,7 @@ Supply a list of verb(s) to see detailed documentation"
  ————————————
 
 Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com); 
-Copyright © 2024 Interworldly Adventuring, LLC.
+Copyright © 2024-2025 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
