@@ -366,7 +366,7 @@
     (multiple-value-bind (class-name other-object)
         (decode-object (subseq dump offset) offset dump)
       (when (and other-object (> other-object #x100))
-        (decode-object-at dump other-object dump))
+        (decode-object-at dump other-object))
       class-name)))
 
 (defun decode-all-objects (&optional (dump (load-dump-into-mem)))
@@ -575,124 +575,122 @@ Room for objects:
   "Print the status of the Forth stack"
   (fresh-line)
   (clim:formatting-table
-   (t)
-   (clim:formatting-row
-    (t)
-    (clim:formatting-cell
-     (t)
-     (clim:surrounding-output-with-border
-      (t :shape :drop-shadow)
-      (clim:surrounding-output-with-border
-       (t :shape :drop-shadow)
-       (format t "ParamStack at $~4,'0x" (find-label-from-files "ParamStack"))
-       (format t "~%ForthStack: $~2,'0x" (dump-peek "ForthStack"))
-       (format t "~%     Depth: ~d" (/ (- #x81 (dump-peek "ForthStack")) 2)))
-      (terpri)
-      (if (= #x81 (dump-peek "ForthStack"))
-          (format t "~2%     Ø~2%(empty stack)")
-          (let ((i (dump-peek "ForthStack")))
-            (clim:formatting-table
-             (t)
-             (loop while (< i #x81)
-                   do (clim:formatting-row
-                       (t)
+      (t)
+    (clim:formatting-row
+        (t)
+      (clim:formatting-cell
+          (t)
+        (clim:surrounding-output-with-border
+            (t :shape :drop-shadow)
+          (clim:surrounding-output-with-border
+              (t :shape :drop-shadow)
+            (format t "ParamStack at $~4,'0x" (find-label-from-files "ParamStack"))
+            (format t "~%ForthStack: $~2,'0x" (dump-peek "ForthStack"))
+            (format t "~%     Depth: ~d" (/ (- #x81 (dump-peek "ForthStack")) 2)))
+          (terpri)
+          (if (= #x81 (dump-peek "ForthStack"))
+              (format t "~2%     Ø~2%(empty stack)")
+              (let ((i (dump-peek "ForthStack")))
+                (clim:formatting-table
+                    (t)
+                  (loop while (< i #x81)
+                        do (clim:formatting-row
+                               (t)
+                             (clim:formatting-cell
+                                 (t)
+                               (format t "$~4,'0x "
+                                       (+ i (find-label-from-files "ParamStack"))))
+                             (clim:formatting-cell
+                                 (t)
+                               (format t " $~2,'0x:  " i))
+                             (clim:formatting-cell
+                                 (t)
+                               (format t " $~4,'0x "
+                                       (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
+                                          (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                             (clim:formatting-cell
+                                 (t)
+                               (format t " ~:d"
+                                       (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
+                                          (dump-peek (+ i (find-label-from-files "ParamStack")))))))
+                        do (incf i 2)))))))
+      (clim:formatting-cell
+          (t)
+        (clim:surrounding-output-with-border
+            (t :shape :drop-shadow)
+          (format t "ForthCursor (@$~4,'0x): $~2,'0x:~4,'0x"
+                  (find-label-from-files "ForthCursor")
+                  (dump-peek "CurrentBank")
+                  (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
+                     (dump-peek (find-label-from-files "ForthCursor"))))
+          (format t "~&ForthExecuteOneOpcode: $~4,'0x" (find-label-from-files "ForthExecuteOneOpcode")))
+        (terpri)
+        (clim:surrounding-output-with-border
+            (t :shape :drop-shadow)
+          (format t "Last opcode: $~2,'0x ~a"
+                  (dump-peek "LastForthOp")
+                  (pascal-case (string (case (dump-peek "LastForthOp")
+                                         (0 'e-o-l)
+                                         (13 'push-byte) (1 'push-word)
+                                         (2 'set-byte) (3 'set-word)
+                                         (4 'get-byte) (5 'get-word)
+                                         (6 'execute) (11 'go)
+                                         (7 'dup) (8 'drop) (12 'swap)
+                                         (9 'unless) (10 'when)
+                                         
+                                         (otherwise "⚠")))))
+          (clim:surrounding-output-with-border
+              (t :shape :underline)
+            (format t "~2%Next opcodes:"))
+          (terpri)
+          (clim:formatting-table
+              (t)
+            (loop for i from 1 upto 32
+                  with done-yet-p = nil
+                  while (and (< i 32) (not done-yet-p))
+                  for forth-cursor from (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
+                                           (dump-peek (find-label-from-files "ForthCursor")))
+                  do (clim:formatting-row
+                         (t)
                        (clim:formatting-cell
-                        (t)
-                        (format t "$~4,'0x "
-                                (+ i (find-label-from-files "ParamStack"))))
+                           (t)
+                         (format t "$~2,'0x:" forth-cursor))
                        (clim:formatting-cell
-                        (t)
-                        (format t " $~2,'0x:  "
-                                i
-                                (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                   (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                           (t)
+                         (format t "$~2,'0x" (dump-peek forth-cursor)))
                        (clim:formatting-cell
-                        (t)
-                        (format t " $~4,'0x "
-                                (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                   (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                           (t)
+                         (format t "~a" (pascal-case (string (case (dump-peek forth-cursor)
+                                                               (0 'e-o-l)
+                                                               (13 'push-byte) (1 'push-word)
+                                                               (2 'set-byte) (3 'set-word)
+                                                               (4 'get-byte) (5 'get-word)
+                                                               (6 'execute) (11 'go)
+                                                               (7 'dup) (8 'drop) (12 'swap)
+                                                               (9 'unless) (10 'when)
+                                                               
+                                                               (otherwise "⚠"))))))
                        (clim:formatting-cell
-                        (t)
-                        (format t " ~:d"
-                                (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                   (dump-peek (+ i (find-label-from-files "ParamStack")))))))
-                   do (incf i 2)))))))
-    (clim:formatting-cell
-     (t)
-     (clim:surrounding-output-with-border
-      (t :shape :drop-shadow)
-      (format t "ForthCursor: $~2,'0x:~4,'0x"
-              (dump-peek "CurrentBank")
-              (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
-                 (dump-peek (find-label-from-files "ForthCursor"))))
-      (format t "~&ForthExecuteOneOpcode: $~4,'0x" (find-label-from-files "ForthExecuteOneOpcode")))
-     (terpri)
-     (clim:surrounding-output-with-border
-      (t :shape :drop-shadow)
-      (format t "Last opcode: $~2,'0x ~a"
-              (dump-peek "LastForthOp")
-              (pascal-case (string (case (dump-peek "LastForthOp")
-                                     (0 'e-o-l)
-                                     (13 'push-byte) (1 'push-word)
-                                     (2 'set-byte) (3 'set-word)
-                                     (4 'get-byte) (5 'get-word)
-                                     (6 'execute) (11 'go)
-                                     (7 'dup) (8 'drop) (12 'swap)
-                                     (9 'unless) (10 'when)
-                                     
-                                     (otherwise "⚠")))))
-      (clim:surrounding-output-with-border
-       (t :shape :underline)
-       (format t "~2%Next opcodes:"))
-      (terpri)
-      (clim:formatting-table
-       (t)
-       (loop for i from 1 upto 32
-             with done-yet-p = nil
-             while (and (< i 32) (not done-yet-p))
-             for forth-cursor from (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
-                                      (dump-peek (find-label-from-files "ForthCursor")))
-             do (clim:formatting-row
-                 (t)
-                 (clim:formatting-cell
-                  (t)
-                  (format t "$~2,'0x:" forth-cursor))
-                 (clim:formatting-cell
-                  (t)
-                  (format t "$~2,'0x" (dump-peek forth-cursor)))
-                 (clim:formatting-cell
-                  (t)
-                  (format t "~a" (pascal-case (string (case (dump-peek forth-cursor)
-                                                        (0 'e-o-l)
-                                                        (13 'push-byte) (1 'push-word)
-                                                        (2 'set-byte) (3 'set-word)
-                                                        (4 'get-byte) (5 'get-word)
-                                                        (6 'execute) (11 'go)
-                                                        (7 'dup) (8 'drop) (12 'swap)
-                                                        (9 'unless) (10 'when)
-                                                        
-                                                        (otherwise "⚠"))))))
-                 (clim:formatting-cell
-                  (t)
-                  (format t "~@[$~4,'0x~]" 
-                          (case (dump-peek forth-cursor)
-                            ((1 9 10 11) (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                            (dump-peek (+ 1 forth-cursor))))
-                            (13 (dump-peek (+ 1 forth-cursor)))
-                            (otherwise nil))))
-                 (clim:formatting-cell
-                  (t)
-                  (format t "~@[~:d~]"
-                          (case (dump-peek forth-cursor)
-                            (0 (setf done-yet-p t) nil)
-                            ((1 9 10 11) (prog1
-                                             (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                                (dump-peek (+ 1 forth-cursor)))
-                                           (incf forth-cursor 2)))
-                            (13 (prog1
-                                    (dump-peek (+ 1 forth-cursor))
-                                  (incf forth-cursor 1)))
-                            (otherwise nil))))))))))))
+                           (t)
+                         (format t "~@[$~4,'0x~]" 
+                                 (case (dump-peek forth-cursor)
+                                   ((1 9 10 11) (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
+                                                   (dump-peek (+ 1 forth-cursor))))
+                                   (13 (dump-peek (+ 1 forth-cursor)))
+                                   (otherwise nil))))
+                       (clim:formatting-cell
+                           (t)
+                         (format t "~@[~:d~]"
+                                 (case (dump-peek forth-cursor)
+                                   (0 (setf done-yet-p t) nil)
+                                   ((1 9 10 11) (prog1
+                                                    (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
+                                                       (dump-peek (+ 1 forth-cursor)))
+                                                  (incf forth-cursor 2)))
+                                   (13 (prog1
+                                           (dump-peek (+ 1 forth-cursor))
+                                         (incf forth-cursor 1)))
+                                   (otherwise nil))))))))))))
 
 (defun show-forth-stack ()
   "Show the Forth stack in a window"

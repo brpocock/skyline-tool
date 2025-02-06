@@ -749,8 +749,10 @@ file ~a.s in bank $~(~2,'0x~)~
          (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a)" asset-indicator))
         ((script-asset-p asset-indicator)
          (format t "~%
-~a: ~a Source/Tables/SpeakJet.dic\\
+~a: ~a \\
+~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth \\
 ~10tSource/Assets.index bin/skyline-tool
+	# FIXME NTSC is not actually right for everyone
 	mkdir -p Object/Assets
 	~a"
                  (asset->object-name asset-indicator)
@@ -1388,12 +1390,19 @@ EndOfBinary = *
                        (mapcar (lambda (each)
                                  (string-trim #(#\Space #\Newline) each)) 
                                (split-sequence #\= line))
-                     (let ((number (cond 
-                                     ((char= #\$ (char value 0))
-                                      (parse-integer (subseq value 1) :radix 16))
-                                     ((every #'digit-char-p value)
-                                      (parse-integer value))
-                                     (t 0))))
+                     (when-let (number (cond
+                     			 ((char= #\~ (char value 0))
+                     			  (logxor #xffff
+                     			    (if (char= #\$ (char value 1))
+                                              (parse-integer (subseq value 2) :radix 16)
+                     			      (parse-integer (subseq value 1)))))
+                                         ((char= #\$ (char value 0))
+                                          (parse-integer (subseq value 1) :radix 16))
+                                         ((every #'digit-char-p value)
+                                          (parse-integer value))
+                                         ((char= #\" (char value 0))
+                                          (char->minifont (char value 1)))
+                                         (t nil)))
                        (setf (gethash label table) number))))
           (loop for label in (sort (copy-list (hash-table-keys table)) #'string-lessp)
                 for number = (gethash label table) 

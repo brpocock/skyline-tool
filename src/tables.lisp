@@ -371,6 +371,33 @@ High:~~10t.byte >(All~0@*~aNames), >EndOf~0@*~aNames
   "Write the file out with the enumerated key names"
   (write-inventory-tables #p"Source/Tables/Keys.txt" #p"Source/Generated/KeyLabels.s" "Key"))
 
+(defun write-flags-tables (&optional (source-text #p"Source/Tables/Flags.txt")
+                                     (source-code #p"Source/Generated/FlagLabels.s")
+                                     (forth-code #p"Source/Generated/FlagLabels.forth"))
+  "Write the file out with the enumerated flag names"
+  (format *trace-output* "~&Reading game flag names from ~a…" (enough-namestring source-text))
+  (finish-output *trace-output*)
+  (with-output-to-file (code source-code :if-exists :supersede)
+    (format code ";;; Generated from ~a
+
+GameFlag: .block~2%"
+            (enough-namestring source-text))
+    (with-output-to-file (forth forth-code :if-exists :supersede)
+      (format forth " ( Generated from ~a )~2%" (enough-namestring source-text))
+      (with-input-from-file (text source-text)
+        (loop for counter from 0 below (* 16 8)
+              for line = (read-line text nil nil)
+              while (and line (not (emptyp line)))
+              do (progn
+                   (format code "~&~10t~a = $~2,'0x" (pascal-case line) counter)
+                   (format forth "~% : GameFlag_~a ~d ; " (pascal-case line) counter))
+              finally
+                 (progn
+                   (format *trace-output* " …read ~:d game flag name~:p (of ~:d max), done.~%"
+                           (1+ counter) (* 16 8))
+                   (format code "~%~10t.bend~% ;;; end of file~%")
+                   (format forth "~%( end of file )~%")))))))
+
 (defun write-characters-tables (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
                                           (source-pathname "Source/Generated/CharacterTables.s"))
   (format *trace-output* "~&Reading NPC stats from ~a … "
