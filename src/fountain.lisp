@@ -2348,16 +2348,19 @@ but now also ~s."
   DecalYH 127 decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
-              (format t "~% CharacterID_~a find-character-in-scene entity-decal@
-161 a@, DecalXH sta.x, 127 a@, DecalYH sta.x,"
+              (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP
+161 DecalXH decal!
+127 DecalYH decal!"
                       (pascal-case (string name)))))
         ;; else, on camera
         (destructuring-bind (abs/rel x y) (interpret-place where)
           (assert (eql abs/rel :absolute))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
-                (format t "~% CharacterID_~a find-character-in-scene entity-decal@
-161 DecalXH decal! 127 DecalYH decal! update-one-decal"
+                (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP DUP
+161 DecalXH decal!
+127 DecalYH decal!
+update-one-decal"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
                 (format t "~% ~d ~d CharacterID_~a enter-character"
