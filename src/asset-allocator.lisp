@@ -750,7 +750,7 @@ file ~a.s in bank $~(~2,'0x~)~
         ((script-asset-p asset-indicator)
          (format t "~%
 ~a: ~a \\
-~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth \\
+~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth Source/Generated/Classes.forth \\
 ~10tSource/Assets.index bin/skyline-tool
 	# FIXME NTSC is not actually right for everyone
 	mkdir -p Object/Assets
