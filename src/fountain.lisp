@@ -2344,13 +2344,13 @@ but now also ~s."
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
               (format t "~% CharacterID_~a find-character entity-decal@ DUP
-  DecalXH 161 decal! 
-  DecalYH 127 decal!"
+127 SWAP DecalXH SWAP decal! 
+127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
               (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP
-161 DecalXH decal!
-127 DecalYH decal!"
+127 SWAP DecalXH SWAP decal!
+127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))))
         ;; else, on camera
         (destructuring-bind (abs/rel x y) (interpret-place where)
@@ -2358,8 +2358,8 @@ but now also ~s."
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
                 (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP DUP
-161 DecalXH decal!
-127 DecalYH decal!
+~d SWAP DecalXH SWAP decal!
+~d SWAP DecalYH SWAP decal!
 update-one-decal"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
