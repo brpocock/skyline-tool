@@ -216,7 +216,7 @@ The signal code was ~a" break-code)
              (incf sum #x4000))
             (t
              (let ((size (read-asset-bank-size bank build region)))
-               (format t "~&Bank $~2,'0x — $~4,'0x (~:d)" bank size size)
+               (format t "~&Bank $~2,'0x — $~4,'0x (~:d) (~d%)" bank size size (round (/ size 163.84)))
                (incf sum size)))))
         (format t "~% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)"
                 build region sum sum (floor sum 1024) (round (* 100 (/ sum (* 1024 1024)))))))))
