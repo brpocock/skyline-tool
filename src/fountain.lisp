@@ -2379,7 +2379,7 @@ update-one-decal"
       (destructuring-bind (kind x y) (interpret-place target)
         (assert (eql kind :absolute) (kind)
                 "KIND of location for positioning a boat must be absolute, but got ~s" kind)
-        (format t "~%~d ( Boat “~a” ) " boat-id ship-name)
+        (format t "~%~d ( Boat “~a” ) DUP " boat-id ship-name)
         (format t "Boat~:(~a~) ~a"
                 boat-class
                 (ecase east/west
