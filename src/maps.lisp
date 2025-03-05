@@ -64,7 +64,7 @@
                                   (read-file-into-string
                                    (namestring (tileset-pathname tileset))))))
           (when (equal "tile" (car tile-data))
-            (let ((tile-id (parse-integer (assocdr "id" (second tile-data)))))
+            (let (#+ () (tile-id (parse-integer (assocdr "id" (second tile-data)))))
               (dolist (animation (cddr tile-data))
                 (when (equal "animation" (car animation))
                   (let ((sequence (list)))
@@ -161,12 +161,16 @@
 
 (defun object-covers-tile-p (x y object)
   "Returns generally true if the OBJECT is over tile at X, Y"
-  (or (and (find-if (lambda (el) (equal "point" (car el)))
-                    (subseq object 2))
-           (<= (* x 8)
-               (parse-number (assocdr "x" (second object))) (1- (* (1+ x) 8)))
-           (<= (* y 16)
-               (parse-number (assocdr "y" (second object))) (1- (* (1+ y) 16))))))
+  (let* ((obj-x1 (parse-number (assocdr "x" (second object))))
+         (obj-y1 (parse-number (assocdr "y" (second object))))
+         (obj-x2 (1- (+ obj-x1 (parse-number (or (assocdr "width" (second object) nil) "1")))))
+         (obj-y2 (1- (+ obj-y1 (parse-number (or (assocdr "height" (second object) nil) "1")))))
+         (cell-x1 (* x 8)) (cell-x2 (+ cell-x1 7))
+         (cell-y1 (* y 16)) (cell-y2 (+ cell-y1 15)))
+    (and (<= cell-x1 obj-x2)
+         (<= obj-x1  cell-x2)
+         (<= cell-y1 obj-y2)
+         (<= obj-y1  cell-y2))))
 
 (defun find-effective-attributes (tileset x y objects attributes
                                   exits enemies)
@@ -550,6 +554,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
         (when (and (equal "property" (car prop))
                    (equalp key (assocdr "name" (second prop))))
           (when-let (value (assocdr "value" (second prop)))
+            #+ () (format *trace-output* "~&Property value set from ~s ⇒ ~s" prop value)
             (return-from tile-property-value
               (let ((value (string-trim #(#\Space) value)))
                 (cond ((or (equalp "true" value)
@@ -560,7 +565,8 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                            (equalp "f" value)
                            (equalp "off" value))
                        :off)
-                      (t value))))))))))
+                      (t value)))))))))
+  nil)
 
 (defun tile-collision-p (tile.xml test-x test-y)
   (unless (and tile.xml (< 1 (length tile.xml)))
@@ -586,12 +592,12 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defun locale-pathname (locale)
   (let* ((parts (split-sequence #\/ locale))
          (parts (if (equal "Maps" (elt parts 0))
-                    (mapcar #'cl-change-case:pascal-case (subseq parts 1))
-                    (mapcar #'cl-change-case:pascal-case parts))))
+                    (mapcar #'pascal-case (subseq parts 1))
+                    (mapcar #'pascal-case parts))))
     (make-pathname :name (last-elt parts)
                    :type "tmx"
                    :directory (append (list :relative "Source" "Maps")
-                                      (mapcar #'cl-change-case:pascal-case
+                                      (mapcar #'pascal-case
                                               (subseq parts 0 (1- (length parts))))))))
 
 (defun load-other-map (locale)
@@ -632,11 +638,11 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
         (when full-name
           (let ((segment-name
                   (remove #\_ (concatenate 'string
-                                           (cl-change-case:pascal-case island) "/"
-                                           (cl-change-case:pascal-case full-name)))))
+                                           (pascal-case (string island)) "/"
+                                           (pascal-case (string full-name))))))
             (setf (gethash segment-name *maps-ids*) (parse-integer id)
                   (gethash segment-name *maps-display-names*)
-                  (cl-change-case:lower-case display-name))
+                  (lower-case display-name))
             (when (not (emptyp dock-id))
               (setf (gethash segment-name *maps-dock-ids*) (parse-integer dock-id)
                     (gethash (parse-integer dock-id) *dock-ids-maps*) segment-name)))))))
@@ -683,7 +689,7 @@ or correct the TMX file (add the ID) and DO-OVER."
      (restart-case
          (let ((locale-id (get-asset-id :map
                                         (format nil "~{~a~^/~}"
-                                                (mapcar #'cl-change-case:pascal-case
+                                                (mapcar #'pascal-case
                                                         (split-sequence #\/ locale-name))))))
            (dolist (group (xml-matches "objectgroup" xml))
              (dolist (object (xml-matches "object" group))
@@ -692,7 +698,7 @@ or correct the TMX file (add the ID) and DO-OVER."
                    (when (and (find-if (lambda (kv)
                                          (destructuring-bind (key value) kv
                                            (and (equalp key "value")
-                                                (equalp (cl-change-case:pascal-case value)
+                                                (equalp (pascal-case value)
                                                         name))))
                                        (second prop))
                               (find-if (lambda (kv) (destructuring-bind (key value) kv
@@ -1125,7 +1131,7 @@ range is 0 - #xffffffff (4,294,967,295)"
     (t (or (let ((pos (position (char-downcase char) +minifont-punctuation+ :test #'char=)))
              (when pos (+ 36 pos)))
            (error "Cannot encode character “~:c” (~a) in minifont"
-                  char (cl-change-case:sentence-case (char-name char)))))))
+                  char (sentence-case (char-name char)))))))
 
 (defun minifont->char (byte &key replace)
   (unless replace
@@ -1151,10 +1157,10 @@ range is 0 - #xffffffff (4,294,967,295)"
   (= #xff (elt decal 2)))
 
 (defun assemble-binary (source-pathname)
-  (let ((combined-source-pathname
-          (make-pathname :directory (append (list "Source" "Generated")
-                                            (subseq (pathname-directory source-pathname) 1))
-                         :defaults source-pathname)))
+  (let (#+ () (combined-source-pathname
+                (make-pathname :directory (append (list "Source" "Generated")
+                                                  (subseq (pathname-directory source-pathname) 1))
+                               :defaults source-pathname)))
     (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
             (enough-namestring source-pathname))
     #(#x60) ; rts
