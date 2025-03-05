@@ -282,8 +282,8 @@
             #+ () (format *trace-output* "~2&//% tile $~2,'0x override palette ~s" id pal$)
             (assert (typep (parse-integer pal$) '(integer 0 7)) (pal$)
                     "Expected a palette index from 0 to 7, not ~s" pal$)
-            (setf decal-props (logior (logand decal-props #xfffff8ff)
-                                      (ash (parse-integer pal$) 8))))
+            (setf decal-props (logior (logand decal-props (logxor #xffffffff (ash 7 5)))
+                                      (ash (parse-integer pal$) 5))))
           (cond
             ((string-equal type "rug"))
             ((string-equal type "ceiling"))
@@ -837,7 +837,7 @@ Update map/s or script to agree with one another and DO-OVER."
         (set-bit 4 (ash (mod (aref tile-palettes (ensure-number tile-id)) 8) 5))))
     (when-let (palette (tile-property-value "Palette" xml))
       (clear-bit 4 (ash 7 5))
-      (set-bit 4 (ash (mod (parse-integer palette :radix 16) 8) 5)))
+      (set-bit 4 (ash (mod (parse-integer palette) 8) 5)))
     bytes))
 
 (defun parse-tile-attributes (palettes xml i)
