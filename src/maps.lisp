@@ -283,7 +283,7 @@
             (assert (typep (parse-integer pal$) '(integer 0 7)) (pal$)
                     "Expected a palette index from 0 to 7, not ~s" pal$)
             (setf decal-props (logior (logand decal-props (logxor #xffffffff (ash 7 5)))
-                                      (ash (parse-integer pal$) 5))))
+                                      (ash (parse-integer pal$) 8))))
           (cond
             ((string-equal type "rug"))
             ((string-equal type "ceiling"))
