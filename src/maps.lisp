@@ -193,13 +193,16 @@
 (defun mark-palette-transitions (grid attributes-table)
   "On GRID, mark tiles who start a span with a new palette in ATTRIBUTES-TABLE"
   (dotimes (y (array-dimension grid 1))
+    (terpri *trace-output*)
     (dotimes (x (array-dimension grid 0))
+      (format *trace-output* "~d " (tile-effective-palette grid x y attributes-table))
       (if (zerop x)
           (setf (aref grid x y 0) (logior #x80 (aref grid x y 0)))
           (let ((palette-left (tile-effective-palette grid (1- x) y attributes-table))
                 (palette-self (tile-effective-palette grid x y attributes-table)))
             (unless (= palette-left palette-self)
-              (setf (aref grid x y 0) (logior #x80 (aref grid x y 0)))))))))
+              (setf (aref grid x y 0) (logior #x80 (aref grid x y 0))))))))
+  (terpri *trace-output*))
 
 (defun properties->plist (properties.xml)
   "Convert properties from XML in PROPERTIES.XML into a plist of keyword→value pairs"
@@ -852,10 +855,10 @@ Update map/s or script to agree with one another and DO-OVER."
     bytes))
 
 (defun tile-effective-palette (grid x y attributes-table)
-  (let ((byte4 (ash (logand #xe0 (aref (elt attributes-table (aref grid x y 1)) 4))
+  (the (unsigned-byte 4)
+       (ash (logand (ash 7 5)
+                    (aref (elt attributes-table (aref grid x y 1)) 4))
                     -5)))
-    (check-type byte4 (integer 0 7))
-    byte4))
 
 (defun load-tileset (xml-reference &optional relative-path)
   (let* ((path (etypecase xml-reference
@@ -1158,9 +1161,9 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (defun assemble-binary (source-pathname)
   (let (#+ () (combined-source-pathname
-                (make-pathname :directory (append (list "Source" "Generated")
-                                                  (subseq (pathname-directory source-pathname) 1))
-                               :defaults source-pathname)))
+          (make-pathname :directory (append (list "Source" "Generated")
+                                            (subseq (pathname-directory source-pathname) 1))
+                         :defaults source-pathname)))
     (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
             (enough-namestring source-pathname))
     #(#x60) ; rts
