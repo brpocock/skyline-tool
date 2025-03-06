@@ -197,16 +197,16 @@
 (defun mark-palette-transitions (grid attributes-table)
   "On GRID, mark tiles who start a span with a new palette in ATTRIBUTES-TABLE"
   (dotimes (y (array-dimension grid 1))
-    (terpri *trace-output*)
+    #+ () (terpri *trace-output*)
     (dotimes (x (array-dimension grid 0))
-      (format *trace-output* "~d " (tile-effective-palette grid x y attributes-table))
+      #+ () (format *trace-output* "~d " (tile-effective-palette grid x y attributes-table))
       (if (zerop x)
           (setf (aref grid x y 0) (logior #x80 (aref grid x y 0)))
           (let ((palette-left (tile-effective-palette grid (1- x) y attributes-table))
                 (palette-self (tile-effective-palette grid x y attributes-table)))
             (unless (= palette-left palette-self)
               (setf (aref grid x y 0) (logior #x80 (aref grid x y 0))))))))
-  (terpri *trace-output*))
+  #+ () (terpri *trace-output*))
 
 (defun properties->plist (properties.xml)
   "Convert properties from XML in PROPERTIES.XML into a plist of keyword→value pairs"
