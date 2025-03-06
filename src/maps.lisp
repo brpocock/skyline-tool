@@ -155,34 +155,38 @@
 
 (defun assign-attributes (attr attr-table)
   "Assign attibutes ATTR into ATTR-TABLE, reusing existing entry if possible"
-  (or (position-if (lambda (attribute) (equalp attr attribute)) attr-table)
-      (progn (setf (cdr (last attr-table)) (cons attr nil))
-             (1- (length attr-table)))))
+  (or (position attr attr-table :test #'equalp)
+      (prog1 (length attr-table)
+        (setf (cdr (last attr-table)) (cons attr nil)))))
 
-(defun object-covers-tile-p (x y object)
+(defun object-covers-tile-p (x y object &key tile-width)
   "Returns generally true if the OBJECT is over tile at X, Y"
   (let* ((obj-x1 (parse-number (assocdr "x" (second object))))
          (obj-y1 (parse-number (assocdr "y" (second object))))
          (obj-x2 (1- (+ obj-x1 (parse-number (or (assocdr "width" (second object) nil) "1")))))
          (obj-y2 (1- (+ obj-y1 (parse-number (or (assocdr "height" (second object) nil) "1")))))
-         (cell-x1 (* x 8)) (cell-x2 (+ cell-x1 7))
+         (cell-x1 (* x tile-width)) (cell-x2 (+ cell-x1 (1- tile-width)))
          (cell-y1 (* y 16)) (cell-y2 (+ cell-y1 15)))
     (and (<= cell-x1 obj-x2)
          (<= obj-x1  cell-x2)
-         (>= cell-y1 obj-y2)
-         (>= obj-y1  cell-y2))))
+         (<= cell-y1 obj-y2)
+         (<= obj-y1  cell-y2))))
 
 (defun find-effective-attributes (tileset x y objects attributes
-                                  exits enemies)
+                                  exits enemies &key tile-width)
   "Find the effective attributes for the tile X Y using TILESET, OBJECTS, ATTRIBUTES, EXITS and ENEMIES."
   (declare (ignore enemies)) ; TODO
   (let ((effective-objects (remove-if-not (lambda (el)
                                             (and (equal "object" (car el))
-                                                 (object-covers-tile-p x y el)))
+                                                 (object-covers-tile-p x y el :tile-width tile-width)))
                                           objects)))
     (dolist (object effective-objects)
-      (add-attribute-values (tileset-palettes tileset) object attributes
-                            :exits exits :x x :y y))))
+      #+ () (format *trace-output* "~&Object covering ~d, ~d" x y)
+      (setf attributes (add-attribute-values (tileset-palettes tileset)
+                                             object attributes
+                                             :exits exits :x x :y y
+                                             :tile-width tile-width))))
+  attributes)
 
 (defun add-alt-tile-attributes (tile-attributes alt-tile-attributes)
   "Adds ALT-TILE-ATTRIBUTES into TILE-ATTRIBUTES"
@@ -300,9 +304,9 @@
                   name)
           (return-from collect-decal-object (list x y id decal-props)))))))
 
-(defun collect-invisible-decals-for-tile (x y objects)
+(defun collect-invisible-decals-for-tile (x y objects &key tile-width)
   (loop for object in objects
-        when (and (object-covers-tile-p x y object)
+        when (and (object-covers-tile-p x y object :tile-width tile-width)
                   (or (tile-property-value "Text" object)
                       (tile-property-value "Speech" object)))
           collect (list x y #xff (logior-numbers (decal-properties->binary object)))))
@@ -350,12 +354,14 @@
                                        :x x :y y :layer "detail")
                 (setf (aref tile-attributes 5) alt-tile-id)
                 (add-alt-tile-attributes tile-attributes alt-tile-attributes)))
-            (find-effective-attributes base-tileset x y objects
-                                       tile-attributes exits-table enemies)
             (setf (aref output x y 0) tile-id
-                  (aref output x y 1) (assign-attributes tile-attributes
-                                                         attributes-table))
-            (when-let (decals (collect-invisible-decals-for-tile x y objects))
+                  (aref output x y 1) (assign-attributes
+                                       (find-effective-attributes base-tileset x y objects
+                                                                  tile-attributes exits-table enemies
+                                                                  :tile-width tile-width)
+                                       attributes-table))
+            (when-let (decals (collect-invisible-decals-for-tile x y objects
+                                                                 :tile-width tile-width))
               (appendf decals-table decals))))))
     (dolist (object objects)
       (when-let (decal (collect-decal-object object enemies
@@ -550,7 +556,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                                           :x (mod i width) :y (floor i width))))
     (values output palettes)))
 
-(defun tile-property-value (key tile.xml)
+(defun tile-property-value (key tile.xml &key tile-width)
   (dolist (info (cddr tile.xml))
     (when (and (equal "properties" (car info)))
       (dolist (prop (cddr info))
@@ -776,17 +782,18 @@ Update map/s or script to agree with one another and DO-OVER."
                              &key
                                (exits nil exits-provided-p)
                                tile-id
+                               tile-width
                              &allow-other-keys)
   (labels ((set-bit (byte bit)
              (setf (elt bytes byte) (logior (elt bytes byte) bit)))
            (clear-bit (byte bit)
              (setf (elt bytes byte) (logand (elt bytes byte) (logxor #xff bit))))
            (map-boolean (property byte bit)
-             (when-let (value (tile-property-value property xml))
+             (when-let (value (tile-property-value property xml :tile-width tile-width))
                (cond ((eql t value) (set-bit byte bit))
                      ((eql :off value) (clear-bit byte bit))
                      (t (warn "Unrecognized value ~s for property ~s" value property))))))
-
+    
     (when (tile-collision-p xml 4 0) (set-bit 0 #x01))
     (when (tile-collision-p xml 4 15) (set-bit 0 #x02))
     (when (tile-collision-p xml 0 7) (set-bit 0 #x04))
@@ -839,6 +846,8 @@ Update map/s or script to agree with one another and DO-OVER."
         (clear-bit 4 (ash 7 5))
         (set-bit 4 (ash (mod (aref tile-palettes (ensure-number tile-id)) 8) 5))))
     (when-let (palette (tile-property-value "Palette" xml))
+      #+ () (format *trace-output* "~&//* Hey, look, changing the palette to ~d because of~%~10t~s"
+                    palette xml)
       (clear-bit 4 (ash 7 5))
       (set-bit 4 (ash (mod (parse-integer palette) 8) 5)))
     bytes))
@@ -849,10 +858,8 @@ Update map/s or script to agree with one another and DO-OVER."
                              (and (equal "tile" (car el))
                                   (= i (parse-integer (assocdr "id" (second el))))))
                            (subseq xml 2))))
-    (add-attribute-values palettes tile.xml bytes :tile-id i)
-    #+ () (format *trace-output* "~& Tile (~2,'0x) Palette ~x Attrs ~s"
-                  i (logand #x07 (ash (aref bytes 4) -5)) bytes)
-    bytes))
+    ;; returns bytes
+    (add-attribute-values palettes tile.xml bytes :tile-id i)))
 
 (defun tile-effective-palette (grid x y attributes-table)
   (the (unsigned-byte 4)
