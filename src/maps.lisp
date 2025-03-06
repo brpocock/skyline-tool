@@ -169,8 +169,8 @@
          (cell-y1 (* y 16)) (cell-y2 (+ cell-y1 15)))
     (and (<= cell-x1 obj-x2)
          (<= obj-x1  cell-x2)
-         (<= cell-y1 obj-y2)
-         (<= obj-y1  cell-y2))))
+         (>= cell-y1 obj-y2)
+         (>= obj-y1  cell-y2))))
 
 (defun find-effective-attributes (tileset x y objects attributes
                                   exits enemies)
