@@ -1664,6 +1664,29 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
     (terpri)
     (finish-output)))
 
+(defun pixels-to-clim (pixels &key x y (stream t))
+  (let ((s (or stream t)))
+    (labels ((tb ()
+               (terpri)
+               (print-clim-pixel (list 0 0 0) s)
+               (dotimes (x0 (array-dimension pixels 0))
+                 (print-clim-pixel (loop repeat 3 collect (if (= x x0) #xff 0)) s))
+               (print-clim-pixel (list 0 0 0) s)))
+      (format t "~& Image (~:d×~:d pixels):"
+              (array-dimension pixels 0)
+              (array-dimension pixels 1))
+      (tb)
+      (dotimes (y0 (array-dimension pixels 1))
+        (terpri)
+        (print-clim-pixel (list 0 0 (if (eql y y0) #xff 0)) s)
+        (dotimes (x0 (array-dimension pixels 0))
+          (destructuring-bind (r g b) (palette->rgb (aref pixels x0 y0))
+            (print-clim-pixel (list r g b) s)))
+        (print-clim-pixel (list 0 0 (if (eql y y0) #xff 0)) s))
+      (tb)
+      (terpri)
+      (finish-output))))
+
 (defun pixels-to-ansi-string (pixels &key x y)
   (with-output-to-string (*standard-output*)
     (pixels-to-ansi pixels :x x :y y)))
@@ -1741,8 +1764,8 @@ an error."
   (setf unit (or unit #x10))
   (clim:with-output-as-presentation (stream color 'palette-color)
     (clim:with-room-for-graphics (stream ;; :width (* (if shortp 1 3/2) unit 2)
-                                         ;; :height (* (if shortp 1 3/2) unit)
-					 )
+                                  ;; :height (* (if shortp 1 3/2) unit)
+			    )
       (setf (clim:medium-ink stream) (apply #'clim:make-rgb-color
                                             (mapcar (lambda (c) (/ c 255.0))
                                                     (elt (machine-palette 7800) color))))
@@ -1800,11 +1823,12 @@ an error."
                 ((color-not-in-palette-error
                    (lambda (c)
                      (princ c)
-                     (when (tty-xterm-p)
-                       (with-output-to-string (*standard-output*)
-                         (format t "~2&~c[2mProblem with this image:~c[0m~2%"
-                                 #\Escape #\Escape)
-                         (pixels-to-ansi image :x (* 2 byte-i) :y y)))
+                     (if (tty-xterm-p)
+                         (with-output-to-string (*standard-output*)
+                           (format t "~2&~c[2mProblem with this image:~c[0m~2%"
+                                   #\Escape #\Escape)
+                           (pixels-to-ansi image :x (* 2 byte-i) :y y))
+                         (format nil "Problem with this image"))
                      (cerror (format nil "Continue, using $~2,'0x (probably transparent)"
                                      (elt palette 0))
                              "Color not in palette")
