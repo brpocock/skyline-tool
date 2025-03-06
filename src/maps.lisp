@@ -285,8 +285,8 @@
             #+ () (format *trace-output* "~2&//% tile $~2,'0x override palette ~s" id pal$)
             (assert (typep (parse-integer pal$) '(integer 0 7)) (pal$)
                     "Expected a palette index from 0 to 7, not ~s" pal$)
-            (setf decal-props (logior (logand decal-props #xfffff8ff)
-                                      (ash (parse-integer pal$) 8))))
+            (setf decal-props (logior (logand decal-props (logxor #xffffffff (ash 7 5)))
+                                      (ash (parse-integer pal$) 5))))
           (cond
             ((string-equal type "rug"))
             ((string-equal type "ceiling"))
@@ -557,6 +557,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
         (when (and (equal "property" (car prop))
                    (equalp key (assocdr "name" (second prop))))
           (when-let (value (assocdr "value" (second prop)))
+            #+ () (format *trace-output* "~&Property value set from ~s ⇒ ~s" prop value)
             (return-from tile-property-value
               (let ((value (string-trim #(#\Space) value)))
                 (cond ((or (equalp "true" value)
@@ -567,7 +568,8 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                            (equalp "f" value)
                            (equalp "off" value))
                        :off)
-                      (t value))))))))))
+                      (t value)))))))))
+  nil)
 
 (defun tile-collision-p (tile.xml test-x test-y)
   (unless (and tile.xml (< 1 (length tile.xml)))
@@ -593,12 +595,12 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defun locale-pathname (locale)
   (let* ((parts (split-sequence #\/ locale))
          (parts (if (equal "Maps" (elt parts 0))
-                    (mapcar #'cl-change-case:pascal-case (subseq parts 1))
-                    (mapcar #'cl-change-case:pascal-case parts))))
+                    (mapcar #'pascal-case (subseq parts 1))
+                    (mapcar #'pascal-case parts))))
     (make-pathname :name (last-elt parts)
                    :type "tmx"
                    :directory (append (list :relative "Source" "Maps")
-                                      (mapcar #'cl-change-case:pascal-case
+                                      (mapcar #'pascal-case
                                               (subseq parts 0 (1- (length parts))))))))
 
 (defun load-other-map (locale)
@@ -639,11 +641,11 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
         (when full-name
           (let ((segment-name
                   (remove #\_ (concatenate 'string
-                                           (cl-change-case:pascal-case (string island)) "/"
-                                           (cl-change-case:pascal-case (string full-name))))))
+                                           (pascal-case (string island)) "/"
+                                           (pascal-case (string full-name))))))
             (setf (gethash segment-name *maps-ids*) (parse-integer id)
                   (gethash segment-name *maps-display-names*)
-                  (cl-change-case:lower-case display-name))
+                  (lower-case display-name))
             (when (not (emptyp dock-id))
               (setf (gethash segment-name *maps-dock-ids*) (parse-integer dock-id)
                     (gethash (parse-integer dock-id) *dock-ids-maps*) segment-name)))))))
@@ -690,7 +692,7 @@ or correct the TMX file (add the ID) and DO-OVER."
      (restart-case
          (let ((locale-id (get-asset-id :map
                                         (format nil "~{~a~^/~}"
-                                                (mapcar #'cl-change-case:pascal-case
+                                                (mapcar #'pascal-case
                                                         (split-sequence #\/ locale-name))))))
            (dolist (group (xml-matches "objectgroup" xml))
              (dolist (object (xml-matches "object" group))
@@ -699,7 +701,7 @@ or correct the TMX file (add the ID) and DO-OVER."
                    (when (and (find-if (lambda (kv)
                                          (destructuring-bind (key value) kv
                                            (and (equalp key "value")
-                                                (equalp (cl-change-case:pascal-case value)
+                                                (equalp (pascal-case value)
                                                         name))))
                                        (second prop))
                               (find-if (lambda (kv) (destructuring-bind (key value) kv
@@ -838,7 +840,7 @@ Update map/s or script to agree with one another and DO-OVER."
         (set-bit 4 (ash (mod (aref tile-palettes (ensure-number tile-id)) 8) 5))))
     (when-let (palette (tile-property-value "Palette" xml))
       (clear-bit 4 (ash 7 5))
-      (set-bit 4 (ash (mod (parse-integer palette :radix 16) 8) 5)))
+      (set-bit 4 (ash (mod (parse-integer palette) 8) 5)))
     bytes))
 
 (defun parse-tile-attributes (palettes xml i)
@@ -856,7 +858,7 @@ Update map/s or script to agree with one another and DO-OVER."
   (the (unsigned-byte 4)
        (ash (logand (ash 7 5)
                     (aref (elt attributes-table (aref grid x y 1)) 4))
-            -5)))
+                    -5)))
 
 (defun load-tileset (xml-reference &optional relative-path)
   (let* ((path (etypecase xml-reference
@@ -1132,7 +1134,7 @@ range is 0 - #xffffffff (4,294,967,295)"
     (t (or (let ((pos (position (char-downcase char) +minifont-punctuation+ :test #'char=)))
              (when pos (+ 36 pos)))
            (error "Cannot encode character “~:c” (~a) in minifont"
-                  char (cl-change-case:sentence-case (char-name char)))))))
+                  char (sentence-case (char-name char)))))))
 
 (defun minifont->char (byte &key replace)
   (unless replace
@@ -1159,9 +1161,9 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (defun assemble-binary (source-pathname)
   (let (#+ () (combined-source-pathname
-                (make-pathname :directory (append (list "Source" "Generated")
-                                                  (subseq (pathname-directory source-pathname) 1))
-                               :defaults source-pathname)))
+          (make-pathname :directory (append (list "Source" "Generated")
+                                            (subseq (pathname-directory source-pathname) 1))
+                         :defaults source-pathname)))
     (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
             (enough-namestring source-pathname))
     #(#x60) ; rts
