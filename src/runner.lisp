@@ -52,19 +52,17 @@
 
 (defun run-script-in-playtest (script-full-name)
   (clim-sys:make-process (lambda ()
-                 (uiop:run-program
-                  (list "gnome-terminal"
-                        "--window"
-                        "--geometry" "80x50"
-                        "--hide-menubar"
-                        "--title" (format nil "Running ~a: ~a"
-                                          (cl-change-case:title-case *game-title*)
-                                          script-full-name)
-                        "--" "bin/playtest" 
-                        (format nil "NEWGAME=~a"
-                                (subseq script-full-name
-                                        (1+ (position #\/ script-full-name)))))))
-               :name (format nil "Running ~a" script-full-name)))
+                           (uiop:run-program
+                            (list "ptyxis"
+                                  "-s"
+                                  "--title" (format nil "Running ~a: ~a"
+                                                    (cl-change-case:title-case *game-title*)
+                                                    script-full-name)
+                                  "--" "bin/playtest" 
+                                  (format nil "NEWGAME=~a"
+                                          (subseq script-full-name
+                                                  (1+ (position #\/ script-full-name)))))))
+                         :name (format nil "Running ~a" script-full-name)))
 
 (define-run-script-frame-command (com-run-script :menu t :name t)
     ((script-full-name 'script-name :gesture :select))
