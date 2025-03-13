@@ -94,7 +94,8 @@
 (defun show-dll-from-dump ()
   "Show the decoded Display List List from the core dump"
   (clim-simple-echo:run-in-simple-echo #'decode-dll-from-dump
-                                       :process-name "Display List List decoded"))
+                                       :process-name "Display List List decoded"
+                                       :height 768))
 
 (defun check-for-absent-assets-in-project-folder ()
   "Check the project folder for assets that are not mentioned in the Assets.index"
@@ -104,11 +105,12 @@
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"
   (clim-simple-echo:run-in-simple-echo (lambda ()
-                                                     (format t "~&Running a full garbage collection…")
-                                                     (force-output)
-                                                     (sb-ext:gc :full t)
-                                                     (room))
-                                                   :process-name "Room"))
+                                         (format t "~&Running a full garbage collection…")
+                                         (force-output)
+                                         (sb-ext:gc :full t)
+                                         (format t "~&Ready. (ROOM) says:~%")
+                                         (room))
+                                       :process-name "Room"))
 
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"
