@@ -43,6 +43,7 @@
       (core-dump-analysis
        analyze-faults-from-dump
        show-dll-from-dump
+       copy-dump-as-dump2
        compare-dlls-from-dumps
        show-dialogue-buffers
        show-animation-buffer

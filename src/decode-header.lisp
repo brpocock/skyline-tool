@@ -156,6 +156,15 @@
       (decode-dll-from-dump dump start-address))
     (pathname-string dump.txt)))
 
+(defun copy-dump-as-dump2 ()
+  "Make a copy of /tmp/dump as /tmp/dump2 for later comparison"
+  (copy-file "/tmp/dump" "/tmp/dump2" :if-to-exists :supersede)
+  (clim-simple-echo:run-in-simple-echo
+   (lambda ()
+     (format t "/tmp/dump copied to /tmp/dump2. You can use it for compares later."))
+   :process-name "Core dump copied"
+   :height 80))
+
 (defun compare-dlls-from-dumps (&optional (dump1 "/tmp/dump") (dump2 "/tmp/dump2")
                                           (start-address-1 (detect-active-dll dump1))
                                           (start-address-2 (detect-active-dll dump2)))
