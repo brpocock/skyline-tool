@@ -232,23 +232,23 @@ The signal code was ~a" break-code)
 
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
-  (let ((frame (clim:make-application-frame 'launcher-frame)))
-    (let ((*launcher-frame* frame))
-      (setf (clim:frame-pretty-name frame) (format nil "Skyline Tool for ~a: Launcher"
-                                                   (cl-change-case:title-case *game-title*))
-            *default-pathname-defaults*
-            (let ((skyline-dir (asdf:system-source-directory 
-                                (asdf:find-system :skyline-tool))))
-              (make-pathname :defaults skyline-dir
-                             :directory (butlast (pathname-directory skyline-dir)))))
-      (sb-posix:chdir (namestring *default-pathname-defaults*))
-      (clim:run-frame-top-level frame))))
+  (let* ((frame (clim:make-application-frame 'launcher-frame))
+         (*launcher-frame* frame))
+    (setf (clim:frame-pretty-name frame) (format nil "Skyline Tool for ~a: Launcher"
+                                                 (cl-change-case:title-case *game-title*))
+          *default-pathname-defaults*
+          (let ((skyline-dir (asdf:system-source-directory 
+                              (asdf:find-system :skyline-tool))))
+            (make-pathname :defaults skyline-dir
+                           :directory (butlast (pathname-directory skyline-dir)))))
+    (sb-posix:chdir (namestring *default-pathname-defaults*))
+    (clim:run-frame-top-level frame)))
 
 (defun run-launcher ()
   "Open the Skyline Tool launcher (main menu) in its own thread"
   (let ((*trace-output* (make-synonym-stream '*trace-output*)))
     (handler-case
-        (clim-sys:make-process (lambda () (launcher))
+        (clim-sys:make-process #'launcher
                                :name "Skyline Tool GUI Launcher")
       (xlib:window-error ()
         (invoke-restart 'restart-event-loop) ))))
