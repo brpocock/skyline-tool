@@ -184,11 +184,16 @@
         (format t "~%~10tDisposal mode: ~a"
                 (if (plusp (logand #x20 (fetch "DecalFlags")))
                     "particle" "sprite"))
-        (format t "~%~10tZ-order: $~2,'0x (~a normal)"
-                (fetch "DecalZ") (cond
-                                   ((< #x80 (fetch "DecalZ")) "under")
-                                   ((> #x80 (fetch "DecalZ")) "above")
-                                   (t "just")))
+        (format t "~%~10tZ-order: $~2,'0x (~a normal), index: ~d"
+                (fetch "DecalZ")
+                (cond
+                  ((< #x80 (fetch "DecalZ")) "under")
+                  ((> #x80 (fetch "DecalZ")) "above")
+                  (t "just"))
+                (or (loop for i from 0 below (dump-peek "NumDecals" dump)
+                          when (= index (dump-peek (+ i (find-label-from-files "DecalsInZOrder")) dump))
+                            do (return i))
+                    "N/A"))
         (format t "~%~10tFlash time: ~d" (fetch "DecalFlashTime"))
         (format t "~%~10tAnimation State: ~a, ~a"
                 (if (plusp (logand #x40 (fetch "DecalAnimationState")))
