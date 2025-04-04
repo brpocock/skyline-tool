@@ -323,8 +323,8 @@
          (exits-table (cons nil nil))
          (decals-table (cons nil nil))
          (enemies (make-array 0 :element-type 'cons :adjustable t :fill-pointer t)))
-    (assert (<= 16 (array-dimension ground 1) 64) ()
-            "The tile map must have from 16-64 (not ~:d) rows"
+    (assert (<= 13 (array-dimension ground 1) 64) ()
+            "The tile map must have from 13-64 (not ~:d) rows"
             (array-dimension ground 1))
     (assert (<= 20 (array-dimension ground 0) 64) ()
             "The tile map must have from 20-64 (not ~:d) rows"
@@ -340,6 +340,10 @@
                (tile-number (if detailp
                                 (aref detail x y)
                                 (aref ground x y))))
+          (when (zerop tile-number)
+            (warn "Tile number zero (blank) replaced with $7f at (~d, ~d) on ~:[ground~;detail~] layer."
+                  x y detailp)
+            (setf tile-number #x7f))
           (unless (<= 1 tile-number 128)
             (cerror "Continue, using tile $7f"
                     "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer."
