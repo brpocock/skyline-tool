@@ -326,8 +326,8 @@
     (assert (<= 13 (array-dimension ground 1) 64) ()
             "The tile map must have from 13-64 (not ~:d) rows"
             (array-dimension ground 1))
-    (assert (<= 20 (array-dimension ground 0) 64) ()
-            "The tile map must have from 20-64 (not ~:d) rows"
+    (assert (<= 20 (array-dimension ground 0) 127) ()
+            "The tile map must have from 20-127 (not ~:d) columns"
             (array-dimension ground 0))
     (assert (> 1025 (* (array-dimension ground 0) (array-dimension ground 1))) ()
             "The tile map must have no more than 1,024 tiles, but this one is ~
