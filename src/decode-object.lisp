@@ -568,7 +568,7 @@ Room for objects:
   "Show how much room objects take up in the dump"
   (clim-simple-echo:run-in-simple-echo #'room-for-objects
                                        :width 1111
-                                       :height 555
+                                       :height 1111
                                        :process-name "Room for Objects"))
 
 (defun echo-forth-stack ()
