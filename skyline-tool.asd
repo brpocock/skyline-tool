@@ -66,8 +66,10 @@
                  (:file "i18n-l10n")
                  (:file "listings")
                  (:file "decode-animation-buffers")
-                 (:file "decode-header")
-                 (:file "decode-decal")
+                 (:file "decode-header"
+                  :depends-on ("peek"))
+                 (:file "decode-decal"
+                  :depends-on ("peek"))
                  (:file "decode-map")
                  (:file "decode-object")
                  (:file "peek")
