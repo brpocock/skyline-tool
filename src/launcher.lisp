@@ -43,6 +43,7 @@
       (core-dump-analysis
        analyze-faults-from-dump
        show-dll-from-dump
+       show-dlbam
        copy-dump-as-dump2
        compare-dlls-from-dumps
        show-dialogue-buffers
@@ -97,6 +98,12 @@
   (clim-simple-echo:run-in-simple-echo #'decode-dll-from-dump
                                        :process-name "Display List List decoded"
                                        :height 768))
+
+(defun show-dlbam ()
+  "Show the status of the BAM for Display Lists"
+  (clim-simple-echo:run-in-simple-echo #'decode-dlbam
+                                       :process-name "Display List Block Allocation Map"
+                                       :height 512))
 
 (defun check-for-absent-assets-in-project-folder ()
   "Check the project folder for assets that are not mentioned in the Assets.index"
