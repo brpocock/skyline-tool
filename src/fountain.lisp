@@ -1643,17 +1643,18 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                           "….")
                          " ")
                         "-"))))
-    (let ((no~ (remove #\¶ (remove #\~ prepared))))
-      (assert (string-equal no~
-                            (ignore-errors (minifont->unicode
-                                            (unicode->minifont no~))))
+    (let* ((no~ (remove #\¶ (remove #\~ prepared)))
+           (back+forth (ignore-errors (minifont->unicode
+                                       (unicode->minifont no~)))))
+      (assert (string-equal no~ back+forth)
               (prepared)
-              "This text contains character(s) which cannot be displayed on the game console:
+              "This text contains character(s) which cannot be displayed on ~
+the game console:
 “~a”
 would be rendered as
 “~a”"
               prepared
-              (string-downcase (ignore-errors (minifont->unicode (unicode->minifont no~))))))
+              (string-downcase back+forth)))
     prepared))
 
 (defvar *atarivox-dictionary* nil
@@ -2490,10 +2491,10 @@ update-one-decal"
 (defun stage-facing-value (direction &key (playerp nil))
   (declare (ignore playerp))
   (ecase direction
-    (north "CharacterFacingUp")
-    (south "CharacterFacingDown")
-    (east "CharacterFacingRight")
-    (west "CharacterFacingLeft")))
+    (north "ActorFacingUp")
+    (south "ActorFacingDown")
+    (east "ActorFacingRight")
+    (west "ActorFacingLeft")))
 
 (defstage face (who where)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -3046,17 +3047,13 @@ FadeColor~:(~a~) FadingTarget C!"
                         (id (logior dir-hash scene-number)))
                    (check-type scene-number (integer 0 #x7ff)
                                "a scene number integer between 0 and 2,047")
-                   (format *trace-output* "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                   (format *trace-output*
+                           "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
                            dir title scene-number dir-hash id)
                    (return-from find-script-id id))))
       (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
-        #+ () (warn "Script file “~a” is missing a Scene number line. ~
-The very first scene line (INT/EXT line) may have an unique scene number affixed to that line. ~
-This number is needed only on the very first scene and must be unique among all script files ~
-in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4,'0x (Scene ~:d)"
-                    (enough-namestring pathname) id (logand #xff (sxhash title)))
-        (format *trace-output* "~&//* Script “~:(~a~)” is scene ~:d; id $~4,'0x"
-                script-moniker (logand #x7ff id) id)
+        (format *trace-output* "~&//* Script “~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                script-moniker (logand #x7ff id) dir-hash id)
         id))))
 
 
@@ -3078,7 +3075,7 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
   (format nil "~10t.byte ActionIdle"))
 
 (defmethod output-actor-value (actor (column (eql :character-facing)))
-  (format nil "~10t.byte CharacterFacingDown"))
+  (format nil "~10t.byte ActorFacingDown"))
 
 (defmethod output-actor-value (actor (column (eql :actor-flags)))
   (format nil "~10t.byte 0"))
