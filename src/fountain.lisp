@@ -54,144 +54,144 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
              nor/sou eas/wes)))
 
   (defun stage/when (_when conditional _comma clauses _stop)
-    "Stage direction: when CONDITIONAL is true, perform CLAUSES"
+    "when CONDITIONAL is true, perform CLAUSES"
     (declare (ignore _when _comma _stop))
     (list 'if conditional clauses))
 
   (defun stage/if-otherwise (if conditional comma clauses sem
                                 otherwise otherwise-clauses stop)
-    "Stage direction: iff CONDITIONAL is true, perform CLAUSES, otherwise, OTHERWISE-CLAUSES"
+    "iff CONDITIONAL is true, perform CLAUSES, otherwise, OTHERWISE-CLAUSES"
     (declare (ignore if comma sem otherwise stop))
     (list 'if conditional clauses otherwise-clauses))
 
   (defun stage/unless (unless conditional comma clauses stop)
-    "Stage direction: Unless CONDITIONAL is true, perform CLAUSES."
+    "Unless CONDITIONAL is true, perform CLAUSES."
     (declare (ignore unless comma stop))
     (list 'if conditional nil clauses))
 
   (defun stage/repeat (_repeat numeric _times _colon clauses)
-    "Stage direction: Repeat CLAUSES NUMERIC times"
+    "Repeat CLAUSES NUMERIC times"
     (declare (ignore _repeat _times _colon))
     (list 'repeat numeric clauses))
 
   (defun stage/jump-to-file (_continued _in file _in_ folder)
-    "Stage direction: script is continued in another file/asset"
+    "script is continued in another file/asset"
     (declare (ignore _continued _in _in_))
     ;; XXX could use symbolic script IDs here for legibility of generated code
     (list 'jump (find-script-id (concatenate 'string folder "/" file))))
 
   (defun stage/semicolon-clauses (a sem b)
-    "Stage direction: form a program from A followed by B"
+    "form a program from A followed by B"
     (declare (ignore sem))
     (list 'progn a b))
 
   (defun stage/do-block (do colon statements done stop)
-    "Stage direction: treat STATEMENTS as one program"
+    "treat STATEMENTS as one program"
     (declare (ignore do colon done stop))
     (list 'progn statements))
 
   (defun stage/statements-list (statements statement)
-    "Stage direction: create a program from STATEMENTS followed by STATEMENT"
+    "create a program from STATEMENTS followed by STATEMENT"
     (list 'progn (concatenate 'list statements statement)))
 
   (defun stage/truck-left/right (truck left/right)
-    "Stage direction: Truck the camera LEFT/RIGHT by one tile"
+    "Truck the camera LEFT/RIGHT by one tile"
     (declare (ignore truck))
     (list 'camera-move left/right 1))
 
   (defun stage/dolly-up/down (dolly up/down)
-    "Stage direction: Dolly the camera UP/DOWN by one tile"
+    "Dolly the camera UP/DOWN by one tile"
     (declare (ignore dolly))
     (list 'camera-move up/down 1))
 
   (defun stage/truck-numeric-left/right (truck numeric left/right)
-    "Stage direction: truck the camera LEFT/RIGHT by NUMERIC tiles"
+    "truck the camera LEFT/RIGHT by NUMERIC tiles"
     (declare (ignore truck))
     (list 'camera-move left/right numeric))
 
   (defun stage/dolly-numeric-up/down (dolly numeric up/down)
-    "Stage direction: dolly the camera UP/DOWN by NUMERIC tiles"
+    "dolly the camera UP/DOWN by NUMERIC tiles"
     (declare (ignore dolly))
     (list 'camera-move up/down numeric))
 
   (defun stage/camera-include (move direction to include actor/location)
-    "Stage direction: truck/dolly the camera to include ACTOR/LOCATION"
+    "truck/dolly the camera to include ACTOR/LOCATION"
     (declare (ignore move direction to include))
     (list 'camera-include actor/location))
 
   (defun stage/camera-center (move direction to center
                               on actor/location)
-    "Stage direction: truck/dolly the camera to center on ACTOR/LOCATION"
+    "truck/dolly the camera to center on ACTOR/LOCATION"
     (declare (ignore move direction to center on))
     (list 'camera-center actor/location))
 
   (defun stage/camera-frame (frame actor/location and other)
-    "Stage direction: truck/dolly the camera to frame both ACTOR/LOCATION and (when possible) also OTHER."
+    "truck/dolly the camera to frame both ACTOR/LOCATION and (when possible) also OTHER."
     (declare (ignore frame and))
     (list 'camera-frame actor/location other))
 
   (defun stage/camera-close (close on actor/location)
-    "Stage direction: Center the camera on ACTOR/LOCATION"
+    "Center the camera on ACTOR/LOCATION"
     (declare (ignore close on))
     (list 'camera-center actor/location))
 
   (defun stage/one-beat (beat)
-    "Stage direction: Wait one beat"
+    "Wait one beat"
     (declare (ignore beat))
     (list 'wait 'beat 1))
 
   (defun stage/numeric-beats (numeric beat)
-    "Stage direction: Wait NUMERIC beats"
+    "Wait NUMERIC beats"
     (declare (ignore beat))
     (list 'wait 'beat numeric))
 
   (defun stage/wait-secs (wait for numeric second)
-    "Stage direction: Wait NUMERIC seconds"
+    "Wait NUMERIC seconds"
     (declare (ignore wait for second))
     (list 'wait 'second numeric))
 
   (defun stage/wait-beats (wait for numeric beat)
-    "Stage direction: Wait NUMERIC beats"
+    "Wait NUMERIC beats"
     (declare (ignore wait for beat))
     (list 'wait 'beat numeric))
 
   (defun stage/go (go quoted)
-    "Stage direction: Go to QUOTED in the script"
+    "Go to QUOTED in the script"
     (declare (ignore go))
     (list 'go quoted))
 
   (defun stage/go-to (go to quoted)
-    "Stage direction: Go to QUOTED in the script"
+    "Go to QUOTED in the script"
     (declare (ignore go to))
     (list 'go quoted))
 
   (defun stage/we-hear-sound (we hear sound)
-    "Stage direction: Play SOUND"
+    "Play SOUND"
     (declare (ignore we hear))
     (list 'hear sound))
 
   (defun stage/song-starts-playing (song starts playing)
-    "Stage direction: Begin playing SONG"
+    "Begin playing SONG"
     (declare (ignore starts playing))
     (list 'music 'start song))
 
   (defun stage/song-stops-playing (song stops playing)
-    "Stage direction: Stop SONG if it is playing"
+    "Stop SONG if it is playing"
     (declare (ignore stops playing))
     (list 'music 'stop song))
 
   (defun stage/music-stops (the music stops)
-    "Stage direction: Stop all music"
+    "Stop all music"
     (declare (ignore the music stops))
     (list 'music 'stop t))
 
   (defun stage/set-var-to-val (set var to num)
-    "Stage direction: assign VAR the value NUM"
+    "assign VAR the value NUM"
     (declare (ignore set to))
     (list 'set (list 'var var) num))
 
   (defun stage/var←val (var from num)
-    "Stage direction: assign VAR the value NUM"
+    "assign VAR the value NUM"
     (declare (ignore from))
     (list 'set (list 'var var) num))
 
