@@ -771,15 +771,20 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
     
-    (actor-is-clause (someone is actor-coda (lambda (someone _is coda)
-                                              (declare (ignore _is))
-                                              (cons (car coda) (cons someone (rest coda)))))
-                     (someone looks actor-condition (lambda (someone _is coda)
-                                                      (declare (ignore _is))
-                                                      (cons (car coda) (cons someone (rest coda)))))
-                     (someone is actor-condition  (lambda (someone _is coda)
-                                                    (declare (ignore _is))
-                                                    (cons (car coda) (cons someone (rest coda))))))
+    (actor-is-clause (someone is actor-coda
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda)
+                                      (cons someone (rest coda)))))
+                     (someone looks actor-condition
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda)
+                                      (cons someone (rest coda)))))
+                     (someone is actor-condition
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda) (cons someone (rest coda))))))
     (actor-coda
      (at location (lambda (_at location)
                     (declare (ignore _at))
@@ -819,20 +824,24 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-
-    (pick-up-clause (actor picks up article quoted (lambda (actor _picks _up _an item)
-                                                     (declare (ignore _picks _up _an))
-                                                     (list 'pick-up actor item)))
-                    (actor picks up quoted (lambda (actor _picks _up item)
-                                             (declare (ignore _picks _up))
-                                             (list 'pick-up actor item))))
-
-    (equip-clause (actor equips item-name (lambda (actor _equips item)
-                                            (declare (ignore _equips))
-                                            (list 'equip actor item)))
-                  (actor equips article item-name (lambda (actor _equips _article item)
-                                                    (declare (ignore _equips _article))
-                                                    (list 'equip actor item))))
+    
+    (pick-up-clause (actor picks up article quoted
+                           (lambda (actor _picks _up _an item)
+                             (declare (ignore _picks _up _an))
+                             (list 'pick-up actor item)))
+                    (actor picks up quoted
+                           (lambda (actor _picks _up item)
+                             (declare (ignore _picks _up))
+                             (list 'pick-up actor item))))
+    
+    (equip-clause (actor equips item-name
+                         (lambda (actor _equips item)
+                           (declare (ignore _equips))
+                           (list 'equip actor item)))
+                  (actor equips article item-name
+                         (lambda (actor _equips _article item)
+                           (declare (ignore _equips _article))
+                           (list 'equip actor item))))
     
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
@@ -855,9 +864,10 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                     (it is clear around-here (lambda (&rest _)
                                                (declare (ignore _))
                                                (list 'weather nil)))
-                    (it is weather-condition around-here (lambda (_it _is weather _here)
-                                                           (declare (ignore _it _is _here))
-                                                           (list 'weather weather))))
+                    (it is weather-condition around-here
+                        (lambda (_it _is weather _here)
+                          (declare (ignore _it _is _here))
+                          (list 'weather weather))))
     (lighting-word (dim (constantly 'dark))
                    (night (constantly 'dark))
                    dark
@@ -3074,13 +3084,13 @@ FadeColor~:(~a~) FadingTarget C!"
 (defmethod output-actor-value (actor (column (eql :character-action)))
   (format nil "~10t.byte ActionIdle"))
 
-(defmethod output-actor-value (actor (column (eql :character-facing)))
+(defmethod output-actor-value (actor (column (eql :actor-facing)))
   (format nil "~10t.byte ActorFacingDown"))
 
 (defmethod output-actor-value (actor (column (eql :actor-flags)))
   (format nil "~10t.byte 0"))
 
-(defmethod output-actor-value (actor (column (eql :character-course)))
+(defmethod output-actor-value (actor (column (eql :actor-course)))
   (format nil "~10t.word $0000"))
 
 (defmethod output-actor-value (actor (column (eql :character-decal-kind)))
@@ -3196,15 +3206,22 @@ FadeColor~:(~a~) FadingTarget C!"
                 (pascal-case (string class))
                 (pascal-case (string class)))
         (format t "~%Character_~a:" (pascal-case (string name)))
-        (dolist (column '(basic-object-class-i-d entity-decal character-h-p character-max-h-p
-                          character-action character-facing
-                          character-course character-decal-kind character-skin-color character-hair-color
-                          character-clothes-color character-head character-body character-shield character-equipment
-                          character-armor-class character-crowns character-arrows character-potions
+        (dolist (column '(basic-object-class-i-d entity-decal character-h-p
+                          character-max-h-p
+                          character-action actor-facing
+                          actor-course character-decal-kind
+                          character-skin-color character-hair-color
+                          character-clothes-color character-head character-body
+                          character-shield character-equipment
+                          character-armor-class character-crowns
+                          character-arrows character-potions
                           character-character-i-d character-speech-pitch
-                          character-speech-bend character-speech-speed character-speech-color
-                          non-player-character-tactical-goal non-player-character-tactical-object
-                          non-player-character-strategic-goal non-player-character-strategic-object
+                          character-speech-bend character-speech-speed
+                          character-speech-color
+                          non-player-character-tactical-goal
+                          non-player-character-tactical-object
+                          non-player-character-strategic-goal
+                          non-player-character-strategic-object
                           character-name-length))
           (format t "~2%~10t* = Character_~a + ~a~%~a"
                   (pascal-case (string name)) (pascal-case (string column))
