@@ -84,6 +84,7 @@
 
 #+mcclim
 (defun edit-myself-in-climacs (file)
+  "Open Skyline-Tool source FILE in Climacs"
   (climacs:edit-file file
                      :process-name "Editing Skyline-Tool"))
 
