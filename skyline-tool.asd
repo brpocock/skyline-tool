@@ -47,11 +47,11 @@
   
   :components
   (;;(:file "gray-streams-pipe")
-   (:file "clim-simple-echo")
    (:module "src"
     :components ((:file "package")
                  (:file "utils")
                  (:file "misc")
+                 (:file "clim-simple-echo")
                  (:file "assembly")
                  (:file "7800gd-debug")
                  (:file "7800gd-interface"
