@@ -54,144 +54,144 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
              nor/sou eas/wes)))
 
   (defun stage/when (_when conditional _comma clauses _stop)
-    "Stage direction: when CONDITIONAL is true, perform CLAUSES"
+    "when CONDITIONAL is true, perform CLAUSES"
     (declare (ignore _when _comma _stop))
     (list 'if conditional clauses))
 
   (defun stage/if-otherwise (if conditional comma clauses sem
                                 otherwise otherwise-clauses stop)
-    "Stage direction: iff CONDITIONAL is true, perform CLAUSES, otherwise, OTHERWISE-CLAUSES"
+    "iff CONDITIONAL is true, perform CLAUSES, otherwise, OTHERWISE-CLAUSES"
     (declare (ignore if comma sem otherwise stop))
     (list 'if conditional clauses otherwise-clauses))
 
   (defun stage/unless (unless conditional comma clauses stop)
-    "Stage direction: Unless CONDITIONAL is true, perform CLAUSES."
+    "Unless CONDITIONAL is true, perform CLAUSES."
     (declare (ignore unless comma stop))
     (list 'if conditional nil clauses))
 
   (defun stage/repeat (_repeat numeric _times _colon clauses)
-    "Stage direction: Repeat CLAUSES NUMERIC times"
+    "Repeat CLAUSES NUMERIC times"
     (declare (ignore _repeat _times _colon))
     (list 'repeat numeric clauses))
 
   (defun stage/jump-to-file (_continued _in file _in_ folder)
-    "Stage direction: script is continued in another file/asset"
+    "script is continued in another file/asset"
     (declare (ignore _continued _in _in_))
     ;; XXX could use symbolic script IDs here for legibility of generated code
     (list 'jump (find-script-id (concatenate 'string folder "/" file))))
 
   (defun stage/semicolon-clauses (a sem b)
-    "Stage direction: form a program from A followed by B"
+    "form a program from A followed by B"
     (declare (ignore sem))
     (list 'progn a b))
 
   (defun stage/do-block (do colon statements done stop)
-    "Stage direction: treat STATEMENTS as one program"
+    "treat STATEMENTS as one program"
     (declare (ignore do colon done stop))
     (list 'progn statements))
 
   (defun stage/statements-list (statements statement)
-    "Stage direction: create a program from STATEMENTS followed by STATEMENT"
+    "create a program from STATEMENTS followed by STATEMENT"
     (list 'progn (concatenate 'list statements statement)))
 
   (defun stage/truck-left/right (truck left/right)
-    "Stage direction: Truck the camera LEFT/RIGHT by one tile"
+    "Truck the camera LEFT/RIGHT by one tile"
     (declare (ignore truck))
     (list 'camera-move left/right 1))
 
   (defun stage/dolly-up/down (dolly up/down)
-    "Stage direction: Dolly the camera UP/DOWN by one tile"
+    "Dolly the camera UP/DOWN by one tile"
     (declare (ignore dolly))
     (list 'camera-move up/down 1))
 
   (defun stage/truck-numeric-left/right (truck numeric left/right)
-    "Stage direction: truck the camera LEFT/RIGHT by NUMERIC tiles"
+    "truck the camera LEFT/RIGHT by NUMERIC tiles"
     (declare (ignore truck))
     (list 'camera-move left/right numeric))
 
   (defun stage/dolly-numeric-up/down (dolly numeric up/down)
-    "Stage direction: dolly the camera UP/DOWN by NUMERIC tiles"
+    "dolly the camera UP/DOWN by NUMERIC tiles"
     (declare (ignore dolly))
     (list 'camera-move up/down numeric))
 
   (defun stage/camera-include (move direction to include actor/location)
-    "Stage direction: truck/dolly the camera to include ACTOR/LOCATION"
+    "truck/dolly the camera to include ACTOR/LOCATION"
     (declare (ignore move direction to include))
     (list 'camera-include actor/location))
 
   (defun stage/camera-center (move direction to center
                               on actor/location)
-    "Stage direction: truck/dolly the camera to center on ACTOR/LOCATION"
+    "truck/dolly the camera to center on ACTOR/LOCATION"
     (declare (ignore move direction to center on))
     (list 'camera-center actor/location))
 
   (defun stage/camera-frame (frame actor/location and other)
-    "Stage direction: truck/dolly the camera to frame both ACTOR/LOCATION and (when possible) also OTHER."
+    "truck/dolly the camera to frame both ACTOR/LOCATION and (when possible) also OTHER."
     (declare (ignore frame and))
     (list 'camera-frame actor/location other))
 
   (defun stage/camera-close (close on actor/location)
-    "Stage direction: Center the camera on ACTOR/LOCATION"
+    "Center the camera on ACTOR/LOCATION"
     (declare (ignore close on))
     (list 'camera-center actor/location))
 
   (defun stage/one-beat (beat)
-    "Stage direction: Wait one beat"
+    "Wait one beat"
     (declare (ignore beat))
     (list 'wait 'beat 1))
 
   (defun stage/numeric-beats (numeric beat)
-    "Stage direction: Wait NUMERIC beats"
+    "Wait NUMERIC beats"
     (declare (ignore beat))
     (list 'wait 'beat numeric))
 
   (defun stage/wait-secs (wait for numeric second)
-    "Stage direction: Wait NUMERIC seconds"
+    "Wait NUMERIC seconds"
     (declare (ignore wait for second))
     (list 'wait 'second numeric))
 
   (defun stage/wait-beats (wait for numeric beat)
-    "Stage direction: Wait NUMERIC beats"
+    "Wait NUMERIC beats"
     (declare (ignore wait for beat))
     (list 'wait 'beat numeric))
 
   (defun stage/go (go quoted)
-    "Stage direction: Go to QUOTED in the script"
+    "Go to QUOTED in the script"
     (declare (ignore go))
     (list 'go quoted))
 
   (defun stage/go-to (go to quoted)
-    "Stage direction: Go to QUOTED in the script"
+    "Go to QUOTED in the script"
     (declare (ignore go to))
     (list 'go quoted))
 
   (defun stage/we-hear-sound (we hear sound)
-    "Stage direction: Play SOUND"
+    "Play SOUND"
     (declare (ignore we hear))
     (list 'hear sound))
 
   (defun stage/song-starts-playing (song starts playing)
-    "Stage direction: Begin playing SONG"
+    "Begin playing SONG"
     (declare (ignore starts playing))
     (list 'music 'start song))
 
   (defun stage/song-stops-playing (song stops playing)
-    "Stage direction: Stop SONG if it is playing"
+    "Stop SONG if it is playing"
     (declare (ignore stops playing))
     (list 'music 'stop song))
 
   (defun stage/music-stops (the music stops)
-    "Stage direction: Stop all music"
+    "Stop all music"
     (declare (ignore the music stops))
     (list 'music 'stop t))
 
   (defun stage/set-var-to-val (set var to num)
-    "Stage direction: assign VAR the value NUM"
+    "assign VAR the value NUM"
     (declare (ignore set to))
     (list 'set (list 'var var) num))
 
   (defun stage/var←val (var from num)
-    "Stage direction: assign VAR the value NUM"
+    "assign VAR the value NUM"
     (declare (ignore from))
     (list 'set (list 'var var) num))
 
@@ -771,15 +771,20 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
     
-    (actor-is-clause (someone is actor-coda (lambda (someone _is coda)
-                                              (declare (ignore _is))
-                                              (cons (car coda) (cons someone (rest coda)))))
-                     (someone looks actor-condition (lambda (someone _is coda)
-                                                      (declare (ignore _is))
-                                                      (cons (car coda) (cons someone (rest coda)))))
-                     (someone is actor-condition  (lambda (someone _is coda)
-                                                    (declare (ignore _is))
-                                                    (cons (car coda) (cons someone (rest coda))))))
+    (actor-is-clause (someone is actor-coda
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda)
+                                      (cons someone (rest coda)))))
+                     (someone looks actor-condition
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda)
+                                      (cons someone (rest coda)))))
+                     (someone is actor-condition
+                              (lambda (someone _is coda)
+                                (declare (ignore _is))
+                                (cons (car coda) (cons someone (rest coda))))))
     (actor-coda
      (at location (lambda (_at location)
                     (declare (ignore _at))
@@ -819,20 +824,24 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-
-    (pick-up-clause (actor picks up article quoted (lambda (actor _picks _up _an item)
-                                                     (declare (ignore _picks _up _an))
-                                                     (list 'pick-up actor item)))
-                    (actor picks up quoted (lambda (actor _picks _up item)
-                                             (declare (ignore _picks _up))
-                                             (list 'pick-up actor item))))
-
-    (equip-clause (actor equips item-name (lambda (actor _equips item)
-                                            (declare (ignore _equips))
-                                            (list 'equip actor item)))
-                  (actor equips article item-name (lambda (actor _equips _article item)
-                                                    (declare (ignore _equips _article))
-                                                    (list 'equip actor item))))
+    
+    (pick-up-clause (actor picks up article quoted
+                           (lambda (actor _picks _up _an item)
+                             (declare (ignore _picks _up _an))
+                             (list 'pick-up actor item)))
+                    (actor picks up quoted
+                           (lambda (actor _picks _up item)
+                             (declare (ignore _picks _up))
+                             (list 'pick-up actor item))))
+    
+    (equip-clause (actor equips item-name
+                         (lambda (actor _equips item)
+                           (declare (ignore _equips))
+                           (list 'equip actor item)))
+                  (actor equips article item-name
+                         (lambda (actor _equips _article item)
+                           (declare (ignore _equips _article))
+                           (list 'equip actor item))))
     
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
@@ -855,9 +864,10 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                     (it is clear around-here (lambda (&rest _)
                                                (declare (ignore _))
                                                (list 'weather nil)))
-                    (it is weather-condition around-here (lambda (_it _is weather _here)
-                                                           (declare (ignore _it _is _here))
-                                                           (list 'weather weather))))
+                    (it is weather-condition around-here
+                        (lambda (_it _is weather _here)
+                          (declare (ignore _it _is _here))
+                          (list 'weather weather))))
     (lighting-word (dim (constantly 'dark))
                    (night (constantly 'dark))
                    dark
@@ -1643,17 +1653,18 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                           "….")
                          " ")
                         "-"))))
-    (let ((no~ (remove #\¶ (remove #\~ prepared))))
-      (assert (string-equal no~
-                            (ignore-errors (minifont->unicode
-                                            (unicode->minifont no~))))
+    (let* ((no~ (remove #\¶ (remove #\~ prepared)))
+           (back+forth (ignore-errors (minifont->unicode
+                                       (unicode->minifont no~)))))
+      (assert (string-equal no~ back+forth)
               (prepared)
-              "This text contains character(s) which cannot be displayed on the game console:
+              "This text contains character(s) which cannot be displayed on ~
+the game console:
 “~a”
 would be rendered as
 “~a”"
               prepared
-              (string-downcase (ignore-errors (minifont->unicode (unicode->minifont no~))))))
+              (string-downcase back+forth)))
     prepared))
 
 (defvar *atarivox-dictionary* nil
@@ -2490,10 +2501,10 @@ update-one-decal"
 (defun stage-facing-value (direction &key (playerp nil))
   (declare (ignore playerp))
   (ecase direction
-    (north "CharacterFacingUp")
-    (south "CharacterFacingDown")
-    (east "CharacterFacingRight")
-    (west "CharacterFacingLeft")))
+    (north "ActorFacingUp")
+    (south "ActorFacingDown")
+    (east "ActorFacingRight")
+    (west "ActorFacingLeft")))
 
 (defstage face (who where)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -3046,17 +3057,13 @@ FadeColor~:(~a~) FadingTarget C!"
                         (id (logior dir-hash scene-number)))
                    (check-type scene-number (integer 0 #x7ff)
                                "a scene number integer between 0 and 2,047")
-                   (format *trace-output* "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                   (format *trace-output*
+                           "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
                            dir title scene-number dir-hash id)
                    (return-from find-script-id id))))
       (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
-        #+ () (warn "Script file “~a” is missing a Scene number line. ~
-The very first scene line (INT/EXT line) may have an unique scene number affixed to that line. ~
-This number is needed only on the very first scene and must be unique among all script files ~
-in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4,'0x (Scene ~:d)"
-                    (enough-namestring pathname) id (logand #xff (sxhash title)))
-        (format *trace-output* "~&//* Script “~:(~a~)” is scene ~:d; id $~4,'0x"
-                script-moniker (logand #x7ff id) id)
+        (format *trace-output* "~&//* Script “~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                script-moniker (logand #x7ff id) dir-hash id)
         id))))
 
 
@@ -3077,13 +3084,13 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
 (defmethod output-actor-value (actor (column (eql :character-action)))
   (format nil "~10t.byte ActionIdle"))
 
-(defmethod output-actor-value (actor (column (eql :character-facing)))
-  (format nil "~10t.byte CharacterFacingDown"))
+(defmethod output-actor-value (actor (column (eql :actor-facing)))
+  (format nil "~10t.byte ActorFacingDown"))
 
 (defmethod output-actor-value (actor (column (eql :actor-flags)))
   (format nil "~10t.byte 0"))
 
-(defmethod output-actor-value (actor (column (eql :character-course)))
+(defmethod output-actor-value (actor (column (eql :actor-course)))
   (format nil "~10t.word $0000"))
 
 (defmethod output-actor-value (actor (column (eql :character-decal-kind)))
@@ -3199,15 +3206,22 @@ in a certain locale (e.g. island). Lacking a manually-provided one, I'll use $~4
                 (pascal-case (string class))
                 (pascal-case (string class)))
         (format t "~%Character_~a:" (pascal-case (string name)))
-        (dolist (column '(basic-object-class-i-d entity-decal character-h-p character-max-h-p
-                          character-action character-facing
-                          character-course character-decal-kind character-skin-color character-hair-color
-                          character-clothes-color character-head character-body character-shield character-equipment
-                          character-armor-class character-crowns character-arrows character-potions
+        (dolist (column '(basic-object-class-i-d entity-decal character-h-p
+                          character-max-h-p
+                          character-action actor-facing
+                          actor-course character-decal-kind
+                          character-skin-color character-hair-color
+                          character-clothes-color character-head character-body
+                          character-shield character-equipment
+                          character-armor-class character-crowns
+                          character-arrows character-potions
                           character-character-i-d character-speech-pitch
-                          character-speech-bend character-speech-speed character-speech-color
-                          non-player-character-tactical-goal non-player-character-tactical-object
-                          non-player-character-strategic-goal non-player-character-strategic-object
+                          character-speech-bend character-speech-speed
+                          character-speech-color
+                          non-player-character-tactical-goal
+                          non-player-character-tactical-object
+                          non-player-character-strategic-goal
+                          non-player-character-strategic-object
                           character-name-length))
           (format t "~2%~10t* = Character_~a + ~a~%~a"
                   (pascal-case (string name)) (pascal-case (string column))

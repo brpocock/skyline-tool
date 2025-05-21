@@ -446,3 +446,27 @@
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
+(defun decode-dlbam (&key (dump (load-dump-into-mem)))
+  (format t "~&Decoding the display list block allocation map (DLBAM)")
+  (loop for i from 0 below 12
+        for address = 
+                    (+ (* i #x100)
+                       (if (< i 6)
+                           (find-label-from-files "DLSpace")
+                           (- (find-label-from-files "ExtDLSpace")
+                              #x600)))
+        for user = (dump-peek (+ i (find-label-from-files "DLBAM"))
+                              dump)
+        for user-name = (case user
+                          (#.(find-label-from-files "DLBlockFree")
+                           nil)
+                          (#.(find-label-from-files "DLBlockText")
+                           "Text")
+                          (#.(find-label-from-files "DLBlockMap")
+                           "Map")
+                          (#.(find-label-from-files "DLBlockScroll")
+                           "Scroll")
+                          (otherwise
+                           (format nil "¿garbage? code $~2,'0x" user)))
+        do (format t "~&DL Block $~x (at $~4,'0x) ~:[free~;~:*in use by ~a~]"
+                   i address user-name)))
