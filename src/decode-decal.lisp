@@ -393,16 +393,19 @@
                  (terpri stream)
                  (if (and (plusp i) (zerop (mod i 4)))
                      (progn
-                       (clim:with-output-as-presentation (stream i 'palette-indirect-register)
+                       (clim:with-output-as-presentation
+                           (stream i 'palette-indirect-register)
                          (princ entry-name stream))
                        (princ " is a reference to " stream)
-                       (clim:with-output-as-presentation (stream color-index 'palette-reference)
+                       (clim:with-output-as-presentation
+                           (stream color-index 'palette-reference)
                          (princ (palette-register-name color-index palette-index)
                                 stream))
                        (princ ", which is set to " stream)
                        (print-clim-color (elt palette color-index) stream))
                      (progn
-                       (clim:with-output-as-presentation (stream i 'palette-register)
+                       (clim:with-output-as-presentation
+                           (stream i 'palette-register)
                          (princ entry-name stream))
                        (princ " is set to " stream)
                        (print-clim-color color-index stream)))))))
@@ -422,7 +425,8 @@
     #+ () (print-machine-palette stream)
     (force-output stream)))
 
-(define-show-decal-frame-command (com-find-animation-buffer :menu t :name t) ((buffer 'anim-buffer-index-value))
+(define-show-decal-frame-command (com-find-animation-buffer :menu t :name t)
+    ((buffer 'anim-buffer-index-value))
   (clim-sys:make-process (lambda () (show-animation-buffer buffer))
                          :name "Show animation buffer"))
 

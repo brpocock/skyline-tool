@@ -1393,19 +1393,28 @@ range is 0 - #xffffffff (4,294,967,295)"
                   (force-output *trace-output*)
                   ;; decals list
                   (write-byte (length decals-table) object)
-                  (assert (every (lambda (decal) (= 4 (length decal))) decals-table)
+                  (assert (every (lambda (decal)
+                                   (= 4 (length decal)))
+                                 decals-table)
                           (decals-table)
-                          "All decals table entries must be precisely 4 values: ~%~s" decals-table)
+                          "All decals table entries must be precisely 4 values: ~%~s"
+                          decals-table)
                   (dolist (decal decals-table)
-                    (write-bytes (subseq decal 0 3) object) ; x, y, gid of first art
-                    (write-dword (fourth decal) object)     ; attributes
-                    )
+                    ;; x, y, gid of first art
+                    (write-bytes (subseq decal 0 3) object)
+                    ;; attributes
+                    (write-dword (fourth decal) object)
+                    #+ ()
+                    (format *trace-output*
+                            "~&~{ • Decal at ~d, ~d gid $~2,'0x attributes $~8,'0x~}"
+                            (coerce decal 'list)))
                   ;; enemies list
                   (write-byte (length enemies-list) object)
                   (write-bytes run-commands-content object)
                   (loop for enemy across enemies-list
                         do (write-bytes enemy object))
-                  (format *trace-output* "end of file at $~4,'0x … " (file-position object))
+                  (format *trace-output* " end of file at $~4,'0x … "
+                          (file-position object))
                   (force-output *trace-output*)))
               (format *trace-output* "done."))))))))
 

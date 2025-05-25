@@ -40,20 +40,23 @@
       (7800-game-drive
        push-binary-to-7800-game-drive
        shove-binary-into-running-7800-game-drive)
-      (core-dump-analysis
-       analyze-faults-from-dump
+      (core-dump-display
        show-dll-from-dump
        show-dlbam
        copy-dump-as-dump2
        compare-dlls-from-dumps
-       show-dialogue-buffers
        show-animation-buffer
-       show-decal
+       show-decal)
+      (core-dump-general
+       analyze-faults-from-dump
+       show-dialogue-buffers
+       show-map
+       show-forth-stack)
+      (core-dump-objects
        show-player-object
        show-self-object
        show-all-objects
-       show-room-for-objects
-       show-forth-stack)
+       show-room-for-objects)
       (lisp
        run-repl
        show-lisp-room

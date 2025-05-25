@@ -121,24 +121,25 @@
            (elt dump (addr-of field))))
       (assert (= #x7000 (addr-of "MapArt")))
       (format t "~2&Map currently ~d × ~d tiles:" (fetch "MapWidth") (fetch "MapHeight"))
-      (let ((n (fetch "MapBackground")))
-        (format t "~&Background color: $~2,'0x  ~a" n (atari-colu-string n)))
-      (format t "~&Palettes: ~{$~2,'0x, $~2,'0x, $~2,'0x~32t~a, ~a, ~a~^~%~10t~}"
-              (loop for i below 8
-                    appending (let ((c1 (elt dump (+ (* 3 i) (addr-of "MapPalettes"))))
-                                    (c2 (elt dump (+ 1 (* 3 i) (addr-of "MapPalettes"))))
-                                    (c3 (elt dump (+ 2 (* 3 i) (addr-of "MapPalettes")))))
-                                (list c1 c2 c3
-                                      (atari-colu-string c1)
-                                      (atari-colu-string c2)
-                                      (atari-colu-string c3)))))
+      (let ((n (fetch "MapBackground"))
+            (pals (addr-of "MapPalettes")))
+        (format t "~&Background color: $~2,'0x  ~a" n (atari-colu-string n))
+        (format t "~&Palettes: ~{$~2,'0x, $~2,'0x, $~2,'0x~32t~a, ~a, ~a~^~%~10t~}"
+                (loop for i below 8
+                      appending (let ((c1 (elt dump (+ (* 3 i) pals)))
+                                      (c2 (elt dump (+ 1 (* 3 i) pals)))
+                                      (c3 (elt dump (+ 2 (* 3 i) pals))))
+                                  (list c1 c2 c3
+                                        (atari-colu-string c1)
+                                        (atari-colu-string c2)
+                                        (atari-colu-string c3))))))
       (dotimes (y (fetch "MapHeight"))
         (format t "~%[ART]")
         (dotimes (x (fetch "MapWidth"))
           (let* ((art-code (elt dump (+ x (* y (fetch "MapWidth")) (addr-of "MapArt"))))
                  (tile-id (logand #x7f art-code))
                  (headp (= #x80 (logand #x80 art-code))))
-            (format t "~:[ ~;>~]~2,'0x" headp tile-id)))
+            (format t "~:[ ~;/~]~2,'0x" headp tile-id)))
         (format t "~%{ATR}")
         (dotimes (x (fetch "MapWidth"))
           (let* ((attr-code (elt dump (+ x (* y (fetch "MapWidth")) (addr-of "MapTileAttributes"))))
@@ -146,5 +147,10 @@
             (format t " ~2,'0x" attr-id))))))
   (decode-all-attributes dump))
 
-
+(defun show-map ()
+  "Decode the map from a core dump."
+  (clim-simple-echo:run-in-simple-echo #'decode-map
+                                       :width 1111
+                                       :height 1111
+                                       :process-name "Map from Core Dump"))
 
