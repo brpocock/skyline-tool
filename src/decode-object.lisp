@@ -277,9 +277,9 @@
                          (fresh-line)
                          (clim:surrounding-output-with-border (t :shape :drop-shadow
                                                                  :ink clim:+red+)
-                                                              (format t "⚠ BAM clear for block $~2x starting $~4,'0x"
-                                                                      bam
-                                                                      (bam-block->object-address bam))))))))
+                           (format t "⚠ BAM clear for block $~2x starting $~4,'0x"
+                                   bam
+                                   (bam-block->object-address bam))))))))
       (etypecase *standard-output*
         (swank/gray::slime-output-stream
          (loop for i from (1- (length class-fields)) downto 0
@@ -316,58 +316,61 @@
         (t
          (fresh-line)
          (clim:formatting-table (t)
-                                (loop for i from (1- (length class-fields)) downto 0
-                                      for info = (elt class-fields i)
-                                      for field-name = (car info)
-                                      for field-start = (cdr info)
-                                      for next-offset = (if (zerop i)
-                                                            class-size
-                                                            (cdr (elt class-fields (1- i))))
-                                      for length = (- next-offset field-start)
-                                      do (clim:formatting-row (t)
-                                                              (clim:formatting-cell (t)
-                                                                                    (format t "~10t~22a" field-name))
-                                                              (clim:formatting-cell (t)
-                                                                                    (format t "@ $~2,'0x" field-start))
-                                                              (clim:formatting-cell (t)
-                                                                                    (format t " = "))
-                                                              (clim:formatting-cell (t)
-                                                                                    (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
-                                                                                            (coerce (subseq dump field-start next-offset)
-                                                                                                    'list))
-                                                                                    (if (string= "CharacterName" field-name)
-                                                                                        (format t "~%“~a”"
-                                                                                                (minifont->unicode
-                                                                                                 (subseq dump field-start
-                                                                                                         (+ field-start
-                                                                                                            (elt dump (cdr (elt class-fields (1+ i))))))))
-                                                                                        (print-field-value (make-keyword
-                                                                                                            (string-upcase
-                                                                                                             (cl-change-case:param-case field-name)))
-                                                                                                           (coerce (subseq dump field-start next-offset)
-                                                                                                                   'list)
-                                                                                                           t))
-                                                                                    (if (string= "ActorCourse" field-name)
-                                                                                        (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                                                                                              (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
-                                                              (terpri)))
-                                (clim:formatting-row (t)
-                                                     (clim:formatting-cell (t))
-                                                     (clim:formatting-cell (t))
-                                                     (clim:formatting-cell (t))
-                                                     (clim:formatting-cell (t)
-                                                                           (format t "~32t >~%")))))))
+           (loop for i from (1- (length class-fields)) downto 0
+                 for info = (elt class-fields i)
+                 for field-name = (car info)
+                 for field-start = (cdr info)
+                 for next-offset = (if (zerop i)
+                                       class-size
+                                       (cdr (elt class-fields (1- i))))
+                 for length = (- next-offset field-start)
+                 do (clim:formatting-row
+                        (t)
+                      (clim:formatting-cell (t)
+                        (format t "~10t~22a" field-name))
+                      (clim:formatting-cell (t)
+                        (format t "@ $~2,'0x" field-start))
+                      (clim:formatting-cell (t)
+                        (format t " = "))
+                      (clim:formatting-cell (t)
+                        (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
+                                (coerce (subseq dump field-start next-offset)
+                                        'list))
+                        (if (string= "CharacterName" field-name)
+                            (format t "~%“~a”"
+                                    (minifont->unicode
+                                     (subseq dump field-start
+                                             (+ field-start
+                                                (elt dump (cdr (elt class-fields (1+ i))))))))
+                            (print-field-value (make-keyword
+                                                (string-upcase
+                                                 (cl-change-case:param-case field-name)))
+                                               (coerce (subseq dump field-start next-offset)
+                                                       'list)
+                                               t))
+                        (if (string= "ActorCourse" field-name)
+                            (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
+                                                  (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
+                      (terpri)))
+           (clim:formatting-row (t)
+             (clim:formatting-cell (t))
+             (clim:formatting-cell (t))
+             (clim:formatting-cell (t))
+             (clim:formatting-cell (t)
+               (format t "~32t >~%")))))))
     (values class-name actor-course)))
 
 (defun decode-object-at (dump &optional (offset 0))
   (let ((offset (etypecase offset
                   (number offset)
                   (string (parse-integer offset :radix 16)))))
-    (multiple-value-bind (class-name other-object)
-        (decode-object (subseq dump offset) offset dump)
-      (when (and other-object (> other-object #x100))
-        (decode-object-at dump other-object))
-      class-name)))
+    (if (= #xff00 (logand #xff00 offset))
+        (princ "Scenery object only")
+        (multiple-value-bind (class-name other-object)
+            (decode-object (subseq dump offset) offset dump)
+          (when (and other-object (> other-object #x100))
+            (decode-object-at dump other-object))
+          class-name))))
 
 (defun decode-all-objects (&optional (dump (load-dump-into-mem)))
   (decode-player-object dump)
