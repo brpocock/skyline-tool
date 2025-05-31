@@ -4,6 +4,7 @@
                               &optional (low-bank-pathname #p"Object/Bank02.Public.NTSC.o.LABELS.txt")
                                         (last-bank-pathname #p"Object/Bank3f.Public.NTSC.o.LABELS.txt"))
   (dolist (pathname (list low-bank-pathname last-bank-pathname))
+    (when (probe-file pathname)
     (with-input-from-file (labeled pathname :if-does-not-exist :error)
       (loop for line = (read-line labeled nil nil)
             while line
@@ -15,7 +16,7 @@
                        (if (char= #\$ (char value$ 0))
                            (+ 0 (parse-integer (subseq value$ 1) :radix 16))
                            (+ 0 (parse-integer value$))))))))))
-  nil)
+  nil))
 
 (defun dump-peek (label &optional (dump (load-dump-into-mem)))
   (when-let ((address (etypecase label
