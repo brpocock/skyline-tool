@@ -555,6 +555,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "AnimationTable" 'compile-animation-sequences
           "AssetIDs" 'write-asset-ids
           "EnemyStatsTable" 'compile-enemy-stats
+          "EquipmentIndex" 'write-equipment-index
           "ItemDropTable" 'compile-item-drops
           "DocksIndex" 'write-docks-index
           "ShoppingTable" 'compile-shops
