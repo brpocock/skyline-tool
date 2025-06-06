@@ -478,10 +478,10 @@ GameFlag: .block~2%"
                       ".ptext \"~a\"" (constantly t) :item-name
                       ".byte $~2,'0x" (constantly t) :decal-bank
                       ".byte ~aClass" (complement #'str:blankp) :entity-class
-                      ".byte ~aPrototype" (complement #'str:blankp) :entity-prototype
+                      ".word ~aPrototype" (complement #'str:blankp) :entity-prototype
                       ".byte Decal160B" (lambda (s) (find #\B s)) :drawing-mode
                       ".byte ~aClass" (complement #'str:blankp) :course-class
-                      ".byte ~aPrototype" (complement #'str:blankp) :course-prototype)
+                      ".word ~aPrototype" (complement #'str:blankp) :course-prototype)
               by #'cdddr
               do (format output "~%~a:" (pascal-case (string field)))
               do (dolist (item equipment-stats)
