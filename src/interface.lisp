@@ -53,6 +53,7 @@
         :write-cart-header 'write-cart-header
         :write-character-ids 'write-character-ids
         :write-docks-index 'write-docks-index
+        :write-equipment-index 'write-equipment-index
         :write-flags-tables 'write-flags-tables
         :write-gimp-palettes 'write-gimp-palettes
         :write-inventory-tables 'write-inventory-tables

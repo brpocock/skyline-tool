@@ -429,7 +429,8 @@ GameFlag: .block~2%"
             do (progn
                  (format source "~%~a:~%~10t.byte $00, $00~32t; Player, Narrator" asm-name)
                  (dolist (char *npc-stats*)
-                   (format *trace-output* "~%~4t~s~20t~a" (npc-interpret-field (getf char name) name) (getf char :name)))
+                   (format *trace-output* "~%~4t~s~20t~a" (npc-interpret-field (getf char name) name)
+                           (getf char :name)))
                  (loop for char in *npc-stats*
                        do (format source "~%~10t.byte $~2,'0x~32t; (~:(~a~))"
                                   (or (npc-interpret-field (getf char name) name
@@ -453,3 +454,42 @@ GameFlag: .block~2%"
       (format code "~2%~10tDockNames = (~{DockName~d~^, ~})"
               (loop for i from 1 upto max-dock-id collecting i))
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
+
+(defun write-equipment-index (&optional (pathname #p"Source/Generated/EquipmentIndex.s"))
+  "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
+  (format *trace-output* "~&Reading equipment attributes from ~a…" #p"Source/Tables/EquipmentIndex.ods")
+  (finish-output *trace-output*)
+  (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
+    (let* ((equipment-stats (remove-if-not (lambda (record)
+                                             (loop for (key value) on record
+                                                   by #'cddr
+                                                   unless (str:blankp value)
+                                                     return t
+                                                   finally (return nil)))
+                                           (ss->lol (first sheet)))))
+      (ensure-directories-exist pathname)
+      (with-output-to-file (output pathname :if-exists :supersede)
+        (format *trace-output* "writing ~a …" (enough-namestring pathname))
+        (finish-output *trace-output*)
+        (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
+        (loop for (format filter field)
+                on
+                (list ".byte $~2,'0x" (constantly t) :index
+                      ".ptext \"~a\"" (constantly t) :item-name
+                      ".byte $~2,'0x" (constantly t) :decal-bank
+                      ".byte ~aClass" (complement #'str:blankp) :entity-class
+                      ".byte ~aPrototype" (complement #'str:blankp) :entity-prototype
+                      ".byte Decal160B" (lambda (s) (find #\B s)) :drawing-mode
+                      ".byte ~aClass" (complement #'str:blankp) :course-class
+                      ".byte ~aPrototype" (complement #'str:blankp) :course-prototype)
+              by #'cdddr
+              do (format output "~%~a:" (pascal-case (string field)))
+              do (dolist (item equipment-stats)
+                   (let ((value (getf item field)))
+                     (format output "~%~10t~?~40t; ~a"
+                             (if (funcall filter value)
+                                 format
+                                 ".byte 0")
+                             (cons value nil)
+                             (title-case (getf item :item-name))))))
+        (format output "~2%~10t.bend~%")))))
