@@ -454,7 +454,7 @@ To see specifics about one command, add its name to the end, e.g.
 If you need more help, ask support@interworldly.com
 
 Copyright © 2016-2024, Bruce-Robert Pocock
-Copyright © 2024, Interworldly Adventuring, LLC
+Copyright © 2024-2025, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -484,7 +484,7 @@ See COPYING for details
   (command (append '("port") subcommand)))
 
 (defun command (argv)
-  (format *trace-output* "~&Skyline tool (© 2024) invoked:
+  (format *trace-output* "~&Skyline tool (© 2025) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
   (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
