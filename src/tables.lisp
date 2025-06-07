@@ -472,24 +472,61 @@ GameFlag: .block~2%"
         (format *trace-output* "writing ~a …" (enough-namestring pathname))
         (finish-output *trace-output*)
         (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
-        (loop for (format filter field)
-                on
-                (list ".byte $~2,'0x" (constantly t) :index
-                      ".ptext \"~a\"" (constantly t) :item-name
-                      ".byte $~2,'0x" (constantly t) :decal-bank
-                      ".byte ~aClass" (complement #'str:blankp) :entity-class
-                      ".word ~aPrototype" (complement #'str:blankp) :entity-prototype
-                      ".byte Decal160B" (lambda (s) (find #\B s)) :drawing-mode
-                      ".byte ~aClass" (complement #'str:blankp) :course-class
-                      ".word ~aPrototype" (complement #'str:blankp) :course-prototype)
-              by #'cdddr
-              do (format output "~%~a:" (pascal-case (string field)))
-              do (dolist (item equipment-stats)
-                   (let ((value (getf item field)))
-                     (format output "~%~10t~?~40t; ~a"
-                             (if (funcall filter value)
-                                 format
-                                 ".byte 0")
-                             (cons value nil)
-                             (title-case (getf item :item-name))))))
+        (flet ((always (format value)
+                 (declare (ignore value))
+                 format)
+               (here? (format s)
+                 (if (str:blankp s) ".byte 0" format))
+               (dec (format s)
+                 (if (str:blankp s)
+                     ".byte $ff"
+                     format))
+               (hex (format s)
+                 (if (str:blankp s)
+                     ".byte $ff"
+                     format))
+               (drawing-mode-filter (format s)
+                 (declare (ignore format))
+                 (if (string-equal "160B" (string-trim #(#\Space) s))
+                     ".byte Decal160B"
+                     ".byte 0")))
+          (loop for (format validator field-info)
+                  on
+                  (list ".byte $~2,'0x" #'hex :index
+                        ".byte $~2,'0x" #'hex :decal-bank
+                        ".byte ~aClass" #'here? :entity-class
+                        ".byte ~aSize" #'here? :entity-class
+                        ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
+                        ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
+                        "" #'drawing-mode-filter :drawing-mode
+                        ".byte ~aClass" #'here? '(:course-class :course)
+                        ".byte ~aSize" #'here? '(:course-class :course-size)
+                        ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
+                        ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
+                        ".byte Sound_~a" #'here? :sound
+                        ".byte $~2,'0x" #'hex :up
+                        ".byte $~2,'0x" #'hex :down
+                        ".byte $~2,'0x" #'hex :left
+                        ".byte $~2,'0x" #'hex :right
+                        ".byte ~d" #'dec :palette
+                        ".byte ~d" #'dec :displace-up
+                        ".byte ~d" #'dec :displace-down
+                        ".byte ~d" #'dec :displace-left
+                        ".byte ~d" #'dec :displace-right
+                        ".byte >~a" #'here? :decal-sheet)
+                by #'cdddr
+
+                for field-name = (if (listp field-info)
+                                     (first field-info)
+                                     field-info)
+                for field-asm-name = (if (listp field-info)
+                                         (second field-info)
+                                         field-info)
+                do (format output "~2%~a:" (pascal-case (string field-asm-name)))
+                do (dolist (item equipment-stats)
+                     (let ((value (getf item field-name)))
+                       (format output "~%~10t~?~40t; ~a"
+                               (funcall validator format value)
+                               (cons value nil)
+                               (title-case (getf item :item-name)))))))
         (format output "~2%~10t.bend~%")))))
