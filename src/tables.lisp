@@ -494,8 +494,8 @@ GameFlag: .block~2%"
                   on
                   (list ".byte $~2,'0x" #'hex :index
                         ".byte $~2,'0x" #'hex :decal-bank
-                        ".byte ~aClass" #'here? :entity-class
-                        ".byte ~aSize" #'here? :entity-class
+                        ".byte ~aClass" #'here? '(:entity-class :entity)
+                        ".byte ~aSize" #'here? '(:entity-class :entity-size)
                         ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
                         ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
                         "" #'drawing-mode-filter :drawing-mode
