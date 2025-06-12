@@ -508,7 +508,7 @@ GameFlag: .block~2%"
                         ".byte $~2,'0x" #'hex :down
                         ".byte $~2,'0x" #'hex :left
                         ".byte $~2,'0x" #'hex :right
-                        ".byte ~d" #'dec :palette
+                        ".byte ~d << PaletteShift" #'dec :palette
                         ".byte ~d" #'dec :displace-up
                         ".byte ~d" #'dec :displace-down
                         ".byte ~d" #'dec :displace-left
