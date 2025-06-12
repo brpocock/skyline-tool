@@ -859,7 +859,10 @@ Object/Bank~(~2,'0x~).~a.~a.o ~3:*Object/Bank~(~2,'0x~).~a.~a.list.txt ~3:*Objec
 		c000 ffff ~1@*LastBankDefs.~a.~a"
             *bank* build video))
   (format t "~%
-Object/Bank~(~2,'0x~).~a.~a.o:~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
+Object/Bank~(~2,'0x~).~a.~a.o ~
+~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt ~
+~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: ~
+~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 	mkdir -p Object
 	${AS7800} -DTV=~a \\
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
