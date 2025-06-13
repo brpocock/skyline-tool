@@ -825,14 +825,17 @@ Source/Generated/Bank~(~2,'0x~).~a.~a.s: Source/Assets.index Source/Generated/Ba
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool write-asset-bank ~x ~a ~a
 
-Object/Bank~(~2,'0x~).~a.~a.o ~3:*Object/Bank~(~2,'0x~).~a.~a.list.txt ~3:*Object/Bank~(~2,'0x~).~a.~a.LABELS.txt: \\
+Object/Bank~(~2,'0x~).~a.~a.o \\
+  ~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt \\
+  ~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: \\
 		Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
 ~10tSource/Assets.index bin/skyline-tool \\~{~%~10t~a~^ \\~}
 	mkdir -p Object
 	${AS7800} -DTV=~a ~a \\~{~%		-I ~a \\~}
-		-l $@.LABELS.txt -L $@.list.txt \\
-		$< -o $@
-	bin/skyline-tool prepend-fundamental-mode $@.list.txt"
+		~0@*-l Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
+                    ~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt \\
+		~0@*$< -o Object/Bank~(~2,'0x~).~a.~a.o
+	bin/skyline-tool prepend-fundamental-mode ~0@*Object/Bank~(~2,'0x~).~a.~a.o.list.txt"
             bank build video
             asset-objects
             build
@@ -867,8 +870,11 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
 	${AS7800} -DTV=~a \\
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
-		-l $@.LABELS.txt -L $@.list.txt $< -o $@
-	bin/skyline-tool prepend-fundamental-mode $@.list.txt"
+		~0@*-l Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
+                    ~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt $< \\
+                    ~0@*-o Object/Bank~(~2,'0x~).~a.~a.o
+	bin/skyline-tool prepend-fundamental-mode \\
+                      ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt"
           *bank* build video (recursive-read-deps bank-source)
           (when (< *bank* *last-bank*)
             (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
