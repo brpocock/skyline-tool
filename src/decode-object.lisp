@@ -102,7 +102,11 @@
       (- (+ (logxor #xff (second value)) (/ (logxor #xff (first value)) #x100)))
       (+ (second value) (/ (first value) #x100))))
 
-(defgeneric print-field-value (field-keyword-name field-value stream)
+
+(defun print-field-value (name value &optional (stream  *standard-output*))
+  (print-field-value% name value stream))
+
+(defgeneric print-field-value% (field-keyword-name field-value stream)
   (:documentation "Print the FIELD-VALUE for FIELD-KEYWORD-NAME to STREAM")
   (:method ((field-keyword-name t) (field-value t) (stream t))
     nil)
@@ -323,8 +327,7 @@
                                             (string-upcase
                                              (cl-change-case:param-case field-name)))
                                            (coerce (subseq dump field-start next-offset)
-                                                   'list)
-                                           t))
+                                                   'list)))
                     (if (string= "ActorCourse" field-name)
                         (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
                                               (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))))
@@ -362,8 +365,7 @@
                                                 (string-upcase
                                                  (cl-change-case:param-case field-name)))
                                                (coerce (subseq dump field-start next-offset)
-                                                       'list)
-                                               t))
+                                                       'list)))
                         (if (string= "ActorCourse" field-name)
                             (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
                                                   (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
