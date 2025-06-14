@@ -98,7 +98,7 @@
   (elt *inventory-items* number))
 
 (defun 8.8-float (value)
-  (if (not (zerop (logand #x80 (second value))))
+  (if (plusp (logand #x80 (second value)))
       (- (+ (logxor #xff (second value)) (/ (logxor #xff (first value)) #x100)))
       (+ (second value) (/ (first value) #x100))))
 
@@ -119,7 +119,7 @@
     (format s " = ~dpx" (first value)))
   (:method ((field (eql :stab-course-distance)) value s)
     (let ((n (8.8-float value)))
-      (format s " = ~2f (~a)" n (rationalize n))))
+      (format s " = ~,2f (~a)" n (rationalize n))))
   (:method ((field (eql :stab-course-speed)) value s)
     (let ((n (8.8-float value)))
       (format s " = ~2fpx/f (~a) = ~~~2fpx/s @60Hz"

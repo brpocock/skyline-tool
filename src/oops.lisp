@@ -233,7 +233,9 @@ Method~aDestroy: .proc
 ~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
                           (mapcan (lambda (class)
                                     (list (gethash class class-bases) class))
-                                  (reverse all-classes-sequentially))))))
+                                  (reverse all-classes-sequentially)))))
+              (fresh-line class-constants)
+              (terpri class-constants))
             (format class-methods "
 ;;; 
 ;;; Set up method dispatch jump table pointers
