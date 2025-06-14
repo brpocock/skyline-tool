@@ -159,7 +159,6 @@
                          (princ entry-name stream))
                        (princ " is set to " stream)
                        (print-clim-color color-index stream)))))))
-    (print-machine-palette stream)
     (force-output stream)))
 
 (defmethod display-anim-buffer-contents ((frame anim-buffer-frame) (display-pane clim:pane))
@@ -189,11 +188,14 @@
     (terpri stream)
     (clim:with-output-as-presentation (stream (anim-buffer-mode frame) 'anim-buffer-mode)
       (format stream "~&Write Mode: ~a" (anim-buffer-mode frame)))
+    (format stream "; marked referenced by ~d decal~:p"
+            (dump-peek (+ (anim-buffer-index frame) (find-label-from-files "AnimationBufferBusy"))
+                       (anim-buffer-from-dump frame)))
     (loop for decal below #x40
           when (and (= #x50
                        (dump-peek (+ decal (find-label-from-files "DecalArtH"))
                                   (anim-buffer-from-dump frame)))
-                    (= (* 4 (anim-buffer-index *anim-buffer-frame*))
+                    (= (* 4 (anim-buffer-index frame))
                        (dump-peek (+ decal (find-label-from-files "DecalArtL"))
                                   (anim-buffer-from-dump frame))))
             do (clim:with-output-as-presentation (stream decal 'decal-index-value)
