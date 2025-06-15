@@ -41,11 +41,11 @@
   (let ((ids-classes (read-class-ids-from-file)))
     (gethash id ids-classes)))
 
-(defun read-class-fields-from-defs (class-name &optional (pathname #p"Source/Classes/Classes.Defs"))
+(defun read-class-fields-from-defs (class-name &optional
+                                                 (pathname #p"Source/Classes/Classes.Defs"))
   (when (string= "BasicObject" class-name)
     (return-from read-class-fields-from-defs
-      (list (cons (cons "BasicObjectClassID" 0) nil)
-            1)))
+      (list (cons (cons "BasicObjectClassID" 0) nil) 1)))
   (let ((class-name-< (concatenate 'string class-name " < "))
         (offset 0)
         (fields (list)))
@@ -56,16 +56,19 @@
                                                        class-name-<
                                                        :end1 (length class-name-<)))
                                      (return (subseq line (length class-name-<)))))))
+        (unless parent-class
+          (error "Can't determine parent class of ~s" class-name))
         (destructuring-bind (f$ o$) (read-class-fields-from-defs parent-class pathname)
           (setf fields f$ offset o$))
         (loop for line = (read-line classes.defs nil nil)
               while (and line
                          (plusp (length line))
                          (or (char= #\. (char line 0))
+                             (char= #\# (char line 0))
                              (char= #\; (char line 0))))
               do (when (char= #\. (char line 0))
                    (destructuring-bind (field-name field-bytes$)
-                       (split-sequence #\Space (subseq line 1))
+                       (split-sequence #\Space (subseq line 1) :count 2)
                      (let ((field-bytes (parse-integer field-bytes$)))
                        (push (cons (concatenate 'string class-name field-name) offset) fields)
                        (incf offset field-bytes)))))
