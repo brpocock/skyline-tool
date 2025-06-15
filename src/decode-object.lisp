@@ -163,7 +163,6 @@
     (print-field-value :palette-color value s))
   (:method ((field (eql :character-clothes-color)) value s)
     (print-field-value :palette-color value s))
-  
   (:method ((field (eql :character-inventory)) value s)
     (if (every #'zerop value)
         (format s " = nil")
@@ -175,9 +174,9 @@
                         when (plusp (logand (expt 2 bit) bignum))
                           collect (inventory-item-name bit))))))
   (:method ((field (eql :character-speech-color)) value s)
-    (if (= #x0f (logand #x0f (first value)))
-        (format s " = ~a" (atari-color-name (ash (logand #xf0 (first value)) -4)))
-        (format s " (likely incorrect value)")))
+    (format s " = ~a" (atari-color-name (ash (logand #xf0 (first value)) -4)))
+    (unless (= #x0f (logand #x0f (first value)))
+      (format s " (likely incorrect value)")))
   (:method ((field (eql :actor-facing)) value s)
     (format s " = ~a"
             (case (first value)
