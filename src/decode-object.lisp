@@ -125,8 +125,8 @@
       (format s " = ~,2f (~a)" n (rationalize n))))
   (:method ((field (eql :stab-course-speed)) value s)
     (let ((n (8.8-float value)))
-      (format s " = ~2fpx/f (~a) = ~~~2fpx/s @60Hz"
-              n (rationalize n) (* 60 n))))
+      (format s " = ~,2fpx/f (~a) = ~%~~~,2fpx/s @60Hz = ~~~,2ftiles/s"
+              n (rationalize n) (* 60 n) (/ (* 60 n) 16))))
   (:method ((field (eql :stab-course-forward-p)) value s)
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
   (:method ((field (eql :course-finished-p)) value s)
@@ -163,6 +163,7 @@
     (print-field-value :palette-color value s))
   (:method ((field (eql :character-clothes-color)) value s)
     (print-field-value :palette-color value s))
+  
   (:method ((field (eql :character-inventory)) value s)
     (if (every #'zerop value)
         (format s " = nil")
@@ -276,7 +277,7 @@
 (defun decode-object (dump &optional offset everything)
   (let* ((class-id (elt dump 0))
          (class-name (dereference-class class-id))
-         (actor-course 0))
+         other-objects)
     (unless class-name
       (format t "~2&#<Malformed object (with class ID $~2,'0x)~@[ at $~2,'0x~]>"
               class-id offset)
@@ -331,9 +332,14 @@
                                              (cl-change-case:param-case field-name)))
                                            (coerce (subseq dump field-start next-offset)
                                                    'list)))
-                    (if (string= "ActorCourse" field-name)
-                        (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                              (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))))
+                    (when (string= "ActorCourse" field-name)
+                      (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
+                               (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))
+                            other-objects))
+                    (when (string= "ItemWielder" field-name)
+                      (let ((wielder (subseq dump field-start next-offset)))
+                        (push (+ (* #x100 (elt wielder 1)) (elt wielder 0))
+                              other-objects)))
                     (terpri))))
         (t
          (fresh-line)
@@ -369,9 +375,14 @@
                                                  (cl-change-case:param-case field-name)))
                                                (coerce (subseq dump field-start next-offset)
                                                        'list)))
-                        (if (string= "ActorCourse" field-name)
-                            (setf actor-course (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                                  (elt dump (+ 1 (cdr (elt class-fields (1+ i)))))))))
+                        (when (string= "ActorCourse" field-name)
+                          (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
+                                   (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))
+                                other-objects))
+                        (when (string= "ItemWielder" field-name)
+                          (let ((wielder (subseq dump field-start next-offset)))
+                            (push (+ (* #x100 (elt wielder 1)) (elt wielder 0))
+                                  other-objects))))
                       (terpri)))
            (clim:formatting-row (t)
              (clim:formatting-cell (t))
@@ -379,7 +390,7 @@
              (clim:formatting-cell (t))
              (clim:formatting-cell (t)
                (format t "~32t >~%")))))))
-    (values class-name actor-course)))
+    (values class-name (remove-if #'null other-objects))))
 
 (defun decode-object-at (dump &optional (offset 0))
   (let ((offset (etypecase offset
@@ -387,10 +398,12 @@
                   (string (parse-integer offset :radix 16)))))
     (if (= #xff00 (logand #xff00 offset))
         (princ "Scenery object only")
-        (multiple-value-bind (class-name other-object)
+        (multiple-value-bind (class-name other-objects)
             (decode-object (subseq dump offset) offset dump)
-          (when (and other-object (> other-object #x100))
-            (decode-object-at dump other-object))
+          (when other-objects
+            (dolist (other-object other-objects)
+              (when (and other-object (> other-object #x100))
+                (decode-object-at dump other-object))))
           class-name))))
 
 (defun decode-all-objects (&optional (dump (load-dump-into-mem)))
@@ -401,7 +414,8 @@
         with classes = (list)
         unless (zerop object-start)
           do (progn
-               (format t "~&Object # ~d:" i)
+               (clim:with-text-face (t :bold)
+                 (format t "~2&Object # ~d:" i))
                (push (decode-object-at dump object-start) classes))
         finally
            (prog1
