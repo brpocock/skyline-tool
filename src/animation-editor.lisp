@@ -122,10 +122,13 @@
              :initarg :palette))
   (:panes (anim-seq-filmstrip-pane :application :height 550 :width 1800
                                                 :display-function 'display-anim-seq-filmstrip)
-          (interactor :interactor :height 250 :width 400)
+          (interactor :interactor :height 250 :width 400
+                                  :max-height 250)
           (anim-seq-detail-pane :application :height 250 :width 700
+                                             :max-height 250
                                              :display-function 'display-anim-seq-properties)
           (anim-seq-preview-pane :application :height 250 :width 700
+                                              :max-height 250
                                               :display-function 'display-anim-preview))
   (:layouts (default (clim:vertically ()
                        anim-seq-filmstrip-pane
@@ -946,9 +949,10 @@
                :initform :south :accessor anim-seq-assign-facing :initarg :facing))
   (:panes (anim-seq-detail-pane :application :height 400 :width 400
                                              :display-function 'display-anim-seq-assignment)
-          (interactor :interactor :height 150 :width 400))
+          (interactor :interactor :height 50 :width 400
+                                  :max-height 50))
   (:layouts (default (clim:vertically ()
-                         anim-seq-detail-pane
+                       anim-seq-detail-pane
                        interactor))))
 
 (defmethod display-anim-seq-assignment ((frame anim-seq-assign-frame) pane)
@@ -1168,7 +1172,8 @@
   ()
   (:panes (anim-seq-assignments-pane :application :height 600 :width 1600
                                                   :display-function 'display-anim-seq-assignments)
-          (interactor :interactor :height 200 :width 400))
+          (interactor :interactor :height 50 :width 400
+                                  :max-height 50))
   (:layouts (default (clim:vertically ()
                        anim-seq-assignments-pane
                        interactor))))
@@ -1344,7 +1349,8 @@
    (%palette :type integer :initarg :palette :initform 0 :accessor show-tileset-palette))
   (:panes (tileset-pane :application :height 850 :width 1600
                                      :display-function 'display-tileset)
-          (interactor :interactor :height 100 :width 1600))
+          (interactor :interactor :height 100 :width 1600
+                                  :max-height 100))
   (:layouts (default (clim:vertically ()
                        tileset-pane
                        interactor))))
@@ -1421,7 +1427,8 @@
    (%callback :accessor choose-sequence-callback :initarg :callback))
   (:panes (list-pane :application :height 500 :width 400
                                   :display-function 'display-sequences-list)
-          (interactor :interactor :height 100 :width 400))
+          (interactor :interactor :height 100 :width 400
+                                  :max-height 100))
   (:layouts (default (clim:vertically ()
                        list-pane
                        interactor))))

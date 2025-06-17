@@ -6,7 +6,8 @@
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
   (:panes (menu-list-pane :application :height 700 :width 450
                                        :display-function 'display-launcher-menu)
-          (interactor :interactor :height 125 :width 450))
+          (interactor :interactor :height 125 :width 450
+                                  :max-height 125))
   (:layouts (default (clim:vertically () menu-list-pane interactor)))
   (:icon (mapcar
           (lambda (name)
