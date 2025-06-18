@@ -3199,6 +3199,9 @@ FadeColor~:(~a~) FadingTarget C!"
                               head body character-id class
                          &allow-other-keys)
         actor
+      (when (> (length (string name)) 12)
+        (error "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+               name name (length (string name))))
       (unless (member name '(player narrator) :test 'string-equal)
         (format t "~%;;;~|~2%~10tAllActors ..= [[ CharacterID_~a, Character_~a, ~aClass, ~aSize ]]"
                 (pascal-case (string name))
