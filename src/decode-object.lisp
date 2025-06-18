@@ -424,7 +424,7 @@
                  (when (hash-table-count summary)
                    (format t "~2%Classes in use:~{~%~3t~4:d × ~a~}~%"
                            (alist-plist
-                            (reverse (sort (hash-table-alist summary)
+                            (reverse (sort (cons (cons "Player" 1) (hash-table-alist summary))
                                            #'string>
                                            :key #'car)))))
                  summary))))
