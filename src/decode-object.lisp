@@ -364,11 +364,13 @@
                                 (coerce (subseq dump field-start next-offset)
                                         'list))
                         (if (string= "CharacterName" field-name)
-                            (format t "~%“~a”"
-                                    (minifont->unicode
-                                     (subseq dump field-start
-                                             (+ field-start
-                                                (elt dump (cdr (elt class-fields (1+ i))))))))
+                            (clim:with-text-style (t
+                                                   (clim:make-text-style :serif :italic 16))
+                              (format t "~%“~(~a~)”"
+                                      (minifont->unicode
+                                       (subseq dump field-start
+                                               (+ field-start
+                                                  (elt dump (cdr (elt class-fields (1+ i)))))))))
                             (print-field-value (make-keyword
                                                 (string-upcase
                                                  (cl-change-case:param-case field-name)))
