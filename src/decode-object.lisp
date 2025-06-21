@@ -50,14 +50,18 @@
         (offset 0)
         (fields (list)))
     (with-input-from-file (classes.defs pathname :if-does-not-exist :error)
-      (let ((parent-class (loop for line = (read-line classes.defs)
+      (let ((parent-class (loop for line = (read-line classes.defs nil nil)
+                                while line
                                 do (when (and (< (length class-name-<) (length line))
                                               (string= line
                                                        class-name-<
                                                        :end1 (length class-name-<)))
-                                     (return (subseq line (length class-name-<)))))))
-        (unless parent-class
-          (error "Can't determine parent class of ~s" class-name))
+                                     (return (subseq line (length class-name-<))))
+                                finally (unless line
+                                          (cerror "Ignore and continue"
+                                                  "Can't determine parent class of ~s" class-name)
+                                          (return-from read-class-fields-from-defs
+                                            (list nil 0))))))
         (destructuring-bind (f$ o$) (read-class-fields-from-defs parent-class pathname)
           (setf fields f$ offset o$))
         (loop for line = (read-line classes.defs nil nil)
