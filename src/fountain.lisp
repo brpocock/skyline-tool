@@ -2513,11 +2513,9 @@ update-one-decal"
       (cerror "Continue, ignoring facing request"
               "Actor ~:(~a~) asked to face a direction, but they are not in the scene" who)
       (return))
-    (let ((ok-label (genlabel "SetFacing"))
-          (done-label (genlabel "DoneFacing")))
-      (format t "~% ~a CharacterID_~a character-facing!"
-              (stage-facing-value where)
-              (pascal-case (string name))))))
+    (format t "~% ~a CharacterID_~a character-facing!"
+            (stage-facing-value where)
+            (pascal-case (string name)))))
 
 (defgeneric compile-stage-math (fun args)
   (:method ((fun t) (args t))
@@ -3189,6 +3187,36 @@ FadeColor~:(~a~) FadingTarget C!"
 (defmethod output-actor-value (actor (column (eql :character-name-length)))
   (format nil "~10t.ptext \"~a\"" (getf actor :name)))
 
+(defun print-one-actor-prototype (name class actor)
+  (format t "~%;;;~|~2%~10tAllActors ..= [[ CharacterID_~a, Character_~a, ~aClass, ~aSize ]]"
+          (pascal-case (string name))
+          (pascal-case (string name))
+          (pascal-case (string class))
+          (pascal-case (string class)))
+  (format t "~%;;; ~|~%Character_~a:" (pascal-case (string name)))
+  (dolist (column '(basic-object-class-i-d entity-decal character-h-p
+                    character-max-h-p
+                    character-action actor-facing
+                    actor-course character-decal-kind
+                    character-skin-color character-hair-color
+                    character-clothes-color character-head character-body
+                    character-shield character-equipment
+                    character-armor-class character-crowns
+                    character-arrows character-potions
+                    character-character-i-d character-speech-pitch
+                    character-speech-bend character-speech-speed
+                    character-speech-color
+                    non-player-character-tactical-goal
+                    non-player-character-tactical-object
+                    non-player-character-strategic-goal
+                    non-player-character-strategic-object
+                    character-name-length))
+    (format t "~2%~10t* = Character_~a + ~a~%~a"
+            (pascal-case (string name)) (pascal-case (string column))
+            (output-actor-value actor (make-keyword (string-upcase (string column))))))
+  (format t "~%~10t* = Character_~a + ~aSize"
+          (pascal-case (string name)) (pascal-case (string class))))
+
 (defun print-actor-prototypes ()
   (format t "~&;;; Generated character prototype data from NPC Stats file")
   (format t "~%~10tAllActors := []")
@@ -3200,58 +3228,34 @@ FadeColor~:(~a~) FadingTarget C!"
                          &allow-other-keys)
         actor
       (when (> (length (string name)) 12)
-        (error "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
-               name name (length (string name))))
+        (let ((trunc (subseq (string name) 0 12)))
+          (cerror (format nil "Continue with truncated name “~a”" trunc)
+                  "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+                  name name (length (string name)))
+          (setf name trunc)))
       (unless (member name '(player narrator) :test 'string-equal)
-        (format t "~%;;;~|~2%~10tAllActors ..= [[ CharacterID_~a, Character_~a, ~aClass, ~aSize ]]"
-                (pascal-case (string name))
-                (pascal-case (string name))
-                (pascal-case (string class))
-                (pascal-case (string class)))
-        (format t "~%Character_~a:" (pascal-case (string name)))
-        (dolist (column '(basic-object-class-i-d entity-decal character-h-p
-                          character-max-h-p
-                          character-action actor-facing
-                          actor-course character-decal-kind
-                          character-skin-color character-hair-color
-                          character-clothes-color character-head character-body
-                          character-shield character-equipment
-                          character-armor-class character-crowns
-                          character-arrows character-potions
-                          character-character-i-d character-speech-pitch
-                          character-speech-bend character-speech-speed
-                          character-speech-color
-                          non-player-character-tactical-goal
-                          non-player-character-tactical-object
-                          non-player-character-strategic-goal
-                          non-player-character-strategic-object
-                          character-name-length))
-          (format t "~2%~10t* = Character_~a + ~a~%~a"
-                  (pascal-case (string name)) (pascal-case (string column))
-                  (output-actor-value actor (make-keyword (string-upcase (string column))))))
-        (format t "~%~10t* = Character_~a + ~aSize"
-                (pascal-case (string name)) (pascal-case (string class))))))
-  (format t "
-~10tSortedActors := sort(AllActors)
+        (print-one-actor-prototype name class actor))))
+  (format t "~2%
+;;; ~|
 ActorCharacterID:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte SortedActors[ci][0]
+~12t.byte AllActors[ci][0]
 ~10t.next
 ActorPointerL:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte <SortedActors[ci][1]
+~12t.byte <AllActors[ci][1]
 ~10t.next
 ActorPointerH:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte >SortedActors[ci][1]
+~12t.byte >AllActors[ci][1]
 ~10t.next
 ActorClassID:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte SortedActors[ci][2]
+~12t.byte AllActors[ci][2]
 ~10t.next
 ActorClassSize:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte SortedActors[ci][3]
+~12t.byte AllActors[ci][3]
 ~10t.next
 
 ~10tActorsCount = len(AllActors)
@@ -3278,6 +3282,12 @@ ActorClassSize:
                            &allow-other-keys)
           actor
         (unless (member name '(player narrator) :test 'string-equal)
+          (when (> (length (string name)) 12)
+            (let ((trunc (subseq (string name) 0 12)))
+              (cerror (format nil "Continue with truncated name “~a”" trunc)
+                      "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+                      name name (length (string name)))
+              (setf name trunc)))
           (format t "~%~10tCharacterID_~a = $~2,'0x"
                   (pascal-case (string name)) character-id))))
     (format *trace-output* " …done."))
