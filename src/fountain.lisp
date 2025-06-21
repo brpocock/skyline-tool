@@ -3188,8 +3188,7 @@ FadeColor~:(~a~) FadingTarget C!"
   (format nil "~10t.ptext \"~a\"" (getf actor :name)))
 
 (defun print-one-actor-prototype (name class actor)
-  (format t "~%;;;~|~2%~10tAllActors ..= [[ CharacterID_~a, Character_~a, ~aClass, ~aSize ]]"
-          (pascal-case (string name))
+  (format t "~%;;;~|~2%~10tAllActors ..= [[ Character_~a, ~aClass, ~aSize ]]"
           (pascal-case (string name))
           (pascal-case (string class))
           (pascal-case (string class)))
@@ -3237,25 +3236,21 @@ FadeColor~:(~a~) FadingTarget C!"
         (print-one-actor-prototype name class actor))))
   (format t "~2%
 ;;; ~|
-ActorCharacterID:
-~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte AllActors[ci][0]
-~10t.next
 ActorPointerL:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte <AllActors[ci][1]
+~12t.byte <AllActors[ci][0]
 ~10t.next
 ActorPointerH:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte >AllActors[ci][1]
+~12t.byte >AllActors[ci][0]
 ~10t.next
 ActorClassID:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte AllActors[ci][2]
+~12t.byte AllActors[ci][1]
 ~10t.next
 ActorClassSize:
 ~10t.for ci := 0, ci < len(AllActors), ci += 1
-~12t.byte AllActors[ci][3]
+~12t.byte AllActors[ci][2]
 ~10t.next
 
 ~10tActorsCount = len(AllActors)
