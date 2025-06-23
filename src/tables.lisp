@@ -495,12 +495,10 @@ GameFlag: .block~2%"
                   (list ".byte $~2,'0x" #'hex :index
                         ".byte $~2,'0x" #'hex :decal-bank
                         ".byte ~aClass" #'here? '(:entity-class :entity)
-                        ".byte ~aSize" #'here? '(:entity-class :entity-size)
                         ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
                         ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
                         "" #'drawing-mode-filter :drawing-mode
                         ".byte ~aClass" #'here? '(:course-class :course)
-                        ".byte ~aSize" #'here? '(:course-class :course-size)
                         ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
                         ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
                         ".byte Sound_~a" #'here? :sound

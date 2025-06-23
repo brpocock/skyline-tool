@@ -1,6 +1,7 @@
 (in-package :skyline-tool)
 
-(defun make-classes-for-oops (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
+(defun make-classes-for-oops (&optional
+                                (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
   "Writes ClassConstants from CLASS-DEFS-PATHNAME"
   (let ((all-classes-sequentially (list)))
     (with-input-from-file (class-file class-defs-pathname)
@@ -64,7 +65,6 @@ node [shape=Mrecord];
                                                     (param-case class-name)
                                                     (param-case field)
                                                     class-name field
-                                                    
                                                     (param-case class-name)
                                                     (param-case
                                                      (if (char= #\P (last-elt field))
@@ -142,37 +142,32 @@ Method~aDestroy: .proc
                         with class-index = 1 with slot-offset = 1
                         for line = (read-line class-file nil nil) while line
                         do (cond
-                             ;; blank line
-                             ((emptyp line)
+                             ((emptyp line) ; blank line
                               (fresh-line class-constants)
                               (fresh-line class-methods)
                               (fresh-line classes.forth))
-                             ;; comment
-                             ((char= #\; (char line 0))
+                             ((char= #\; (char line 0)) ; comment
                               (fresh-line class-constants)
                               (princ line class-constants)
                               (fresh-line class-methods)
                               (princ line class-methods)
                               (format classes.forth "~& ( ~a ) "
                                       (subseq line
-                                              (position-if
-                                               (lambda (ch)
-                                                 (and (char/= #\; ch)
-                                                      (char/= #\Space ch)
-                                                      (char/= #\Tab ch)))
-                                               line))))
-                             ;; method name
-                             ((char= #\# (char line 0))
+                                              (position-if (lambda (ch)
+                                                             (and (char/= #\; ch)
+                                                                  (char/= #\Space ch)
+                                                                  (char/= #\Tab ch)))
+                                                           line))))
+                             ((char= #\# (char line 0)) ; method name
                               (if current-class
-                                  (let ((name (string-trim " " (subseq line 1)))
+                                  (let ((name (string-trim #(#\Space) (subseq line 1)))
                                         (methods (gethash current-class methods-set)))
                                     (setf (gethash name methods) current-class)
                                     (format class-constants "~%~10tCall~a~a = $~2,'0x"
                                             current-class name (* 3 (1- (hash-table-count methods)))))
                                   (cerror "Continue, ignoring"
                                           "Ignoring method without class: ~s" line)))
-                             ;; slot name & size
-                             ((char= #\. (char line 0))
+                             ((char= #\. (char line 0)) ; slot name & size
                               (if current-class
                                   (destructuring-bind (name size$)
                                       (split-sequence #\Space (subseq line 1)
@@ -193,8 +188,7 @@ Method~aDestroy: .proc
                                       (incf slot-offset size)))
                                   (cerror "Continue, ignoring"
                                           "Ignoring slot without class: ~s" line)))
-                             ;; class definition
-                             ((find #\< line)
+                             ((find #\< line) ; class definition
                               (destructuring-bind (new-class old-class)
                                   (mapcar (curry #'string-trim #(#\Space))
                                           (split-sequence #\< line))
@@ -206,7 +200,6 @@ Method~aDestroy: .proc
                                         parent-class old-class
                                         slot-offset (gethash old-class class-size)
                                         (gethash new-class class-bases) old-class
-                                        
                                         (gethash new-class methods-set)
                                         (copy-hash-table (gethash old-class methods-set)))
                                   (finish-output)
@@ -220,7 +213,8 @@ Method~aDestroy: .proc
                                         current-class parent-class
                                         current-class (incf class-index))))
                              ;; anything else
-                             (t (error "Unrecognized line in class definitions: ~s" line)))
+                             (t (cerror "Continue, ignoring line"
+                                        "Unrecognized line in class definitions: ~s" line)))
                         finally
                            (when current-class
                              (finalize-oops-class current-class slot-offset))))
@@ -233,7 +227,16 @@ Method~aDestroy: .proc
 ~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
                           (mapcan (lambda (class)
                                     (list (gethash class class-bases) class))
-                                  (reverse all-classes-sequentially)))))
+                                  (reverse (copy-list all-classes-sequentially)))))
+                (with-output-to-file (sizes #p"./Source/Generated/ClassSizes.s"
+                                            :if-exists :supersede)
+                  (format sizes ";;; Class sizes derived from ~s~2%ClassSize: .block"
+                          (enough-namestring class-defs-pathname))
+                  (format sizes
+                          "~{~&~20t.byte ~d~40t; ~aClass~}~2%~10t.bend~%;;; Finis.~%"
+                          (mapcan (lambda (class)
+                                    (list (gethash class class-size) class))
+                                  (reverse (copy-list all-classes-sequentially))))))
               (fresh-line class-constants)
               (terpri class-constants))
             (format class-methods "

@@ -561,6 +561,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "ShoppingTable" 'compile-shops
           "CharacterIDs" 'write-character-ids
           "ClassConstants" 'make-classes-for-oops
+          "ClassSizes" 'make-classes-for-oops
           "ClassMethods" 'make-classes-for-oops
           "ClassInheritance" 'make-classes-for-oops
           "InventoryLabels" 'write-inventory-tables
