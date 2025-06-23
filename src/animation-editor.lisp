@@ -58,7 +58,7 @@
 
 (define-constant +decal-kinds+
     '( :player :human :earl :captain :princess :elder :nefertem
-      :vizier :sentinel :sailor :enemy :block1 :block2 :block3 :block4)
+      :vizier :sentinel :sailor :block1 :block2 :block3 :block4 :enemy )
   :test 'equalp)
 
 (clim:define-presentation-type simple-animation-sequence-index () :inherit-from 'integer)
@@ -151,7 +151,7 @@
                                             (:160b 4)
                                             (:160a (case (simple-animation-sequence-decal-kind
                                                           (anim-seq-editor-sequence frame))
-                                                     ((:enemy :nefertem) 6)
+                                                     ((:enemy :sentinel :nefertem) 6)
                                                      (otherwise 0)))))
     (clim:redisplay-frame-panes frame)))
 
@@ -381,15 +381,8 @@
   (setf (simple-animation-sequence-decal-body
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
         (mod body
-             (ecase (simple-animation-sequence-decal-kind
-                     (anim-seq-editor-sequence *anim-seq-editor-frame*))
-               (:human 2)
-               (:sailor 8)
-               (:enemy #x100)
-               (:block1 20)
-               (:block2 20)
-               (:block3 20)
-               (:block4 20))))
+             (body-count-for-decal-kind (simple-animation-sequence-decal-kind
+                                         (anim-seq-editor-sequence *anim-seq-editor-frame*)))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
 (clim:define-presentation-to-command-translator click-to-set-body
@@ -920,14 +913,14 @@
 (defun edit-animation-sequence (&optional (sequence 0))
   "Select which frames go together to form an animation sequence"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*anim-seq-editor-frame*
-                         (clim:make-application-frame 'anim-seq-editor-frame
-                                                      :sequence sequence)))
-                   (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
-                         "Edit Animation Sequence")
-                   (clim:run-frame-top-level *anim-seq-editor-frame*)))
-               :name "Edit Animation Sequence"))
+                           (load-all-animation-sequences)
+                           (let ((*anim-seq-editor-frame*
+                                   (clim:make-application-frame 'anim-seq-editor-frame
+                                                                :sequence sequence)))
+                             (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
+                                   "Edit Animation Sequence")
+                             (clim:run-frame-top-level *anim-seq-editor-frame*)))
+                         :name "Edit Animation Sequence"))
 
 (define-constant +all-actions+
     '(:idle :climbing :hurt :flying
@@ -947,7 +940,7 @@
                :initform :idle :accessor anim-seq-assign-action :initarg :action)
    (%facing-id :type (member :all :north :south :east :west)
                :initform :south :accessor anim-seq-assign-facing :initarg :facing))
-  (:panes (anim-seq-detail-pane :application :height 400 :width 400
+  (:panes (anim-seq-detail-pane :application :height 600 :width 500
                                              :display-function 'display-anim-seq-assignment)
           (interactor :interactor :height 50 :width 400
                                   :max-height 50))
@@ -1079,8 +1072,11 @@
             (clim:formatting-cell (pane)
               (clim:with-output-as-presentation (pane (simple-animation-sequence-decal-body seq)
                                                       'simple-animation-sequence-decal-body)
-                (format pane "~d"
-                        (simple-animation-sequence-decal-body seq))))))
+                (format pane "~d."
+                        (simple-animation-sequence-decal-body seq))
+                (when-let (body (find-name-for-body (simple-animation-sequence-decal-kind seq)
+                                                    (simple-animation-sequence-decal-body seq)))
+                  (format pane " ~a" body))))))
         (terpri pane)
         (clim:formatting-row (pane)
           (clim:formatting-cell (pane)
@@ -1152,21 +1148,21 @@
   "Select which animation sequence applies to which action(s)"
   (let ((parent *anim-seq-assigns-frame*))
     (clim-sys:make-process (lambda ()
-                   (let ((*anim-seq-assign-frame*
-                           (clim:make-application-frame
-                            'anim-seq-assign-frame
-                            :sequence (when-let (seq (gethash (list decal-kind body action facing)
-                                                              *animation-assignments*))
-                                        (simple-animation-sequence-index seq))
-                            :decal-kind decal-kind
-                            :body body
-                            :action action
-                            :facing facing
-                            :parent parent)))
-                     (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
-                           "Assign Animation Sequence")
-                     (clim:run-frame-top-level *anim-seq-assign-frame*)))
-                 :name "Assign Animation Sequence")))
+                             (let ((*anim-seq-assign-frame*
+                                     (clim:make-application-frame
+                                      'anim-seq-assign-frame
+                                      :sequence (when-let (seq (gethash (list decal-kind body action facing)
+                                                                        *animation-assignments*))
+                                                  (simple-animation-sequence-index seq))
+                                      :decal-kind decal-kind
+                                      :body body
+                                      :action action
+                                      :facing facing
+                                      :parent parent)))
+                               (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
+                                     "Assign Animation Sequence")
+                               (clim:run-frame-top-level *anim-seq-assign-frame*)))
+                           :name "Assign Animation Sequence")))
 
 (clim:define-application-frame anim-seq-assigns-frame ()
   ()
@@ -1182,11 +1178,11 @@
   (case kind
     (:human 2)
     (:sailor 8)
-    (:enemy 8); TODO count the number from somewhere?
-    (:block1 8)
-    (:block2 8)
-    (:block3 8)
-    (:block4 8)
+    (:block1 20)
+    (:block2 20)
+    (:block3 20)
+    (:block4 20)
+    (:enemy 256); TODO count the number from somewhere?
     (otherwise 1)))
 
 (defvar *animation-assignments* (make-hash-table :test 'equalp))
@@ -1213,7 +1209,20 @@
                                                   decal-kind body)
               do (return (elt *animation-sequences* i)))))
 
+(defun find-name-for-body (decal-kind body)
+  (when (string-equal "human" decal-kind)
+    (return-from find-name-for-body (ecase body
+                                      (0 "tunic")
+                                      (1 "robe"))))
+  (loop for row in *npc-stats*
+        when (and (string-equal decal-kind (getf row :decal))
+                  (when-let ((body$ (ignore-errors (parse-integer (getf row :body)))))
+                    (= body body$)))
+          return (getf row :name)))
+
 (defmethod display-anim-seq-assignments ((frame anim-seq-assigns-frame) pane)
+  (unless *npc-stats*
+    (load-npc-stats))
   (block nil
     (clim:with-text-size (pane :large)
       (format pane "Assign Animation Sequences to NPCs"))
@@ -1254,7 +1263,9 @@
                       (setf printed-decal-kind decal-kind)))
                   (clim:formatting-cell (pane)
                     (unless (eql printed-body body)
-                      (format pane "~d" body)
+                      (format pane "~d." body)
+                      (when-let (name (find-name-for-body decal-kind body))
+                        (format pane " ~a" name))
                       (setf printed-body body)))
                   (clim:formatting-cell (pane)
                     (format pane "~a" (title-case (string facing))))
