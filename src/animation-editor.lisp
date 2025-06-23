@@ -386,10 +386,10 @@
                (:human 2)
                (:sailor 8)
                (:enemy #x100)
-               (:block1 8)
-               (:block2 8)
-               (:block3 8)
-               (:block4 8))))
+               (:block1 20)
+               (:block2 20)
+               (:block3 20)
+               (:block4 20))))
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
 (clim:define-presentation-to-command-translator click-to-set-body
