@@ -1704,35 +1704,32 @@ MatchDecalBodyL:
 ~10t.byte <DecalBodies
 MatchDecalBodyH:
 ~10t.byte >DecalBodies")
-        (format s "~2%MatchDecalBodies:")
+        (format s "~2%MatchDecalBodies:~%~10t.dsection BodyCounts~%")
         (dolist (kind +decal-kinds+)
-          (let ((set (make-hash-table)))
-            (dolist (seq *animation-sequences*)
-              (when (eql kind (simple-animation-sequence-decal-kind seq))
-                (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
-            (format s "~%~10t.byte ~d~32t; Body count for ~a"
-                    (hash-table-count set)
-                    (pascal-case (string kind)))))
-        (dolist (kind +decal-kinds+)
-          (let ((set (make-hash-table)))
-            (dolist (seq *animation-sequences*)
-              (when (eql kind (simple-animation-sequence-decal-kind seq))
-                (incf (gethash (simple-animation-sequence-decal-body seq) set 0))))
-            (if (zerop (hash-table-count set))
+          (let* ((body-sequences
+                   (loop for body from 0
+                         while (find-if #1=(lambda (seq)
+                                             (and (eql kind (simple-animation-sequence-decal-kind seq))
+                                                  (eql body (simple-animation-sequence-decal-body seq))))
+                                        (hash-table-values *animation-assignments*))
+                         collect (count-if #1#
+                                           (hash-table-values *animation-assignments*))))
+                 (body-sequences-offsets
+                   (loop for body from 0 upto (length body-sequences)
+                         collect (if (zerop body) 0
+                                     (loop for n from 0 below body
+                                           sum (or (nth n body-sequences) 0))))))
+            (format s "~2%~
+~10t.section BodyCounts
+~10t.byte ~d~32t; Body count for ~a
+~10t.send"
+                    (1- (length body-sequences-offsets))
+                    (pascal-case (string kind)))
+            (if (< (length body-sequences-offsets) 2)
                 (format s "~2%~10tMatchBodies~a = 0" (pascal-case (string kind)))
-                (format s "~2%MatchBodies~a:~%~10t.byte ~{~d, ~}~d ; end + 1"
+                (format s "~2%MatchBodies~a:~%~10t.byte ~{~d~^, ~}~40t; offsets of each body after the first"
                         (pascal-case (string kind))
-                        (rest (loop for body from 0
-                                    for offset from 0
-                                    while (find-if #1=(lambda (seq)
-                                                        (and (eql kind (simple-animation-sequence-decal-kind seq))
-                                                             (eql body (simple-animation-sequence-decal-body seq))))
-                                                   (hash-table-values *animation-assignments*))
-                                    collect (1- (count-if #1#
-                                                          (hash-table-values *animation-assignments*)))))
-                        (count-if (lambda (seq)
-                                    (eql kind (simple-animation-sequence-decal-kind seq)))
-                                  (hash-table-values *animation-assignments*))))))
+                        (rest body-sequences-offsets)))))
         (format s "~2%MatchAction:")
         (let (last-kind)
           (dolist (key keys)
