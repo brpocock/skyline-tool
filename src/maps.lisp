@@ -323,8 +323,8 @@
          (exits-table (cons nil nil))
          (decals-table (cons nil nil))
          (enemies (make-array 0 :element-type 'cons :adjustable t :fill-pointer t)))
-    (assert (<= 13 (array-dimension ground 1) 64) ()
-            "The tile map must have from 13-64 (not ~:d) rows"
+    (assert (<= 10 (array-dimension ground 1) 64) ()
+            "The tile map must have from 10-64 (not ~:d) rows"
             (array-dimension ground 1))
     (assert (<= 20 (array-dimension ground 0) 127) ()
             "The tile map must have from 20-127 (not ~:d) columns"
