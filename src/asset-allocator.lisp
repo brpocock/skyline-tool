@@ -72,7 +72,7 @@
                      kind name)
              (if-let (existing (gethash id (gethash kind seen-ids)))
                (restart-case
-                   (error "Two ~(~a~)s (at least) have the same ID: “~a” and “~a”~:[ (both nil)~; (both $~x)~]"
+                   (error "Two ~(~a~)s (at least) have the same ID: “~a” and “~a”~:[ (both nil)~;~:* (both $~x)~]"
                           kind existing name id)
                  (reload-assets ()
                    :report "Reload the assets to check for changed IDs"
@@ -1210,7 +1210,7 @@ mentioned in the top-level Makefile."
             (format *trace-output* "~&//* Song “~a” has ID $~2,'0x (from workNumber)"
                     (pathname-name pathname) (parse-integer work-number$))
             (return-from get-asset-id (parse-integer work-number$))))))
-    (let ((id (logand #xff (sxhash asset-name))))
+    (let ((id (ash (logand #xff00 (sxhash asset-name)) -8)))
       (format *trace-output* "~&//* Song “~a” has ID $~2,'0x"
               (pathname-name pathname) id)
       id)))
