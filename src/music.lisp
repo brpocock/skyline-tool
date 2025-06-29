@@ -372,7 +372,8 @@ skipping MIDI music with ~:d track~:p"
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
                                                 :key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (list voice freq-code (frequency-distance freq (elt notes freq-code))))))
+      (list voice freq-code (/ (frequency-distance freq (elt notes freq-code))
+                               (frequency-distance freq (elt notes (1+ freq-code))))))))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
   (let ((notes (mapcar #'second
@@ -380,7 +381,8 @@ skipping MIDI music with ~:d track~:p"
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
                                                 :key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (list voice freq-code (frequency-distance freq (elt notes freq-code))))))
+      (list voice freq-code (/ (frequency-distance freq (elt notes freq-code))
+                               (frequency-distance freq (elt notes (1+ freq-code))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
@@ -537,6 +539,10 @@ skipping MIDI music with ~:d track~:p"
     (read-pokey-tables)
   :test 'equalp)
 
+(define-constant +all-hokey-distortions+
+    '(:10 :2 :12a :12b :8 :4b :4a)
+  :test #'equalp)
+
 (defun pokey-distortion-column (distortion bits)
   (+ (ecase bits
        (16 0)
@@ -567,7 +573,7 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-tia-note-for-ntsc (note)
   (labels ((nearest (&rest set)
-             (first (sort set #'< :key #'third))))
+             (first (sort (remove-if #'null set) #'< :key #'third))))
     (nearest (null-if-zero-note (best-tia-ntsc-note-for note 4))
              (null-if-zero-note (best-tia-ntsc-note-for note 5))
              (null-if-zero-note (best-tia-ntsc-note-for note 2))
@@ -577,7 +583,7 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-tia-note-for-pal (note)
   (labels ((nearest (&rest set)
-             (first (sort set #'< :key #'third))))
+             (first (sort (remove-if #'null set) #'< :key #'third))))
     (nearest (null-if-zero-note (best-tia-pal-note-for note 4))
              (null-if-zero-note (best-tia-pal-note-for note 5))
              (null-if-zero-note (best-tia-pal-note-for note 2))
@@ -683,12 +689,11 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-tia-note-for (key distortion tv)
   (let ((freq (freq<-midi-key key)))
-    (elt (ecase tv
-           (:ntsc (or (best-tia-ntsc-note-for freq distortion)
-                      (best-tia-note-for-ntsc freq)))
-           (:pal (or (best-tia-pal-note-for freq distortion)
-                     (best-tia-note-for-pal freq))))
-         0)))
+    (ecase tv
+      (:ntsc (or (best-tia-ntsc-note-for freq distortion)
+                 (best-tia-note-for-ntsc freq)))
+      (:pal (or (best-tia-pal-note-for freq distortion)
+                (best-tia-note-for-pal freq))))))
 
 (defun bytes-for-hokey-note (&key voices time key duration distortion)
   (let ((voice (find-free-voice voices time))
@@ -769,7 +774,7 @@ skipping MIDI music with ~:d track~:p"
             'vector)))
 
 (defmethod midi-to-sound-binary (output-coding machine-type midi-notes (sound (eql :pokey)))
-  (array<-pokey-notes-list (midi->pokey (car midi-notes) output-coding) output-coding))
+  (error "superseded"))
 
 (defmethod midi-to-sound-binary (output-coding (machine-type (eql 2600)) midi-notes (sound (eql :tia)))
   (array<-tia-notes-list (midi->2600-tia (car midi-notes)) output-coding))
@@ -1024,7 +1029,10 @@ Gathered text:~{~% • ~a~}"
                                    0))
                               object)))))
 
-(defun pokey-distortion-code (distortion) ; FIXME
+(defun pokey-distortion-code (distortion)
+  (ecase distortion
+    (:10 10) (:2 2) (:12a 12) (:12b 13) (:8 8) (:4a 4) (:4b 5))
+  
   (parse-integer (symbol-name distortion) :junk-allowed t))
 
 (defmethod write-song-data-to-binary (data object (machine (eql 7800)) sound-chip)
@@ -1263,12 +1271,10 @@ Music:~:*
   :test #'=)
 
 (defun frame-rate->fps (frame-rate)
-  (etypecase frame-rate
-    (symbol (ecase frame-rate
-              (:ntsc 60)
-              (:secam 50)
-              (:pal 60)))
-    (integer frame-rate)))
+  (ecase frame-rate
+    (:ntsc 60)
+    (:secam 50)
+    (:pal 60)))
 
 (defun midi->score (input frame-rate)
   (let ((fps (frame-rate->fps frame-rate))
@@ -1303,34 +1309,93 @@ Music:~:*
   tia-c
   tia-f)
 
+(defun hokey-reckon (note &rest distortions)
+  (when (null distortions)
+    (warn "nobody could play note ~a" (midi->note-name note))
+    (return-from hokey-reckon
+      (apply #'hokey-reckon note +all-hokey-distortions+)))
+  (when-let ((best1 (best-pokey-note-for note (make-keyword (string (first distortions))) 8)))
+    (return-from hokey-reckon (values (first distortions) best1)))
+  (apply #'hokey-reckon note (rest distortions)))
+
 (defmethod note->hokey (note (instrument (eql :crystal-synthesizer)))
-  (values 8 (best-pokey-note-for note :|8| 8)))
+  (hokey-reckon note :8))
 (defmethod note->hokey (note (instrument (eql :saw-synthesizer)))
-  (values 4 (best-pokey-note-for note :|4| 8)))
+  (hokey-reckon note :4a))
 (defmethod note->hokey (note (instrument (eql :square-synthesizer)))
-  (values 10 (best-pokey-note-for note :|10| 8)))
+  (hokey-reckon note :10))
+(defmethod note->hokey (note (instrument (eql :flute)))
+  (note->hokey note :crystal-synthesizer))
+(defmethod note->hokey (note (instrument (eql :piano-piano)))
+  (note->hokey note :square-synthesizer))
+(defmethod note->hokey (note (instrument (eql :piano)))
+  (note->hokey note :square-synthesizer))
+(defmethod note->hokey (note (instrument (eql :violin)))
+  (note->hokey note :square-synthesizer))
+(defmethod note->hokey (note (instrument (eql :strings-strings)))
+  (note->hokey note :crystal-synthesizer))
+(defmethod note->hokey (note (instrument (eql :accordion)))
+  (note->hokey note :crystal-synthesizer))
+(defmethod note->hokey (note (instrument (eql :fretless-electric-bass-bass)))
+  (note->hokey note :square-synthesizer))
+(defmethod note->hokey (note (instrument (eql :acoustic-guitar)))
+  (note->hokey note :square-synthesizer))
+(defmethod note->hokey (note (instrument (eql :snare-drum)))
+  (note->hokey note :saw-synthesizer))
+(defmethod note->hokey (note (instrument (eql :concert-bass-drum)))
+  (note->hokey note :saw-synthesizer))
+(defmethod note->hokey (note (instrument (eql :4-piece-drum-kit-drums)))
+  (note->hokey note :saw-synthesizer))
+(defmethod note->hokey (note (instrument (eql :voice)))
+  nil)
 
-(defmethod note->tia (note (instrument (eql :crystal-synthesizer)))
-  (values 0 (best-tia-note-for-ntsc note)))
-(defmethod note->tia (note (instrument (eql :saw-synthesizer)))
-  (values 4 (best-tia-note-for-ntsc note)))
-(defmethod note->tia (note (instrument (eql :square-synthesizer)))
-  (values 10 (best-tia-note-for-ntsc note)))
+(defmethod note->tia (note (instrument (eql :crystal-synthesizer)) frame-rate)
+  (best-tia-note-for note 0 frame-rate))
+(defmethod note->tia (note (instrument (eql :saw-synthesizer)) frame-rate)
+  (best-tia-note-for note 5 frame-rate))
+(defmethod note->tia (note (instrument (eql :square-synthesizer)) frame-rate)
+  (best-tia-note-for note 8 frame-rate))
+(defmethod note->tia (note (instrument (eql :violin)) frame-rate)
+  (note->tia note :crystal-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :strings-strings)) frame-rate)
+  (note->tia note :crystal-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :flute)) frame-rate)
+  (note->tia note :crystal-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :accordion)) frame-rate)
+  (note->tia note :crystal-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :piano-piano)) frame-rate)
+  (note->tia note :square-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :piano)) frame-rate)
+  (note->tia note :square-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :fretless-electric-bass-bass)) frame-rate)
+  (note->tia note :square-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :acoustic-guitar)) frame-rate)
+  (note->tia note :square-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :snare-drum)) frame-rate)
+  (note->tia note :saw-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :concert-bass-drum)) frame-rate)
+  (note->tia note :saw-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :4-piece-drum-kit-drums)) frame-rate)
+  (note->tia note :saw-synthesizer frame-rate))
+(defmethod note->tia (note (instrument (eql :voice)) frame-rate)
+  nil)
 
-(defun score->hokey-notes (score)
-  (mapcar (lambda (score-note)
-            (multiple-value-bind (hokey-c hokey-f)
-                (note->hokey (getf score-note :key) (getf score-note :instrument))
-              (multiple-value-bind (tia-c tia-f)
-                  (note->tia (getf score-note :key) (getf score-note :instrument))
-                (make-hokey-note :start-time (getf score-note :frame-time)
-                                 :duration (getf score-note :frame-duration)
-                                 :hokey-c hokey-c :hokey-f hokey-f
-                                 :tia-c tia-c :tia-f tia-f))))
-          score))
+(defun score->hokey-notes (score frame-rate)
+  (remove-if #'null
+             (mapcar (lambda (score-note)
+                       (multiple-value-bind (hokey-c hokey-f hokey-error)
+                           (note->hokey (getf score-note :key) (getf score-note :instrument))
+                         (destructuring-bind (&optional tia-c tia-f (tia-error 0))
+                             (note->tia (getf score-note :key) (getf score-note :instrument) frame-rate)
+                           (when (and hokey-c tia-c)
+                             (make-hokey-note :start-time (getf score-note :frame-time)
+                                              :duration (getf score-note :frame-duration)
+                                              :hokey-c hokey-c :hokey-f (cons hokey-f (or hokey-error 0))
+                                              :tia-c tia-c :tia-f (cons tia-f tia-error))))))
+                     score)))
 
-(defmethod score->song (score (format (eql :hokey)))
-  (score->hokey-notes score))
+(defmethod score->song (score (format (eql :hokey)) frame-rate)
+  (score->hokey-notes score frame-rate))
 
 (defmethod write-song-binary (hokey-notes (format (eql :hokey)) output)
   (with-output-to-file (out output :if-exists :supersede :element-type '(unsigned-byte 8))
@@ -1340,21 +1405,25 @@ Music:~:*
           (loop while (> d-t #x100)
                 do (progn 
                      (decf d-t #xff)
-                     (write-bytes #(#xff 0 0 0 0 0) out)))
+                     (write-bytes #(#xff 0 0 0 0 0 0 0) out)))
           (setf time (hokey-note-start-time note))
           
           (write-byte d-t out)
           (write-byte (hokey-note-duration note) out)
-          (write-byte (ash (hokey-note-hokey-c note) 4) out)
-          (write-byte (hokey-note-hokey-f note) out)
+          (write-byte (pokey-distortion-code (hokey-note-hokey-c note)) out)
+          (write-byte (first (hokey-note-hokey-f note)) out)
+          (write-byte (floor (* #x100 (rest (hokey-note-hokey-f note)))) out)
           (write-byte (hokey-note-tia-c note) out)
-          (write-byte (hokey-note-tia-f note) out)))
-      (write-bytes #(0 0 0 0 0 0) out))))
+          (write-byte (first (hokey-note-tia-f note)) out)
+          (write-byte (floor (* #x100 (rest (hokey-note-tia-f note)))) out)))
+      (write-bytes #(0 0 0 0 0 0 0 0) out))))
 
 (defun midi-compile (input format frame-rate
                      &optional (output (make-pathname
-                                        :name (format nil "Song.~a" (pathname-name input))
+                                        :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
                                         :type "o"
                                         :directory '(:relative "Object" "Assets"))))
-  "Compile INPUT for device FORMAT with FRAME-RATE frames/second"
-  (write-song-binary (score->song (midi->score input frame-rate) format) format output))
+  "Compile INPUT for device FORMAT with FRAME-RATE TV (eg NTSC)"
+  (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
+                                  (make-keyword format) (make-keyword frame-rate))
+                     (make-keyword format) output))

@@ -507,8 +507,8 @@ file ~a.s in bank $~(~2,'0x~)~
                                         :name (subseq name 5) :type "mscz")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Source" "Generated" "Assets")
-                         :name name :type "s")))))
+          (make-pathname :directory '(:relative "Object" "Assets")
+                         :name name :type "o")))))
   (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)" 
          name *bank*))
 
@@ -688,7 +688,7 @@ file ~a.s in bank $~(~2,'0x~)~
       ((equal kind "Maps")
        (format nil "bin/skyline-tool compile-map $<"))
       ((equal kind "Songs")
-       (format nil "bin/skyline-tool compile-music $@ $< 7800 POKEY ~a" video))
+       (format nil "bin/skyline-tool compile-midi $< HOKEY ~a $@" video))
       ((equal kind "Scripts")
        (format nil "bin/skyline-tool compile-script $< Source/Generated/Assets/Script.~{~a~^.~}.forth
 	bin/skyline-tool compile-forth ~:*Source/Generated/Assets/Script.~{~a~^.~}.forth $@"

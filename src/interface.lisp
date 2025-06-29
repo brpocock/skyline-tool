@@ -24,6 +24,7 @@
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
+        :compile-midi 'midi-compile
         :compile-obj 'compile-obj
         :compile-code 'compile-skylisp
         :compile-shops 'compile-shops
