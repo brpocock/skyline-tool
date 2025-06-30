@@ -652,8 +652,7 @@ file ~a.s in bank $~(~2,'0x~)~
   (declare (ignore build))
   (destructuring-bind (kind name) (asset-kind/name asset-indicator)
     (cond ((equal kind "Songs")
-           (format nil "Source/Generated/Assets/Song.~a.s \\~%~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
-                   name
+           (format nil "~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                    (loop for video in +all-video+
                          collecting (list name video))))
           ((equal kind "Maps")
@@ -872,8 +871,12 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
 		~0@*-l Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
-                    ~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt $< \\
-                    ~0@*-o Object/Bank~(~2,'0x~).~a.~a.o
+		~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt $< \\
+		~0@*-o Object/Bank~(~2,'0x~).~a.~a.o | \\
+		tee ~0@*Object/Bank~(~2,'0x~).~a.~a.out
+	echo \"@	$(grep 'warning: Bank $.. ends at $.... (length $....' ~0@*Object/Bank~(~2,'0x~).~a.~a.out | \\
+		cut -d ' ' -f 9 | cut -d'$' -f2 | cut -d',' -f1)\" > \\
+			~0@*Source/Generated/Bank~(~2,'0x~).~a.~a.size
 	bin/skyline-tool prepend-fundamental-mode \\
                       ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt"
           *bank* build video (recursive-read-deps bank-source)
