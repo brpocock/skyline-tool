@@ -1424,10 +1424,10 @@ Music:~:*
           (write-byte (hokey-note-duration note) out)
           (write-byte (pokey-distortion-code (hokey-note-hokey-c note)) out)
           (write-byte (first (hokey-note-hokey-f note)) out)
-          (write-byte (floor (* #x100 (rest (hokey-note-hokey-f note)))) out)
+          (write-byte (floor (min #xff (* #x100 (rest (hokey-note-hokey-f note))))) out)
           (write-byte (hokey-note-tia-c note) out)
           (write-byte (first (hokey-note-tia-f note)) out)
-          (write-byte (floor (* #x100 (rest (hokey-note-tia-f note)))) out)))
+          (write-byte (floor (min #xff (* #x100 (rest (hokey-note-tia-f note))))) out)))
       (write-bytes #(0 0 0 0 0 0 0 0) out))))
 
 (defun compile-midi (argv0 input format frame-rate
