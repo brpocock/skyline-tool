@@ -372,10 +372,10 @@ skipping MIDI music with ~:d track~:p"
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
                                                 ::key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (let ((dist-1 (frequency-distance freq (elt notes (1- freq-code))))
+      (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
             (dist0 (frequency-distance freq (elt notes freq-code)))
-            (dist+1 (frequency-distance freq (elt notes (1+ freq-code)))))
-        (if (> (+ dist0 dist+1) (+ dist-1 dist0))
+            (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
+        (if (> (or (+ dist0 dist+1) -1) (or (+ dist-1 dist0) -1))
             (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
             (list voice freq-code (/ dist0 (+ dist0 dist+1)))))      )))
 
