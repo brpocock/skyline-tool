@@ -1323,7 +1323,7 @@ Music:~:*
     (return-from hokey-reckon
       (apply #'hokey-reckon note +all-hokey-distortions+)))
   (when-let ((best1 (best-pokey-note-for note (make-keyword (string (first distortions))) 8)))
-    (return-from hokey-reckon (values (first distortions) best1 #xff)))
+    (return-from hokey-reckon (values (first distortions) best1 1.0)))
   (apply #'hokey-reckon note (rest distortions)))
 
 ;; TODO
