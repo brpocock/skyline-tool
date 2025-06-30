@@ -1418,12 +1418,23 @@ Music:~:*
           (write-byte (floor (* #x100 (rest (hokey-note-tia-f note)))) out)))
       (write-bytes #(0 0 0 0 0 0 0 0) out))))
 
+(defun compile-midi (argv0 input format frame-rate
+                     &optional (output (make-pathname
+                                        :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
+                                        :type "o"
+                                        :directory '(:relative "Object" "Assets"))))
+  (declare (ignore argv0))
+  (midi-compile input format frame-rate output))
+
 (defun midi-compile (input format frame-rate
                      &optional (output (make-pathname
                                         :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
                                         :type "o"
                                         :directory '(:relative "Object" "Assets"))))
   "Compile INPUT for device FORMAT with FRAME-RATE TV (eg NTSC)"
+  (format *trace-output* "~&Compiling ~a to format ~a for frame rate ~a into ~a"
+          (enough-namestring input) format frame-rate (enough-namestring output))
+  (finish-output *trace-output*)
   (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
                                   (make-keyword format) (make-keyword frame-rate))
                      (make-keyword format) output))

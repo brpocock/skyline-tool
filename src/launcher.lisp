@@ -223,25 +223,19 @@ The signal code was ~a" break-code)
         (dotimes (bank #x40)
           (cond
             ((or (< bank (first-assets-bank build)) (= bank #x3f))
-             (if (probe-file (make-pathname :directory '(:relative "Source" "Generated")
-                                            :type "size"
-                                            :name (format nil "Bank~(~2,'0x~).Public.NTSC" bank)))
-                 (let ((size (ignore-errors
-                              (parse-integer
-                               (remove-if-not (lambda (ch)
-                                                (digit-char-p ch 16))
-                                              (read-file-into-string
-                                               (make-pathname :directory '(:relative "Source" "Generated")
-                                                              :type "size"
-                                                              :name (format nil "Bank~(~2,'0x~).Public.NTSC" bank))))))))
-                   (unless size
-                     (setf size #x4000)
-                     (format t "~%Bank $~2,'0x *size file not parsed" bank))
-                   (incf sum size)
-                   (format t "~%Bank $~2,'0x — $~4,'0x (~:d) (~d%)"
-                           bank size size (round (/ size 163.84))))
-                 (progn (format t "~%Bank $~2,'0x — fill" bank)
-                        (incf sum #x4000))))
+             (let ((size (ignore-errors
+                          (parse-integer
+                           (remove-if-not #'digit-char-p
+                                          (read-file-into-string
+                                           (make-pathname :directory '(:relative "Source" "Generated")
+                                                          :type "size"
+                                                          :name (format nil "Bank~(~2,'0x~).Public.NTSC" bank))))))))
+               (unless size
+                 (setf size #x4000)
+                 (format t "~%Bank $~2,'0x *size file not parsed" bank))
+               (incf sum size)
+               (format t "~%Bank $~2,'0x — $~4,'0x (~:d) (~d%)"
+                       bank size size (round (/ size 163.84)))))
             ((= bank #x3e)
              (format t "~%Bank $3e — unavailable on 7800GD")
              (incf sum #x4000))
