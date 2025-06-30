@@ -375,9 +375,9 @@ skipping MIDI music with ~:d track~:p"
       (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
             (dist0 (frequency-distance freq (elt notes freq-code)))
             (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
-        (if (> (or (when dist+1 (+ dist0 dist+1)) -1) (or (when dist-1 (+ dist-1 dist0)) -1))
-            (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-            (list voice freq-code (/ dist0 (+ dist0 dist+1)))))      )))
+        (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
+          (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+          (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
   (let ((notes (mapcar #'second
@@ -385,12 +385,12 @@ skipping MIDI music with ~:d track~:p"
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
                                                 :key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (let ((dist-1 (frequency-distance freq (elt notes (1- freq-code))))
+      (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
             (dist0 (frequency-distance freq (elt notes freq-code)))
-            (dist+1 (frequency-distance freq (elt notes (1+ freq-code)))))
-        (if (> (+ dist0 dist+1) (+ dist-1 dist0))
-            (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-            (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
+            (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
+        (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
+          (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+          (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
