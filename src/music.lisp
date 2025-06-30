@@ -368,21 +368,29 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
   (let ((notes (mapcar #'first
-                       (cdr (elt +tia-voices+ voice)))))
+                       (rest (elt +tia-voices+ voice)))))
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
-                                                :key (curry #'frequency-distance freq)))
+                                                ::key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (list voice freq-code (/ (frequency-distance freq (elt notes freq-code))
-                               (frequency-distance freq (elt notes (1+ freq-code))))))))
+      (let ((dist-1 (frequency-distance freq (elt notes (1- freq-code))))
+            (dist0 (frequency-distance freq (elt notes freq-code)))
+            (dist+1 (frequency-distance freq (elt notes (1+ freq-code)))))
+        (if (> (+ dist0 dist+1) (+ dist-1 dist0))
+            (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+            (list voice freq-code (/ dist0 (+ dist0 dist+1)))))      )))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
   (let ((notes (mapcar #'second
-                       (cdr (elt +tia-voices+ voice)))))
+                       (rest (elt +tia-voices+ voice)))))
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
                                                 :key (curry #'frequency-distance freq)))
                                    notes :test #'=))
-      (list voice freq-code (/ (frequency-distance freq (elt notes freq-code))
-                               (frequency-distance freq (elt notes (1+ freq-code))))))))
+      (let ((dist-1 (frequency-distance freq (elt notes (1- freq-code))))
+            (dist0 (frequency-distance freq (elt notes freq-code)))
+            (dist+1 (frequency-distance freq (elt notes (1+ freq-code)))))
+        (if (> (+ dist0 dist+1) (+ dist-1 dist0))
+            (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+            (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
@@ -569,7 +577,7 @@ skipping MIDI music with ~:d track~:p"
         finally (return nil)))
 
 (defun null-if-zero-note (n)
-  (if (or (null n) (zerop (lastcar n))) nil n))
+  (if (or (null n) (zerop (third n))) nil n))
 
 (defun best-tia-note-for-ntsc (note)
   (labels ((nearest (&rest set)
@@ -1315,8 +1323,12 @@ Music:~:*
     (return-from hokey-reckon
       (apply #'hokey-reckon note +all-hokey-distortions+)))
   (when-let ((best1 (best-pokey-note-for note (make-keyword (string (first distortions))) 8)))
-    (return-from hokey-reckon (values (first distortions) best1)))
+    (return-from hokey-reckon (values (first distortions) best1 #xff)))
   (apply #'hokey-reckon note (rest distortions)))
+
+;; TODO
+#+ () (defmethod note->hokey (note instrument)
+        (hokey-reckon note (distortions-for-instrument instrument)))
 
 (defmethod note->hokey (note (instrument (eql :crystal-synthesizer)))
   (hokey-reckon note :8))
