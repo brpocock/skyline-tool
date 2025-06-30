@@ -375,7 +375,7 @@ skipping MIDI music with ~:d track~:p"
       (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
             (dist0 (frequency-distance freq (elt notes freq-code)))
             (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
-        (if (> (or (+ dist0 dist+1) -1) (or (+ dist-1 dist0) -1))
+        (if (> (or (when dist+1 (+ dist0 dist+1)) -1) (or (when dist-1 (+ dist-1 dist0)) -1))
             (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
             (list voice freq-code (/ dist0 (+ dist0 dist+1)))))      )))
 
