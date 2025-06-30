@@ -509,13 +509,6 @@ file ~a.s in bank $~(~2,'0x~)~
         (return-from find-included-binary-file
           (make-pathname :directory '(:relative "Object" "Assets")
                          :name name :type "o")))))
-  (when (eql 0 (search "SoundEffect." name))
-    (let ((possible-file (make-pathname :directory '(:relative "Source" "SoundEffects")
-                                        :name (nth 1 (split-sequence #\. name)) :type "mscz")))
-      (when (probe-file possible-file)
-        (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets")
-                         :name name :type "o")))))
   (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)" 
          name *bank*))
 
@@ -571,9 +564,7 @@ file ~a.s in bank $~(~2,'0x~)~
           "ClassMethods" 'make-classes-for-oops
           "ClassInheritance" 'make-classes-for-oops
           "InventoryLabels" 'write-inventory-tables
-          "KeyLabels" 'write-keys-tables
-          "SoundEffects" 'write-sound-effects-file
-          "SoundIDs" 'write-sound-effects-file)
+          "KeyLabels" 'write-keys-tables)
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)
@@ -726,23 +717,6 @@ file ~a.s in bank $~(~2,'0x~)~
               (asset->object-name asset-indicator :video video)
               (asset->source-name asset-indicator)
               (asset-compilation-line asset-indicator :video video)))))
-
-(defun write-makefile-for-sound-effects ()
-  (dolist (file (directory #p"Source/SoundEffects/*.mscz"))
-    (write-compilation/sound-effect (pathname-name file))))
-
-(defun write-compilation/sound-effect (basename)
-  (format t "~%
-Object/Assets/SoundEffect.~a.NTSC.o: \\
-~10tSource/SoundEffects/~0@*~a.midi bin/skyline-tool
-	mkdir -p Object/Assets
-	bin/skyline-tool compile-midi $< HOKEY NTSC ~0@*Object/Assets/SoundEffect.~a.NTSC.o
-	bin/skyline-tool compile-midi $< HOKEY PAL ~0@*Object/Assets/SoundEffect.~a.PAL.o
-~0@*Object/Assets/SoundEffect.~a.PAL.o: \\
-~10tbin/skyline-tool Source/SoundEffects/~0@*~a.midi
-	mkdir -p Object/Assets
-	bin/skyline-tool compile-midi $< HOKEY PAL ~0@*Object/Assets/SoundEffect.~a.PAL.o"
-          basename))
 
 (defun write-asset-compilation/map (asset-indicator)
   (dolist (video +all-video+)
@@ -1164,7 +1138,6 @@ mentioned in the top-level Makefile."
       (write-makefile-header)
       (write-makefile-for-bare-assets)
       (write-makefile-for-tilesets)
-      (write-makefile-for-sound-effects)
       (write-makefile-for-art)
       (write-makefile-for-blobs)
       (write-makefile-test-target)
@@ -1575,36 +1548,4 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
             (return-from assemble-file-for-size 8192))
           (parse-integer (aref size 0) :radix 16))))))
 
-(defun write-sound-effects-file ()
-  "Write Source/Generated/SoundEffects.s and Source/Generated/SoundIDs.s"
-  (with-output-to-file (out #p"Source/Generated/SoundEffects.s"
-                            :if-exists :supersede)
-    (format out ";;; SoundEffects.s is a generated file, it will be overwritten
 
-~10tAllSounds := []")
-    (with-output-to-file (ids #p"Source/Generated/SoundIDs.s"
-                              :if-exists :supersede)
-      (format out ";;; SoundIDs.s is a generated file, it will be overwritten~2%")
-      (let ((sound-id 1))
-        (dolist (file (directory #p"Source/SoundEffects/*.mscz"))
-          (format ids "~%~10tSound_~a = $~(~2,'0x~)"
-                  (pascal-case (pathname-name file))
-                  (prog1 sound-id (incf sound-id)))
-          (format out "~%
-~10tAllSounds ..= [SoundEffect_~a]
-SoundEffect_~0@*~a:
-~10t.if TV == NTSC
-~10t.binary \"SoundEffect.~0@*~a.NTSC.o\"
-~10t.else
-~10t.binary \"SoundEffect.~0@*~a.PAL.o\"
-~10t.fi"
-                  (pascal-case (pathname-name file))))
-        (dolist (file (directory #p"Source/SoundEffects/*.s"))
-          (format ids "~%~10tSound_~a = $~(~2,'0x~)"
-                  (pascal-case (pathname-name file))
-                  (prog1 sound-id (incf sound-id)))
-          (format out "~2%~10t.include \"../SoundEffects/~a.s\""
-                  (pathname-name file)))
-        (format out "~2%SoundEffectL: .byte <(AllSounds)
-SoundEffectH: .byte >(AllSounds)")
-        (format ids "~2%~10tSound  = ~d~%" sound-id)))))
