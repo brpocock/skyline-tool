@@ -501,7 +501,7 @@ GameFlag: .block~2%"
                         ".byte ~aClass" #'here? '(:course-class :course)
                         ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
                         ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
-                        ".byte Sound_~a" #'here? :sound
+                        ".byte Song_~a_ID" #'here? :sound
                         ".byte $~2,'0x" #'hex :up
                         ".byte $~2,'0x" #'hex :down
                         ".byte $~2,'0x" #'hex :left
