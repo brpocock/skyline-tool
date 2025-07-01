@@ -2194,6 +2194,15 @@ but now also ~s."
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
 
+(defstage music (start/stop song)
+  (if (eql start/stop 'start)
+      (format t "
+Song_~a_ID NextSong C!
+( let's pretend for now we always mean BGM )
+SoundSourceBackgroundMusic NextSoundSource C!
+PlaySong EXECUTE" (pascal-case song))
+      (format t "(should try to stop song)")))
+
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
       (require-actor actor)
