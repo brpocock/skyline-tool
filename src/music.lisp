@@ -1422,7 +1422,7 @@ Music:~:*
           
           (write-byte d-t out)
           (write-byte (hokey-note-duration note) out)
-          (write-byte (pokey-distortion-code (hokey-note-hokey-c note)) out)
+          (write-byte (logior #x0f (ash (pokey-distortion-code (hokey-note-hokey-c note)) 4)) out)
           (write-byte (first (hokey-note-hokey-f note)) out)
           (write-byte (floor (min #xff (* #x100 (rest (hokey-note-hokey-f note))))) out)
           (write-byte (hokey-note-tia-c note) out)
