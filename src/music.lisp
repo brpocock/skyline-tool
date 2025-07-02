@@ -1300,8 +1300,8 @@ Music:~:*
                    (:rest (setf lyric nil))
                    (:note
                     (push (list* :lyric lyric :instrument instrument
-                                 :frame-time (floor (* (/ (getf (rest token) :time) 1000) fps))
-                                 :frame-duration (floor (* (/ (getf (rest token) :duration) 1000) fps))
+                                 :frame-time (floor (* (/ (getf (rest token) :time) 454) 1/4 fps))
+                                 :frame-duration (floor (* (/ (getf (rest token) :duration) 454) 1/4 fps))
                                  (rest token))
                           score)
                     (setf lyric nil))))
