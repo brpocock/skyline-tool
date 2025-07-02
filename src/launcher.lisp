@@ -233,11 +233,16 @@ The signal code was ~a" break-code)
                (unless size
                  (setf size #x4000)
                  (format t "~%Bank $~2,'0x *size file not parsed" bank))
+               (when (= bank #x3f)
+                 (let ((sh-size (with-input-from-file (sh #p"Object/Stagehand.o")
+                                  (file-length sh))))
+                   (format t "~%Stagehand included in Bank $3F — $~4,'0x (~:d)" sh-size sh-size)
+                   (incf size sh-size)))
                (incf sum size)
                (format t "~%Bank $~2,'0x — $~4,'0x (~:d) (~d%)"
                        bank size size (round (/ size 163.84)))))
             ((= bank #x3e)
-             (format t "~%Bank $3e — unavailable on 7800GD")
+             (format t "~%Bank $3E — unavailable on 7800GD")
              (incf sum #x4000))
             (t
              (let ((size (read-asset-bank-size bank build region)))
