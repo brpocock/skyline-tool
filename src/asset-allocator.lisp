@@ -866,6 +866,7 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
 ~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: ~
 ~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
 	mkdir -p Object
+	rm $@
 	${AS7800} -DTV=~a \\
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
@@ -878,7 +879,8 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
  cut -d',' -f2)\" > ~
  ~0@*Source/Generated/Bank~(~2,'0x~).~a.~a.size
 	bin/skyline-tool prepend-fundamental-mode \\
-                      ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt"
+                      ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt
+	[ -f $@ ]"
           *bank* build video (recursive-read-deps bank-source)
           (when (< *bank* *last-bank*)
             (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
