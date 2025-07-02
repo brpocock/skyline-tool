@@ -1421,7 +1421,7 @@ Music:~:*
           (setf time (hokey-note-start-time note))
           
           (write-byte d-t out)
-          (write-byte (hokey-note-duration note) out)
+          (write-byte (max 1 (hokey-note-duration note)) out)
           ;; TODO volume
           (let ((volume 1/2))
             (write-byte (logior (floor (* 15 volume)) (ash (pokey-distortion-code (hokey-note-hokey-c note)) 4)) out))
