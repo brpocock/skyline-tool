@@ -1216,10 +1216,16 @@ Music:~:*
   (score->hokey-notes score frame-rate))
 
 (defun pokey-distortion-for-instrument (instrument-name)
-  (or (loop for row in (read-orchestration)
+  (or (loop for row in (get-orchestration)
             when (string-equal instrument-name (getf row :instrument))
               do (return (getf row :distortion)))
       :|10|))
+
+(defvar *orchestra* nil)
+
+(defun get-orchestration ()
+  (or *orchestra*
+      (setf *orchestra* (read-orchestration))))
 
 (defmethod write-song-binary (hokey-notes (format (eql :hokey)) output)
   (with-output-to-file (out output :if-exists :supersede :element-type '(unsigned-byte 8))
@@ -1228,14 +1234,19 @@ Music:~:*
                                  (prog1
                                      (cons (getf row :instrument) i)
                                    (incf i)))
-                               (read-orchestration)))))
+                               (get-orchestration)))))
       
       (format *trace-output* " … ~d instrument~:p in orchestra"
               (length orchestra))
       (let ((time 0))
         (format *trace-output* "~&Writing Hokey song data to ~a (~d note~:p)"
                 (enough-namestring output) (length hokey-notes))
+        (terpri *trace-output*)
+        (princ " 𝄞 " *trace-output*)
         (dolist (note hokey-notes)
+          (case (random 8)
+            (0 (princ "♪" *trace-output*))
+            (2 (princ "𝅘𝅥" *trace-output*)))
           (let ((d-t (- (hokey-note-start-time note) time)))
             (loop while (> d-t #xff)
                   do (progn 
@@ -1251,7 +1262,8 @@ Music:~:*
             (write-byte 8 out)          ; TODO volume
             (write-byte (hokey-note-tia-f note) out)
             (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))
-        (write-bytes #(0 0 0 0 0 0 0 0) out)))))
+        (write-bytes #(0 0 0 0 0 0 0 0) out))
+      (terpri *trace-output*))))
 
 (defun compile-midi (argv0 input format frame-rate
                      &optional (output (make-pathname
