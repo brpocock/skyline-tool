@@ -1118,7 +1118,7 @@ Music:~:*
                                (velocity midi::velocity))
                       chunk
                     (if (plusp velocity)
-                        (start-note/rest (list :note :time time :key key))
+                        (start-note/rest (list :note :time time :key key :velocity velocity))
                         (start-note/rest (list :rest :time time)))))
                  (midi:key-signature-message nil)
                  (midi::reset-all-controllers-message nil)
@@ -1209,7 +1209,8 @@ Music:~:*
                                             :hokey-f (or hokey-f 0)
                                             :hokey-error (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))
                                             :tia-f (or tia-f 0)
-                                            :tia-error (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))))
+                                            :tia-error (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))
+                                            :volume (/ (getf score-note :velocity) 128.0)))))
                      score)))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
@@ -1259,7 +1260,7 @@ Music:~:*
             (write-byte (or (assoc-value orchestra (hokey-note-instrument note) :test #'string-equal) 0) out)
             (write-byte (hokey-note-hokey-f note) out)
             (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-            (write-byte 8 out)          ; TODO volume
+            (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
             (write-byte (hokey-note-tia-f note) out)
             (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))
         (write-bytes #(0 0 0 0 0 0 0 0) out))
