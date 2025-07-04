@@ -480,7 +480,7 @@ INPUT & OUTPUT pathnames can be given."
             (enough-namestring input) (enough-namestring output))
     (format out ";;;; Phantasia ~a~%;;; This file is generated from ~a~2%"
             (enough-namestring output) (enough-namestring input))
-    (let ((table (sort (read-orchestration input) #'string-lessp :key (rcurry #'getf :instrument))))
+    (let ((table (read-orchestration input)))
       (format out "~2%~10tNumInstruments = ~d" (length table))
       (format out "~2%;;; FIXME PAL support 
 ;;; (multiple-value-bind (int fract) (floor (/ (* 1.0 60) 50)) (list int (floor (* fract #x100))))

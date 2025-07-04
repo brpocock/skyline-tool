@@ -564,7 +564,8 @@ file ~a.s in bank $~(~2,'0x~)~
           "ClassMethods" 'make-classes-for-oops
           "ClassInheritance" 'make-classes-for-oops
           "InventoryLabels" 'write-inventory-tables
-          "KeyLabels" 'write-keys-tables)
+          "KeyLabels" 'write-keys-tables
+          "Orchestration" 'write-orchestration)
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)

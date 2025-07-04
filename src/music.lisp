@@ -1228,15 +1228,26 @@ Music:~:*
   (or *orchestra*
       (setf *orchestra* (read-orchestration))))
 
+(defun enumerate-orchestral-instruments ()
+  (let ((i 0))
+    (mapcar (lambda (row)
+              (prog1
+                  (cons (getf row :instrument) i)
+                (incf i)))
+            (get-orchestration))))
+
+(defmethod calculate-duration-for ((note hokey-note) instrument-number)
+  (let ((instrument (elt *orchestra* instrument-number)))
+    (max 1 (round (- (hokey-note-duration note)
+                     (ceiling (/ (ceiling (* 15 (hokey-note-volume note))) (getf instrument :attack-addend)))
+                     (ceiling (getf instrument :decay-duration))
+                     (ceiling (/ (- (ceiling (* 15 (hokey-note-volume note)))
+                                    (ceiling (* (getf instrument :decay-subtrahend) (getf instrument :decay-duration))))
+                                 (getf instrument :release-subtrahend))))))))
+
 (defmethod write-song-binary (hokey-notes (format (eql :hokey)) output)
   (with-output-to-file (out output :if-exists :supersede :element-type '(unsigned-byte 8))
-    (let ((orchestra (let ((i 0))
-                       (mapcar (lambda (row)
-                                 (prog1
-                                     (cons (getf row :instrument) i)
-                                   (incf i)))
-                               (get-orchestration)))))
-      
+    (let ((orchestra (enumerate-orchestral-instruments)))
       (format *trace-output* " … ~d instrument~:p in orchestra"
               (length orchestra))
       (let ((time 0))
@@ -1248,16 +1259,16 @@ Music:~:*
           (case (random 8)
             (0 (princ "♪" *trace-output*))
             (2 (princ "𝅘𝅥" *trace-output*)))
-          (let ((d-t (- (hokey-note-start-time note) time)))
+          (let ((d-t (- (hokey-note-start-time note) time))
+                (instrument (or (assoc-value orchestra (hokey-note-instrument note) :test #'string-equal) 0)))
             (loop while (> d-t #xff)
                   do (progn 
                        (decf d-t #xff)
                        (write-bytes #(#xff #xff 0 0 0 0 0 0) out)))
             (setf time (hokey-note-start-time note))
-            
             (write-byte d-t out)
-            (write-byte (max 1 (hokey-note-duration note)) out)
-            (write-byte (or (assoc-value orchestra (hokey-note-instrument note) :test #'string-equal) 0) out)
+            (write-byte (calculate-duration-for note instrument) out)
+            (write-byte instrument out)
             (write-byte (hokey-note-hokey-f note) out)
             (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
             (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
