@@ -169,7 +169,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "Play SOUND"
     (declare (ignore we hear))
     (list 'hear sound))
-
+  
+  (defun stage/song-plays (song plays)
+    "Play SONG once"
+    (declare (ignore plays))
+    (list 'music 'incidental song))
+  
   (defun stage/song-starts-playing (song starts playing)
     "Begin playing SONG"
     (declare (ignore starts playing))
@@ -676,7 +681,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               natural negative next night none nor normal-lit normally north not nothing
               of on open or
               part pi picks pirate pitch player-armor-color
-              player-hair-color player-skin-color playing plus
+              player-hair-color player-skin-color playing plays plus
               potion positive power product purple
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe rope root round rowboat
@@ -997,8 +1002,8 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                       #'stage/we-hear-sound)
                   (quoted starts playing
                           #'stage/song-starts-playing)
-                  (quoted stops playing
-                          #'stage/song-stops-playing)
+                  (quoted plays
+                          #'stage/song-plays)
                   (the music stops
                        #'stage/music-stops)
                   (silence
@@ -1953,6 +1958,7 @@ but now also ~s."
   (when moniker (npc-interpret-color moniker)))
 
 (defmethod npc-interpret-field (chalice (field (eql :chalice)) &key kind name)
+  (declare (ignore name kind))
   (if (emptyp chalice)
       0
       (parse-integer chalice)))
@@ -2185,23 +2191,27 @@ but now also ~s."
 (defstage pick-up (actor item-name)
   (declare (ignore actor))
   (destructuring-bind (&key x y gid) (find-named-object-in-scene item-name)
-    (let ((x (floor (the real x) 8))
-          (y (1- (floor (the real y) 16)))
-          (art (logand #xff (* 2 (1- (the real gid))))))
-      (format t "~% ~d ~d  ( ~a = ) ~d destroy-decal"
-              x y item-name art))))
+    (if (and x y gid)
+        (let ((x (floor (the real x) 8))
+              (y (1- (floor (the real y) 16)))
+              (art (logand #xff (* 2 (1- (the real gid))))))
+          (format t "~% ~d ~d  ( ~a = ) ~d destroy-decal"
+                  x y item-name art))
+        (format t "~% ( garbage request to pick-up ignored, perhaps nothing named ~s was found ) " item-name))))
 
 (defstage progn (&rest directions)
   (map nil #'stage-directions->code directions))
 
 (defstage music (start/stop song)
-  (if (eql start/stop 'start)
-      (format t "
+  (ecase start/stop
+    (start (format t "
 Song_~a_ID NextSong C!
-( let's pretend for now we always mean BGM )
 SoundSourceBackgroundMusic NextSoundSource C!
-PlaySong EXECUTE" (pascal-case song))
-      (format t "(should try to stop song)")))
+PlaySong EXECUTE " (pascal-case song)))
+    (incidental (format t "
+Song_~a_ID NextSong C!
+SoundSourceIncidentalMusic NextSoundSource C!
+PlaySong EXECUTE " (pascal-case song)))))
 
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
