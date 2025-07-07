@@ -2207,11 +2207,11 @@ but now also ~s."
     (start (format t "
 Song_~a_ID NextSong C!
 SoundSourceBackgroundMusic NextSoundSource C!
-PlaySong EXECUTE " (pascal-case song)))
+PlaySong EXECUTE " song))
     (incidental (format t "
 Song_~a_ID NextSong C!
 SoundSourceIncidentalMusic NextSoundSource C!
-PlaySong EXECUTE " (pascal-case song)))))
+PlaySong EXECUTE "  song))))
 
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
