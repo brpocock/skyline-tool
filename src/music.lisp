@@ -650,8 +650,6 @@ skipping MIDI music with ~:d track~:p"
                                                             volume
                                                             (nth-value 2 (key<-midi-key (getf info :key)))))
                       output))
-               (:rest (push (make-array 5 :initial-contents (list (getf info :duration) 0 0 0 nil))
-                            output))
                (:text (push (make-array 5 :initial-contents (list nil nil nil nil info))
                             output))))
     (reverse output)))
@@ -668,7 +666,6 @@ skipping MIDI music with ~:d track~:p"
         (loop for (kind . params) in track
               collecting (ecase kind
                            (:text (setf distortion (find-tia-distortion params)))
-                           (:rest)
                            (:note (destructuring-bind (&key time key duration) params
                                     (typecase distortion
                                       (null
@@ -1087,23 +1084,27 @@ Music:~:*
                                 (make-keyword (string-upcase output-coding)))))))
 
 (defun midi-track-decode (track parts/quarter)
-  (let ((current-note/rest (list :rest))
+  (let ((current-note/rest nil)
         (output (list))
         (sec/quarter-note 1/2)
         (last-duration 0))
     (labels ((start-note/rest (info)
-               #+ (or)  (format *trace-output* "~& start ~a" info)
+               #+common-lisp  (format *trace-output* "~& start ~a" info)
                (when current-note/rest
                  (end-note/rest (getf (cdr info) :time)))
                (setf current-note/rest info))
              (end-note/rest (time)
-               #+ (or)
-               (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time (- time current-time))
-               (push (append current-note/rest
-                             (list :duration (if (<= time (+ 1/60 (getf (cdr current-note/rest) :time 0)))
-                                                 last-duration
-                                                 (setf last-duration (- time (getf (cdr current-note/rest) :time 0))))))
-                     output)
+               (if current-note/rest
+                   (progn
+                     (let ((d (if (<= time (+ 1/60 (getf (cdr current-note/rest) :time 0)))
+                                  last-duration
+                                  (setf last-duration (- time (getf (cdr current-note/rest) :time 0))))))
+                       #+common-lisp
+                       (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time d)
+                       (push (append current-note/rest
+                                     (list :duration d))
+                             output)))
+                   (warn "no note to end; ignoring"))
                (setf current-note/rest nil)))
       (loop for chunk in track
             with time-signature-num = 4
@@ -1122,7 +1123,7 @@ Music:~:*
                           time-signature-num time-signature-den)
                   nil)
                  (midi::tempo-message
-                  (setf sec/quarter-note (/ (slot-value chunk 'midi::tempo) 1000000))
+                  (setf sec/quarter-note (/ (slot-value chunk 'midi::tempo) (expt 10 6)))
                   (format *trace-output* " … Tempo is ~s sec/quarter-note … " sec/quarter-note)
                   nil)
                  (midi::control-change-message nil)
@@ -1131,11 +1132,11 @@ Music:~:*
                   (with-slots ((key midi::key) (time midi::time)
                                (velocity midi::velocity))
                       chunk
-                    (let ((time/seconds (* 1/4 sec/quarter-note (/ 1 parts/quarter) time)))
+                    (let ((time/seconds (* sec/quarter-note (/ 1 parts/quarter) time)))
                       (if (plusp velocity)
                           (start-note/rest (list :note :time time/seconds
                                                        :key key :velocity velocity))
-                          (start-note/rest (list :rest :time time/seconds))))))
+                          (end-note/rest time/seconds)))))
                  (midi:key-signature-message nil)
                  (midi::reset-all-controllers-message nil)
                  (midi:program-change-message nil)
@@ -1176,11 +1177,6 @@ Music:~:*
         (loop for token in track
               do (ecase (first token)
                    (:text (setf lyric (second token)))
-                   (:rest
-                    (push (list* :lyric lyric :instrument instrument
-                                 (rest token))
-                          score)
-                    (setf lyric nil))
                    (:note
                     (push (list* :lyric lyric :instrument instrument
                                  (rest token))
