@@ -367,17 +367,18 @@ skipping MIDI music with ~:d track~:p"
            output-coding machine-type sound-chip (length midi-notes))))
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
-  (let ((notes (mapcar #'first
-                       (rest (elt +tia-voices+ voice)))))
-    (when-let (freq-code (position (first (sort (copy-list notes) #'<
-                                                ::key (curry #'frequency-distance freq)))
-                                   notes :test #'=))
-      (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
-            (dist0 (frequency-distance freq (elt notes freq-code)))
-            (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
-        (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
-          (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-          (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
+  (when freq
+    (let ((notes (mapcar #'first
+                         (rest (elt +tia-voices+ voice)))))
+      (when-let (freq-code (position (first (sort (copy-list notes) #'<
+                                                  ::key (curry #'frequency-distance freq)))
+                                     notes :test #'=))
+        (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
+              (dist0 (frequency-distance freq (elt notes freq-code)))
+              (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
+          (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
+              (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+              (list voice freq-code (/ dist0 (+ dist0 dist+1)))))))))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
   (let ((notes (mapcar #'second
@@ -420,9 +421,11 @@ skipping MIDI music with ~:d track~:p"
                                           table))))
 
   (defun midi->note-name (note)
-    (multiple-value-bind (octave letter) (floor (- note 9) 12)
-      (format nil "~a ~d" (elt '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯") letter)
-              octave)))
+    (if note
+        (multiple-value-bind (octave letter) (floor (- note 9) 12)
+          (format nil "~a ~d" (elt '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯") letter)
+                  octave))
+        "Ø"))
 
   (defun note->midi-note-number (octave note-name)
     (+ 9
@@ -630,13 +633,18 @@ skipping MIDI music with ~:d track~:p"
 
 (defun midi->2600-tia (notes)
   (let ((volume 8)
+        (last-duration 0)
         (output (list)))
     (loop for note in notes
           for i from 0
           for (note/rest . info) = note
           do (ecase note/rest
                (:note
-                (push (make-array 5 :initial-contents (list (getf info :duration)
+                (push (make-array 5 :initial-contents (list (let ((d (getf info :duration)))
+                                                              (prog1 (if (plusp d)
+                                                                         d
+                                                                         last-duration)
+                                                                (setf last-duration d)))
                                                             0
                                                             (freq<-midi-key (getf info :key))
                                                             volume
@@ -769,7 +777,7 @@ skipping MIDI music with ~:d track~:p"
         (error "File ~a contains no tracks with actual music?
 Gathered text:~{~% • ~a~}"
                file texts))
-      (map 'list (lambda (track) (midi-track-decode track parts/quarter))
+      (map 'list (rcurry #'midi-track-decode parts/quarter)
            real-tracks))))
 
 (defun import-music-for-playlist (output-coding line catalog comments-catalog
@@ -1079,53 +1087,62 @@ Music:~:*
                                 (make-keyword (string-upcase output-coding)))))))
 
 (defun midi-track-decode (track parts/quarter)
-  (declare (ignore parts/quarter))
-  (let ((current-time 0)
-        (current-note/rest (list :rest))
-        (output (list)))
+  (let ((current-note/rest (list :rest))
+        (output (list))
+        (sec/quarter-note 1/2)
+        (last-duration 0))
     (labels ((start-note/rest (info)
-               #+ (or)  (format *trace-output* "	start ~a" info)
+               #+ (or)  (format *trace-output* "~& start ~a" info)
                (when current-note/rest
                  (end-note/rest (getf (cdr info) :time)))
                (setf current-note/rest info))
              (end-note/rest (time)
-               #+ (or)  (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time (- time current-time))
-               (push (append current-note/rest (list :duration (- time current-time)))
+               #+ (or)
+               (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time (- time current-time))
+               (push (append current-note/rest
+                             (list :duration (if (<= time (+ 1/60 (getf (cdr current-note/rest) :time 0)))
+                                                 last-duration
+                                                 (setf last-duration (- time (getf (cdr current-note/rest) :time 0))))))
                      output)
-               (setf current-note/rest nil)
-               (setf current-time time)))
+               (setf current-note/rest nil)))
       (loop for chunk in track
             with time-signature-num = 4
             with time-signature-den = 4
-            ;; with tempo = 120
-            ;; with sec/quarter-note =
             do (typecase chunk
                  (midi::text-message
                   (push (list :text
-                              (remove-if (lambda (char) (zerop (char-code char)))
-                                         (slot-value chunk 'midi::text)))
+                              (substitute #\Space #\Null
+                                          (slot-value chunk 'midi::text)))
                         output)
                   nil)
                  (midi::time-signature-message
                   (setf time-signature-num (midi::message-numerator chunk)
                         time-signature-den (expt 2 (midi::message-denominator chunk)))
+                  (format *trace-output* " … Time signature is ~d⁄~d … "
+                          time-signature-num time-signature-den)
                   nil)
-                 (midi::tempo-message nil)
+                 (midi::tempo-message
+                  (setf sec/quarter-note (/ (slot-value chunk 'midi::tempo) 1000000))
+                  (format *trace-output* " … Tempo is ~s sec/quarter-note … " sec/quarter-note)
+                  nil)
                  (midi::control-change-message nil)
                  (midi::note-on-message
                   #+ (or) (format *trace-output* "~&~s" chunk)
                   (with-slots ((key midi::key) (time midi::time)
                                (velocity midi::velocity))
                       chunk
-                    (if (plusp velocity)
-                        (start-note/rest (list :note :time time :key key :velocity velocity))
-                        (start-note/rest (list :rest :time time)))))
+                    (let ((time/seconds (* 1/4 sec/quarter-note (/ 1 parts/quarter) time)))
+                      (if (plusp velocity)
+                          (start-note/rest (list :note :time time/seconds
+                                                       :key key :velocity velocity))
+                          (start-note/rest (list :rest :time time/seconds))))))
                  (midi:key-signature-message nil)
                  (midi::reset-all-controllers-message nil)
                  (midi:program-change-message nil)
                  (midi::midi-port-message nil)
                  (t (warn "~&Ignored (unsupported) chunk ~s" chunk)))
-            finally (end-note/rest current-time))
+            do (progn (finish-output *error-output*) (finish-output *trace-output*))
+            finally (end-note/rest -1))
       (reverse output))))
 
 (defun key<-midi-key (key)
@@ -1146,9 +1163,9 @@ Music:~:*
     (:secam 50)
     (:pal 60)))
 
-(defun midi->score (input frame-rate)
-  (let ((fps (frame-rate->fps frame-rate))
-        (score (list)))
+(defun midi->score (input &optional _ignored)
+  (declare (ignore _ignored))
+  (let ((score (list)))
     (dolist (track (read-midi input))
       (let ((instrument (make-keyword (string-upcase (param-case (if (eql :text (caar track))
                                                                      (prog1
@@ -1159,16 +1176,18 @@ Music:~:*
         (loop for token in track
               do (ecase (first token)
                    (:text (setf lyric (second token)))
-                   (:rest (setf lyric nil))
+                   (:rest
+                    (push (list* :lyric lyric :instrument instrument
+                                 (rest token))
+                          score)
+                    (setf lyric nil))
                    (:note
                     (push (list* :lyric lyric :instrument instrument
-                                 :frame-time (floor (* (/ (getf (rest token) :time) 454) 1/4 fps))
-                                 :frame-duration (max 1 (floor (* (/ (getf (rest token) :duration) 454) 1/4 fps)))
                                  (rest token))
                           score)
                     (setf lyric nil))))
         (setf score (sort score (lambda (a b)
-                                  (< (getf a :time) (getf b :time)))))))
+                                  (< (getf a :time 0) (getf b :time 0)))))))
     score))
 
 (defstruct hokey-note
@@ -1181,36 +1200,42 @@ Music:~:*
   tia-f
   tia-error)
 
-(defun hokey-reckon (note distortions &optional (q 1))
-  (when (null distortions)
-    (warn "nobody could play note ~a" (midi->note-name note))
-    (return-from hokey-reckon
-      (hokey-reckon note +all-hokey-distortions+ (* q 1/2))))
-  (let ((d (make-keyword (princ-to-string (first distortions)))))
-    (when-let ((best1 (best-pokey-note-for note d 8)))
-      (when (< 0 best1 #xff)
-        (return-from hokey-reckon (values d best1 q)))))
-  (hokey-reckon note (rest distortions) (* q 3/4)))
+(defun hokey-reckon (note instrument &optional (q 1))
+  (let* ((o (get-orchestration))
+         (i (loop for i* in o for i from 0
+                  when (string-equal (param-case (string instrument))
+                                     (param-case (string (getf i* :instrument))))
+                    return i
+                  finally (return 0)))
+         (d (make-keyword (princ-to-string (getf (elt o i) :distortion)))))
+    (when note
+      (when-let ((best1 (best-pokey-note-for note d 8)))
+        (when (< 0 best1 #xff)
+          (return-from hokey-reckon (values i best1 q)))))
+    (when (> q 1/2)
+      (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4))
+      (format *trace-output* "(NIL Hokey cannot play ~a on any instrument)"
+              (midi->note-name note)))))
 
 (defun score->hokey-notes (score frame-rate)
   (remove-if #'null
              (mapcar (lambda (score-note)
-                       (multiple-value-bind (hokey-c hokey-f hokey-error)
+                       (multiple-value-bind (instrument hokey-f hokey-error)
                            (hokey-reckon (getf score-note :key)
-                                         (list (pokey-distortion-for-instrument (getf score-note :instrument))))
-                         (declare (ignore _hokey-c))
+                                         (getf score-note :instrument))
                          (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
                              #| FIXME PAL |#
                              (best-tia-ntsc-note-for (getf score-note :key))
                            (declare (ignore _tia-c))
-                           (make-hokey-note :start-time (getf score-note :frame-time)
-                                            :duration (getf score-note :frame-duration)
-                                            :instrument (getf score-note :instrument)
-                                            :hokey-f (or hokey-f 0)
-                                            :hokey-error (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))
-                                            :tia-f (or tia-f 0)
-                                            :tia-error (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))
-                                            :volume (/ (getf score-note :velocity) 128.0)))))
+                           (when (getf score-note :velocity)
+                             (make-hokey-note :start-time (getf score-note :time)
+                                              :duration (getf score-note :duration)
+                                              :instrument instrument
+                                              :hokey-f (or hokey-f 0)
+                                              :hokey-error (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))
+                                              :tia-f (or tia-f 0)
+                                              :tia-error (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))
+                                              :volume (/ (getf score-note :velocity) 128.0))))))
                      score)))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
@@ -1236,21 +1261,58 @@ Music:~:*
                 (incf i)))
             (get-orchestration))))
 
+(defun quieter-note (note)
+  (make-hokey-note :start-time (hokey-note-start-time note)
+                   :duration (if (zerop (floor (* 15 4/5 (hokey-note-volume note))))
+                                 0
+                                 (hokey-note-duration note))
+                   :instrument (hokey-note-instrument note)
+                   :volume (min 1 (max 0 (* 4/5 (hokey-note-volume note))))
+                   :hokey-f (hokey-note-hokey-f note)
+                   :hokey-error (hokey-note-hokey-error note)
+                   :tia-f (hokey-note-tia-f note)
+                   :tia-error (hokey-note-tia-error note)))
+
 (defmethod calculate-duration-for ((note hokey-note) instrument-number)
-  (let ((instrument (elt *orchestra* instrument-number)))
-    (max 1 (- (ceiling (hokey-note-duration note))
-              (ceiling (/ (ceiling (* 15 (hokey-note-volume note))) (getf instrument :attack-addend)))
-              (ceiling (getf instrument :decay-duration))
-              (ceiling (/ (- (ceiling (* 15 (hokey-note-volume note)))
-                             (ceiling (* (getf instrument :decay-subtrahend) (getf instrument :decay-duration))))
-                          (getf instrument :release-subtrahend)))))))
+  (when (< (hokey-note-duration note) 1/60); FIXME NTSC
+    (format *trace-output* "~%Dropping note at time ~d as it is too short to play (duration ~ds = ~5fs < 1/60s)"
+            (hokey-note-start-time note)
+            (hokey-note-duration note) (hokey-note-duration note))
+    (return-from calculate-duration-for 0))
+  (let* ((instrument (elt *orchestra* instrument-number))
+         (total-duration (ceiling (* 60 (hokey-note-duration note)))) ; FIXME NTSC
+         (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note))) (getf instrument :attack-addend))))
+         (decay-duration (ceiling (getf instrument :decay-duration)))
+         (release-duration
+           (ceiling (/ (- (ceiling (* 15 (hokey-note-volume note)))
+                          (ceiling (* (getf instrument :decay-subtrahend) (getf instrument :decay-duration))))
+                       (getf instrument :release-subtrahend))))
+         (sustain-duration (- total-duration
+                              attack-duration
+                              decay-duration
+                              release-duration)))
+    (format *trace-output* "~& ~3d frame~:p — A ~3d D ~3d S ~3d R ~3d (vol ~3d%)"
+            total-duration
+            attack-duration
+            decay-duration
+            sustain-duration
+            release-duration
+            (floor (* 100 (hokey-note-volume note))))  
+    (if (< sustain-duration 1)
+        (let ((quieter (quieter-note note)))
+          (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"
+                  sustain-duration (floor (* 100 (hokey-note-volume note))))
+          (calculate-duration-for quieter instrument-number))
+        (values (max 1 sustain-duration) note))))
 
 (defmethod write-song-binary (hokey-notes (format (eql :hokey)) output)
   (with-output-to-file (out output :if-exists :supersede :element-type '(unsigned-byte 8))
     (let ((orchestra (enumerate-orchestral-instruments)))
       (format *trace-output* " … ~d instrument~:p in orchestra"
               (length orchestra))
-      (let ((time 0))
+      (let ((time 0)
+            (duration-of-previous-note 0)
+            (note-count 0))
         (format *trace-output* "~&Writing Hokey song data to ~a (~d note~:p)"
                 (enough-namestring output) (length hokey-notes))
         (terpri *trace-output*)
@@ -1259,34 +1321,44 @@ Music:~:*
           (case (random 8)
             (0 (princ "♪" *trace-output*))
             (2 (princ "𝅘𝅥" *trace-output*)))
-          (let ((d-t (- (hokey-note-start-time note) time))
-                (instrument (or (assoc-value orchestra (hokey-note-instrument note) :test #'string-equal) 0)))
-            (loop while (> d-t #xff)
-                  do (progn 
-                       (decf d-t #xff)
-                       (write-bytes #(#xff #xff 0 0 0 0 0 0) out)))
+          (let ((d-t (* 60 (- (hokey-note-start-time note) time))); NTSC XXX
+                (instrument (or (hokey-note-instrument note) 0)))
             (setf time (hokey-note-start-time note))
-            (let ((duration (calculate-duration-for note instrument)))
-              (loop while (> duration #xff)
+            (multiple-value-bind (duration note) ; shadows outer NOTE
+                (calculate-duration-for note instrument)
+              (incf d-t duration-of-previous-note)
+              (loop while (> d-t #xff)
                     do (progn
-                         (decf duration #xff)
-                         (write-byte d-t out)
-                         (write-byte #xff out)
-                         (write-byte instrument out)
-                         (write-byte (hokey-note-hokey-f note) out)
-                         (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-                         (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
-                         (write-byte (hokey-note-tia-f note) out)
-                         (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))
-              (write-byte d-t out)
-              (write-byte duration out)
-              (write-byte instrument out)
-              (write-byte (hokey-note-hokey-f note) out)
-              (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-              (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
-              (write-byte (hokey-note-tia-f note) out)
-              (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out))))
-        (write-bytes #(0 0 0 0 0 0 0 0) out))
+                         (decf d-t #xff)
+                         (incf note-count)
+                         (write-bytes #(#xff #xff 0 0 0 0 0 0) out)))
+              (setf duration-of-previous-note duration)
+              (when (plusp (floor duration))
+                (loop while (> duration #xff)
+                      do (progn
+                           (decf duration #xff)
+                           (incf note-count)
+                           (write-byte (floor d-t) out)
+                           (write-byte #xff out)
+                           (write-byte instrument out)
+                           (write-byte (hokey-note-hokey-f note) out)
+                           (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
+                           (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
+                           (write-byte (hokey-note-tia-f note) out)
+                           (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)
+                           (setf d-t #xff)))
+                (incf note-count)
+                (write-byte (floor d-t) out)
+                (write-byte duration out)
+                (write-byte instrument out)
+                (write-byte (hokey-note-hokey-f note) out)
+                (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
+                (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
+                (write-byte (hokey-note-tia-f note) out)
+                (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))))
+        (write-bytes #(0 0 0 0 0 0 0 0) out)
+        (format *trace-output* " … wrote ~:d note~:p (total ~:d bytes)"
+                note-count (* 8 (1+ note-count))))
       (terpri *trace-output*))))
 
 (defun compile-midi (argv0 input format frame-rate
