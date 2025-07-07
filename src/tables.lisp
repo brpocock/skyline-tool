@@ -461,7 +461,7 @@ GameFlag: .block~2%"
   (finish-output *trace-output*)
   (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
     (loop for row in table
-          when (not (emptyp (getf row :instrument)))
+          when (and row (not (emptyp (string-trim #(#\Space) (getf row :instrument)))))
             collecting (list :instrument (getf row :instrument)
                              :distortion (make-keyword (string-upcase (getf row :distortion)))
                              :attack-addend (parse-number (getf row :attack-addend))
@@ -475,62 +475,63 @@ GameFlag: .block~2%"
   "Write the orchestration tables to a source code file. 
 
 INPUT & OUTPUT pathnames can be given."
-  (with-output-to-file (out output :if-exists :supersede)
-    (format *trace-output* "~&Going to write orchestration tables from ~a to source code file ~a…"
-            (enough-namestring input) (enough-namestring output))
-    (format out ";;;; Phantasia ~a~%;;; This file is generated from ~a~2%"
-            (enough-namestring output) (enough-namestring input))
-    (let ((table (read-orchestration input)))
-      (format out "~2%~10tNumInstruments = ~d" (length table))
-      (format out "~2%;;; FIXME PAL support 
+  (with-simple-restart (do-over "Re-read the Orchestration.ods file")
+    (with-output-to-file (out output :if-exists :supersede)
+      (format *trace-output* "~&Going to write orchestration tables from ~a to source code file ~a…"
+              (enough-namestring input) (enough-namestring output))
+      (format out ";;;; Phantasia ~a~%;;; This file is generated from ~a~2%"
+              (enough-namestring output) (enough-namestring input))
+      (let ((table (read-orchestration input)))
+        (format out "~2%~10tNumInstruments = ~d" (length table))
+        (format out "~2%;;; FIXME PAL support 
 ;;; (multiple-value-bind (int fract) (floor (/ (* 1.0 60) 50)) (list int (floor (* fract #x100))))
 ;;; FIXME PAL support")
-      (format out "~2%InstrumentHokeyDistortion:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (ash (or (parse-integer (string (getf row :distortion)) :junk-allowed t) 10) 4)
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentTIADistortion:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (getf row :tia-distortion)
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentAttackAddend:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (getf row :attack-addend))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentAttackFraction:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (* #x100 (nth-value 1 (floor (getf row :attack-addend)))))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentDecaySubtrahend:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (getf row :decay-subtrahend))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentDecayFraction:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentDecayDuration:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (getf row :decay-duration))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentReleaseSubtrahend:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (getf row :release-subtrahend))
-                (title-case (getf row :instrument))))
-      (format out "~2%InstrumentReleaseFraction:")
-      (dolist (row table)
-        (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                (floor (* #x100 (nth-value 1 (floor (getf row :release-subtrahend)))))
-                (title-case (getf row :instrument))))
-      (format out "~2%;;; End of Orchestration~2%"))))
+        (format out "~2%InstrumentHokeyDistortion:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (ash (or (parse-integer (string (getf row :distortion)) :junk-allowed t) 10) 4)
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentTIADistortion:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (getf row :tia-distortion)
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentAttackAddend:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :attack-addend))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentAttackFraction:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :attack-addend)))))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentDecaySubtrahend:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :decay-subtrahend))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentDecayFraction:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentDecayDuration:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :decay-duration))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentReleaseSubtrahend:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :release-subtrahend))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentReleaseFraction:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :release-subtrahend)))))
+                  (title-case (getf row :instrument))))
+        (format out "~2%;;; End of Orchestration~2%")))))
 
 (defun write-equipment-index (&optional (pathname #p"Source/Generated/EquipmentIndex.s"))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
