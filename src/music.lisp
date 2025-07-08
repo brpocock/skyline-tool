@@ -570,14 +570,20 @@ skipping MIDI music with ~:d track~:p"
 (assert (= 97 (aref +pokey-notes-table+ (pokey-distortion-column :12a 8) 5))
         () "POKEY notes table seems to be incorrect")
 
-(defun best-pokey-note-for (midi-note-number distortion bits)
-  (loop for row from 0 below (array-dimension +pokey-notes-table+ 1)
-        when (= midi-note-number (aref +pokey-notes-table+ 0 row))
-          do (let ((value (aref +pokey-notes-table+ (pokey-distortion-column distortion bits) row)))
-               (when (and value (< 0 value #xff))
-                 (assert (< value (expt 2 bits)))
-                 (return value)))
-        finally (return nil)))
+(defun pokey->frequency (AUDF)
+  (/ 15699.9 #| FIXME NTSC? |# (* 2 (1+ AUDF))))
+
+(defun frequency->pokey (frequency)
+  (floor (/ (- 15699.9 #| FIXME NTSC? |# (* 2 frequency)) (* 2 frequency))))
+
+(defun best-pokey-note-for (midi-note-number &optional distortion bits)
+  (declare (ignore distortion bits))
+  (multiple-value-bind (value error) 
+      (frequency->pokey (freq<-midi-key midi-note-number))
+    (format *trace-output* "~&For ~a, ~d × ~d then ~d × ~d" (midi->note-name midi-note-number)
+            value (ash (logand #xf0 (apply #'fraction-nybbles (simplify-to-rational error))) -4)
+            (1+ value) (logand #x0f (apply #'fraction-nybbles (simplify-to-rational error))))
+    (values value error)))
 
 (defun null-if-zero-note (n)
   (if (or (null n) (zerop (third n))) nil n))
@@ -1089,7 +1095,7 @@ Music:~:*
         (sec/quarter-note 1/2)
         (last-duration 0))
     (labels ((start-note/rest (info)
-               #+common-lisp  (format *trace-output* "~& start ~a" info)
+               #+ ()  (format *trace-output* "~& start ~a" info)
                (when current-note/rest
                  (end-note/rest (getf (cdr info) :time)))
                (setf current-note/rest info))
@@ -1099,8 +1105,7 @@ Music:~:*
                      (let ((d (if (<= time (+ 1/60 (getf (cdr current-note/rest) :time 0)))
                                   last-duration
                                   (setf last-duration (- time (getf (cdr current-note/rest) :time 0))))))
-                       #+common-lisp
-                       (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time d)
+                       #+ () (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time d)
                        (push (append current-note/rest
                                      (list :duration d))
                              output)))
@@ -1202,21 +1207,39 @@ Music:~:*
                   when (string-equal (param-case (string instrument))
                                      (param-case (string (getf i* :instrument))))
                     return i
-                  finally (return 0)))
-         (d (make-keyword (princ-to-string (getf (elt o i) :distortion)))))
+                  finally (return 0))))
     (when note
-      (when-let ((best1 (best-pokey-note-for note d 8)))
-        (when (< 0 best1 #xff)
-          (return-from hokey-reckon (values i best1 q)))))
+      (multiple-value-bind (best1 best-e) (best-pokey-note-for note)
+        (when (and best1 (< 0 best1 #xff))
+          (return-from hokey-reckon (values i best1 best-e)))))
     (when (> q 1/2)
       (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4))
       (format *trace-output* "(NIL Hokey cannot play ~a on any instrument)"
               (midi->note-name note)))))
 
+(defun simplify-to-rational (fraction &optional (smallest-part 1/4))
+  (let* ((numerator (round fraction smallest-part))
+         (denominator (/ 1 smallest-part))
+         (multiple (lcm numerator denominator))
+         (den (if (plusp numerator)
+                  (/ multiple numerator)
+                  0))
+         (num (if (plusp denominator)
+                  (/ multiple denominator)
+                  (/ 1 smallest-part))))
+    (list num den)))
+
+(defun fraction-nybbles (num den)
+  (if (zerop num)
+      #xf0
+      (logior (ash (max 0 (min 15 num)) 4)
+              (max 0 (min 15 (- den num))))))
+
 (defun score->hokey-notes (score frame-rate)
   (remove-if #'null
              (mapcar (lambda (score-note)
                        (multiple-value-bind (instrument hokey-f hokey-error)
+                           #| FIXME PAL |#
                            (hokey-reckon (getf score-note :key)
                                          (getf score-note :instrument))
                          (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
@@ -1228,9 +1251,15 @@ Music:~:*
                                               :duration (getf score-note :duration)
                                               :instrument instrument
                                               :hokey-f (or hokey-f 0)
-                                              :hokey-error (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))
+                                              :hokey-error
+                                              (apply #'fraction-nybbles
+                                                     (simplify-to-rational
+                                                      (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))))
                                               :tia-f (or tia-f 0)
-                                              :tia-error (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))
+                                              :tia-error
+                                              (apply #'fraction-nybbles
+                                                     (simplify-to-rational
+                                                      (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))
                                               :volume (/ (getf score-note :velocity) 128.0))))))
                      score)))
 
@@ -1287,6 +1316,7 @@ Music:~:*
                               attack-duration
                               decay-duration
                               release-duration)))
+    #+ ()
     (format *trace-output* "~& ~3d frame~:p — A ~3d D ~3d S ~3d R ~3d (vol ~3d%)"
             total-duration
             attack-duration
