@@ -1089,10 +1089,12 @@ Music:~:*
                                 (make-keyword (string-upcase sound-chip))
                                 (make-keyword (string-upcase output-coding)))))))
 
+(defvar *sec/quarter-note* 1/2)
+
 (defun midi-track-decode (track parts/quarter)
+  (format *trace-output* "~&~|~%MIDI track:~%")
   (let ((keyboard (make-array '(#x100)))
-        (output (list))
-        (sec/quarter-note 1/2))
+        (output (list)))
     (labels ((midi-note (&key time velocity key)
                (cond ((and key (plusp velocity))
                       (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
@@ -1123,16 +1125,16 @@ Music:~:*
                           time-signature-num time-signature-den)
                   nil)
                  (midi::tempo-message
-                  (setf sec/quarter-note (/ (slot-value chunk 'midi::tempo) (expt 10 6)))
-                  (format *trace-output* " … Tempo is ~s sec/quarter-note … " sec/quarter-note)
+                  (setf *sec/quarter-note* (/ (slot-value chunk 'midi::tempo) (expt 10 6)))
+                  (format *trace-output* " … Tempo is ~s sec/quarter-note … " *sec/quarter-note*)
                   nil)
                  (midi::control-change-message nil)
                  (midi::note-on-message
                   (with-slots ((key midi::key) (time midi::time)
                                (velocity midi::velocity))
                       chunk
-                    (let ((time/seconds (* sec/quarter-note (/ 1 parts/quarter) time)))
-                      (midi-note :time time/seconds :key key :velocity velocity))))
+                    (let ((time/seconds (* *sec/quarter-note* (/ 1 parts/quarter) time)))
+                      (midi-note :time time/seconds :key (- key 12) :velocity velocity))))
                  (midi:key-signature-message nil)
                  (midi::reset-all-controllers-message nil)
                  (midi:program-change-message nil)
@@ -1167,7 +1169,7 @@ Music:~:*
                                                                      (prog1
                                                                          (cadar track)
                                                                        (setf track (rest track)))
-                                                                     "Saw")))))
+                                                                     "Piano")))))
             (lyric nil))
         (loop for token in track
               do (ecase (first token)
