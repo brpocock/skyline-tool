@@ -1090,27 +1090,22 @@ Music:~:*
                                 (make-keyword (string-upcase output-coding)))))))
 
 (defun midi-track-decode (track parts/quarter)
-  (let ((current-note/rest nil)
+  (let ((keyboard (make-array '(#x100)))
         (output (list))
-        (sec/quarter-note 1/2)
-        (last-duration 0))
-    (labels ((start-note/rest (info)
-               #+ ()  (format *trace-output* "~& start ~a" info)
-               (when current-note/rest
-                 (end-note/rest (getf (cdr info) :time)))
-               (setf current-note/rest info))
-             (end-note/rest (time)
-               (if current-note/rest
-                   (progn
-                     (let ((d (if (<= time (+ 1/60 (getf (cdr current-note/rest) :time 0)))
-                                  last-duration
-                                  (setf last-duration (- time (getf (cdr current-note/rest) :time 0))))))
-                       #+ () (format *trace-output* "	end ~a at ~d (duration ~d)" current-note/rest time d)
-                       (push (append current-note/rest
-                                     (list :duration d))
-                             output)))
-                   (warn "no note to end; ignoring"))
-               (setf current-note/rest nil)))
+        (sec/quarter-note 1/2))
+    (labels ((midi-note (&key time velocity key)
+               (cond ((and key (plusp velocity))
+                      (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
+                      (setf (aref keyboard key) time))
+                     ((and key (zerop velocity) (aref keyboard key))
+                      (let ((d (- time (aref keyboard key)))) 
+                        (format *trace-output* "~& end ~a at ~d (duration ~d)" (midi->note-name key) time d)
+                        (push (list :note :time (aref keyboard key) :duration d
+                                          :key key :velocity velocity)
+                              output)
+                        (setf (aref keyboard key) nil)))
+                     (t (warn "Dunno what to do with note time ~d velocity ~d key ~d (is ~[up~;down~])"
+                              time velocity key (aref keyboard key))))))
       (loop for chunk in track
             with time-signature-num = 4
             with time-signature-den = 4
@@ -1133,22 +1128,17 @@ Music:~:*
                   nil)
                  (midi::control-change-message nil)
                  (midi::note-on-message
-                  #+ (or) (format *trace-output* "~&~s" chunk)
                   (with-slots ((key midi::key) (time midi::time)
                                (velocity midi::velocity))
                       chunk
                     (let ((time/seconds (* sec/quarter-note (/ 1 parts/quarter) time)))
-                      (if (plusp velocity)
-                          (start-note/rest (list :note :time time/seconds
-                                                       :key key :velocity velocity))
-                          (end-note/rest time/seconds)))))
+                      (midi-note :time time/seconds :key key :velocity velocity))))
                  (midi:key-signature-message nil)
                  (midi::reset-all-controllers-message nil)
                  (midi:program-change-message nil)
                  (midi::midi-port-message nil)
                  (t (warn "~&Ignored (unsupported) chunk ~s" chunk)))
-            do (progn (finish-output *error-output*) (finish-output *trace-output*))
-            finally (end-note/rest -1))
+            do (progn (finish-output *error-output*) (finish-output *trace-output*)))
       (reverse output))))
 
 (defun key<-midi-key (key)
