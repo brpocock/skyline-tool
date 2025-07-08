@@ -1098,13 +1098,15 @@ Music:~:*
     (labels ((midi-note (&key time velocity key)
                (cond ((and key (plusp velocity))
                       #+ () (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
-                      (setf (aref keyboard key) time))
+                      (setf (aref keyboard key) (list time velocity)))
                      ((and key (zerop velocity) (aref keyboard key))
-                      (let ((d (- time (aref keyboard key)))) 
+                      (let ((d (- time (first (aref keyboard key))))) 
                         #+ () (format *trace-output* "~& end ~a at ~d (duration ~d)" (midi->note-name key) time d)
-                        (push (list :note :time (aref keyboard key) :duration d
-                                          :key key :velocity velocity)
-                              output)
+                        (destructuring-bind (start-time first-velocity)
+                            (aref keyboard key)
+                          (push (list :note :time start-time :duration d
+                                            :key key :velocity first-velocity)
+                                output))
                         (setf (aref keyboard key) nil)))
                      (t (warn "Dunno what to do with note time ~d velocity ~d key ~d (is ~[up~;down~])"
                               time velocity key (aref keyboard key))))))
@@ -1252,7 +1254,7 @@ Music:~:*
                                               (apply #'fraction-nybbles
                                                      (simplify-to-rational
                                                       (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))
-                                              :volume (/ (getf score-note :velocity) 128.0))))))
+                                              :volume (/ (getf score-note :velocity) 127))))))
                      score)))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
@@ -1298,11 +1300,13 @@ Music:~:*
     (return-from calculate-duration-for 0))
   (let* ((instrument (elt *orchestra* instrument-number))
          (total-duration (ceiling (* 60 (hokey-note-duration note)))) ; FIXME NTSC
-         (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note))) (getf instrument :attack-addend))))
+         (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note)))
+                                      (getf instrument :attack-addend))))
          (decay-duration (ceiling (getf instrument :decay-duration)))
          (release-duration
            (ceiling (/ (- (ceiling (* 15 (hokey-note-volume note)))
-                          (ceiling (* (getf instrument :decay-subtrahend) (getf instrument :decay-duration))))
+                          (ceiling (* (getf instrument :decay-subtrahend)
+                                      (getf instrument :decay-duration))))
                        (getf instrument :release-subtrahend))))
          (sustain-duration (- total-duration
                               attack-duration
@@ -1335,6 +1339,7 @@ Music:~:*
         (terpri *trace-output*)
         (princ " 𝄞 " *trace-output*)
         (dolist (note hokey-notes)
+          #+ () (format *trace-output* "~x" (max 0 (min 15 (floor (* #x10 (hokey-note-volume note))))))
           (case (random 8)
             (0 (princ "♪" *trace-output*))
             (2 (princ "𝅘𝅥" *trace-output*)))
@@ -1358,7 +1363,7 @@ Music:~:*
                            (write-byte instrument out)
                            (write-byte (hokey-note-hokey-f note) out)
                            (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-                           (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
+                           (write-byte (min 15 (round (* #x10 (hokey-note-volume note)))) out)
                            (write-byte (hokey-note-tia-f note) out)
                            (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)
                            (setf d-t #xff)))
@@ -1368,7 +1373,7 @@ Music:~:*
                 (write-byte instrument out)
                 (write-byte (hokey-note-hokey-f note) out)
                 (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-                (write-byte (min 15 (floor (* #x10 (hokey-note-volume note)))) out)
+                (write-byte (min 15 (round (* #x10 (hokey-note-volume note)))) out)
                 (write-byte (hokey-note-tia-f note) out)
                 (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))))
         (write-bytes #(0 0 0 0 0 0 0 0) out)
