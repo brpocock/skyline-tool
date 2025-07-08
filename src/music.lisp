@@ -1327,7 +1327,6 @@ Music:~:*
       (format *trace-output* " … ~d instrument~:p in orchestra"
               (length orchestra))
       (let ((time 0)
-            (duration-of-previous-note 0)
             (note-count 0))
         (format *trace-output* "~&Writing Hokey song data to ~a (~d note~:p)"
                 (enough-namestring output) (length hokey-notes))
@@ -1342,13 +1341,11 @@ Music:~:*
             (setf time (hokey-note-start-time note))
             (multiple-value-bind (duration note) ; shadows outer NOTE
                 (calculate-duration-for note instrument)
-              (incf d-t duration-of-previous-note)
               (loop while (> d-t #xff)
                     do (progn
                          (decf d-t #xff)
                          (incf note-count)
                          (write-bytes #(#xff #xff 0 0 0 0 0 0) out)))
-              (setf duration-of-previous-note duration)
               (when (plusp (floor duration))
                 (loop while (> duration #xff)
                       do (progn
