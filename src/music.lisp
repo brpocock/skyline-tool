@@ -1232,29 +1232,32 @@ Music:~:*
 (defun score->hokey-notes (score frame-rate)
   (remove-if #'null
              (mapcar (lambda (score-note)
-                       (multiple-value-bind (instrument hokey-f hokey-error)
-                           #| FIXME PAL |#
-                           (hokey-reckon (getf score-note :key)
-                                         (getf score-note :instrument))
-                         (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
+                       (let ((key (getf score-note :key)))
+                         (unless (<= 24 key 72)
+                           (warn "Note ~a is unlikely to play correctly on Hokey"
+                                 (midi->note-name key)))
+                         (multiple-value-bind (instrument hokey-f hokey-error)
                              #| FIXME PAL |#
-                             (best-tia-ntsc-note-for (getf score-note :key))
-                           (declare (ignore _tia-c))
-                           (when (getf score-note :velocity)
-                             (make-hokey-note :start-time (getf score-note :time)
-                                              :duration (getf score-note :duration)
-                                              :instrument instrument
-                                              :hokey-f (or hokey-f 0)
-                                              :hokey-error
-                                              (apply #'fraction-nybbles
-                                                     (simplify-to-rational
-                                                      (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))))
-                                              :tia-f (or tia-f 0)
-                                              :tia-error
-                                              (apply #'fraction-nybbles
-                                                     (simplify-to-rational
-                                                      (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))
-                                              :volume (/ (getf score-note :velocity) 127))))))
+                             (hokey-reckon key (getf score-note :instrument))
+                           (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
+                               #| FIXME PAL |#
+                               (best-tia-ntsc-note-for key)
+                             (declare (ignore _tia-c))
+                             (when (getf score-note :velocity)
+                               (make-hokey-note :start-time (getf score-note :time)
+                                                :duration (getf score-note :duration)
+                                                :instrument instrument
+                                                :hokey-f (or hokey-f 0)
+                                                :hokey-error
+                                                (apply #'fraction-nybbles
+                                                       (simplify-to-rational
+                                                        (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))))
+                                                :tia-f (or tia-f 0)
+                                                :tia-error
+                                                (apply #'fraction-nybbles
+                                                       (simplify-to-rational
+                                                        (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))
+                                                :volume (/ (getf score-note :velocity) 127)))))))
                      score)))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
