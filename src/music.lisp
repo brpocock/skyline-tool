@@ -1211,8 +1211,8 @@ Music:~:*
       (format *trace-output* "(NIL Hokey cannot play ~a on any instrument)"
               (midi->note-name note)))))
 
-(defun simplify-to-rational (fraction &optional (smallest-part 1/4))
-  (let* ((numerator (round fraction smallest-part))
+(defun simplify-to-rational (fraction &optional (smallest-part 1/3))
+  (let* ((numerator (floor fraction smallest-part))
          (denominator (/ 1 smallest-part))
          (multiple (lcm numerator denominator))
          (den (if (plusp numerator)
