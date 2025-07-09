@@ -1224,10 +1224,12 @@ Music:~:*
     (list num den)))
 
 (defun fraction-nybbles (num den)
-  (if (zerop num)
-      #xf0
-      (logior (ash (max 0 (min 15 num)) 4)
-              (max 0 (min 15 (- den num))))))
+  (cond ((zerop num)
+         #xf0)
+        ((>= num den)
+         #xf0)
+        (t (logior (ash (max 0 (min 15 num)) 4)
+                   (max 0 (min 15 (- den num)))))))
 
 (defun score->hokey-notes (score frame-rate)
   (remove-if #'null
@@ -1251,12 +1253,12 @@ Music:~:*
                                                 :hokey-error
                                                 (apply #'fraction-nybbles
                                                        (simplify-to-rational
-                                                        (or hokey-error (if (zerop (or hokey-f 0)) 0 #xff))))
+                                                        (or hokey-error #xf0)))
                                                 :tia-f (or tia-f 0)
                                                 :tia-error
                                                 (apply #'fraction-nybbles
                                                        (simplify-to-rational
-                                                        (or tia-error (if (zerop (or hokey-f 0)) 0 #xff))))
+                                                        (or tia-error #xf0)))
                                                 :volume (/ (getf score-note :velocity) 127)))))))
                      score)))
 
@@ -1366,7 +1368,7 @@ Music:~:*
                            (write-byte instrument out)
                            (write-byte (hokey-note-hokey-f note) out)
                            (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-                           (write-byte (min 15 (round (* #x10 (hokey-note-volume note)))) out)
+                           (write-byte (min 15 (round (* 15 (hokey-note-volume note)))) out)
                            (write-byte (hokey-note-tia-f note) out)
                            (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)
                            (setf d-t #xff)))
@@ -1375,10 +1377,10 @@ Music:~:*
                 (write-byte duration out)
                 (write-byte instrument out)
                 (write-byte (hokey-note-hokey-f note) out)
-                (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
-                (write-byte (min 15 (round (* #x10 (hokey-note-volume note)))) out)
+                (write-byte (hokey-note-hokey-error note) out)
+                (write-byte (min 15 (round (* 15 (hokey-note-volume note)))) out)
                 (write-byte (hokey-note-tia-f note) out)
-                (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)))))
+                (write-byte (hokey-note-tia-error note) out)))))
         (write-bytes #(0 0 0 0 0 0 0 0) out)
         (format *trace-output* " … wrote ~:d note~:p (total ~:d bytes)"
                 note-count (* 8 (1+ note-count))))
