@@ -574,7 +574,7 @@ skipping MIDI music with ~:d track~:p"
   (/ 15699.9 #| FIXME NTSC? |# (* 2 (1+ AUDF))))
 
 (defun frequency->pokey (frequency)
-  (floor (/ (- 15699.9 #| FIXME NTSC? |# (* 2 frequency)) (* 2 frequency))))
+  (ceiling (/ (- 15699.9 #| FIXME NTSC? |# (* 2 frequency)) (* 2 frequency))))
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
   (declare (ignore distortion bits))
@@ -1208,8 +1208,8 @@ Music:~:*
           (return-from hokey-reckon (values i best1 best-e)))))
     (when (> q 1/2)
       (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4))
-      (format *trace-output* "(NIL Hokey cannot play ~a on any instrument)"
-              (midi->note-name note)))))
+      (cerror "Continue, dropping this note"
+              "Hokey cannot play ~a on any instrument" (midi->note-name note)))))
 
 (defun simplify-to-rational (fraction &optional (smallest-part 1/3))
   (let* ((numerator (floor fraction smallest-part))
