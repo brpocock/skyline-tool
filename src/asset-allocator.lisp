@@ -712,7 +712,7 @@ file ~a.s in bank $~(~2,'0x~)~
     (dolist (video +all-video+)
       (format t "~%
 ~a: ~a \\
-~10tSource/Assets.index bin/skyline-tool
+~10tSource/Assets.index bin/skyline-tool Source/Generated/Orchestration.s Source/Tables/Orchestration.ods
 	mkdir -p Object/Assets
 	~a"
               (asset->object-name asset-indicator :video video)
