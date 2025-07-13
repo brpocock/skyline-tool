@@ -362,7 +362,7 @@
   (declare (ignore video))
   (ecase *machine*
     (7800 (cond
-            ((equal build "Demo") 8)
+            ((equal build "Demo") 64)
             ((equal build "Test") 64)
             (t 64)))))
 
