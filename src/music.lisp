@@ -1308,10 +1308,13 @@ Music:~:*
          (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note)))
                                       (getf instrument :attack-addend))))
          (decay-duration (ceiling (getf instrument :decay-duration)))
+         (sustained-volume-after-decay
+           (max 1
+                (- (ceiling (* 15 (hokey-note-volume note)))
+                   (ceiling (* (getf instrument :decay-subtrahend)
+                               (getf instrument :decay-duration))))))
          (release-duration
-           (ceiling (/ (- (ceiling (* 15 (hokey-note-volume note)))
-                          (ceiling (* (getf instrument :decay-subtrahend)
-                                      (getf instrument :decay-duration))))
+           (ceiling (/ sustained-volume-after-decay
                        (getf instrument :release-subtrahend))))
          (sustain-duration (- total-duration
                               attack-duration
