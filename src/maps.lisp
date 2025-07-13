@@ -1129,7 +1129,7 @@ range is 0 - #xffffffff (4,294,967,295)"
         do (write-byte byte stream)))
 
 (define-constant +minifont-punctuation+
-  " ,.?!/&+-×÷=“”’;:…@❓ñ♪©•↑↓←→"
+  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ª"
   :test 'string=)
 
 (defun char->minifont (char)
@@ -1139,17 +1139,17 @@ range is 0 - #xffffffff (4,294,967,295)"
          (char<= #\A char #\Z))
      (digit-char-p char 36))
     ((char= #\apostrophe char)
-     (if-let ((n #.(position #\’ +minifont-punctuation+ :test #'char=)))
+     (if-let (n #.(position #\’ +minifont-punctuation+ :test #'char=))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
-    (t (or (let ((pos (position (char-downcase char) +minifont-punctuation+ :test #'char=)))
-             (when pos (+ 36 pos)))
+    (t (or (when-let (pos (position (char-downcase char) +minifont-punctuation+ :test #'char=))
+             (+ 36 pos))
            (error "Cannot encode character “~:c” (~a) in minifont"
                   char (sentence-case (char-name char)))))))
 
 (defun minifont->char (byte &key replace)
   (unless replace
-    (check-type byte (integer 0 63) "a minifont character value (0-63)"))
+    (check-type byte (integer 0 127) "a minifont character value (0-127)"))
   (cond
     ((<= 0 byte 35) (char (format nil "~36r" byte) 0))
     ((or (< byte 0) (> byte 63)) replace)

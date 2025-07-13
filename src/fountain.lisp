@@ -1647,7 +1647,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                         (cl-ppcre:regex-replace-all
                          "[ \\t\\n]+"
                          (cl-ppcre:regex-replace-all
-                          "(…|\\.\\.\\.+)"
+                          "(\\.\\.\\.+)"
                           (cl-ppcre:regex-replace-all
                            "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
                            (cl-ppcre:regex-replace-all
@@ -1655,7 +1655,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                             string
                             "’")
                            "\\1\\2")
-                          "….")
+                          "…")
                          " ")
                         "-"))))
     (let* ((no~ (remove #\¶ (remove #\~ prepared)))
