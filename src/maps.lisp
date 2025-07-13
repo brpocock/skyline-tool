@@ -1142,17 +1142,17 @@ range is 0 - #xffffffff (4,294,967,295)"
      (if-let (n #.(position #\’ +minifont-punctuation+ :test #'char=))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
-    (t (or (when-let (pos (position (char-downcase char) +minifont-punctuation+ :test #'char=))
-             (+ 36 pos))
-           (error "Cannot encode character “~:c” (~a) in minifont"
-                  char (sentence-case (char-name char)))))))
+    (t (if-let (pos (position (char-downcase char) +minifont-punctuation+ :test #'char=))
+         (+ 36 pos)
+         (error "Cannot encode character “~:c” (~a) in minifont"
+                char (sentence-case (char-name char)))))))
 
 (defun minifont->char (byte &key replace)
   (unless replace
     (check-type byte (integer 0 127) "a minifont character value (0-127)"))
   (cond
     ((<= 0 byte 35) (char (format nil "~36r" byte) 0))
-    ((or (< byte 0) (> byte 63)) replace)
+    ((or (< byte 0) (> byte 127)) replace)
     (t (elt +minifont-punctuation+ (- byte 36)))))
 
 (defun unicode->minifont (string)

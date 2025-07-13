@@ -1643,32 +1643,48 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
   (let ((prepared
           (string-trim #(#\Space #\Tab)
                        (cl-ppcre:regex-replace-all
-                        "—"
+                        "’r"
                         (cl-ppcre:regex-replace-all
-                         "[ \\t\\n]+"
+                         "’ll"
                          (cl-ppcre:regex-replace-all
-                          "(\\.\\.\\.+)"
+                          "I’"
                           (cl-ppcre:regex-replace-all
-                           "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                           "I’ll"
                            (cl-ppcre:regex-replace-all
-                            "\\'"
-                            string
-                            "’")
-                           "\\1\\2")
-                          "…")
-                         " ")
-                        "-"))))
-    (let* ((no~ (remove #\¶ (remove #\~ prepared)))
+                            "—"
+                            (cl-ppcre:regex-replace-all
+                             "[ \\t\\n]+"
+                             (cl-ppcre:regex-replace-all
+                              "(\\.\\.\\.+)"
+                              (cl-ppcre:regex-replace-all
+                               "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                               (cl-ppcre:regex-replace-all
+                                "\\'"
+                                string
+                                "’")
+                               "\\1\\2")
+                              "…")
+                             " ")
+                            "-")
+                           "{I’ll}")
+                          "{I’}")
+                         "{’ll}")
+                        "{’r}"))))
+    (let* ((no~ (remove #\} (remove #\{ (remove #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
       (assert (string-equal no~ back+forth)
               (prepared)
               "This text contains character(s) which cannot be displayed on ~
 the game console:
-“~a”
-would be rendered as
+The prepared text would be
+“~a”,
+which would be rendered from approximately
+“~a” 
+as
 “~a”"
               prepared
+              no~
               (string-downcase back+forth)))
     prepared))
 
@@ -1880,12 +1896,12 @@ but now also ~s."
   (ensure-atarivox-dictionary)
   (when (emptyp string) (return-from convert-for-atarivox nil))
   (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[A-Za-zÑñ0-9-']+\\b *\\[(.*?)\\]"
+                 "\\b[[:alnum:]-']+\\b *\\[(.*?)\\]"
                  string
                  " \\1 "))
         (words nil))
     (cl-ppcre:do-scans (start end reg-starts reg-ends
-                        "( +|\\~[A-Za-zÑñ]+|[A-Za-zÑñ\\']+|[^A-Za-zÑñ\\' ]+)" string)
+                        "( +|\\~[[:alnum:]]+|[[:alnum:]\\']+|[^[:alnum:]\\' ]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))
