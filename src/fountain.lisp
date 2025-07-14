@@ -1685,7 +1685,11 @@ as
 “~a”"
               prepared
               no~
-              (string-downcase back+forth)))
+              (string-downcase back+forth))
+      (assert (>= #xc0 (length (unicode->minifont no~))) (prepared)
+              "This text is more than 192 characters in length and cannot be prepared.
+“~a”"
+              prepared))
     prepared))
 
 (defvar *atarivox-dictionary* nil
