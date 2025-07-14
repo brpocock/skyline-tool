@@ -26,13 +26,14 @@ instead, find the  device port pathname (e.g. /dev/ttyUSB0)  and pass it
 in yourself. It is possible that this probe process could cause issues.
 
 When ready, hit Return, and I'll try to locate the path to the interface.")
-  (force-output)
+  (finish-output)
   (let ((ports (click.adventuring.skyline.eprom:enumerate-real-serial-ports)))
     (format t "~&Searching ~:d serial ports…" (length ports))
+    (finish-output)
     (let ((thread-pool (mapcar #'spawn-thread-to-look-for-7800gd-on-port ports)))
       (labels ((kill-threads () (dolist (th thread-pool)
-				       (when (and th (thread-alive-p th))
-                                                    (destroy-thread th)))))
+			    (when (and th (thread-alive-p th))
+                                    (destroy-thread th)))))
         (loop
            (dolist (thread thread-pool)
              (unless (thread-alive-p thread)
@@ -40,6 +41,7 @@ When ready, hit Return, and I'll try to locate the path to the interface.")
                  (removef thread-pool thread)
                  (when return
                    (destructuring-bind (port stream) return
+                     (finish-output)
                      (when (y-or-n-p "~2&Found an 7800GD on ~a. Proceed?" port)
                        (kill-threads)
                        (return-from find-7800gd-serial-port (list port stream))))))))
@@ -54,6 +56,7 @@ When ready, hit Return, and I'll try to locate the path to the interface.")
                      (length thread-pool)
                      (round (* 100.0 (/ (length thread-pool) (length ports))))
                      (length ports))
+             (finish-output)
              (when (< (length thread-pool) 5)
                (format t "~&… remaining tasks: ~{~a~^, ~}"
                        (mapcar #'thread-name thread-pool))))
@@ -96,8 +99,8 @@ If EXECUTEP is T then boot the uploaded code freshly."
 (defun push-7800gd-bin (binary-pathname &optional serial-pathname)
   (push-7800gd binary-pathname :serial-pathname serial-pathname))
 
-(defun push-7800gd-bin-no-execute (binary-pathname &optional serial-pathname
-                                                             bump-version-p)
+(defun push-7800gd-bin-no-execute (binary-pathname
+                                   &optional serial-pathname (bump-version-p t))
   (let ((serial (or serial-pathname
                     (first (find-7800gd-serial-port)))))
     (push-7800gd binary-pathname :serial-pathname serial :executep nil :skip-bank-62-p t)
