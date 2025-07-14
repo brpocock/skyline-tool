@@ -229,7 +229,7 @@
   (unless (cmd-write-cart port load-address size)
     (error "Unable to write data"))
   (file-position file offset)
-  (format t "Writing ~:dkiB to $~5,'0x: " (round (/ size 1024)) load-address)
+  (format t "Writing ~:dkiB to $~6,'0x: " (round (/ size 1024)) load-address)
   (loop with left = size
         for blocks-to-read = (min 4096 left)
         with blocks-sent = 0
@@ -247,8 +247,10 @@
              (princ "•")
              (finish-output))
         finally (progn
+                  (terpri)
+                  (finish-output)
                   (cmd-write-data-complete port)
-                  (format t " OK")
+                  (format t " OK ")
                   (return t))))
 
 (defstruct mapper-info
