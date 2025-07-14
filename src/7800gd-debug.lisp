@@ -244,7 +244,8 @@
              (incf blocks-sent blocks-to-read)
              (decf left blocks-to-read)
              (princ #\Backspace)
-             (princ "•"))
+             (princ "•")
+             (finish-output))
         finally (progn
                   (cmd-write-data-complete port)
                   (format t " OK")
