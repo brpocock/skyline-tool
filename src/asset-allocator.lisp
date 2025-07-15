@@ -652,7 +652,8 @@ file ~a.s in bank $~(~2,'0x~)~
   (declare (ignore build))
   (destructuring-bind (kind name) (asset-kind/name asset-indicator)
     (cond ((equal kind "Songs")
-           (format nil "~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
+           (format nil "~20tSource/Generated/Orchestration.s\\
+~{~20tObject/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                    (loop for video in +all-video+
                          collecting (list name video))))
           ((equal kind "Maps")
