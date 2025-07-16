@@ -1286,16 +1286,17 @@ Music:~:*
             (get-orchestration))))
 
 (defun quieter-note (note)
-  (make-hokey-note :start-time (hokey-note-start-time note)
-                   :duration (if (zerop (floor (* 15 4/5 (hokey-note-volume note))))
-                                 0
-                                 (hokey-note-duration note))
-                   :instrument (hokey-note-instrument note)
-                   :volume (min 1 (max 0 (* 4/5 (hokey-note-volume note))))
-                   :hokey-f (hokey-note-hokey-f note)
-                   :hokey-error (hokey-note-hokey-error note)
-                   :tia-f (hokey-note-tia-f note)
-                   :tia-error (hokey-note-tia-error note)))
+  (let ((quieter (min 1 (max 0 (* 4/5 (hokey-note-volume note))))))
+    (make-hokey-note :start-time (hokey-note-start-time note)
+                     :duration (if (zerop (floor (* 15 quieter)))
+                                   0
+                                   (hokey-note-duration note))
+                     :instrument (hokey-note-instrument note)
+                     :volume quieter
+                     :hokey-f (hokey-note-hokey-f note)
+                     :hokey-error (hokey-note-hokey-error note)
+                     :tia-f (hokey-note-tia-f note)
+                     :tia-error (hokey-note-tia-error note))))
 
 (defmethod calculate-duration-for ((note hokey-note) instrument-number)
   (when (< (hokey-note-duration note) 1/60); FIXME NTSC
