@@ -1643,33 +1643,42 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
   (let ((prepared
           (string-trim #(#\Space #\Tab)
                        (cl-ppcre:regex-replace-all
-                        "’r"
+                        "’s"
                         (cl-ppcre:regex-replace-all
-                         "’ll"
+                         "fi"
                          (cl-ppcre:regex-replace-all
-                          "I’"
+                          "li"
                           (cl-ppcre:regex-replace-all
-                           "I’ll"
+                           "’r"
                            (cl-ppcre:regex-replace-all
-                            "—"
+                            "’ll"
                             (cl-ppcre:regex-replace-all
-                             "[ \\t\\n]+"
+                             "I’"
                              (cl-ppcre:regex-replace-all
-                              "(\\.\\.\\.+)"
+                              "I’ll"
                               (cl-ppcre:regex-replace-all
-                               "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                               "—"
                                (cl-ppcre:regex-replace-all
-                                "\\'"
-                                string
-                                "’")
-                               "\\1\\2")
-                              "…")
-                             " ")
-                            "-")
-                           "{I’ll}")
-                          "{I’}")
-                         "{’ll}")
-                        "{’r}"))))
+                                "[ \\t\\n]+"
+                                (cl-ppcre:regex-replace-all
+                                 "(\\.\\.\\.+)"
+                                 (cl-ppcre:regex-replace-all
+                                  "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                                  (cl-ppcre:regex-replace-all
+                                   "\\'"
+                                   string
+                                   "’")
+                                  "\\1\\2")
+                                 "…")
+                                " ")
+                               "-")
+                              "{I’ll}")
+                             "{I’}")
+                            "{’ll}")
+                           "{’r}")
+                          "{li}")
+                         "{fi}")
+                        "{’s}"))))
     (let* ((no~ (remove #\} (remove #\{ (remove #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
