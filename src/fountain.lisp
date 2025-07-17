@@ -1900,12 +1900,12 @@ but now also ~s."
   (ensure-atarivox-dictionary)
   (when (emptyp string) (return-from convert-for-atarivox nil))
   (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[[:alnum:]-']+\\b *\\[(.*?)\\]"
+                 "\\b[\\p{L}\\p{N}’'-]+\\b\\s*\\[(.*?)\\]"
                  string
                  " \\1 "))
         (words nil))
     (cl-ppcre:do-scans (start end reg-starts reg-ends
-                        "( +|\\~[[:alnum:]]+|[[:alnum:]\\']+|[^[:alnum:]\\' ]+)" string)
+                        "(\\s+|-|~\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))
@@ -2845,13 +2845,12 @@ update-one-decal"
          (go top))))
   (format t " C\" ~a\"
 0 ( TODO SpeakJet )
-do-branching-dialogue "
+do-branching-dialogue ~a"
           text 
           (if (string-equal "CONTINUE" option)
               "0 ( continue )"
               (concatenate 'string "ScriptLabel_"
-                           (pascal-case option)))
-          (script-auto-label "WaitForUserInput"))
+                           (pascal-case option))))
   (return-from fountain/write-speech-branch
     (dialogue-hash text)))
 
