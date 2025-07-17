@@ -1129,7 +1129,7 @@ range is 0 - #xffffffff (4,294,967,295)"
         do (write-byte byte stream)))
 
 (define-constant +minifont-punctuation+
-  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ª"
+  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0"
   :test 'string=)
 
 (defun char->minifont (char)
@@ -1151,9 +1151,15 @@ range is 0 - #xffffffff (4,294,967,295)"
   (unless replace
     (check-type byte (integer 0 127) "a minifont character value (0-127)"))
   (cond
-    ((<= 0 byte 35) (char (format nil "~36r" byte) 0))
-    ((or (< byte 0) (> byte 127)) replace)
-    (t (elt +minifont-punctuation+ (- byte 36)))))
+    ((<= 0 byte 35) (format nil "~36r" byte))
+    ((or (< byte 0) (> byte 127)) (string replace))
+    ((= #x70 byte) "I’")
+    ((= #x71 byte) "ll")
+    ((= #x72 byte) "’r")
+    ((= #x75 byte) "li")
+    ((= #x76 byte) "fi")
+    ((= #x77 byte) "’s")
+    (t (string (elt +minifont-punctuation+ (- byte 36))))))
 
 (defun unicode->minifont (string)
   (let ((mini-string (make-array (length string) :element-type '(unsigned-byte 8))))
@@ -1162,19 +1168,18 @@ range is 0 - #xffffffff (4,294,967,295)"
     mini-string))
 
 (defun minifont->unicode (string &key replace)
-  (let ((uni-string (make-string (length string))))
-    (loop for i below (length string)
-          do (setf (aref uni-string i) (minifont->char (aref string i) :replace replace)))
-    uni-string))
+  (apply #'concatenate 'string
+         (loop for i below (length string)
+               collecting (minifont->char (aref string i) :replace replace))))
 
 (defun decal-invisible-p (decal)
   (= #xff (elt decal 2)))
 
 (defun assemble-binary (source-pathname)
   (let (#+ () (combined-source-pathname
-          (make-pathname :directory (append (list "Source" "Generated")
-                                            (subseq (pathname-directory source-pathname) 1))
-                         :defaults source-pathname)))
+                (make-pathname :directory (append (list "Source" "Generated")
+                                                  (subseq (pathname-directory source-pathname) 1))
+                               :defaults source-pathname)))
     (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
             (enough-namestring source-pathname))
     #(#x60) ; rts
