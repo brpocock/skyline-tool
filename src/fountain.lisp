@@ -1641,44 +1641,48 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
 (defun prepare-dialogue (string)
   "Prepare STRING for encoding into Minifont for the game console"
   (let ((prepared
-          (string-trim #(#\Space #\Tab)
+          (string-trim
+           #(#\Space #\Tab)
+           (cl-ppcre:regex-replace-all
+            "~([a-z]+){([a-z]*)}"
+            (cl-ppcre:regex-replace-all
+             "’s"
+             (cl-ppcre:regex-replace-all
+              "fi"
+              (cl-ppcre:regex-replace-all
+               "li"
+               (cl-ppcre:regex-replace-all
+                "’r"
+                (cl-ppcre:regex-replace-all
+                 "’ll"
+                 (cl-ppcre:regex-replace-all
+                  "I’"
+                  (cl-ppcre:regex-replace-all
+                   "I’ll"
+                   (cl-ppcre:regex-replace-all
+                    "—"
+                    (cl-ppcre:regex-replace-all
+                     "[ \\t\\n]+"
+                     (cl-ppcre:regex-replace-all
+                      "(\\.\\.\\.+)"
+                      (cl-ppcre:regex-replace-all
+                       "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
                        (cl-ppcre:regex-replace-all
-                        "’s"
-                        (cl-ppcre:regex-replace-all
-                         "fi"
-                         (cl-ppcre:regex-replace-all
-                          "li"
-                          (cl-ppcre:regex-replace-all
-                           "’r"
-                           (cl-ppcre:regex-replace-all
-                            "’ll"
-                            (cl-ppcre:regex-replace-all
-                             "I’"
-                             (cl-ppcre:regex-replace-all
-                              "I’ll"
-                              (cl-ppcre:regex-replace-all
-                               "—"
-                               (cl-ppcre:regex-replace-all
-                                "[ \\t\\n]+"
-                                (cl-ppcre:regex-replace-all
-                                 "(\\.\\.\\.+)"
-                                 (cl-ppcre:regex-replace-all
-                                  "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
-                                  (cl-ppcre:regex-replace-all
-                                   "\\'"
-                                   string
-                                   "’")
-                                  "\\1\\2")
-                                 "…")
-                                " ")
-                               "-")
-                              "{i’ll}")
-                             "{i’}")
-                            "{’ll}")
-                           "{’r}")
-                          "{li}")
-                         "{fi}")
-                        "{’s}"))))
+                        "\\'"
+                        string
+                        "’")
+                       "\\1\\2")
+                      "…")
+                     " ")
+                    "-")
+                   "{i’ll}")
+                  "{i’}")
+                 "{’ll}")
+                "{’r}")
+               "{li}")
+              "{fi}")
+             "{’s}")
+            "\\1\\2"))))
     (let* ((no~ (remove #\} (remove #\{ (remove #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
