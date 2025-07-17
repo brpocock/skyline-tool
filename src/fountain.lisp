@@ -1809,91 +1809,99 @@ but now also ~s."
 
 (defun fixup-exclamations (seq)
   (loop
-     (if-let (bang (position-if (lambda (n) (member n '(:bang :query))) seq))
-       (progn
-         (assert (plusp bang) ()
-                 "Neither exclamation mark nor question mark can begin a sentence")
-         (setf seq
-               (let* ((alteration (elt seq bang))
-                      (phrase-start
-                        (or (let ((n (position-if
-                                      (lambda (tok)
-                                        (and (stringp tok)
-                                             (starts-with-subseq "Pause" tok)))
-                                      seq
-                                      :end bang :from-end t)))
-                              (when n (1+ n)))
-                            0))
-                      (before (subseq seq 0 phrase-start))
-                      (phrase (subseq seq phrase-start bang))
-                      (after (when (< bang (length seq))
-                               (subseq seq (1+ bang))))
-                      (phrase-length (length phrase)))
-                 (assert (plusp phrase-length) ()
-                         "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
-                 (ecase alteration
-                   (:bang
-                    (warn "handling of “!” is poor")
-                    (reduce (curry #'concatenate 'list)
-                            (list
-                             before
-                             (list "Bend" "$04")
-                             (mapcan (lambda (phoneme)
-                                       (list "Stress" phoneme))
-                                     phrase)
-                             (list "Bend" "$05")
-                             after)))
-                   (:query
-                    (warn "handling of “?” is poor")
-                    (reduce (curry #'concatenate 'list)
-                            (list
-                             before
-                             (case (length phrase)
-                               (1 (list "Bend" "$08" (car phrase)))
-                               (2 (list "Bend" "$06" (first phrase)
-                                        "Bend" "$08" (second phrase)))
-                               (3 (list "Bend" "$06" (first phrase)
-                                        "Bend" "$08" (second phrase)
-                                        "Bend" "$0a" (third phrase)))
-                               (4 (list "Bend" "$06" (first phrase)
-                                        "Bend" "$08" (second phrase)
-                                        "Bend" "$0a" (third phrase)
-                                        "Bend" "$08" (fourth phrase)))
-                               (otherwise
-                                (cons (subseq phrase 0 (- (length phrase) 5))
-                                      (list "Bend" "$06" (elt phrase (- (length phrase) 5))
-                                            "Bend" "$08" (elt phrase (- (length phrase) 4))
-                                            "Bend" "$0a" (elt phrase (- (length phrase) 3))
-                                            "Bend" "$0c" (elt phrase (- (length phrase) 2))
-                                            "Bend" "$09" (elt phrase (- (length phrase) 1))))))
-                             (list "Bend" "$05")
-                             after)))))))
-       (return-from fixup-exclamations seq))))
+     (let ((bang (position-if (lambda (n) (member n '(:bang :query))) seq)))
+       (unless bang
+         (return-from fixup-exclamations seq))
+       (assert (plusp bang) ()
+               "Neither exclamation mark nor question mark can begin a sentence")
+       (setf seq
+             (let* ((alteration (elt seq bang))
+                    (phrase-start
+                      (or (let ((n (position-if
+                                    (lambda (tok)
+                                      (and (stringp tok)
+                                           (starts-with-subseq "Pause" tok)))
+                                    seq
+                                    :end bang :from-end t)))
+                            (when n (1+ n)))
+                          0))
+                    (before (subseq seq 0 phrase-start))
+                    (phrase (subseq seq phrase-start bang))
+                    (after (when (< bang (length seq))
+                             (subseq seq (1+ bang))))
+                    (phrase-length (length phrase)))
+               (assert (plusp phrase-length) ()
+                       "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
+               (ecase alteration
+                 (:bang
+                  (warn "handling of “!” is poor")
+                  (reduce (curry #'concatenate 'list)
+                          (list
+                           before
+                           (list "Bend" "$04")
+                           (mapcan (lambda (phoneme)
+                                     (list "Stress" phoneme))
+                                   phrase)
+                           (list "Bend" "$05")
+                           after)))
+                 (:query
+                  (warn "handling of “?” is poor")
+                  (reduce (curry #'concatenate 'list)
+                          (list
+                           before
+                           (case (length phrase)
+                             (1 (list "Bend" "$08" (car phrase)))
+                             (2 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)))
+                             (3 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)
+                                      "Bend" "$0a" (third phrase)))
+                             (4 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)
+                                      "Bend" "$0a" (third phrase)
+                                      "Bend" "$08" (fourth phrase)))
+                             (otherwise
+                              (cons (subseq phrase 0 (- (length phrase) 5))
+                                    (list "Bend" "$06" (elt phrase (- (length phrase) 5))
+                                          "Bend" "$08" (elt phrase (- (length phrase) 4))
+                                          "Bend" "$0a" (elt phrase (- (length phrase) 3))
+                                          "Bend" "$0c" (elt phrase (- (length phrase) 2))
+                                          "Bend" "$09" (elt phrase (- (length phrase) 1))))))
+                           (list "Bend" "$05")
+                           after)))))))))
+
+(defmacro repeat-unrolled ((times) &body body)
+  (cons 'progn
+        (loop repeat times
+              collect `(progn ,@ (copy-list body)))))
 
 (defun combine-adjacent-pauses (bytes)
-  (loop for i from 0 below (1- (length bytes))
+  (loop for i from 0 below (length bytes)
         for a = (elt bytes i)
-        for b = (elt bytes (1+ i))
+        for b = (when (< i (1- (length bytes))) (elt bytes (1+ i)))
         if (and (stringp a)
                 (stringp b)
                 (starts-with-subseq "Pause" a)
                 (starts-with-subseq "Pause" b))
           collect (prog1 (speakjet-pause+ a b)
                     (incf i))
+            into output
         else
           if (and (stringp a)
                   (member b '(:bang :query))
                   (starts-with-subseq "Pause" a))
             collect (prog1 b
                       (incf i))
+              into output
         else
           if (and (stringp a)
                   (starts-with-subseq "Pause" a)
                   (string= b "EndOfPhrase"))
             collect (prog1 b
                       (incf i))
+              into output
         else
-          collect a))
+          collect a into output))
 
 (defun convert-for-atarivox (string)
   "Convert STRING into a list of tokens for AtariVox (SpeakJet)"
