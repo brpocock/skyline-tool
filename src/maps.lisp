@@ -1129,7 +1129,7 @@ range is 0 - #xffffffff (4,294,967,295)"
         do (write-byte byte stream)))
 
 (define-constant +minifont-punctuation+
-  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0"
+  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćńśź0"
   :test 'string=)
 
 (defun char->minifont (char)
