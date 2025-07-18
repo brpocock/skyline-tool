@@ -884,8 +884,9 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
                       ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt
 	[ -f $@ ]"
           *bank* build video (recursive-read-deps bank-source)
-          (when (< *bank* *last-bank*)
-            (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
+          (if (= *bank* *last-bank*)
+              "Source/Generated/Orchestration.s"
+              (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
           video
           (when (= *bank* *last-bank*) *bank*)
           (first-assets-bank build)
