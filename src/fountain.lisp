@@ -1889,39 +1889,53 @@ but now also ~s."
               collect `(progn ,@ (copy-list body)))))
 
 (defun combine-adjacent-pauses (bytes)
-  (loop for i from 0 below (length bytes)
-        for a = (elt bytes i)
-        for b = (when (< i (1- (length bytes))) (elt bytes (1+ i)))
-        if (and (stringp a)
-                (stringp b)
-                (starts-with-subseq "Pause" a)
-                (starts-with-subseq "Pause" b))
-          collect (prog1 (speakjet-pause+ a b)
-                    (incf i))
-            into output
-        else
-          if (and (stringp a)
-                  (member b '(:bang :query))
-                  (starts-with-subseq "Pause" a))
-            collect (prog1 b
-                      (incf i))
-              into output
-        else
-          if (and (stringp a)
-                  (starts-with-subseq "Pause" a)
-                  (string= b "EndOfPhrase"))
-            collect (prog1 b
-                      (incf i))
-              into output
-        else
-          collect a into output))
+  (when (< (length bytes) 2)
+    (return-from combine-adjacent-pauses bytes))
+  (let ((merge1
+          (append
+           (loop for i from 0 below (1- (length bytes))
+                 for a = (elt bytes i)
+                 for b = (elt bytes (1+ i))
+                 if (and (stringp a)
+                         (stringp b)
+                         (starts-with-subseq "Pause" a)
+                         (starts-with-subseq "Pause" b))
+                   collect (prog1 (speakjet-pause+ a b)
+                             (incf i))
+                 else
+                   if (and (stringp a)
+                           (member b '(:bang :query))
+                           (starts-with-subseq "Pause" a))
+                     collect (prog1 b
+                               (incf i))
+                 else
+                   if (and (stringp a)
+                           (starts-with-subseq "Pause" a)
+                           (string= b "EndOfPhrase"))
+                     collect (prog1 b
+                               (incf i))
+                 else
+                   collect a)
+           (last bytes))))
+    (let ((penultimate (elt merge1 (- (length merge1) 2)))
+          (ultimate (elt merge1 (- (length merge1) 1))))
+      (if (and (stringp penultimate)
+               (stringp ultimate)
+               (starts-with-subseq "Pause" penultimate)
+               (or (starts-with-subseq "Pause" ultimate)
+                   (string= "EndOfPhrase" ultimate)))
+          (return-from combine-adjacent-pauses
+            (combine-adjacent-pauses
+             (append (subseq merge1 0 (- (length merge1) 1))
+                     (list "EndOfPhrase"))))
+          merge1))))
 
 (defun convert-for-atarivox (string)
   "Convert STRING into a list of tokens for AtariVox (SpeakJet)"
   (ensure-atarivox-dictionary)
   (when (emptyp string) (return-from convert-for-atarivox nil))
   (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[\\p{L}\\p{N}’'-]+\\b\\s*\\[(.*?)\\]"
+                 "\\b[\\p{L}\\p{N}’'-]+\\s*\\[(.*?)\\]"
                  string
                  " \\1 "))
         (words nil))
@@ -1953,6 +1967,7 @@ but now also ~s."
                                                  "Word not in dictionary: “~a” not found"
                                                  word)
                                          (list "M1"))))))))
+      (format *trace-output* "~s" bytes)
       (flatten
        (append (remove-if #'null
                           (fixup-exclamations (combine-adjacent-pauses bytes)))
