@@ -1644,45 +1644,48 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
           (string-trim
            #(#\Space #\Tab)
            (cl-ppcre:regex-replace-all
-            "~([a-z]+){([a-z]*)}"
+            "\\\\[A-Za-z0-9]+"
             (cl-ppcre:regex-replace-all
-             "’s"
+             "~([a-z]+){([a-z]*)}"
              (cl-ppcre:regex-replace-all
-              "fi"
+              "’s"
               (cl-ppcre:regex-replace-all
-               "li"
+               "fi"
                (cl-ppcre:regex-replace-all
-                "’r"
+                "li"
                 (cl-ppcre:regex-replace-all
-                 "’ll"
+                 "’r"
                  (cl-ppcre:regex-replace-all
-                  "I’"
+                  "’ll"
                   (cl-ppcre:regex-replace-all
-                   "I’ll"
+                   "I’"
                    (cl-ppcre:regex-replace-all
-                    "—"
+                    "I’ll"
                     (cl-ppcre:regex-replace-all
-                     "[ \\t\\n]+"
+                     "—"
                      (cl-ppcre:regex-replace-all
-                      "(\\.\\.\\.+)"
+                      "[ \\t\\n]+"
                       (cl-ppcre:regex-replace-all
-                       "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                       "(\\.\\.\\.+)"
                        (cl-ppcre:regex-replace-all
-                        "\\'"
-                        string
-                        "’")
-                       "\\1\\2")
-                      "…")
-                     " ")
-                    "-")
-                   "{i’ll}")
-                  "{i’}")
-                 "{’ll}")
-                "{’r}")
-               "{li}")
-              "{fi}")
-             "{’s}")
-            "\\1\\2"))))
+                        "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                        (cl-ppcre:regex-replace-all
+                         "\\'"
+                         string
+                         "’")
+                        "\\1\\2")
+                       "…")
+                      " ")
+                     "-")
+                    "{i’ll}")
+                   "{i’}")
+                  "{’ll}")
+                 "{’r}")
+                "{li}")
+               "{fi}")
+              "{’s}")
+             "\\1\\2")
+            ""))))
     (let* ((no~ (remove #\} (remove #\{ (remove #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
@@ -1940,7 +1943,7 @@ but now also ~s."
                  " \\1 "))
         (words nil))
     (cl-ppcre:do-scans (start end reg-starts reg-ends
-                        "(\\s+|-|~\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
+                        "(\\s+|-|\\\\\\d+|[~\\\\]\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))
@@ -1949,24 +1952,30 @@ but now also ~s."
                    with index = 0
                    while (< index (length string))
                    for word in words
-                   append (cond ((emptyp word) (list "Pause1"))
-                                ((equalp word "?!") (list :bang :query))
-                                ((equalp word "!") (list :bang))
-                                ((equalp word "?") (list :query))
-                                ((member word '("-" "“" "”") :test #'string-equal)
-                                 nil)
-                                ((or (eql :nil (gethash word *atarivox-dictionary*))
-                                     (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
-                                 nil)
-                                (t (or (prog1
-                                           (gethash word *atarivox-dictionary*)
-                                         (incf index (length word)))
-                                       (progn
-                                         (log-missing-word-for-speakjet word)
-                                         (cerror "Continue with a gunshot sound"
-                                                 "Word not in dictionary: “~a” not found"
-                                                 word)
-                                         (list "M1"))))))))
+                   do (format *trace-output* "~& considering ~s" word)
+                   append (cond
+                            ((emptyp word) (list "Pause1"))
+                            ((char= (char word 0) #\\)
+                             (if (every #'digit-char-p (subseq word 1))
+                                 (list (format nil "$~2,'0x" (parse-number (subseq word 1))))
+                                 (list (subseq word 1))))
+                            ((equalp word "?!") (list :bang :query))
+                            ((equalp word "!") (list :bang))
+                            ((equalp word "?") (list :query))
+                            ((member word '("-" "“" "”") :test #'string-equal)
+                             nil)
+                            ((or (eql :nil (gethash word *atarivox-dictionary*))
+                                 (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
+                             nil)
+                            (t (or (prog1
+                                       (gethash word *atarivox-dictionary*)
+                                     (incf index (length word)))
+                                   (progn
+                                     (log-missing-word-for-speakjet word)
+                                     (cerror "Continue with a gunshot sound"
+                                             "Word not in dictionary: “~a” not found"
+                                             word)
+                                     (list "M1"))))))))
       (format *trace-output* "~s" bytes)
       (flatten
        (append (remove-if #'null
