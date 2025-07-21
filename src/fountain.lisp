@@ -2083,18 +2083,18 @@ but now also ~s."
   (or (unless (emptyp voice-speed)
         (parse-integer voice-speed))
       (progn
-        (cerror "Use default voice speed 100"
+        (cerror "Use default voice speed 114"
                 "Voice speed not specified~@[ for actor ~:(~a~)~]" name)
-        100)))
+        114)))
 
 (defmethod npc-interpret-field (voice-bend (field (eql :voice-bend)) &key name kind)
   (declare (ignore kind))
   (or (unless (emptyp voice-bend)
         (parse-integer voice-bend))
       (progn
-        (cerror "Use default voice bend 128"
+        (cerror "Use default voice bend 5"
                 "Voice bend not specified~@[ for actor ~:(~a~)~]" name)
-        100)))
+        5)))
 
 (defmethod npc-interpret-field (crowns (field (eql :crowns)) &key name kind)
   (declare (ignore name kind))
