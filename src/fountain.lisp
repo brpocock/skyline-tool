@@ -1975,7 +1975,6 @@ but now also ~s."
                                              "Word not in dictionary: “~a” not found"
                                              word)
                                      (list "M1"))))))))
-      (format *trace-output* "~s" bytes)
       (flatten
        (append (remove-if #'null
                           (fixup-exclamations (combine-adjacent-pauses bytes)))
