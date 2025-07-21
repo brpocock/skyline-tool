@@ -1952,7 +1952,6 @@ but now also ~s."
                    with index = 0
                    while (< index (length string))
                    for word in words
-                   do (format *trace-output* "~& considering ~s" word)
                    append (cond
                             ((emptyp word) (list "Pause1"))
                             ((char= (char word 0) #\\)
