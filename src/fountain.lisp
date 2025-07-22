@@ -1933,6 +1933,9 @@ but now also ~s."
                      (list "EndOfPhrase"))))
           merge1))))
 
+(defun char-digit-or-comma-p (char)
+  (or (digit-char-p char) (char= #\, char)))
+
 (defun convert-for-atarivox (string)
   "Convert STRING into a list of tokens for AtariVox (SpeakJet)"
   (ensure-atarivox-dictionary)
@@ -1947,10 +1950,17 @@ but now also ~s."
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))
-    (reversef words)
+    (let ((output (list)))
+      (dolist (word words)
+        (if (and (not (emptyp word))
+                 (every #'char-digit-or-comma-p word))
+            (dolist (num (reverse (split-sequence-if-not #'alpha-char-p
+                                                         (format nil "~r" (parse-number (remove #\, word))))))
+              (push num output))
+            (push word output))
+        (format *trace-output* "~&~s" output))
+      (setf words output))
     (let ((bytes (loop
-                   with index = 0
-                   while (< index (length string))
                    for word in words
                    append (cond
                             ((emptyp word) (list "Pause1"))
@@ -1966,9 +1976,7 @@ but now also ~s."
                             ((or (eql :nil (gethash word *atarivox-dictionary*))
                                  (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
                              nil)
-                            (t (or (prog1
-                                       (gethash word *atarivox-dictionary*)
-                                     (incf index (length word)))
+                            (t (or (gethash word *atarivox-dictionary*)
                                    (progn
                                      (log-missing-word-for-speakjet word)
                                      (cerror "Continue with a gunshot sound"
