@@ -1108,7 +1108,7 @@ Music:~:*
                                             :key key :velocity first-velocity)
                                 output))
                         (setf (aref keyboard key) nil)))
-                     (t (warn "Dunno what to do with note time ~d velocity ~d key ~d (is ~[up~;down~])"
+                     (t (warn "Dunno what to do with note time ~d velocity ~d key ~d (is ~s)"
                               time velocity key (aref keyboard key))))))
       (loop for chunk in track
             with time-signature-num = 4
