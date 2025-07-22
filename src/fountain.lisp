@@ -1958,8 +1958,7 @@ but now also ~s."
             (dolist (num (reverse (split-sequence-if-not #'alpha-char-p
                                                          (format nil "~r" (parse-number (remove #\, word))))))
               (push num output))
-            (push word output))
-        (format *trace-output* "~&~s" output))
+            (push word output)))
       (setf words output))
     (let ((bytes (loop
                    for word in words
