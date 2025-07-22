@@ -1953,6 +1953,7 @@ but now also ~s."
     (let ((output (list)))
       (dolist (word words)
         (if (and (not (emptyp word))
+                 (some #'digit-char-p word)
                  (every #'char-digit-or-comma-p word))
             (dolist (num (reverse (split-sequence-if-not #'alpha-char-p
                                                          (format nil "~r" (parse-number (remove #\, word))))))
