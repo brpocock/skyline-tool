@@ -279,19 +279,17 @@
 (defvar *first-assets-bank* nil)
 
 (defun first-assets-bank (build)
-  (if (equal build "Demo")
-      7
-      (or *first-assets-bank*
-          (setf *first-assets-bank*
-                (loop for bank from 0
-                      for bank-name = (format nil "Bank~(~2,'0x~)" bank)
-                      unless (probe-file (make-pathname :directory (list :relative
-                                                                         "Source"
-                                                                         "Banks" 
-                                                                         bank-name)
-                                                        :name bank-name
-                                                        :type "s"))
-                        return bank)))))
+  (or *first-assets-bank*
+      (setf *first-assets-bank*
+            (loop for bank from 0
+                  for bank-name = (format nil "Bank~(~2,'0x~)" bank)
+                  unless (probe-file (make-pathname :directory (list :relative
+                                                                     "Source"
+                                                                     "Banks" 
+                                                                     bank-name)
+                                                    :name bank-name
+                                                    :type "s"))
+                    return bank))))
 
 (defun allocation-list-name (bank build video)
   (make-pathname :directory '(:relative "Source" "Generated")
