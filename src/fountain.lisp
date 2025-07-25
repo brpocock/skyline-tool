@@ -2349,7 +2349,7 @@ PlaySong EXECUTE "  song))))
     (format t "~% CharacterID_~a ActionDance character-action!"
             (pascal-case (string name))
             ok-label done-label
-            ok-label done-label))))
+            ok-label done-label)))
 
 (defstage weather (&optional kind)
   (format t "~% Weather~:(~a~) weather! " (or kind "None")))
