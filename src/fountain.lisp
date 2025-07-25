@@ -2332,12 +2332,14 @@ PlaySong EXECUTE "  song))))
               ok-label done-label))))
 
 (defstage dance (actor)
-  (destructuring-bind (&key name kind found-in-scene-p &allow-other-keys)
+  (destructuring-bind (&key name kind body found-in-scene-p &allow-other-keys)
       (require-actor actor)
-    (unless (member kind '(captain sailor player nefertem))
-      (cerror "Continue, ignoring dance request"
-              "Actor ~:(~a~) asked to dance but they have no dance frames" actor)
-      (return))
+      (unless (some (lambda (facing)
+                    (find-assigned-animation-sequence kind (or body 0) :dance facing))
+                  '(:north :south :east :west))
+        (cerror "Continue, ignoring dance request"
+                "Actor ~:(~a~) asked to dance but they have no dance frames" actor)
+        (return)))
     (unless found-in-scene-p
       (cerror "Continue, ignoring dance request"
               "Actor ~:(~a~) asked to dance, but they are not in the scene" actor)
