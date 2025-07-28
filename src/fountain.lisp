@@ -1686,7 +1686,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
               "{’s}")
              "\\1\\2")
             ""))))
-    (let* ((no~ (remove #\} (remove #\{ (remove #\¶ (remove #\~ (string-downcase prepared))))))
+    (let* ((no~ (remove #\} (remove #\{ (substitute #\Space #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
       (assert (string-equal no~ back+forth)
@@ -1707,6 +1707,10 @@ as
 “~a”"
               prepared))
     prepared))
+
+    (assert (handler-case (prepare-dialogue "Para¶check")
+    (error (c)
+    (not (search "string contains a non-printable character" (princ-to-string c))))))
 
 (defvar *atarivox-dictionary* nil
   "A cache for the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic")
