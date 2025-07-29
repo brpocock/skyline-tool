@@ -2205,6 +2205,7 @@ but now also ~s."
 
 (defvar *current-scene* nil)
 (defvar *actors* nil)
+(defvar *deferred-weather* nil)
 
 (defgeneric compile-stage-direction (fun args)
   (:method ((fun t) (args t))
@@ -2356,7 +2357,8 @@ PlaySong EXECUTE "  song))))
             ok-label done-label)))
 
 (defstage weather (&optional kind)
-  (format t "~% Weather~:(~a~) weather! " (or kind "None")))
+  ;; Store the weather command to be emitted after load-map
+  (push (list kind) *deferred-weather*))
 
 (defstage wake (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2857,6 +2859,11 @@ update-one-decal"
                                   (split-sequence #\/ value))))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
+  ;; Emit any deferred weather commands after load-map
+  (dolist (weather-command (reverse *deferred-weather*))
+    (format t "~% Weather~:(~a~) weather!"
+            (pascal-case (string (or (first weather-command) "None")))))
+  (setf *deferred-weather* nil)
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
