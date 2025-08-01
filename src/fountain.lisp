@@ -2308,14 +2308,12 @@ PlaySong EXECUTE "  song))))
 (defstage prepare (&rest directions)
   (format t "~%prepare-scene ")
   (map nil #'stage-directions->code directions)
-  (format t " scene-ready")
-  ;; Emit any deferred weather commands after scene-ready
-  (format *trace-output* "~&DEBUG: *deferred-weather* before emitting: ~s~%" *deferred-weather*)
+  ;; Emit any deferred weather commands just before scene-ready
   (dolist (weather-command (reverse *deferred-weather*))
     (format t "~% Weather~:(~a~) weather!"
             (pascal-case (string (or (first weather-command) "None")))))
   (setf *deferred-weather* nil)
-  (format t "~%"))
+  (format t " scene-ready~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
   (format t "~% Lighting~a FadeSpeed~a change-lighting"
@@ -2362,9 +2360,7 @@ PlaySong EXECUTE "  song))))
 
 (defstage weather (&optional kind)
   ;; Store the weather command to be emitted after load-map
-  (format *trace-output* "~&DEBUG: weather stage called with kind: ~s~%" kind)
-  (push (list kind) *deferred-weather*)
-  (format *trace-output* "~&DEBUG: *deferred-weather* is now: ~s~%" *deferred-weather*))
+  (push (list kind) *deferred-weather*))
 
 (defstage wake (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
