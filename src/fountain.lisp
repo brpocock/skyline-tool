@@ -733,10 +733,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
                           	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
                                                        (declare (ignore _intro _ellipsis _closing _ellipsout))
-                                                       (list 'prepare directions)))
-                           (preparation-introduction statement (lambda (_intro statement)
-                                                                 (declare (ignore _intro))
-                                                                 (list 'prepare statement))))
+                                                       (list 'prepare directions))))
     (preparation-introduction (we open on) (open on) (we find) (we see))
     (preparation-closing then suddenly next)
     (ellipsis (|.| |.| |.|) |…| skyline-tool::|:|)
@@ -2311,7 +2308,14 @@ PlaySong EXECUTE "  song))))
 (defstage prepare (&rest directions)
   (format t "~%prepare-scene ")
   (map nil #'stage-directions->code directions)
-  (format t " scene-ready~%"))
+  (format t " scene-ready")
+  ;; Emit any deferred weather commands after scene-ready
+  (format *trace-output* "~&DEBUG: *deferred-weather* before emitting: ~s~%" *deferred-weather*)
+  (dolist (weather-command (reverse *deferred-weather*))
+    (format t "~% Weather~:(~a~) weather!"
+            (pascal-case (string (or (first weather-command) "None")))))
+  (setf *deferred-weather* nil)
+  (format t "~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
   (format t "~% Lighting~a FadeSpeed~a change-lighting"
@@ -2358,7 +2362,9 @@ PlaySong EXECUTE "  song))))
 
 (defstage weather (&optional kind)
   ;; Store the weather command to be emitted after load-map
-  (push (list kind) *deferred-weather*))
+  (format *trace-output* "~&DEBUG: weather stage called with kind: ~s~%" kind)
+  (push (list kind) *deferred-weather*)
+  (format *trace-output* "~&DEBUG: *deferred-weather* is now: ~s~%" *deferred-weather*))
 
 (defstage wake (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2859,11 +2865,7 @@ update-one-decal"
                                   (split-sequence #\/ value))))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
-  ;; Emit any deferred weather commands after load-map
-  (dolist (weather-command (reverse *deferred-weather*))
-    (format t "~% Weather~:(~a~) weather!"
-            (pascal-case (string (or (first weather-command) "None")))))
-  (setf *deferred-weather* nil)
+
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
