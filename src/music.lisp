@@ -495,7 +495,7 @@ skipping MIDI music with ~:d track~:p"
   (defun interpret-pokey-tables (tables)
     (destructuring-bind (sheet1 sheet2 sheet3 sheet4) tables
       (declare (ignore sheet3 sheet4))
-      (interpret-pokey-sheet2 sheet2) ; TODO, ignored
+      (interpret-pokey-sheet2 sheet2) ; TODO: #1228, ignored
       (interpret-pokey-sheet1 sheet1)))
 
   (defun lists->2d-array (lists)
@@ -571,10 +571,10 @@ skipping MIDI music with ~:d track~:p"
         () "POKEY notes table seems to be incorrect")
 
 (defun pokey->frequency (AUDF)
-  (/ 15699.9 #| FIXME NTSC? |# (* 2 (1+ AUDF))))
+  (/ 15699.9 #| FIXME: #1229 NTSC? |# (* 2 (1+ AUDF))))
 
 (defun frequency->pokey (frequency)
-  (ceiling (/ (- 15699.9 #| FIXME NTSC? |# (* 2 frequency)) (* 2 frequency))))
+  (ceiling (/ (- 15699.9 #| FIXME: #1229 NTSC? |# (* 2 frequency)) (* 2 frequency))))
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
   (declare (ignore distortion bits))
@@ -819,7 +819,7 @@ Gathered text:~{~% • ~a~}"
                 :element-type '(unsigned-byte 8)
                 :initial-contents list)))
 
-(defvar *room-available-for-music%* 2000) ; FIXME
+(defvar *room-available-for-music%* 2000) ; FIXME: #1230
 
 (defmacro memoize (var &body fn)
   `(or (and (boundp ',var) ,var)
@@ -1239,10 +1239,10 @@ Music:~:*
                            (warn "Note ~a is unlikely to play correctly on Hokey"
                                  (midi->note-name key)))
                          (multiple-value-bind (instrument hokey-f hokey-error)
-                             #| FIXME PAL |#
+                             #| FIXME: #1231 PAL |#
                              (hokey-reckon key (getf score-note :instrument))
                            (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
-                               #| FIXME PAL |#
+                               #| FIXME: #1231 PAL |#
                                (best-tia-ntsc-note-for key)
                              (declare (ignore _tia-c))
                              (when (getf score-note :velocity)
@@ -1299,13 +1299,13 @@ Music:~:*
                      :tia-error (hokey-note-tia-error note))))
 
 (defmethod calculate-duration-for ((note hokey-note) instrument-number)
-  (when (< (hokey-note-duration note) 1/60); FIXME NTSC
+  (when (< (hokey-note-duration note) 1/60); FIXME: #1231 NTSC
     (format *trace-output* "~%Dropping note at time ~d as it is too short to play (duration ~ds = ~5fs < 1/60s)"
             (hokey-note-start-time note)
             (hokey-note-duration note) (hokey-note-duration note))
     (return-from calculate-duration-for 0))
   (let* ((instrument (elt *orchestra* instrument-number))
-         (total-duration (ceiling (* 60 (hokey-note-duration note)))) ; FIXME NTSC
+         (total-duration (ceiling (* 60 (hokey-note-duration note)))) ; FIXME: #1231 NTSC
          (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note)))
                                       (getf instrument :attack-addend))))
          (decay-duration (ceiling (getf instrument :decay-duration)))

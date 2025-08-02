@@ -1182,7 +1182,7 @@
     (:block2 20)
     (:block3 20)
     (:block4 20)
-    (:enemy 256); TODO count the number from somewhere?
+    (:enemy 256); TODO: #1232 count the number from somewhere?
     (otherwise 1)))
 
 (defvar *animation-assignments* (make-hash-table :test 'equalp))
@@ -1446,7 +1446,7 @@
 
 (defun find-sequences-matching (&key major-kind decal-kind body)
   (ecase major-kind
-    ((:backgroud :scenery) (error "unimplemented TODO"))
+    ((:backgroud :scenery) (error "unimplemented TODO: #1233"))
     (:npc (remove-if-not (lambda (seq)
                            (animation-sequence-compatible-p seq decal-kind body))
                          (copy-list *animation-sequences*)))))
@@ -1603,7 +1603,7 @@
 
 (defun display-anim-preview (_window pane)
   (declare (ignore _window))
-  (format pane "TODO: Display a preview of the animation here"))
+  (format pane "TODO: #1234 Display a preview of the animation here"))
 
 (defun sort-matching-lists-by-decal-kind (a b)
   (let ((d-a (position (elt a 0) +decal-kinds+))

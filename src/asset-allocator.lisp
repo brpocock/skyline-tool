@@ -752,7 +752,7 @@ file ~a.s in bank $~(~2,'0x~)~
 ~a: ~a \\
 ~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth Source/Generated/Classes.forth \\
 ~10tSource/Assets.index bin/skyline-tool
-	# FIXME NTSC is not actually right for everyone
+	# FIXME: #1237 NTSC is not actually right for everyone
 	mkdir -p Object/Assets
 	~a"
                  (asset->object-name asset-indicator)

@@ -44,7 +44,7 @@
 (defmethod write-text-bank ((machine (eql 2600)) bank-number description)
   (declare (ignore description))
   (with-output-to-memory-bank-file (bank-number)
-    (format t "~%;;; TODO: this content is not yet created")
+    (format t "~%;;; TODO: #1235 this content is not yet created")
     (format t "~%bankinit:	brk")))
 
 (defun write-map-data/2600 (table-name format-string grid-key

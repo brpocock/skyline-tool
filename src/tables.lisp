@@ -483,9 +483,9 @@ INPUT & OUTPUT pathnames can be given."
               (enough-namestring output) (enough-namestring input))
       (let ((table (read-orchestration input)))
         (format out "~2%~10tNumInstruments = ~d" (length table))
-        (format out "~2%;;; FIXME PAL support 
+        (format out "~2%;;; FIXME: #1236 PAL support 
 ;;; (multiple-value-bind (int fract) (floor (/ (* 1.0 60) 50)) (list int (floor (* fract #x100))))
-;;; FIXME PAL support")
+;;; FIXME: #1236 PAL support")
         (format out "~2%InstrumentHokeyDistortion:")
         (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
