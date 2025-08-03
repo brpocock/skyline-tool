@@ -24,6 +24,7 @@
                :clouseau
                :cserial-port
                :dufy
+               :fiveam
                :mcclim
                :lparallel
                :local-time
@@ -82,3 +83,12 @@
                  (:file "asset-allocator")
                  (:file "atarivox")
                  (:file "interface")))))
+
+;; Separate test system
+(asdf:defsystem :skyline-tool/tests
+  :description "Tests for Skyline-Tool"
+  :author "Bruce-Robert Pocock"
+  :version "0.9.0"
+  :depends-on (:skyline-tool :fiveam)
+  :components ((:module "tests"
+                :components ((:file "action-tests")))))
