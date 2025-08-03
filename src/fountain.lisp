@@ -2202,7 +2202,11 @@ but now also ~s."
 
 (defvar *current-scene* nil)
 (defvar *actors* nil)
-(defvar *deferred-weather* nil)
+(defvar *deferred-weather* nil
+  "Holds weather-related stage directions or data that are deferred during scene preparation.
+Expected format: a list of weather stage direction forms or data structures to be processed later.
+Lifecycle: Set to NIL at the start of scene preparation, populated as weather directives are encountered,
+and processed/applied at the appropriate point in the scene setup.")
 
 (defgeneric compile-stage-direction (fun args)
   (:method ((fun t) (args t))
