@@ -2208,6 +2208,9 @@ Expected format: a list of weather stage direction forms or data structures to b
 Lifecycle: Set to NIL at the start of scene preparation, populated as weather directives are encountered,
 and processed/applied at the appropriate point in the scene setup.")
 
+(defvar *deferred-weather-lock* (sb-thread:make-mutex :name "deferred-weather-lock")
+  "Mutex for protecting access to *deferred-weather* during concurrent operations.")
+
 (defgeneric compile-stage-direction (fun args)
   (:method ((fun t) (args t))
     (error "Unhandled stage direction function ~s" fun)))
