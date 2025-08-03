@@ -2316,7 +2316,7 @@ PlaySong EXECUTE "  song))))
   (sb-thread:with-mutex (*deferred-weather-lock*)
     (dolist (weather-command (reverse *deferred-weather*))
       (format t "~% Weather~:(~a~) weather!"
-              (pascal-case (string (or (first weather-command) "None"))))
+              (pascal-case (string (or (first weather-command) "None")))))
     (setf *deferred-weather* nil))
   (format t " scene-ready~%"))
 
