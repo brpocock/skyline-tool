@@ -2486,7 +2486,7 @@ update-one-decal"
 (defvar *boat-classes* nil)
 
 (defstage boat (ship-name east/west target actors)
-  (declare (ignore actors)) ; TODO
+  (declare (ignore actors)) ; TODO: #1239
   (with-simple-restart (reload-boats "Reload Boats.ods and retry")
     (load-boats)
     (let ((boat-id (gethash ship-name *boat-ids*))
@@ -2503,7 +2503,7 @@ update-one-decal"
                   (east " MapWidth C@ ")
                   (west " -3 ")))
         (format t " ~d make-boat " y)
-        ;; TODO put people on the boat
+        ;; TODO: #1221 put people on the boat
         (when (eql east/west 'at)
           (return))
         (ecase east/west
@@ -2911,7 +2911,7 @@ update-one-decal"
          (reload-atarivox-dictionary)
          (go top))))
   (format t " C\" ~a\"
-0 ( TODO SpeakJet )
+0 ( TODO: #1222 SpeakJet )
 do-branching-dialogue ~a"
           text 
           (if (string-equal "CONTINUE" option)
@@ -2961,7 +2961,7 @@ do-branching-dialogue ~a"
               (comment
                 (format t "~% ( ~a )" value))
               (label
-               (format t "~% ( ~a LABEL FIXME )"
+               (format t "~% ( ~a LABEL FIXME: #1240 )"
                        (pascal-case value)))
               (scene
                (fountain/write-scene-start value))
@@ -3002,7 +3002,7 @@ FadeColor~:(~a~) FadingTarget C!"
               (branch
                (destructuring-bind (option . text) value
                  (fountain/write-speech-branch option text)))
-              (go (format t "~%~10t ( jmp ScriptLabel_~a FIXME )~%"
+              (go (format t "~%~10t ( jmp ScriptLabel_~a FIXME: #1240 )~%"
                           (pascal-case value)))
               (otherwise
                (cerror "Insert a no-op"

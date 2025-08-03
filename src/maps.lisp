@@ -75,7 +75,7 @@
                                          1000)))
                         (push frame-tile sequence)
                         (push duration sequence)))
-                    ;; TODO If  the sequence  uses a  frame already  defined as
+                    ;; TODO: #1218 If  the sequence  uses a  frame already  defined as
                     ;; a part of another sequence, omit it.
                     (add-animation (reverse sequence))))))))))
     animations))
@@ -175,7 +175,7 @@
 (defun find-effective-attributes (tileset x y objects attributes
                                   exits enemies &key tile-width)
   "Find the effective attributes for the tile X Y using TILESET, OBJECTS, ATTRIBUTES, EXITS and ENEMIES."
-  (declare (ignore enemies)) ; TODO
+  (declare (ignore enemies)) ; TODO: #1238
   (let ((effective-objects (remove-if-not (lambda (el)
                                             (and (equal "object" (car el))
                                                  (object-covers-tile-p x y el :tile-width tile-width)))
@@ -259,7 +259,7 @@
   (reduce #'logior (remove-if #'null (flatten list))))
 
 (defun collect-decal-object (object enemies base-tileset decal-tileset &key (tile-width 8))
-  (declare (ignore enemies)) ; TODO
+  (declare (ignore enemies)) ; TODO: #1238
   (let ((x (floor (parse-number (assocdr "x" (second object))) tile-width))
         (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
         (name (or (assocdr "name" (second object) nil) "(Unnamed decal)")))
@@ -533,7 +533,7 @@
                              best-distance distance)))
                 finally (return best)))
         (cond
-          ;; TODO make a proper error with presentation methods to handle this
+          ;; TODO: #1219 make a proper error with presentation methods to handle this
           ((clim:extended-output-stream-p *trace-output*)
            (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
 All colors: ~s~@[~% at (~3d,~3d)~]"

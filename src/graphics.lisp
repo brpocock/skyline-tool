@@ -49,7 +49,7 @@
       gray cyan orange brown pink violet bright-green magenta)
   :test 'equalp)
 
-(define-constant +apple-hires-palette+ '()) ;; TODO
+(define-constant +apple-hires-palette+ '()) ;; TODO: #1243: #1223
 (define-constant +nes-palette-ntsc+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
       (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
@@ -218,7 +218,7 @@
       (#xff #xff #xa7) (#xfe #xfd #xc2) (#xff #xff #xe4) (#xff #xff #xff))
   :test 'equalp)
 
-(define-constant +ted-palette+ '()) ;; TODO
+(define-constant +ted-palette+ '()) ;; TODO: #1243: #1224
 (define-constant +vcs-ntsc-palette+
     '((0   0   0) (64  64  64) (108 108 108) (144 144 144) (176 176 176) (200 200 200) (220 220 220) (236 236 236)
       (68  68   0) (100 100  16) (132 132  36) (160 160  52) (184 184  64) (208 208  80) (232 232  92) (252 252 104)
@@ -294,7 +294,7 @@
                (161 183 47) (179 200 65) (197 218 82) (214 236 100) (232 254 118) (250 255 136) (255 255 154))
   :test 'equalp)
 
-(define-constant +vcs-pal-palette+ '()) ;; TODO
+(define-constant +vcs-pal-palette+ '()) ;; TODO: #1243: #1225
 (define-constant +vcs-secam-palette+
     '((0 0 0) (0 0 255) (0 255 0) (0 255 255)
       (255 0 0) (255 0 255) (255 255 0) (255 255 255))
@@ -792,7 +792,7 @@ PNG image in an unsuitable format:
       COLSEAFOAM COLGREEN COLSPRINGGREEN COLGOLD)
   :test 'equalp)
 
-(define-constant +atari-pal-color-names+ ; FIXME these are the NTSC ones
+(define-constant +atari-pal-color-names+ ; FIXME: #1241 these are the NTSC ones
     '(COLGREY COLSPINACH COLGOLD COLORANGE
       COLRED COLMAGENTA COLVIOLET COLPURPLE
       COLINDIGO COLBLUE COLSTONEWASH COLTURQUOISE
@@ -1070,7 +1070,7 @@ Proceed with caution."))
 ~}~}"
                 (pathname-name png-file)
                 (length index)
-                (mapcar #'car index)  ; TODO: capture relative positioning
+                (mapcar #'car index)  ; TODO: #1226 capture relative positioning
                 (mob-index+bitmap+color-sets mobs)))
       (format *trace-output* "~% Done writing to ~A" out-file))))
 
@@ -1080,7 +1080,7 @@ Proceed with caution."))
     (with-output-to-file (source-file (make-source-file-name source-file-base-name)
                                       :if-exists :supersede)
       (format source-file ";;; -*- asm -*-
-;;; TODO: write the function to generate this file's contents
+;;; TODO: #1243: #1227 write the function to generate this file's contents
  * = 0 ~% brk~%"))))
 
 (defun tia-font-interpret (pixels x y)
@@ -1607,7 +1607,7 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
             (color-not-in-palette-image c))
           (color-not-in-palette-pixel c)
           (color-not-in-palette-palette c))
-  #+ () ;; TODO
+  #+ () ;; TODO: #1243: #1242
   (print-image (color-not-in-palette-image-pixels c)
                (color-not-in-palette-palette c)
                ))
@@ -2197,7 +2197,7 @@ an error."
                  :colors (maptimes (y 8)
                            (collect-foreground-color/tia
                             (maptimes (x 8) (aref screen x y))))
-                 ;; TODO
+                 ;; TODO: #1243
                  :background-color #x44))
 
 #+ ()
