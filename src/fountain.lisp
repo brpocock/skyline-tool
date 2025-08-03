@@ -2309,10 +2309,11 @@ PlaySong EXECUTE "  song))))
   (format t "~%prepare-scene ")
   (map nil #'stage-directions->code directions)
   ;; Emit any deferred weather commands just before scene-ready
-  (dolist (weather-command (reverse *deferred-weather*))
-    (format t "~% Weather~:(~a~) weather!"
-            (pascal-case (string (or (first weather-command) "None")))))
-  (setf *deferred-weather* nil)
+  (sb-thread:with-mutex (*deferred-weather-lock*)
+    (dolist (weather-command (reverse *deferred-weather*))
+      (format t "~% Weather~:(~a~) weather!"
+              (pascal-case (string (or (first weather-command) "None"))))
+    (setf *deferred-weather* nil))
   (format t " scene-ready~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
