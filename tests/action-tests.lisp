@@ -1,7 +1,7 @@
 (in-package :skyline-tool)
 
 (def-suite action-tests
-  :description "Tests for new character actions: gesture, panic, flying, wave-arms")
+  :description "Tests for new character actions: gesture, panic, flying, wave-arms, dancing")
 
 (in-suite action-tests)
 
@@ -143,6 +143,68 @@ PARROT stops flying.
     (is (search "CharacterID_Parrot" forth-output))
     (is (search "character-action!" forth-output))))
 
+;; Test dancing actions
+(test dancing-starts-dancing
+  "Test 'starts dancing' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE starts dancing.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionDance" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test dancing-dances
+  "Test 'dances' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE dances.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionDance" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test dancing-stops-dancing
+  "Test 'stops dancing' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE stops dancing.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionIdle" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+;; Test walking actions
+(test walking-starts-walking
+  "Test 'starts walking' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE starts walking to \"Kitchen\".
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionWalking" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
 ;; Test wave-arms actions
 (test wave-arms-starts-waving
   "Test 'starts waving' grammar"
@@ -219,6 +281,36 @@ NORVILLE waves his arms.
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
+(test wave-arms-waves-her-arms
+  "Test 'waves her arms' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE waves her arms.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionWaveArms" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test wave-arms-waves-their-arms
+  "Test 'waves their arms' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE waves their arms.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionWaveArms" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
 (test wave-arms-stops-waving
   "Test 'stops waving' grammar"
   (let* ((script "INT SHIPS - CALYPSO2
@@ -231,6 +323,83 @@ NORVILLE stops waving.
          (forth-output (with-output-to-string (*standard-output*)
                          (compile-script-from-string script))))
     (is (search "ActionIdle" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test wave-arms-stops-waving-arms
+  "Test 'stops waving arms' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE stops waving arms.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionIdle" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+;; Test dancing actions
+(test dancing-starts-dancing
+  "Test 'starts dancing' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE starts dancing.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionDance" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test dancing-dances
+  "Test 'dances' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE dances.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionDance" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+(test dancing-stops-dancing
+  "Test 'stops dancing' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE stops dancing.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionIdle" forth-output))
+    (is (search "CharacterID_Norville" forth-output))
+    (is (search "character-action!" forth-output))))
+
+;; Test walking actions (checking for "starts walking")
+(test walking-starts-walking
+  "Test 'starts walking' grammar"
+  (let* ((script "INT SHIPS - CALYPSO2
+
+Open on: NORVILLE is at \"ChefCorner\". Then..
+
+NORVILLE starts walking to the north.
+
+> THE END")
+         (forth-output (with-output-to-string (*standard-output*)
+                         (compile-script-from-string script))))
+    (is (search "ActionWalking" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
