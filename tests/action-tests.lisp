@@ -1,14 +1,16 @@
 (in-package :skyline-tool)
 
+(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))
+
 (def-suite action-tests
-  :description "Tests for new character actions: gesture, panic, flying, wave-arms, dancing")
+  :description "Tests for character actions: gesture, panic, flying, wave-arms, dancing")
 
 (in-suite action-tests)
 
 ;; Test gesture actions
 (test gesture-starts-gesturing
   "Test 'starts gesturing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -23,7 +25,7 @@ NORVILLE starts gesturing.
 
 (test gesture-gestures
   "Test 'gestures' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -38,7 +40,7 @@ NORVILLE gestures.
 
 (test gesture-stops-gesturing
   "Test 'stops gesturing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -54,7 +56,7 @@ NORVILLE stops gesturing.
 ;; Test panic actions
 (test panic-starts-panicking
   "Test 'starts panicking' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -69,7 +71,7 @@ NORVILLE starts panicking.
 
 (test panic-panics
   "Test 'panics' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -84,7 +86,7 @@ NORVILLE panics.
 
 (test panic-stops-panicking
   "Test 'stops panicking' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -100,7 +102,7 @@ NORVILLE stops panicking.
 ;; Test flying actions (using PARROT as instructed)
 (test flying-starts-flying
   "Test 'starts flying' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: PARROT is at \"ChefCorner\". Then..
 
@@ -115,7 +117,7 @@ PARROT starts flying.
 
 (test flying-flies
   "Test 'flies' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: PARROT is at \"ChefCorner\". Then..
 
@@ -130,7 +132,7 @@ PARROT flies.
 
 (test flying-stops-flying
   "Test 'stops flying' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: PARROT is at \"ChefCorner\". Then..
 
@@ -146,7 +148,7 @@ PARROT stops flying.
 ;; Test dancing actions
 (test dancing-starts-dancing
   "Test 'starts dancing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -161,7 +163,7 @@ NORVILLE starts dancing.
 
 (test dancing-dances
   "Test 'dances' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -176,7 +178,7 @@ NORVILLE dances.
 
 (test dancing-stops-dancing
   "Test 'stops dancing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -192,7 +194,7 @@ NORVILLE stops dancing.
 ;; Test walking actions
 (test walking-starts-walking
   "Test 'starts walking' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -208,7 +210,7 @@ NORVILLE starts walking to \"Kitchen\".
 ;; Test wave-arms actions
 (test wave-arms-starts-waving
   "Test 'starts waving' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -223,7 +225,7 @@ NORVILLE starts waving.
 
 (test wave-arms-starts-waving-arms
   "Test 'starts waving arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -238,7 +240,7 @@ NORVILLE starts waving arms.
 
 (test wave-arms-starts-waving-his-arms
   "Test 'starts waving his arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -253,7 +255,7 @@ NORVILLE starts waving his arms.
 
 (test wave-arms-waves-arms
   "Test 'waves arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -268,7 +270,7 @@ NORVILLE waves arms.
 
 (test wave-arms-waves-his-arms
   "Test 'waves his arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -283,7 +285,7 @@ NORVILLE waves his arms.
 
 (test wave-arms-waves-her-arms
   "Test 'waves her arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -298,7 +300,7 @@ NORVILLE waves her arms.
 
 (test wave-arms-waves-their-arms
   "Test 'waves their arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -313,7 +315,7 @@ NORVILLE waves their arms.
 
 (test wave-arms-stops-waving
   "Test 'stops waving' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -328,7 +330,7 @@ NORVILLE stops waving.
 
 (test wave-arms-stops-waving-arms
   "Test 'stops waving arms' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
+  (let* ((script "INT SHIPS - AMS CALYPSO2
 
 Open on: NORVILLE is at \"ChefCorner\". Then..
 
@@ -341,67 +343,7 @@ NORVILLE stops waving arms.
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
-;; Test dancing actions
-(test dancing-starts-dancing
-  "Test 'starts dancing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
-
-NORVILLE starts dancing.
-
-> THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionDance" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
-
-(test dancing-dances
-  "Test 'dances' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
-
-Open on: NORVILLE is at \"ChefCorner\". Then..
-
-NORVILLE dances.
-
-> THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionDance" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
-
-(test dancing-stops-dancing
-  "Test 'stops dancing' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
-
-Open on: NORVILLE is at \"ChefCorner\". Then..
-
-NORVILLE stops dancing.
-
-> THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionIdle" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
-
-;; Test walking actions (checking for "starts walking")
-(test walking-starts-walking
-  "Test 'starts walking' grammar"
-  (let* ((script "INT SHIPS - CALYPSO2
-
-Open on: NORVILLE is at \"ChefCorner\". Then..
-
-NORVILLE starts walking to the north.
-
-> THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionWalking" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
 
 ;; Helper function for testing - avoid make dependencies
 (defun compile-script-from-string (script-string)
@@ -412,8 +354,8 @@ NORVILLE starts walking to the north.
             (*standard-output* output))
         ;; Mock the make-vars to avoid external dependencies
         (let ((*make-vars%* (make-hash-table :test 'equal)))
-          (compile-script input))))))
+          (compile-script input output))))))
 
 (defun run-action-tests ()
   "Run all action tests and return results"
-  (run! 'action-tests)) 
+  (fiveam:run! 'action-tests)) 

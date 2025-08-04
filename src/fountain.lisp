@@ -671,7 +671,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               dances dancing dark difference dim disembarks divided do dolly done down durbat
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
+              flies flying
               gains gets glass go goes grand grappling-hook greater
+              gestures gesturing
               hair hammer has head headed hear here hp hurt
               if imaginary in include inclusive is it
               knife
@@ -680,6 +682,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               magic mask minus moves moving
               natural negative next night none nor normal-lit normally north not nothing
               of on open or
+              panicking
               part pi picks pirate pitch player-armor-color
               player-hair-color player-skin-color playing plays plus
               potion positive power product purple
@@ -692,6 +695,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               under unless up upon
               value
               wait walking walks wand we weigh west when white with wrench wakes
+              waves waving
               yellow
               zero))
   :test 'equalp
@@ -808,7 +812,22 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                   (list 'emote '!)))
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
-                (list 'emote '?))))
+                (list 'emote '?)))
+     (gesturing (lambda (_gesturing)
+                  (declare (ignore _gesturing))
+                  (list 'gesture)))
+     (dancing (lambda (_dancing)
+                (declare (ignore _dancing))
+                (list 'dance)))
+     (flying (lambda (_flying)
+               (declare (ignore _flying))
+               (list 'fly)))
+     (panicking (lambda (_panicking)
+                  (declare (ignore _panicking))
+                  (list 'panic)))
+     (waving (lambda (_waving)
+               (declare (ignore _waving))
+               (list 'wave-arms))))
 
     (actor-condition
      (sweating (lambda (_sweating)
@@ -2429,34 +2448,23 @@ PlaySong EXECUTE "  song))))
               ok-label done-label))))
 
 (defstage dance (actor)
-  (destructuring-bind (&key name kind body found-in-scene-p &allow-other-keys)
-      (require-actor actor)
-    (unless (some (lambda (facing)
-                    (find-assigned-animation-sequence kind (or body 0) :dance facing))
-                  '(:north :south :east :west))
-      (cerror "Continue, ignoring dance request"
-              "Actor ~:(~a~) asked to dance but they have no dance frames" actor)
-      (return)))
-  (unless found-in-scene-p
-    (cerror "Continue, ignoring dance request"
-            "Actor ~:(~a~) asked to dance, but they are not in the scene" actor)
-    (return))
-  (let ((ok-label (genlabel "NoDance"))
-        (done-label (genlabel "DoneDance")))
-    (format t "~% CharacterID_~a ActionDance character-action!"
-            (pascal-case (string name))
-            ok-label done-label
-            ok-label done-label)))
+  "ACTOR should perform the "dance" action."
+  (perform-character-action actor "dance" "ActionDance"))
+   
 (defstage gesture (actor)
+  "ACTOR should perform the "gesture" action."
   (perform-character-action actor "gesture" "ActionGesture"))
 
 (defstage panic (actor)
+  "ACTOR should perform the "panic" action."
   (perform-character-action actor "panic" "ActionPanic"))
 
 (defstage fly (actor)
+  "ACTOR should perform the "fly" action."
   (perform-character-action actor "fly" "ActionFlying"))
 
 (defstage wave-arms (actor)
+  "ACTOR should perform the "wave arms" action."
   (perform-character-action actor "wave arms" "ActionWaveArms"))
 
 (defstage weather (&optional kind)
@@ -2464,6 +2472,7 @@ PlaySong EXECUTE "  song))))
   (push (list kind) *deferred-weather*))
 
 (defstage wake (actor)
+  "ACTOR should stop their current action and return to idle state."
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor actor)
     (unless found-in-scene-p
