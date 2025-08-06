@@ -5,13 +5,11 @@
 
 (require :asdf)
 
-;; Load FiveAM via ASDF
-(asdf:load-system :fiveam)
+(load "setup.lisp")
 
-;; Load the test system
-(asdf:load-system :skyline-tool/tests)
+(ql:quickload :fiveam)
+(ql:quickload :skyline-tool/test)
 
-;; Run the action tests
 (format t "~%Running Skyline-Tool action tests...~%")
-(fiveam:run! 'skyline-tool::action-tests)
+(fiveam:run! 'skyline-tool/test:action-tests)
 (format t "~%Tests completed.~%") 

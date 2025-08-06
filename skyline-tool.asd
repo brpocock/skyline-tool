@@ -85,7 +85,7 @@
                  (:file "interface")))))
 
 ;; Separate test system
-(asdf:defsystem :skyline-tool/tests
+(asdf:defsystem :skyline-tool/test
   :description "Tests for Skyline-Tool"
   :author "Bruce-Robert Pocock"
   :version "0.9.0"

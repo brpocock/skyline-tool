@@ -20,6 +20,7 @@
            #:compile-map
            #:compile-sound
            #:compile-music
+           #:compile-script
            #:command
            #:build-banking
            #:c

@@ -1,6 +1,9 @@
-(in-package :skyline-tool)
+(defpackage :skyline-tool/test
+  (:use :cl :skyline-tool :fiveam)
+  (:export #:action-tests))
+(in-package :skyline-tool/test)
 
-(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))
+#|(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))|#
 
 (def-suite action-tests
   :description "Tests for character actions: gesture, panic, flying, wave-arms, dancing")
