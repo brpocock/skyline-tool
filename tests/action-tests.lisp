@@ -10,6 +10,18 @@
 
 (in-suite action-tests)
 
+;; Helper function for testing - avoid make dependencies
+(defun compile-script-from-string (script-string)
+  "Compile a Fountain script from a string and return the Forth output"
+  (with-input-from-string (input script-string)
+    (with-output-to-string (output)
+      (let ((*standard-input* input)
+            (*standard-output* output))
+        ;; Mock the make-vars to avoid external dependencies
+        (let ((*make-vars%* (make-hash-table :test 'equal)))
+          (compile-script input output))))))
+
+
 ;; Test gesture actions
 (test gesture-starts-gesturing
   "Test 'starts gesturing' grammar"
@@ -326,41 +338,6 @@ NORVILLE stops waving arms.
 
 
 
-;; Helper function for testing - avoid make dependencies
-(defun compile-script-from-string (script-string)
-  "Compile a Fountain script from a string and return the Forth output"
-  (let ((original-cwd (uiop:getcwd))
-        temp-input temp-output)
-    (unwind-protect
-         (progn
-           ;; Change to Phantasia root directory for compilation
-           (uiop:chdir (uiop:pathname-parent-directory-pathname
-                        (asdf:system-source-directory :skyline-tool)))
-           (format t "~% Current working directory: ~s ~%" (uiop:getcwd))
-           (format t "~% Skyline-tool system directory: ~s ~%" (asdf:system-source-directory :skyline-tool))
-           (setf temp-input (uiop:with-temporary-file (:pathname input-path :stream input-stream
-                                                       :keep t)
-                              (write-string script-string input-stream)
-                              (close input-stream)
-                              input-path)
-                 temp-output (uiop:with-temporary-file (:pathname output-path :stream output-stream
-                                                        :keep t)
-                               (close output-stream)
-                               output-path))
-           (handler-case
-               (progn
-                 (compile-script temp-input temp-output)
-                 (if (uiop:file-exists-p temp-output)
-                     (uiop:read-file-string temp-output)
-                     "#<NO OUTPUT FILE>"))
-             (error (e)
-               (format nil "#<Compilation error: ~a>" e))))
-      ;; Restore original working directory
-      (when temp-input (uiop:delete-file-if-exists temp-input))
-      (when temp-output (uiop:delete-file-if-exists temp-output))
-      (uiop:chdir original-cwd))))
-
 (defun run-action-tests ()
   "Run all action tests and return results"
-  (fiveam:run! 'action-tests)) 
-nr
+  (fiveam:run! 'action-tests))
