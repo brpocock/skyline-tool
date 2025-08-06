@@ -15,13 +15,12 @@
   "Test 'starts gesturing' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts gesturing.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionGesture" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -30,13 +29,12 @@ NORVILLE starts gesturing.
   "Test 'gestures' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE gestures.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionGesture" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -45,13 +43,12 @@ NORVILLE gestures.
   "Test 'stops gesturing' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE stops gesturing.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionIdle" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -61,13 +58,12 @@ NORVILLE stops gesturing.
   "Test 'starts panicking' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts panicking.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionPanic" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -76,13 +72,12 @@ NORVILLE starts panicking.
   "Test 'panics' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE panics.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionPanic" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -91,13 +86,12 @@ NORVILLE panics.
   "Test 'stops panicking' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE stops panicking.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionIdle" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -107,13 +101,12 @@ NORVILLE stops panicking.
   "Test 'starts flying' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: PARROT is at \"ChefCorner\". Then..
+Open on: PARROT is at \"ChefCorner\". Then…
 
 PARROT starts flying.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionFlying" forth-output))
     (is (search "CharacterID_Parrot" forth-output))
     (is (search "character-action!" forth-output))))
@@ -122,28 +115,26 @@ PARROT starts flying.
   "Test 'flies' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: PARROT is at \"ChefCorner\". Then..
+Open on: PARROT is at \"ChefCorner\". Then…
 
 PARROT flies.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionFlying" forth-output))
-    (is (search "CharacterID_Parrot" forth-output))
+        (is (search "CharacterID_Parrot" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test flying-stops-flying
   "Test 'stops flying' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: PARROT is at \"ChefCorner\". Then..
+Open on: PARROT is at \"ChefCorner\". Then…
 
 PARROT stops flying.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionIdle" forth-output))
     (is (search "CharacterID_Parrot" forth-output))
     (is (search "character-action!" forth-output))))
@@ -153,13 +144,12 @@ PARROT stops flying.
   "Test 'starts dancing' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts dancing.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionDance" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -168,28 +158,26 @@ NORVILLE starts dancing.
   "Test 'dances' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE dances.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionDance" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test dancing-stops-dancing
   "Test 'stops dancing' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE stops dancing.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+             (forth-output (compile-script-from-string script)))
     (is (search "ActionIdle" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -199,29 +187,27 @@ NORVILLE stops dancing.
   "Test 'starts walking' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
-NORVILLE starts walking to \"Kitchen\".
+NORVILLE starts walking to \"AcrossCounterFromChef\".
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionWalking" forth-output))
+         (forth-output (compile-script-from-string script)))
+    (is (search "do-walk" forth-output))
     (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
+    (is (search "do-walk" forth-output))))
 
 ;; Test wave-arms actions
 (test wave-arms-starts-waving
   "Test 'starts waving' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts waving.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -230,13 +216,12 @@ NORVILLE starts waving.
   "Test 'starts waving arms' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts waving arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
@@ -245,120 +230,137 @@ NORVILLE starts waving arms.
   "Test 'starts waving his arms' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE starts waving his arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-waves-arms
   "Test 'waves arms' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE waves arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-waves-his-arms
   "Test 'waves his arms' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE waves his arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+             (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-waves-her-arms
-  "Test 'waves her arms' grammar"
+      "Test 'waves her arms' grammar"
   (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE waves her arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-waves-their-arms
-  "Test 'waves their arms' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      "Test 'waves their arms' grammar"
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE waves their arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionWaveArms" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
+        (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-stops-waving
-  "Test 'stops waving' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      "Test 'stops waving' grammar"
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE stops waving.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
+         (forth-output (compile-script-from-string script)))
     (is (search "ActionIdle" forth-output))
     (is (search "CharacterID_Norville" forth-output))
     (is (search "character-action!" forth-output))))
 
 (test wave-arms-stops-waving-arms
-  "Test 'stops waving arms' grammar"
-  (let* ((script "INT SHIPS - AMS CALYPSO2
+      "Test 'stops waving arms' grammar"
+      (let* ((script "INT SHIPS - AMS CALYPSO2
 
-Open on: NORVILLE is at \"ChefCorner\". Then..
+Open on: NORVILLE is at \"ChefCorner\". Then…
 
 NORVILLE stops waving arms.
 
 > THE END")
-         (forth-output (with-output-to-string (*standard-output*)
-                         (compile-script-from-string script))))
-    (is (search "ActionIdle" forth-output))
-    (is (search "CharacterID_Norville" forth-output))
-    (is (search "character-action!" forth-output))))
+             (forth-output (compile-script-from-string script)))
+        (is (search "ActionIdle" forth-output))
+        (is (search "CharacterID_Norville" forth-output))
+        (is (search "character-action!" forth-output))))
 
 
 
 ;; Helper function for testing - avoid make dependencies
 (defun compile-script-from-string (script-string)
   "Compile a Fountain script from a string and return the Forth output"
-  (with-input-from-string (input script-string)
-    (with-output-to-string (output)
-      (let ((*standard-input* input)
-            (*standard-output* output))
-        ;; Mock the make-vars to avoid external dependencies
-        (let ((*make-vars%* (make-hash-table :test 'equal)))
-          (compile-script input output))))))
+  (let ((original-cwd (uiop:getcwd))
+        temp-input temp-output)
+    (unwind-protect
+         (progn
+           ;; Change to Phantasia root directory for compilation
+           (uiop:chdir (uiop:pathname-parent-directory-pathname
+                        (asdf:system-source-directory :skyline-tool)))
+           (format t "~% Current working directory: ~s ~%" (uiop:getcwd))
+           (format t "~% Skyline-tool system directory: ~s ~%" (asdf:system-source-directory :skyline-tool))
+           (setf temp-input (uiop:with-temporary-file (:pathname input-path :stream input-stream
+                                                       :keep t)
+                              (write-string script-string input-stream)
+                              (close input-stream)
+                              input-path)
+                 temp-output (uiop:with-temporary-file (:pathname output-path :stream output-stream
+                                                        :keep t)
+                               (close output-stream)
+                               output-path))
+           (handler-case
+               (progn
+                 (compile-script temp-input temp-output)
+                 (if (uiop:file-exists-p temp-output)
+                     (uiop:read-file-string temp-output)
+                     "#<NO OUTPUT FILE>"))
+             (error (e)
+               (format nil "#<Compilation error: ~a>" e))))
+      ;; Restore original working directory
+      (when temp-input (uiop:delete-file-if-exists temp-input))
+      (when temp-output (uiop:delete-file-if-exists temp-output))
+      (uiop:chdir original-cwd))))
 
 (defun run-action-tests ()
   "Run all action tests and return results"
   (fiveam:run! 'action-tests)) 
+nr

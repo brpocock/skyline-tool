@@ -664,7 +664,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a an aboard above absolute alarmed all amulet and appears arrow arrows armor at awakens
+              a an aboard above absolute alarmed all amulet and appears arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
@@ -674,7 +674,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               flies flying
               gains gets glass go goes grand grappling-hook greater
               gestures gesturing
-              hair hammer has head headed hear here hp hurt
+              hair hammer has head headed hear her here his hp hurt
               if imaginary in include inclusive is it
               knife
               large launch left less like lit logand logarithm logical
@@ -682,7 +682,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               magic mask minus moves moving
               natural negative next night none nor normal-lit normally north not nothing
               of on open or
-              panicking
+              panics panicking
               part pi picks pirate pitch player-armor-color
               player-hair-color player-skin-color playing plays plus
               potion positive power product purple
@@ -691,7 +691,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               second seconds see set shadow shield shift ship sleeps sleep
               skin sloop slowly small staff south 
               square starts stops suddenly sum surprised sweating sword
-              than the then times to torch truck tunic
+              than the their then times to torch truck tunic
               under unless up upon
               value
               wait walking walks wand we weigh west when white with wrench wakes

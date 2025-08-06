@@ -5,11 +5,14 @@
 
 (require :asdf)
 
-(load "setup.lisp")
+(load "SkylineTool/setup.lisp")
 
 (ql:quickload :fiveam)
 (ql:quickload :skyline-tool/test)
 
 (format t "~%Running Skyline-Tool action tests...~%")
+
+(uiop:chdir (uiop:pathname-parent-directory-pathname
+              (asdf:system-source-directory :skyline-tool)))
 (fiveam:run! 'skyline-tool/test:action-tests)
 (format t "~%Tests completed.~%") 
