@@ -169,12 +169,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "Play SOUND"
     (declare (ignore we hear))
     (list 'hear sound))
-  
+
   (defun stage/song-plays (song plays)
     "Play SONG once"
     (declare (ignore plays))
     (list 'music 'incidental song))
-  
+
   (defun stage/song-starts-playing (song starts playing)
     "Begin playing SONG"
     (declare (ignore starts playing))
@@ -642,7 +642,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
   (defun stage/empty-boat (the ship-name appears in _the east/west headed for actor/location)
     (declare (ignore the appears in _the headed for))
-    (list 'boat ship-name east/west actor/location nil)) 
+    (list 'boat ship-name east/west actor/location nil))
 
   (defun stage/full-boat (the ship-name appears in _the east/west with actors aboard
                           headed to/for actor/location)
@@ -689,7 +689,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe rope root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
-              skin sloop slowly small staff south 
+              skin sloop slowly small staff south
               square starts stops suddenly sum surprised sweating sword
               than the their then times to torch truck tunic
               under unless up upon
@@ -776,7 +776,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (cut to center on actor/location)
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
-    
+
     (actor-is-clause (someone is actor-coda
                               (lambda (someone _is coda)
                                 (declare (ignore _is))
@@ -845,7 +845,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-    
+
     (pick-up-clause (actor picks up article quoted
                            (lambda (actor _picks _up _an item)
                              (declare (ignore _picks _up _an))
@@ -854,7 +854,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                            (lambda (actor _picks _up item)
                              (declare (ignore _picks _up))
                              (list 'pick-up actor item))))
-    
+
     (equip-clause (actor equips item-name
                          (lambda (actor _equips item)
                            (declare (ignore _equips))
@@ -863,17 +863,17 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                          (lambda (actor _equips _article item)
                            (declare (ignore _equips _article))
                            (list 'equip actor item))))
-    
+
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
                bow torch chalice staff wand rope glass wrench)
-    
+
     (article a an the)
-    
+
     (around-here here
                  out
                  (around here))
-    
+
     (weather-condition raining)
 
     (weather-clause (it is clear (lambda (&rest _)
@@ -1780,7 +1780,7 @@ the game console:
 The prepared text would be
 “~a”,
 which would be rendered from approximately
-“~a” 
+“~a”
 as
 “~a”"
               prepared
@@ -2452,7 +2452,7 @@ PlaySong EXECUTE "  song))))
 (defstage dance (actor)
   "ACTOR should perform the "dance" action."
   (perform-character-action actor "dance" "ActionDance"))
-   
+
 (defstage gesture (actor)
   "ACTOR should perform the "gesture" action."
   (perform-character-action actor "gesture" "ActionGesture"))
@@ -2552,7 +2552,7 @@ PlaySong EXECUTE "  song))))
       (unless found-in-scene-p
         (cerror "Continue, ignoring “exit” direction"
                 "Asked for ~:(~a~) to exit the scene, which they were not in" name)
-        (return)) 
+        (return))
       (format t "~% CharacterID_~a exit-character"
               (pascal-case (string name))
               not-found-character-label))))
@@ -2567,7 +2567,7 @@ PlaySong EXECUTE "  song))))
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
               (format t "~% CharacterID_~a find-character entity-decal@ DUP
-127 SWAP DecalXH SWAP decal! 
+127 SWAP DecalXH SWAP decal!
 127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
@@ -3020,7 +3020,7 @@ update-one-decal"
   (format t " C\" ~a\"
 0 ( TODO: #1222 SpeakJet )
 do-branching-dialogue ~a"
-          text 
+          text
           (if (string-equal "CONTINUE" option)
               "0 ( continue )"
               (concatenate 'string "ScriptLabel_"
@@ -3148,7 +3148,7 @@ FadeColor~:(~a~) FadingTarget C!"
                                  (enough-namestring forth))
                          (force-output *trace-output*)
                          (with-output-to-file (*standard-output* forth :if-does-not-exist :create
-                                                                       :if-exists :supersede) 
+                                                                       :if-exists :supersede)
                            (with-forth-file-wrappers ()
                              (compile-fountain-script from)))
                          (format *trace-output* " Forth script ready to compile.")
