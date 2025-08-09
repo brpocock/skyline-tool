@@ -8,7 +8,7 @@
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT" ; if this poses a problem, ask me for a waiver.
   :long-name "The Skyline tools for building ARPG's for Atari 2600 and more"
-  
+
   :depends-on ( ;; broken into lines for easier sorting
                :alexandria
                :bordeaux-threads
@@ -16,7 +16,7 @@
                :cl-base64
                :cl-change-case
                :cl-json
-               :cl-ppcre 
+               :cl-ppcre
                :clim-listener
                :clim-debugger
                :clods-export
@@ -41,11 +41,11 @@
                :yacc
                :zip
                )
-  
+
   :encoding :utf-8
-  
+
   :serial t
-  
+
   :components
   (;;(:file "gray-streams-pipe")
    (:module "src"
@@ -91,4 +91,5 @@
   :version "0.9.0"
   :depends-on (:skyline-tool :fiveam)
   :components ((:module "tests"
-                :components ((:file "action-tests")))))
+                :components ((:file "action-tests")
+                             (:file "text-transcription-tests")))))

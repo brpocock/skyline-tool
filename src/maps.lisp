@@ -1133,6 +1133,12 @@ range is 0 - #xffffffff (4,294,967,295)"
   :test 'string=)
 
 (defun char->minifont (char)
+  ;; Treat pilcrow (¶) as a space for minifont encoding. The pilcrow is a
+  ;; control/markup character in scripts, not a glyph in the minifont. Mapping
+  ;; it to space ensures validation/round-trip checks don't falsely fail while
+  ;; preserving layout semantics.
+  (when (char= char #\¶)
+    (setf char #\Space))
   (cond
     ((or (char<= #\0 char #\9)
          (char<= #\a char #\z)
