@@ -169,12 +169,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "Play SOUND"
     (declare (ignore we hear))
     (list 'hear sound))
-  
+
   (defun stage/song-plays (song plays)
     "Play SONG once"
     (declare (ignore plays))
     (list 'music 'incidental song))
-  
+
   (defun stage/song-starts-playing (song starts playing)
     "Begin playing SONG"
     (declare (ignore starts playing))
@@ -642,7 +642,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
   (defun stage/empty-boat (the ship-name appears in _the east/west headed for actor/location)
     (declare (ignore the appears in _the headed for))
-    (list 'boat ship-name east/west actor/location nil)) 
+    (list 'boat ship-name east/west actor/location nil))
 
   (defun stage/full-boat (the ship-name appears in _the east/west with actors aboard
                           headed to/for actor/location)
@@ -664,15 +664,17 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a an aboard above absolute alarmed all amulet and appears arrow arrows armor at awakens
+              a an aboard above absolute alarmed all amulet and appears arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
               dances dancing dark difference dim disembarks divided do dolly done down durbat
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
+              flies flying
               gains gets glass go goes grand grappling-hook greater
-              hair hammer has head headed hear here hp hurt
+              gestures gesturing
+              hair hammer has head headed hear her here his hp hurt
               if imaginary in include inclusive is it
               knife
               large launch left less like lit logand logarithm logical
@@ -680,18 +682,20 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               magic mask minus moves moving
               natural negative next night none nor normal-lit normally north not nothing
               of on open or
+              panics panicking
               part pi picks pirate pitch player-armor-color
               player-hair-color player-skin-color playing plays plus
               potion positive power product purple
               quickly quotient
               raining raise raised ready real red red-lit repeat right ring robe rope root round rowboat
               second seconds see set shadow shield shift ship sleeps sleep
-              skin sloop slowly small staff south 
+              skin sloop slowly small staff south
               square starts stops suddenly sum surprised sweating sword
-              than the then times to torch truck tunic
+              than the their then times to torch truck tunic
               under unless up upon
               value
               wait walking walks wand we weigh west when white with wrench wakes
+              waves waving
               yellow
               zero))
   :test 'equalp
@@ -733,10 +737,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
                           	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
                                                        (declare (ignore _intro _ellipsis _closing _ellipsout))
-                                                       (list 'prepare directions)))
-                           (preparation-introduction statement (lambda (_intro statement)
-                                                                 (declare (ignore _intro))
-                                                                 (list 'prepare statement))))
+                                                       (list 'prepare directions))))
     (preparation-introduction (we open on) (open on) (we find) (we see))
     (preparation-closing then suddenly next)
     (ellipsis (|.| |.| |.|) |…| skyline-tool::|:|)
@@ -775,7 +776,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
             (cut to center on actor/location)
             (at numeric / second |,| truck/dolly)
             jump-to-other-file-clause)
-    
+
     (actor-is-clause (someone is actor-coda
                               (lambda (someone _is coda)
                                 (declare (ignore _is))
@@ -811,7 +812,22 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                   (list 'emote '!)))
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
-                (list 'emote '?))))
+                (list 'emote '?)))
+     (gesturing (lambda (_gesturing)
+                  (declare (ignore _gesturing))
+                  (list 'gesture)))
+     (dancing (lambda (_dancing)
+                (declare (ignore _dancing))
+                (list 'dance)))
+     (flying (lambda (_flying)
+               (declare (ignore _flying))
+               (list 'fly)))
+     (panicking (lambda (_panicking)
+                  (declare (ignore _panicking))
+                  (list 'panic)))
+     (waving (lambda (_waving)
+               (declare (ignore _waving))
+               (list 'wave-arms))))
 
     (actor-condition
      (sweating (lambda (_sweating)
@@ -829,7 +845,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (puzzled (lambda (_surprised)
                 (declare (ignore _surprised))
                 (list 'emote '?))))
-    
+
     (pick-up-clause (actor picks up article quoted
                            (lambda (actor _picks _up _an item)
                              (declare (ignore _picks _up _an))
@@ -838,7 +854,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                            (lambda (actor _picks _up item)
                              (declare (ignore _picks _up))
                              (list 'pick-up actor item))))
-    
+
     (equip-clause (actor equips item-name
                          (lambda (actor _equips item)
                            (declare (ignore _equips))
@@ -847,17 +863,17 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                          (lambda (actor _equips _article item)
                            (declare (ignore _equips _article))
                            (list 'equip actor item))))
-    
+
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
                bow torch chalice staff wand rope glass wrench)
-    
+
     (article a an the)
-    
+
     (around-here here
                  out
                  (around here))
-    
+
     (weather-condition raining)
 
     (weather-clause (it is clear (lambda (&rest _)
@@ -1170,6 +1186,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                           #'stage/walks-relative)
                  (someone moves relative-position
                           #'stage/walks-relative)
+                                  ;; Start patterns
                  (someone starts walking relative-position
                           #'stage/start-walk-relative)
                  (someone starts moving relative-position
@@ -1177,12 +1194,77 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                  (someone starts dancing (lambda (someone &rest _)
                                            (declare (ignore _))
                                            (list 'dance someone)))
+                 (someone starts flying (lambda (someone &rest _)
+                                          (declare (ignore _))
+                                          (list 'fly someone)))
+                 (someone starts waving (lambda (someone &rest _)
+                                          (declare (ignore _))
+                                          (list 'wave-arms someone)))
+                 (someone starts waving arms (lambda (someone &rest _)
+                                               (declare (ignore _))
+                                               (list 'wave-arms someone)))
+                 (someone starts waving his arms (lambda (someone &rest _)
+                                                   (declare (ignore _))
+                                                   (list 'wave-arms someone)))
+                 (someone starts waving her arms (lambda (someone &rest _)
+                                                   (declare (ignore _))
+                                                   (list 'wave-arms someone)))
+                 (someone starts waving their arms (lambda (someone &rest _)
+                                                     (declare (ignore _))
+                                                     (list 'wave-arms someone)))
+                 (someone starts gesturing (lambda (someone &rest _)
+                                              (declare (ignore _))
+                                              (list 'gesture someone)))
+                 (someone starts panicking (lambda (someone &rest _)
+                                              (declare (ignore _))
+                                              (list 'panic someone)))
+                 ;; Stop patterns
                  (someone stops dancing (lambda (someone &rest _)
                                           (declare (ignore _))
                                           (list 'wake someone)))
+                 (someone stops flying (lambda (someone &rest _)
+                                         (declare (ignore _))
+                                         (list 'wake someone)))
+                 (someone stops waving (lambda (someone &rest _)
+                                         (declare (ignore _))
+                                         (list 'wake someone)))
+                 (someone stops waving arms (lambda (someone &rest _)
+                                              (declare (ignore _))
+                                              (list 'wake someone)))
+                 (someone stops gesturing (lambda (someone &rest _)
+                                             (declare (ignore _))
+                                             (list 'wake someone)))
+                 (someone stops panicking (lambda (someone &rest _)
+                                             (declare (ignore _))
+                                             (list 'wake someone)))
+                 ;; Action patterns
                  (someone dances (lambda (someone &rest _)
                                    (declare (ignore _))
-                                   (list 'dance someone))))
+                                   (list 'dance someone)))
+                 (someone flies (lambda (someone &rest _)
+                                  (declare (ignore _))
+                                  (list 'fly someone)))
+                 (someone waves (lambda (someone &rest _)
+                                  (declare (ignore _))
+                                  (list 'wave-arms someone)))
+                 (someone waves arms (lambda (someone &rest _)
+                                       (declare (ignore _))
+                                       (list 'wave-arms someone)))
+                 (someone waves his arms (lambda (someone &rest _)
+                                           (declare (ignore _))
+                                           (list 'wave-arms someone)))
+                 (someone waves her arms (lambda (someone &rest _)
+                                           (declare (ignore _))
+                                           (list 'wave-arms someone)))
+                 (someone waves their arms (lambda (someone &rest _)
+                                             (declare (ignore _))
+                                             (list 'wave-arms someone)))
+                 (someone gestures (lambda (someone &rest _)
+                                      (declare (ignore _))
+                                      (list 'gesture someone)))
+                 (someone panics (lambda (someone &rest _)
+                                    (declare (ignore _))
+                                    (list 'panic someone))))
     (relative-position step-distance
                        (to location
                            #'stage/relative-to)
@@ -1686,6 +1768,8 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
               "{’s}")
              "\\1\\2")
             ""))))
+    ;; For round-trip validation, treat pilcrow (¶) as a space in the minifont
+    ;; domain. Pilcrow is used as paragraph markup and has no minifont glyph.
     (let* ((no~ (remove #\} (remove #\{ (substitute #\Space #\¶ (remove #\~ (string-downcase prepared))))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
@@ -1696,7 +1780,7 @@ the game console:
 The prepared text would be
 “~a”,
 which would be rendered from approximately
-“~a” 
+“~a”
 as
 “~a”"
               prepared
@@ -2205,6 +2289,14 @@ but now also ~s."
 
 (defvar *current-scene* nil)
 (defvar *actors* nil)
+(defvar *deferred-weather* nil
+  "Holds weather-related stage directions or data that are deferred during scene preparation.
+Expected format: a list of weather stage direction forms or data structures to be processed later.
+Lifecycle: Set to NIL at the start of scene preparation, populated as weather directives are encountered,
+and processed/applied at the appropriate point in the scene setup.")
+
+(defvar *deferred-weather-lock* (sb-thread:make-mutex :name "deferred-weather-lock")
+  "Mutex for protecting access to *deferred-weather* during concurrent operations.")
 
 (defgeneric compile-stage-direction (fun args)
   (:method ((fun t) (args t))
@@ -2310,6 +2402,12 @@ PlaySong EXECUTE "  song))))
 (defstage prepare (&rest directions)
   (format t "~%prepare-scene ")
   (map nil #'stage-directions->code directions)
+  ;; Emit any deferred weather commands just before scene-ready
+  (sb-thread:with-mutex (*deferred-weather-lock*)
+    (dolist (weather-command (reverse *deferred-weather*))
+      (format t "~% Weather~:(~a~) weather!"
+              (pascal-case (string (or (first weather-command) "None")))))
+    (setf *deferred-weather* nil))
   (format t " scene-ready~%"))
 
 (defstage lighting-change (target &optional (speed 'normal))
@@ -2335,24 +2433,49 @@ PlaySong EXECUTE "  song))))
               ok-label done-label
               ok-label done-label))))
 
-(defstage dance (actor)
-  (destructuring-bind (&key name kind body found-in-scene-p &allow-other-keys)
+(defun perform-character-action (actor action-verb action-enum)
+  "Base function for character actions that sets the action enum and generates character-action! call"
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor actor)
     (unless found-in-scene-p
-      (cerror "Continue, ignoring dance request"
-              "Actor ~:(~a~) asked to dance, but they are not in the scene" actor)
-      (return))
-    (let ((ok-label (genlabel "NoDance"))
-          (done-label (genlabel "DoneDance")))
-      (format t "~% CharacterID_~a ActionDance character-action!"
+
+      (cerror "Continue, ignoring ~a request"
+              "Actor ~:(~a~) asked to ~a, but they are not in the scene" actor action-verb)
+      (return-from perform-character-action))
+    (let ((ok-label (genlabel (string-capitalize action-verb)))
+          (done-label (genlabel (format nil "Done~a" (string-capitalize action-verb)))))
+      (format t "~% CharacterID_~a ~a character-action!"
               (pascal-case (string name))
+              action-enum
               ok-label done-label
               ok-label done-label))))
 
+(defstage dance (actor)
+  "ACTOR should perform the "dance" action."
+  (perform-character-action actor "dance" "ActionDance"))
+
+(defstage gesture (actor)
+  "ACTOR should perform the "gesture" action."
+  (perform-character-action actor "gesture" "ActionGesture"))
+
+(defstage panic (actor)
+  "ACTOR should perform the "panic" action."
+  (perform-character-action actor "panic" "ActionPanic"))
+
+(defstage fly (actor)
+  "ACTOR should perform the "fly" action."
+  (perform-character-action actor "fly" "ActionFlying"))
+
+(defstage wave-arms (actor)
+  "ACTOR should perform the "wave arms" action."
+  (perform-character-action actor "wave arms" "ActionWaveArms"))
+
 (defstage weather (&optional kind)
-  (format t "~% Weather~:(~a~) weather! " (or kind "None")))
+  ;; Store the weather command to be emitted after load-map
+  (push (list kind) *deferred-weather*))
 
 (defstage wake (actor)
+  "ACTOR should stop their current action and return to idle state."
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
       (require-actor actor)
     (unless found-in-scene-p
@@ -2430,7 +2553,7 @@ PlaySong EXECUTE "  song))))
       (unless found-in-scene-p
         (cerror "Continue, ignoring “exit” direction"
                 "Asked for ~:(~a~) to exit the scene, which they were not in" name)
-        (return)) 
+        (return))
       (format t "~% CharacterID_~a exit-character"
               (pascal-case (string name))
               not-found-character-label))))
@@ -2445,7 +2568,7 @@ PlaySong EXECUTE "  song))))
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
               (format t "~% CharacterID_~a find-character entity-decal@ DUP
-127 SWAP DecalXH SWAP decal! 
+127 SWAP DecalXH SWAP decal!
 127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
@@ -2851,6 +2974,7 @@ update-one-decal"
                                   (split-sequence #\/ value))))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
+
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
@@ -2897,7 +3021,7 @@ update-one-decal"
   (format t " C\" ~a\"
 0 ( TODO: #1222 SpeakJet )
 do-branching-dialogue ~a"
-          text 
+          text
           (if (string-equal "CONTINUE" option)
               "0 ( continue )"
               (concatenate 'string "ScriptLabel_"
@@ -3025,7 +3149,7 @@ FadeColor~:(~a~) FadingTarget C!"
                                  (enough-namestring forth))
                          (force-output *trace-output*)
                          (with-output-to-file (*standard-output* forth :if-does-not-exist :create
-                                                                       :if-exists :supersede) 
+                                                                       :if-exists :supersede)
                            (with-forth-file-wrappers ()
                              (compile-fountain-script from)))
                          (format *trace-output* " Forth script ready to compile.")

@@ -280,7 +280,7 @@
                         (12 "Block 2 NPC")
                         (13 "Block 3 NPC")
                         (14 "Block 4 NPC")
-                        (15 "(reserved for expansion)")
+                        (15 "(Reserved for expansion)")
                         (otherwise "(invalid)")))))
 
 (defun decode-object (dump &optional offset everything)

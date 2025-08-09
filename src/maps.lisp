@@ -797,7 +797,7 @@ Update map/s or script to agree with one another and DO-OVER."
                (cond ((eql t value) (set-bit byte bit))
                      ((eql :off value) (clear-bit byte bit))
                      (t (warn "Unrecognized value ~s for property ~s" value property))))))
-    
+
     (when (tile-collision-p xml 4 0) (set-bit 0 #x01))
     (when (tile-collision-p xml 4 15) (set-bit 0 #x02))
     (when (tile-collision-p xml 0 7) (set-bit 0 #x04))
@@ -1133,6 +1133,12 @@ range is 0 - #xffffffff (4,294,967,295)"
   :test 'string=)
 
 (defun char->minifont (char)
+  ;; Treat pilcrow (¶) as a space for minifont encoding. The pilcrow is a
+  ;; control/markup character in scripts, not a glyph in the minifont. Mapping
+  ;; it to space ensures validation/round-trip checks don't falsely fail while
+  ;; preserving layout semantics.
+  (when (char= char #\¶)
+    (setf char #\Space))
   (cond
     ((or (char<= #\0 char #\9)
          (char<= #\a char #\z)
@@ -1250,7 +1256,7 @@ range is 0 - #xffffffff (4,294,967,295)"
       (assert (< (fill-pointer s) #xc00) ()
               "Overflow (to ~:d byte~:p) in attributes table when trying to add ~s (from among ~:d attribute~:p)"
               (fill-pointer s) attr (length attributes-table)))
-    
+
     ;; exits list
     (setf (fill-pointer s) #xc00)
     (dolist (exit exits-table)
