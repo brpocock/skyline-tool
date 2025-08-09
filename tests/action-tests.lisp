@@ -13,13 +13,12 @@
 ;; Helper function for testing - avoid make dependencies
 (defun compile-script-from-string (script-string)
   "Compile a Fountain script from a string and return the Forth output"
-  (with-input-from-string (input script-string)
-    (with-output-to-string (output)
-      (let ((*standard-input* input)
-            (*standard-output* output))
-        ;; Mock the make-vars to avoid external dependencies
-        (let ((*make-vars%* (make-hash-table :test 'equal)))
-          (compile-script input output))))))
+  (with-output-to-string (output)
+    (let ((*standard-output* output))
+    ;; This is really bad form, since we're reaching under its
+    ;; skirt and yanking the crank directly, but it seems to work
+    ;; for now, so I'll accept it.
+      (skyline-tool::compile-fountain-string script-string))))
 
 
 ;; Test gesture actions
