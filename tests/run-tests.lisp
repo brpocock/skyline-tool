@@ -5,7 +5,9 @@
 
 (require :asdf)
 
-(load "SkylineTool/setup.lisp")
+(load (make-pathname :defaults *load-pathname*
+                     :directory (list :relative "SkylineTool")
+                     :name "setup" :type "lisp"))
 
 (ql:quickload :fiveam)
 (ql:quickload :skyline-tool/test)
