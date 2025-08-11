@@ -2134,9 +2134,9 @@ but now also ~s."
   (cond
     ((and (eql kind 'sailor)
           (let ((n (ignore-errors (parse-number body))))
-            (or (null n) (not (<= 0 n 7)))))
+            (or (null n) (not (<= 0 n 8)))))
      (cerror "Continue with sailor “0”"
-             "Sailor body should be 0-7, but got “~a”~@[ for actor ~:(~a~)~]"
+             "Sailor body should be 0-8, but got “~a”~@[ for actor ~:(~a~)~]"
              body name)
      0)
     ((eql kind 'sailor)
