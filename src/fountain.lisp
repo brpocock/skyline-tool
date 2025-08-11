@@ -1770,7 +1770,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
             ""))))
     ;; For round-trip validation, treat pilcrow (¶) as a space in the minifont
     ;; domain. Pilcrow is used as paragraph markup and has no minifont glyph.
-    (let* ((no~ (remove #\} (remove #\{ (substitute #\Space #\¶ (remove #\~ (string-downcase prepared))))))
+    (let* ((no~ (remove #\} (remove #\{ (remove #\~ (string-downcase prepared)))))
            (back+forth (ignore-errors (minifont->unicode
                                        (unicode->minifont no~)))))
       (assert (string-equal no~ back+forth)
