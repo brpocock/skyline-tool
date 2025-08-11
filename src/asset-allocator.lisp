@@ -1390,7 +1390,7 @@ EndOfBinary = *
                                      ((every #'digit-char-p value)
                                       (parse-integer value))
                                      (t 0))))
-                       (when (<= low number high)
+                       (when (and (<= low number high) (not (ends-with-subseq "_ID" label)))
                          (setf (gethash number table) label)))))
           (loop for number in (sort (copy-list (hash-table-keys table)) #'<)
                 for label = (gethash number table) 
