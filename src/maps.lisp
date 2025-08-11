@@ -1137,14 +1137,14 @@ range is 0 - #xffffffff (4,294,967,295)"
   ;; control/markup character in scripts, not a glyph in the minifont. Mapping
   ;; it to space ensures validation/round-trip checks don't falsely fail while
   ;; preserving layout semantics.
-  (when (char= char #\¶)
-    (setf char #\Space))
   (cond
     ((or (char<= #\0 char #\9)
          (char<= #\a char #\z)
          (char<= #\A char #\Z))
      (digit-char-p char 36))
-    ((char= #\apostrophe char)
+    ((char= char #\¶)
+     #xd2)
+    ((char= char #\apostrophe)
      (if-let (n #.(position #\’ +minifont-punctuation+ :test #'char=))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
@@ -1153,11 +1153,12 @@ range is 0 - #xffffffff (4,294,967,295)"
          (error "Cannot encode character “~:c” (~a) in minifont"
                 char (sentence-case (char-name char)))))))
 
-(defun minifont->char (byte &key replace)
+(defun minifont->char (byte &key (replace #\❓))
   (unless replace
-    (check-type byte (integer 0 127) "a minifont character value (0-127)"))
+    (check-type byte (or (integer 0 127) (integer #xd2 #xd2)) "a minifont character value (0-127 or $d2)"))
   (cond
     ((<= 0 byte 35) (format nil "~36r" byte))
+    ((= #xd2 byte) "¶")
     ((or (< byte 0) (> byte 127)) (string replace))
     ((= #x70 byte) "I’")
     ((= #x71 byte) "ll")
