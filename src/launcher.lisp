@@ -169,7 +169,7 @@ asset) changes, this may work."
                              (dump-peek (+ 2 break-signal) mem)
                              (dump-peek (+ 3 break-signal) mem))))
       (unless (every #'zerop break-bytes)
-        (let ((break-code (coerce (mapcar #'minifont->char break-bytes) 'string)))
+        (let ((break-code (minifont->unicode break-bytes :replace #\?)))
           (format t "~2%A DebugBreak occurred, which will result in the crash screen.
 The signal code was ~a" break-code)
           (explain-error-code break-code))))
