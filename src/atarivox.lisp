@@ -58,6 +58,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                                          :stop-bits 1))))
     (unless (cserial-port::%valid-fd-p (cserial-port::stream-serial port))
       (error "Invalid port? ~a ⇒ ~a" pathname port))
+    (write-bytes #(31 28 0) port)
     (list pathname port)))
 
 (defun spawn-thread-to-look-for-atarivox-on-port (pathname)
@@ -94,8 +95,9 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
 (defun convert-atarivox-bytes (tokens)
   (let ((token-values (read-speakjet-tokens)))
     (mapcar (lambda (token$)
-              (when (string= "SpeakJet." token$ :end2 (min 9 (length token$)))
-                (gethash (subseq token$ 9) token-values)))
+              (if (string= "SpeakJet." token$ :end2 (min 9 (length token$)))
+                  (gethash (subseq token$ 9) token-values)
+                  (gethash token$ token-values)))
             tokens)))
 
 (defun atarivox-speak (phrase)
@@ -109,9 +111,9 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
 
 (clim:define-application-frame read-script-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
-  (:panes (script-list-pane :application :height 700 :width 450
+  (:panes (script-list-pane :application :height 700 :width 750
                                          :display-function 'display-script-list)
-          (interactor :interactor :height 125 :width 450))
+          (interactor :interactor :height 125 :width 750))
   (:layouts (default (clim:vertically () script-list-pane interactor))))
 
 (define-read-script-frame-command (com-read-script :menu t :name t)
@@ -138,10 +140,12 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                                 (every #'upper-case-p (remove-if-not #'alpha-char-p line)))
                            (destructuring-bind (char-name &rest _)
                                (split-sequence #\Space (string-trim " " line))
+                             (declare (ignore _))
                              (format t "~& Speaker: ~a" char-name)
                              (let* ((stats (cond
                                              ((char= #\> (char char-name 0)) nil)
-                                             ((string-equal "NARRATOR" char-name)
+                                             ((or (string-equal "NARRATOR" char-name)
+                                                  (string-equal "PLAYER" char-name))
                                               (list :speed 96
                                                     :pitch 114
                                                     :bend 88))
