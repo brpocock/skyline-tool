@@ -732,7 +732,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                               (declare (ignore _stop))
                               clauses))
                (repeat numeric times skyline-tool::|:| clauses
-                 #'stage/repeat)
+                       #'stage/repeat)
                preparation-paragraph)
     (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
                           	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
@@ -866,7 +866,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
     (item-name nothing knife shield (small shield)
                hammer potion sword (large shield) (no shield)
-               bow torch chalice staff wand rope glass wrench)
+               bow torch chalice staff wand rope glass wrench) ; TODO all items
 
     (article a an the)
 
@@ -1186,7 +1186,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                           #'stage/walks-relative)
                  (someone moves relative-position
                           #'stage/walks-relative)
-                                  ;; Start patterns
+                 ;; Start patterns
                  (someone starts walking relative-position
                           #'stage/start-walk-relative)
                  (someone starts moving relative-position
@@ -1213,11 +1213,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                      (declare (ignore _))
                                                      (list 'wave-arms someone)))
                  (someone starts gesturing (lambda (someone &rest _)
-                                              (declare (ignore _))
-                                              (list 'gesture someone)))
+                                             (declare (ignore _))
+                                             (list 'gesture someone)))
                  (someone starts panicking (lambda (someone &rest _)
-                                              (declare (ignore _))
-                                              (list 'panic someone)))
+                                             (declare (ignore _))
+                                             (list 'panic someone)))
                  ;; Stop patterns
                  (someone stops dancing (lambda (someone &rest _)
                                           (declare (ignore _))
@@ -1232,11 +1232,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                               (declare (ignore _))
                                               (list 'wake someone)))
                  (someone stops gesturing (lambda (someone &rest _)
-                                             (declare (ignore _))
-                                             (list 'wake someone)))
+                                            (declare (ignore _))
+                                            (list 'wake someone)))
                  (someone stops panicking (lambda (someone &rest _)
-                                             (declare (ignore _))
-                                             (list 'wake someone)))
+                                            (declare (ignore _))
+                                            (list 'wake someone)))
                  ;; Action patterns
                  (someone dances (lambda (someone &rest _)
                                    (declare (ignore _))
@@ -1260,11 +1260,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                              (declare (ignore _))
                                              (list 'wave-arms someone)))
                  (someone gestures (lambda (someone &rest _)
-                                      (declare (ignore _))
-                                      (list 'gesture someone)))
+                                     (declare (ignore _))
+                                     (list 'gesture someone)))
                  (someone panics (lambda (someone &rest _)
-                                    (declare (ignore _))
-                                    (list 'panic someone))))
+                                   (declare (ignore _))
+                                   (list 'panic someone))))
     (relative-position step-distance
                        (to location
                            #'stage/relative-to)
@@ -2429,9 +2429,7 @@ PlaySong EXECUTE "  song))))
     (let ((ok-label (genlabel "FoundCharacter"))
           (done-label (genlabel "DoneSleep")))
       (format t "~% ActionSleep CharacterID_~a character-action!"
-              (pascal-case (string name))
-              ok-label done-label
-              ok-label done-label))))
+              (pascal-case (string name))))))
 
 (defun perform-character-action (actor action-verb action-enum)
   "Base function for character actions that sets the action enum and generates character-action! call"
@@ -2445,28 +2443,26 @@ PlaySong EXECUTE "  song))))
           (done-label (genlabel (format nil "Done~a" (string-capitalize action-verb)))))
       (format t "~% CharacterID_~a ~a character-action!"
               (pascal-case (string name))
-              action-enum
-              ok-label done-label
-              ok-label done-label))))
+              action-enum))))
 
 (defstage dance (actor)
-  "ACTOR should perform the "dance" action."
+  "ACTOR should perform the “dance” action."
   (perform-character-action actor "dance" "ActionDance"))
 
 (defstage gesture (actor)
-  "ACTOR should perform the "gesture" action."
+  "ACTOR should perform the “gesture” action."
   (perform-character-action actor "gesture" "ActionGesture"))
 
 (defstage panic (actor)
-  "ACTOR should perform the "panic" action."
+  "ACTOR should perform the ”panic” action."
   (perform-character-action actor "panic" "ActionPanic"))
 
 (defstage fly (actor)
-  "ACTOR should perform the "fly" action."
+  "ACTOR should perform the “fly” action."
   (perform-character-action actor "fly" "ActionFlying"))
 
 (defstage wave-arms (actor)
-  "ACTOR should perform the "wave arms" action."
+  "ACTOR should perform the “wave arms” action."
   (perform-character-action actor "wave arms" "ActionWaveArms"))
 
 (defstage weather (&optional kind)
@@ -2484,9 +2480,7 @@ PlaySong EXECUTE "  song))))
     (let ((ok-label (genlabel "WakeUp"))
           (done-label (genlabel "DoneWaking")))
       (format t "~% ActionIdle CharacterID_~a character-action!"
-              (pascal-case (string name))
-              ok-label done-label
-              ok-label done-label))))
+              (pascal-case (string name))))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
   (format t "~% FadeSpeed~a FadeActualColor~:(~a~) fade-in"
@@ -2514,8 +2508,7 @@ PlaySong EXECUTE "  song))))
         (format t "~% ~d wait-deciseconds"
                 (round (* 10 secs)))
         (format t "~% ~d wait-long"
-                (floor (* 10 secs) 256)
-                (script-auto-label "WaitForManyFramesCounter")))))
+                (floor (* 10 secs) 256)))))
 
 (defstage wait-for (actor)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -2554,8 +2547,7 @@ PlaySong EXECUTE "  song))))
                 "Asked for ~:(~a~) to exit the scene, which they were not in" name)
         (return))
       (format t "~% CharacterID_~a exit-character"
-              (pascal-case (string name))
-              not-found-character-label))))
+              (pascal-case (string name))))))
 
 (defstage enter (who where)
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
@@ -2567,13 +2559,13 @@ PlaySong EXECUTE "  song))))
         (destructuring-bind (&key name &allow-other-keys) actor
           (if found-in-scene-p
               (format t "~% CharacterID_~a find-character entity-decal@ DUP
-127 SWAP DecalXH SWAP decal!
-127 SWAP DecalYH SWAP decal!"
+  127 SWAP DecalXH SWAP decal!
+  127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))
               ;; else not found in scene
               (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP
-127 SWAP DecalXH SWAP decal!
-127 SWAP DecalYH SWAP decal!"
+  127 SWAP DecalXH SWAP decal!
+  127 SWAP DecalYH SWAP decal!"
                       (pascal-case (string name)))))
         ;; else, on camera
         (destructuring-bind (abs/rel x y) (interpret-place where)
@@ -2581,9 +2573,9 @@ PlaySong EXECUTE "  song))))
           (destructuring-bind (&key name &allow-other-keys) actor
             (if found-in-scene-p
                 (format t "~% CharacterID_~a find-character-in-scene entity-decal@ DUP DUP
-~d SWAP DecalXH SWAP decal!
-~d SWAP DecalYH SWAP decal!
-update-one-decal"
+  ~d SWAP DecalXH SWAP decal!
+  ~d SWAP DecalYH SWAP decal!
+  update-one-decal"
                         (pascal-case (string name)) x y)
                 ;; else not already in scene
                 (format t "~% ~d ~d CharacterID_~a enter-character"
@@ -2627,7 +2619,7 @@ update-one-decal"
       (ecase east/west
         (east (format t " boat-sail-away-east"))
         (west (format t " boat-sail-away-west")))
-      (format t " wait-for-boat" boat-id ship-name))))
+      (format t " ~d ( “~a” ) wait-for-boat " boat-id ship-name))))
 
 (defstage emote (actor emotion)
   (destructuring-bind (&key name &allow-other-keys) (require-actor actor)
@@ -2645,7 +2637,7 @@ update-one-decal"
       (format t "~% ~aClass ClassID C! ~:*~aSize Size C!
   CharacterID_~a CurrentCharacterID C!
   ~:[0~;1~] RelativePlacement C! ~a FillPattern C! Emote EXECUTE
-"
+  "
               class
               (pascal-case (string name))
               (eql :above position)
@@ -2676,10 +2668,10 @@ update-one-decal"
                                who)
                        (return))))
           (format t "~% ~d ~d CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
-                  x y (pascal-case (string name))
-                  (ecase abs/rel
-                        (:absolute 0)
-                        (:relative 1)))
+  x y (pascal-case (string name))
+  (ecase abs/rel
+    (:absolute 0)
+    (:relative 1)))
           (when waitp
             (format t "~% CharacterID_~a settle-actor"
                     (pascal-case (string name))))))))
@@ -2742,25 +2734,25 @@ update-one-decal"
 (defun forth-number (n)
   (format nil " ~d " n))
 
-(defmacro define-simple-math ((fun) &body asm)
-  (let ((asm* (gensym "ASM-")))
+(defmacro define-simple-math ((fun) &body forth)
+  (let ((forth* (gensym "FORTH-")))
     `(defmath ,fun (a b)
        (let ((a* (stage/constant-value a))
              (b* (stage/constant-value b))
-             (,asm* ',asm))
+             (,forth* ',forth))
          (cond
            ((and a* b*)
             (return (,fun a* b*)))
            (a*
             (stage-directions->acc b)
-            (format t asm (forth-number  a*)))
+            (format t forth (forth-number  a*)))
            (b*
             (stage-directions->acc a)
-            (format t asm (forth-number b*)))
+            (format t forth (forth-number b*)))
            (t
             (stage-directions->acc a)
             (stage-directions->acc b)
-            (princ asm)))))))
+            (princ forth)))))))
 
 (define-simple-math (+) "+")
 (define-simple-math (-) "-")
@@ -2837,7 +2829,7 @@ update-one-decal"
                (typep const '(integer 0 #xffff)))
           (format t " ~d ( ~:*~4,'0x ) " const))
          (const
-          (error "Cannot fit the value ~s (from ~s) into a byte"
+          (error "Cannot fit the value ~s (from ~s) into a word"
                  const expr))
          ((eql 'var (car expr))
           (format t " ~a " (field->label expr)))
@@ -3362,24 +3354,25 @@ FadeColor~:(~a~) FadingTarget C!"
   (format nil "~10t.byte ~d" (or (getf actor :chalice) 0)))
 
 (defmethod output-actor-value (actor (column (eql :character-gender)))
-  (format nil "~10t.byte Gender~a" (pascal-case (string (or (when-let (g (getf actor :gender))
-                                                              (ecase (char (string g) 0)
-                                                                (#\M :male)
-                                                                (#\F :female)
-                                                                (#\N :nonbinary)))
-                                                            :nonbinary)))))
+  (format nil "~10t.byte Gender~a" (pascal-case
+                                    (string
+                                     (let ((g (getf actor :gender #\N)))
+                                       (case (char (string g) 0)
+                                         (#\M :male)
+                                         (#\F :female)
+                                         (otherwise :nonbinary)))))))
 
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
   (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 80)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 100)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 100)))
+  (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))
   (format nil "~10t.byte CoLu(COL~a, $f)" (string-upcase (pascal-case (or (getf actor :speech-color) "Gray")))))
