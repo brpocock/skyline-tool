@@ -1177,7 +1177,7 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun minifont->unicode (string &key replace)
   (apply #'concatenate 'string
          (loop for i below (length string)
-               collecting (minifont->char (aref string i) :replace replace))))
+               collecting (minifont->char (elt string i) :replace replace))))
 
 (defun decal-invisible-p (decal)
   (= #xff (elt decal 2)))
