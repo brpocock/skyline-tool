@@ -493,25 +493,25 @@
                             (unless quietp
                               (terpri)
                               (clim:surrounding-output-with-border
-                               (t :shape :drop-shadow
-                                  :ink clim:+red+)
-                               (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
-                                       j bam (bam-block->object-address j))))
+                                  (t :shape :drop-shadow
+                                     :ink clim:+red+)
+                                (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
+                                        j bam (bam-block->object-address j))))
                             (push j unreachable ))
                            (visitation
                             (unless quietp
                               (terpri)
                               (clim:surrounding-output-with-border
-                               (t :shape :drop-shadow
-                                  :ink clim:+red+)
-                               (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
-                                       j (bam-block->object-address j))))
+                                  (t :shape :drop-shadow
+                                     :ink clim:+red+)
+                                (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
+                                        j (bam-block->object-address j))))
                             (push j squatters)))
                       finally (return-from mark-and-sweep-objects
                                 (values unreachable squatters)))))
 
 (defun room-for-objects (&optional (dump (load-dump-into-mem)))
-  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump)
+  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump :quietp t)
     (format t "~%Object pool map (○ available, ● used~@[, ☠ unreachable~]~@[, ✗squatters~])"
             unreachable squatters)
     (let ((longest-span 0)
@@ -552,15 +552,15 @@
          (format t "~{~%~{~a~^ ~}~}" rows))
         (t (terpri)
          (clim:formatting-table (t)
-                                (clim:formatting-row (t)
-                                                     (loop for addr from #x40 below #x100 by 8
-                                                           do (clim:formatting-cell (t)
-                                                                                    (format t "~2,'0x" addr))))
-                                (dolist (row rows)
-                                  (clim:formatting-row (t)
-                                                       (dolist (el row)
-                                                         (clim:formatting-cell (t)
-                                                                               (princ el))))))))
+           (clim:formatting-row (t)
+             (loop for addr from #x40 below #x100 by 8
+                   do (clim:formatting-cell (t)
+                        (format t "~2,'0x" addr))))
+           (dolist (row rows)
+             (clim:formatting-row (t)
+               (dolist (el row)
+                 (clim:formatting-cell (t)
+                   (princ el))))))))
       
       (format t "~&
 Room for objects:
@@ -573,18 +573,18 @@ Room for objects:
               free-blocks (* 8 free-blocks)
               (round (* 100 (/ free-blocks #xc0)))
               longest-span (* 8 longest-span)))
-    (when unreachable
-      (terpri) (terpri)
-      (clim:surrounding-output-with-border (t :shape :drop-shadow
-                                              :ink clim:+red+)
-                                           (if (= 1 (length unreachable))
-                                               (format t "⚠ An unreachable leaked object exists:")
-                                               (format t "⚠ Unreachable leaked objects exist:")))
-      (dolist (bam unreachable)
-        (let ((address (bam-block->object-address bam)))
-          (format t "~2&Unreachable object? block $~2,'0x for address $~4,'0x:"
-                  bam address)
-          (decode-object-at dump address))))))
+    #+ () (when unreachable
+            (terpri) (terpri)
+            (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                    :ink clim:+red+)
+              (if (= 1 (length unreachable))
+                  (format t "⚠ An unreachable leaked object exists:")
+                  (format t "⚠ Unreachable leaked objects exist:")))
+            (dolist (bam unreachable)
+              (let ((address (bam-block->object-address bam)))
+                (format t "~2&Unreachable object? block $~2,'0x for address $~4,'0x"
+                        bam address)
+                (decode-object-at dump address))))))
 
 (defun decode-self-object (&optional (dump (load-dump-into-mem)))
   (multiple-value-bind (low pointer) (dump-peek "Self")
@@ -616,8 +616,8 @@ Room for objects:
 (defun show-room-for-objects ()
   "Show how much room objects take up in the dump"
   (clim-simple-echo:run-in-simple-echo #'room-for-objects
-                                       :width 1111
-                                       :height 1111
+                                       :width 1000
+                                       :height 500
                                        :process-name "Room for Objects"))
 
 (defun echo-forth-stack ()
