@@ -138,11 +138,11 @@
   (:method ((field (eql :bresenham-course-delta-x)) value s)
     (format s " = $~2,'0x.~2,'0x px/frame ≈ ~f tiles/frame"
             (second value) (first value)
-            (/ (+ (first value) (* #x100 (second value))) 256.0)))
+            (/ (+ (first value) (* #x100 (second value))) #x800)))
   (:method ((field (eql :bresenham-course-delta-y)) value s)
     (format s " = $~2,'0x.~2,'0x px/frame ≈ ~f tiles/frame"
             (second value) (first value)
-            (/ (+ (first value) (* #x100 (second value))) 256.0)))
+            (/ (+ (first value) (* #x100 (second value))) #x1000)))
   (:method ((field (eql :bresenham-course-absolute-delta-x)) value s)
     (format s " = $~4,'0x ≈ ~f tiles"
             (+ (first value) (* #x100 (second value)))
