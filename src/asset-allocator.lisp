@@ -382,6 +382,7 @@
                          (list :relative "Source" "Common")
                          (list :relative "Source" "Routines")
                          (list :relative "Source" "Classes")
+                         (list :relative "Source" "Stagehand")
                          (list :relative "Object" "Assets")
                          (list :relative "Source" "Generated")
                          (list :relative "Source" "Generated" "Assets"))))
@@ -474,10 +475,14 @@ file ~a.s in bank $~(~2,'0x~)~
          testp name *bank* cwd testp))
 
 (defun find-included-binary-file (name)
-  (when (search "Stagehand" name)
+  (when (search "StagehandHigh" name)
     (return-from find-included-binary-file
       (make-pathname :directory '(:relative "Object")
-                     :name "Stagehand" :type "o")))
+                     :name "StagehandHigh" :type "o")))
+  (when (search "StagehandLow" name)
+    (return-from find-included-binary-file
+      (make-pathname :directory '(:relative "Object")
+                     :name "StagehandLow" :type "o")))
   (when (eql 0 (search "Art." name))
     (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
                                         :name (subseq name 4) :type "art")))
