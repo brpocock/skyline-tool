@@ -8,9 +8,9 @@
   (if (or (emptyp (string-trim " " line))
           (char= #\; (char (string-trim " " line) 0)))
       (list nil nil)
-      (destructuring-bind (asset &optional builds-string) 
+      (destructuring-bind (asset &optional builds-string)
           (split-sequence #\space line :remove-empty-subseqs t)
-        (list (string-trim " " asset) 
+        (list (string-trim " " asset)
               (if (null builds-string)
                   (list "AA" "Public" "Demo")
                   (remove-if #'null
@@ -84,9 +84,9 @@
 (defun read-assets-list (&optional (index-file #p"Source/Assets.index"))
   "Read Assets.index from INDEX-FILE (using *ASSETS-LIST* cache)"
   (when (and *assets-list* *asset-ids-seen*)
-    (return-from read-assets-list 
+    (return-from read-assets-list
       (values *assets-list* *asset-ids-seen*)))
-  (format *trace-output* "~&Reading assets index from ~a…" 
+  (format *trace-output* "~&Reading assets index from ~a…"
           (enough-namestring index-file))
   (let ((index-hash (make-hash-table :test 'equal))
         (seen-ids (make-seen-ids-table)))
@@ -133,20 +133,20 @@
 
 (defgeneric asset-loader-size (kind record-count)
   (:method ((kind (eql :overhead)) record-count)
-    (ecase *machine* 
+    (ecase *machine*
       (7800 12)))
   (:method ((kind (eql :song)) record-count)
-    (ecase *machine* 
+    (ecase *machine*
       (7800 256)) ; FIXME #124
     )
   (:method ((kind (eql :script)) record-count)
-    (ecase *machine* 
+    (ecase *machine*
       (7800 (+ 128 (* (1+ record-count) 4)))))
   (:method ((kind (eql :blob)) record-count)
-    (ecase *machine* 
+    (ecase *machine*
       (7800 (+ 284 1 (* record-count 3)))))
   (:method ((kind (eql :map)) record-count)
-    (ecase *machine* 
+    (ecase *machine*
       (7800 (+
              #|LoadMap|# 1024 #| approx XXX |#
              #| end of table |# 1
@@ -215,7 +215,7 @@
                       bank-assets (make-hash-table :test 'equal)
                       (gethash asset bank-assets) asset-size
                       bank (1+ bank))
-           finally (progn 
+           finally (progn
                      (setf (gethash bank banks)
                            (when (plusp (hash-table-count bank-assets))
                              bank-assets))
@@ -227,7 +227,7 @@
                  ((equal "s" (pathname-type asset-file))
                   (assemble-file-for-size asset-file))
                  (t (cerror "Pretend asset size is 8kiB"
-                            "Don't know how to estimate size of “~a”" 
+                            "Don't know how to estimate size of “~a”"
                             (enough-namestring asset-file))
                     8192))))
     (when file-sizes
@@ -259,9 +259,9 @@
               "~&Will try every possible permutation to find one that fits into ~:d ROM bank~:p … "
               available-banks)
       (map-permutations
-       (lambda (sequence) 
+       (lambda (sequence)
          (incf tries)
-         (let ((try (try-allocation-sequence sequence file-sizes 
+         (let ((try (try-allocation-sequence sequence file-sizes
                                              :video video)))
            (when (<= (hash-table-count try) available-banks)
              (format *trace-output* " got a fit in ~:d tr~:@p" tries)
@@ -285,7 +285,7 @@
                   for bank-name = (format nil "Bank~(~2,'0x~)" bank)
                   unless (probe-file (make-pathname :directory (list :relative
                                                                      "Source"
-                                                                     "Banks" 
+                                                                     "Banks"
                                                                      bank-name)
                                                     :name bank-name
                                                     :type "s"))
@@ -325,7 +325,7 @@
             do (ensure-directories-exist allocation-list-name)
             do (with-output-to-file (allocation-file allocation-list-name
                                                      :if-exists :supersede)
-                 (format *trace-output* " $~(~2,'0x~) (#~:*~d; ~:d asset~:p) " 
+                 (format *trace-output* " $~(~2,'0x~) (#~:*~d; ~:d asset~:p) "
                          bank (length (hash-table-keys assets)))
                  (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
             do (ensure-directories-exist allocation-size-name)
@@ -383,6 +383,7 @@
                          (list :relative "Source" "Routines")
                          (list :relative "Source" "Classes")
                          (list :relative "Source" "Stagehand")
+                         (list :relative "Object")
                          (list :relative "Object" "Assets")
                          (list :relative "Source" "Generated")
                          (list :relative "Source" "Generated" "Assets"))))
@@ -394,7 +395,7 @@
     includes))
 
 (defun generated-path (path)
-  (cond 
+  (cond
     ((equalp path '(:relative "Source" "Common"))
      (list :relative "Source" "Generated" "Common"))
     ((equalp (subseq path 0 3) '(:relative "Source" "Banks"))
@@ -463,7 +464,7 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
         (return-from find-included-file possible-file))))
   (let ((generated-pathname
           (make-pathname :directory '(:relative "Source" "Generated")
-                         :name name :type "s"))) 
+                         :name name :type "s")))
     (when (skyline-tool-writes-p generated-pathname)
       (return-from find-included-file generated-pathname))
     (if (makefile-contains-target-p generated-pathname)
@@ -471,7 +472,7 @@ Object/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
   (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~(~2,'0x~)~
 ~@[~&Current working directory: ~a~]~
-~@[~&TestP: ~a~]" 
+~@[~&TestP: ~a~]"
          testp name *bank* cwd testp))
 
 (defun find-included-binary-file (name)
@@ -484,14 +485,14 @@ file ~a.s in bank $~(~2,'0x~)~
       (make-pathname :directory '(:relative "Object")
                      :name "StagehandLow" :type "o")))
   (when (eql 0 (search "Art." name))
-    (let ((possible-file (make-pathname :directory '(:relative "Source" "Art") 
+    (let ((possible-file (make-pathname :directory '(:relative "Source" "Art")
                                         :name (subseq name 4) :type "art")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets") 
+          (make-pathname :directory '(:relative "Object" "Assets")
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
-    (let ((possible-file (make-pathname 
+    (let ((possible-file (make-pathname
                           :directory '(:relative "Source" "Maps" "Tiles")
                           :name (subseq name 8) :type "tsx")))
       (when (probe-file possible-file)
@@ -512,7 +513,7 @@ file ~a.s in bank $~(~2,'0x~)~
         (return-from find-included-binary-file
           (make-pathname :directory '(:relative "Object" "Assets")
                          :name name :type "o")))))
-  (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)" 
+  (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)"
          name *bank*))
 
 (defun recursive-read-deps (source-file &key testp)
@@ -520,7 +521,7 @@ file ~a.s in bank $~(~2,'0x~)~
     (unless (probe-file source-file)
       (if (skyline-tool-writes-p source-file)
           (write-source-file source-file)
-          (error "Can't find “~a” and don't know how to make it~2%(~s)" 
+          (error "Can't find “~a” and don't know how to make it~2%(~s)"
                  (enough-namestring source-file) source-file)))
     (with-input-from-file (source source-file)
       (let* ((testp (or testp
@@ -529,7 +530,7 @@ file ~a.s in bank $~(~2,'0x~)~
                              while line
                              for included = (included-file line)
                              for binary = (included-binary-file line)
-                             for file = (cond 
+                             for file = (cond
                                           (included (find-included-file included :testp testp))
                                           (binary (find-included-binary-file binary))
                                           (t nil))
@@ -592,14 +593,14 @@ file ~a.s in bank $~(~2,'0x~)~
             (enough-namestring pathname))))
 
 (defun recursive-directory (wild-pathname)
-  (remove-if 
+  (remove-if
    #'null
-   (flatten 
+   (flatten
     (concatenate
-     'list 
+     'list
      (directory wild-pathname)
      (loop for subdir
-             in (directory 
+             in (directory
                  (make-pathname :name :wild
                                 :type nil
                                 :directory (pathname-directory
@@ -613,16 +614,16 @@ file ~a.s in bank $~(~2,'0x~)~
                                      (pathname-directory subdir))))))))
 
 (defun all-bare-assets ()
-  (let ((source-prefix-length 
+  (let ((source-prefix-length
           (length (pathname-directory (merge-pathnames #p"Source/")))))
-    (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "mscz") 
+    (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "mscz")
                                 ("Scripts" . "fountain") ("Blobs" . "xcf"))
           append
           (mapcar
            (lambda (pathname)
              (subseq
               (enough-namestring
-               (make-pathname :directory 
+               (make-pathname :directory
                               (append (list :relative "Source")
                                       (subseq (pathname-directory
                                                (merge-pathnames pathname))
@@ -648,7 +649,7 @@ file ~a.s in bank $~(~2,'0x~)~
            (format nil "Source/Generated/Assets/Script.~a.s" (substitute #\. #\/ name)))
           ((equal kind "Blobs")
            (format nil "Source/Generated/Assets/Blob.~a.s" name))
-          (t 
+          (t
            (format nil "Object/Assets/~a.~a.o" kind name)))))
 
 (defun asset->deps-list (asset-indicator build)
@@ -671,8 +672,8 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun asset->symbol-name (asset-indicator)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
-    (format nil "~a_~{~a~^_~}" 
-            (subseq kind 0 (1- (length kind))) 
+    (format nil "~a_~{~a~^_~}"
+            (subseq kind 0 (1- (length kind)))
             name)))
 
 (defun asset->source-name (asset-indicator)
@@ -800,7 +801,7 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
       (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
             do (terpri outfile)
             do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
-                     do (format outfile "~%~10t~:(~a~)_~{~a~^_~}_ID = $~2,'0x" 
+                     do (format outfile "~%~10t~:(~a~)_~{~a~^_~}_ID = $~2,'0x"
                                 kind (split-sequence #\/ asset-name) asset-hash)))))
 
   (with-output-to-file (outfile (merge-pathnames (make-pathname :type "forth")
@@ -813,7 +814,7 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
       (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
             do (terpri outfile)
             do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
-                     do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;" 
+                     do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;"
                                 kind (split-sequence #\/ asset-name) asset-hash))))))
 
 (defun write-asset-bank-makefile (bank &key build video)
@@ -853,7 +854,7 @@ Object/Bank~(~2,'0x~).~a.~a.o \\
             video (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                         ((equal build "Demo") "-DDEMO=true")
                         (t ""))
-            (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+            (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
                     (include-paths-for-current-bank)))))
 
 (defun write-bank-makefile (bank-source &key build video)
@@ -896,7 +897,7 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
           (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                 ((equal build "Demo") "-DDEMO=true")
                 (t ""))
-          (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+          (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
                   (include-paths-for-current-bank))))
 
 (defun write-ram-bank-makefile (&key build video)
@@ -982,7 +983,7 @@ Source/Generated/Bank~(~2,'0x~).~a.~a.s: \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool allocate-assets ~a"
           *bank*
           build video
-          (all-assets-for-build build) 
+          (all-assets-for-build build)
           build))
 
 (defun current-julian-date ()
@@ -1095,7 +1096,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                     (when (= *bank* *last-bank*)
                       (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
                     (first-assets-bank "Test")
-                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path))) 
+                    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
                             (include-paths-for-current-bank))))))))
 
 (defun write-makefile-for-blobs ()
@@ -1175,8 +1176,8 @@ mentioned in the top-level Makefile."
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"
   (let ((*current-scene* asset))
-    (let ((id (find-locale-id-from-xml (xmls:parse-to-list 
-                                        (alexandria:read-file-into-string 
+    (let ((id (find-locale-id-from-xml (xmls:parse-to-list
+                                        (alexandria:read-file-into-string
                                          (locale-pathname asset))))))
       (assert id (id)
               "Could not find asset ID for map “~a”" asset)
@@ -1330,11 +1331,11 @@ VLoadBlob:~10t~:[sec
 ~10t.else
 ~10t.binary \"Song.~1@*~a.PAL.o\"
 ~10t.fi
-~10t.send" 
+~10t.send"
                        (asset->symbol-name asset)
                        (subseq asset (1+ (position #\/ asset)))))
               ((map-asset-p asset)
-               (destructuring-bind (dir map) 
+               (destructuring-bind (dir map)
                    (split-sequence #\/ (subseq asset (1+ (position #\/ asset))))
                  (format source "~&
 ~10t.section BankData
@@ -1378,18 +1379,18 @@ EndOfBinary = *
     (with-input-from-file (labs labels-file)
       (ensure-directories-exist include-file)
       (with-output-to-file (incs include-file :if-exists :supersede)
-        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a.s… " 
+        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a.s… "
                 labels-file include-file-name)
         (finish-output *trace-output*)
         (format incs ";;; Generated file~2%Lib:~10t.block")
         (let ((table (make-hash-table)))
           (loop for line = (read-line labs nil nil)
                 while line
-                do (destructuring-bind (label value) 
+                do (destructuring-bind (label value)
                        (mapcar (lambda (each)
-                                 (string-trim #(#\Space #\Newline) each)) 
+                                 (string-trim #(#\Space #\Newline) each))
                                (split-sequence #\= line))
-                     (let ((number (cond 
+                     (let ((number (cond
                                      ((char= #\$ (char value 0))
                                       (parse-integer (subseq value 1) :radix 16))
                                      ((every #'digit-char-p value)
@@ -1398,7 +1399,7 @@ EndOfBinary = *
                        (when (and (<= low number high) (not (ends-with-subseq "_ID" label)))
                          (setf (gethash number table) label)))))
           (loop for number in (sort (copy-list (hash-table-keys table)) #'<)
-                for label = (gethash number table) 
+                for label = (gethash number table)
                 do (format incs "~&~10t~a = $~x" label number)))
         (format incs "~2%~10t.bend~%")
         (format *trace-output* "Done.")))))
@@ -1409,16 +1410,16 @@ EndOfBinary = *
     (with-input-from-file (labs labels-file)
       (ensure-directories-exist include-file)
       (with-output-to-file (incs include-file :if-exists :supersede)
-        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a… " 
+        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a… "
                 labels-file include-file-name)
         (finish-output *trace-output*)
         (format incs " ( -*- forth -*- Generated file ) ~2%")
         (let ((table (make-hash-table)))
           (loop for line = (read-line labs nil nil)
                 while line
-                do (destructuring-bind (label value) 
+                do (destructuring-bind (label value)
                        (mapcar (lambda (each)
-                                 (string-trim #(#\Space #\Newline) each)) 
+                                 (string-trim #(#\Space #\Newline) each))
                                (split-sequence #\= line))
                      (when-let (number (cond
                      			 ((char= #\~ (char value 0))
@@ -1435,7 +1436,7 @@ EndOfBinary = *
                                          (t nil)))
                        (setf (gethash label table) number))))
           (loop for label in (sort (copy-list (hash-table-keys table)) #'string-lessp)
-                for number = (gethash label table) 
+                for number = (gethash label table)
                 do (format incs "~% : ~a ~d ; " label number)))
         (terpri incs)))
     (format *trace-output* " Done.")))
@@ -1449,9 +1450,9 @@ EndOfBinary = *
                                             #p"Source/Scripts/*.fountain"
                                             #p"Source/Songs/*.mscz")
                               append (recursive-directory wild)))
-      (let* ((dir (pathname-directory asset-file)) 
+      (let* ((dir (pathname-directory asset-file))
              (moniker (format nil "~{~a~^/~}"
-                              (append (subseq dir 
+                              (append (subseq dir
                                               (1+ (position "Source" dir
                                                             :test #'string=)))
                                       (cons (pathname-name asset-file) nil)))))
@@ -1471,13 +1472,13 @@ EndOfBinary = *
                    "--case-sensitive" "--ascii" "-Wall"
                    "-Werror=shadow" "-Werror=wrap-pc"
                    "-Wno-leading-zeros" "--m6502" "-m" "--tab-size=1"
-                   "--verbose-list" "-DTV=NTSC" 
-                   "-I" 
+                   "--verbose-list" "-DTV=NTSC"
+                   "-I"
                    (namestring
-                    (merge-pathnames #p"Source/Common/")) 
-                   "-I" 
+                    (merge-pathnames #p"Source/Common/"))
+                   "-I"
                    (namestring
-                    (merge-pathnames #p"Source/Generated/")) 
+                    (merge-pathnames #p"Source/Generated/"))
                    (enough-namestring source-name)
                    "-o"
                    (enough-namestring object-name))))
@@ -1531,7 +1532,7 @@ Start:
                                     :element-type '(unsigned-byte 8))
     (uiop/stream:with-temporary-file (:stream tmp.s
                                       :pathname temp-name
-                                      :prefix (concatenate 'string 
+                                      :prefix (concatenate 'string
                                                            (pathname-name pathname)
                                                            "-")
                                       :suffix "-GetSoloSize"
@@ -1540,13 +1541,13 @@ Start:
                                       :direction :output
                                       :external-format :utf-8)
       (write-assembly-skeleton-for-size tmp.s pathname)
-      (format *trace-output* "~&Using Turbo Assembler to get size of “~a”" 
+      (format *trace-output* "~&Using Turbo Assembler to get size of “~a”"
               (enough-namestring pathname))
       (let ((err (with-output-to-string (e)
                    (assemble-with-64tass temp-name object-name e))))
         (let ((size (nth-value 1 (cl-ppcre:scan-to-strings
                                   "\\$SIZE\\$([0-9a-f]{4})" err))))
-          (unless size 
+          (unless size
             (cerror "Pretend it's 8kiB"
                     "Tried to assemble “~a” to get size of asset “~a”
 Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"

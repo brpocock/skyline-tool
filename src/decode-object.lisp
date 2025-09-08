@@ -136,13 +136,13 @@
   (:method ((field (eql :course-finished-p)) value s)
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
   (:method ((field (eql :bresenham-course-delta-x)) value s)
-    (format s " = $~2,'0x.~2,'0x px/frame ≈ ~f tiles/frame"
-            (second value) (first value)
-            (/ (+ (first value) (* #x100 (second value))) #x800)))
+    (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
+            (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
+            (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)))))
   (:method ((field (eql :bresenham-course-delta-y)) value s)
-    (format s " = $~2,'0x.~2,'0x px/frame ≈ ~f tiles/frame"
-            (second value) (first value)
-            (/ (+ (first value) (* #x100 (second value))) #x1000)))
+    (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
+            (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
+            (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)) )))
   (:method ((field (eql :bresenham-course-absolute-delta-x)) value s)
     (format s " = $~4,'0x ≈ ~f tiles"
             (+ (first value) (* #x100 (second value)))

@@ -1770,10 +1770,10 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
             ""))))
     ;; For round-trip validation, treat pilcrow (¶) as a space in the minifont
     ;; domain. Pilcrow is used as paragraph markup and has no minifont glyph.
-    (let* ((no~ (remove #\} (remove #\{ (remove #\~ (string-downcase prepared)))))
-           (back+forth (ignore-errors (minifont->unicode
-                                       (unicode->minifont no~)))))
-      (assert (string-equal no~ back+forth)
+    (let* ((no~ (remove #\} (remove #\{ (remove #\~ (remove #\¶ (string-downcase prepared))))))
+           (encoded (ignore-errors (unicode->minifont no~)))
+           (back+forth (when encoded (ignore-errors (minifont->unicode encoded)))))
+      (assert (and encoded back+forth (string-equal no~ back+forth))
               (prepared)
               "This text contains character(s) which cannot be displayed on ~
 the game console:
@@ -1785,7 +1785,7 @@ as
 “~a”"
               prepared
               no~
-              (string-downcase back+forth))
+              (or back+forth "nil"))
       (assert (>= #xc0 (length (unicode->minifont no~))) (prepared)
               "This text is more than 192 characters in length and cannot be prepared.
 “~a”"
