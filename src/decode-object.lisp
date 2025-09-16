@@ -794,12 +794,16 @@ Room for objects:
      (when (= (1+ line) last-line)
        (format t "~%—"))))
   (format t "~%
-DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d"
+DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d …
+
+DialogueTextLines: ~d …Room: ~d"
           (dump-peek "DialogueLines")
           (dump-peek "DialogueLinesToShow")
           (dump-peek "DialogueLinesTarget")
-          (dump-peek "DialogueLinesShown")))
-
+          (dump-peek "DialogueLinesShown")
+          (dump-peek "DialogueTextLines")
+          (dump-peek "DialogueTextLinesRoom")))
+  
 (defun show-dialogue-buffers ()
   "Show the contents of the dialogue buffers"
   (clim-simple-echo:run-in-simple-echo #'decode-dialogue
