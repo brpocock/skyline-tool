@@ -1753,7 +1753,10 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                         "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
                         (cl-ppcre:regex-replace-all
                          "\\'"
-                         string
+                         (cl-ppcre:regex-replace-all
+                          "\\[.*\\]"
+                          string
+                          "")
                          "’")
                         "\\1\\2")
                        "…")
@@ -1768,8 +1771,6 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
               "{’s}")
              "\\1\\2")
             ""))))
-    ;; For round-trip validation, treat pilcrow (¶) as a space in the minifont
-    ;; domain. Pilcrow is used as paragraph markup and has no minifont glyph.
     (let* ((no~ (remove #\} (remove #\{ (remove #\~ (remove #\¶ (string-downcase prepared))))))
            (encoded (ignore-errors (unicode->minifont no~)))
            (back+forth (when encoded (ignore-errors (minifont->unicode encoded)))))
@@ -1785,7 +1786,7 @@ as
 “~a”"
               prepared
               no~
-              (or back+forth "nil"))
+              (or back+forth "NIL"))
       (assert (>= #xc0 (length (unicode->minifont no~))) (prepared)
               "This text is more than 192 characters in length and cannot be prepared.
 “~a”"
