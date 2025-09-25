@@ -1901,8 +1901,9 @@ but now also ~s."
 (defun speakjet-pause+ (x y)
   "Sum together the SpeakJet pauses X and Y into one longer pause"
   (format nil "Pause~d"
-          (+ (parse-integer x :start 5)
-             (parse-integer y :start 5))))
+          (min (+ (parse-integer x :start 5)
+                  (parse-integer y :start 5))
+               6)))
 
 (defun log-missing-word-for-speakjet (word)
   (with-output-to-file (missing-words #p"Object/SpeakJet.missing.words"
@@ -2065,6 +2066,9 @@ but now also ~s."
                             ((or (eql :nil (gethash word *atarivox-dictionary*))
                                  (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
                              nil)
+                            ((and (not (gethash word *atarivox-dictionary*))
+                                  (every (complement #'alphanumericp) word))
+                             (list "Pause1"))
                             (t (or (gethash word *atarivox-dictionary*)
                                    (progn
                                      (log-missing-word-for-speakjet word)
@@ -2214,6 +2218,18 @@ but now also ~s."
         (:m "Male")
         (:f "Female")
         ((:x :n) "Nonbinary"))))
+
+(defmethod npc-interpret-field (equipment (field (eql :equipment)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp equipment)
+      "EquipNone"
+      (format nil "Equip~a" (pascal-case equipment))))
+
+(defmethod npc-interpret-field (shield (field (eql :shield)) &key name kind)
+  (declare (ignore name kind))
+  (if (emptyp shield)
+      "ShieldNoShield"
+      (format nil "Shield~a" (pascal-case shield))))
 
 (defun load-actor (actor)
   (tagbody top
@@ -3331,13 +3347,13 @@ FadeColor~:(~a~) FadingTarget C!"
                                  (t (or (ignore-errors (parse-integer body)) 0))))))
 
 (defmethod output-actor-value (actor (column (eql :character-shield)))
-  (format nil "~10t.byte $~2,'0x" (or (getf actor :shield) #x80)))
+  (format nil "~10t.byte Shield~a" (pascal-case (or (getf actor :shield) "NoShield"))))
 
 (defmethod output-actor-value (actor (column (eql :character-equipment)))
-  (format nil "~10t.byte $~2,'0x" (or (getf actor :equipment) #x80)))
+  (format nil "~10t.byte Equip~a" (pascal-case (or (getf actor :equipment) "None"))))
 
 (defmethod output-actor-value (actor (column (eql :character-armor-class)))
-  (format nil "~10t.byte $~2,'0x" (or (getf actor :armor-class) 10)))
+  (format nil "~10t.byte ~3d" (or (getf actor :armor-class) 10)))
 
 (defmethod output-actor-value (actor (column (eql :character-inventory)))
   (format nil "~10t.dword 0, 0"))

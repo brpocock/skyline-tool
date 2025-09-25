@@ -424,7 +424,7 @@ GameFlag: .block~2%"
                                   collect 0)))
       (loop for name in '(:character-id :hp :ac :pitch :speed
                           :kind :hair-color :skin-color :clothes-color
-                          :head :body)
+                          :head :body :equipment :shield)
             for asm-name = (cl-change-case:pascal-case (string name))
             do (progn
                  (format source "~%~a:~%~10t.byte $00, $00~32t; Player, Narrator" asm-name)
