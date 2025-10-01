@@ -649,8 +649,8 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (declare (ignore the appears in _the with aboard headed to/for))
     (list 'boat ship-name east/west actor/location actors))
 
-  (defun stage/sail-away (the ship-name gets under weigh to _the east/west)
-    (declare (ignore the gets under weigh to _the))
+  (defun stage/sail-away (the ship-name gets underway to _the east/west)
+    (declare (ignore the gets underway to _the))
     (list 'sail-away ship-name east/west))
 
   (defun stage/embarks (actor embarks/boards the ship-name)
@@ -692,9 +692,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               skin sloop slowly small staff south
               square starts stops suddenly sum surprised sweating sword
               than the their then times to torch truck tunic
-              under unless up upon
+              under underway unless up upon
               value
-              wait walking walks wand we weigh west when white with wrench wakes
+              wait walking walks wand way we west when white with wrench wakes
               waves waving
               yellow
               zero))
@@ -1168,7 +1168,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
           #'stage/empty-boat)
      (the ship-name appears in the east/west with someones aboard headed to/for actor/location
           #'stage/full-boat)
-     (the ship-name gets under weigh to the east/west
+     (the ship-name gets underway to the east/west
           #'stage/sail-away)
      (someone embarks/boards the ship-name #'stage/embarks)
      (someone disembarks from the ship-name #'stage/disembarks))
