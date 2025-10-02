@@ -1730,45 +1730,48 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
             (cl-ppcre:regex-replace-all
              "~([a-z]+){([a-z]*)}"
              (cl-ppcre:regex-replace-all
-              "’s"
+              "'t"
               (cl-ppcre:regex-replace-all
-               "fi"
+               "’s"
                (cl-ppcre:regex-replace-all
-                "li"
+                "fi"
                 (cl-ppcre:regex-replace-all
-                 "’r"
+                 "li"
                  (cl-ppcre:regex-replace-all
-                  "’ll"
+                  "’r"
                   (cl-ppcre:regex-replace-all
-                   "I’"
+                   "’ll"
                    (cl-ppcre:regex-replace-all
-                    "I’ll"
+                    "I’"
                     (cl-ppcre:regex-replace-all
-                     "—"
+                     "I’ll"
                      (cl-ppcre:regex-replace-all
-                      "[ \\t\\n]+"
+                      "—"
                       (cl-ppcre:regex-replace-all
-                       "(\\.\\.\\.+)"
+                       "[ \\t\\n]+"
                        (cl-ppcre:regex-replace-all
-                        "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                        "(\\.\\.\\.+)"
                         (cl-ppcre:regex-replace-all
-                         "\\'"
+                         "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
                          (cl-ppcre:regex-replace-all
-                          "\\[.*\\]"
-                          string
-                          "")
-                         "’")
-                        "\\1\\2")
-                       "…")
-                      " ")
-                     "-")
-                    "{i’ll}")
-                   "{i’}")
-                  "{’ll}")
-                 "{’r}")
-                "{li}")
-               "{fi}")
-              "{’s}")
+                          "\\'"
+                          (cl-ppcre:regex-replace-all
+                           "\\[.*\\]"
+                           string
+                           "")
+                          "’")
+                         "\\1\\2")
+                        "…")
+                       " ")
+                      "-")
+                     "{i’ll}")
+                    "{i’}")
+                   "{’ll}")
+                  "{’r}")
+                 "{li}")
+                "{fi}")
+               "{’s}")
+              "{'t}")
              "\\1\\2")
             ""))))
     (let* ((no~ (remove #\} (remove #\{ (remove #\~ (remove #\¶ (string-downcase prepared))))))
