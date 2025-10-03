@@ -73,11 +73,11 @@
                (format t "
 ~10t.section BankData
 ~10t.weak
-~10t~a~:*_DefinedP := false
+~12t~a~:*_DefinedP := false
 ~10t.endweak
 ~10t.if ! ~a~:*_DefinedP
-~10t~a~:*_DefinedP := true
-~a: ~{~%~10t.byte ~a~^, ~30t~a~^, ~50t~a~^~}
+~12t~a~:*_DefinedP := true
+~a: ~{~%~12t.byte ~a~^, ~30t~a~^, ~50t~a~^~}
 ~10t.fi
 ~10t.send
 
