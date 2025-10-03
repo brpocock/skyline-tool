@@ -1182,21 +1182,11 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun decal-invisible-p (decal)
   (= #xff (elt decal 2)))
 
-(defun assemble-binary (source-pathname)
-  (let (#+ () (combined-source-pathname
-                (make-pathname :directory (append (list "Source" "Generated")
-                                                  (subseq (pathname-directory source-pathname) 1))
-                               :defaults source-pathname)))
-    (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
-            (enough-namestring source-pathname))
-    #(#x60) ; rts
-    ))
-
 (defun run-commands-content-for-map (pathname)
   (let ((run-commands-pathname (make-pathname :defaults pathname
-                                              :type "s")))
+                                              :type "forth")))
     (when (probe-file run-commands-pathname)
-      (assemble-binary run-commands-pathname))))
+      (get-asset-id :script run-commands-pathname))))
 
 (defun tileset-rom-bank (xml)
   ;; FIXME #125
@@ -1356,6 +1346,8 @@ range is 0 - #xffffffff (4,294,967,295)"
                       (length exits-table)
                       (length animations-list)
                       (length enemies-list))
+              (when run-commands-content
+                (format *trace-output* "~&Run-Commands content detected"))
               (format *trace-output* "~&Ready to write binary output for ~a … " tv)
               (force-output *trace-output*)
               (let ((outfile (make-pathname
