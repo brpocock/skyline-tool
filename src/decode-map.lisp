@@ -120,6 +120,12 @@
          (fetch (field)
            (elt dump (addr-of field))))
       (assert (= #x7000 (addr-of "MapArt")))
+      (format t "~2&Locale name: ~a (~a, $~2,'0x)"
+              (minifont->unicode (subseq dump
+                                         (1+ (addr-of "MapNameString"))
+                                         (+ 1 (addr-of "MapNameString") (fetch "MapNameString"))))
+              (fetch "CurrentMap")
+              (fetch "CurrentMap"))
       (format t "~2&Map currently ~d × ~d tiles:" (fetch "MapWidth") (fetch "MapHeight"))
       (let ((n (fetch "MapBackground"))
             (pals (addr-of "MapPalettes")))
