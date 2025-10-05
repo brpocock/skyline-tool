@@ -188,7 +188,7 @@
   (:method ((field (eql :palette-color)) value s)
     (format s " = ~a"
             (case (first value)
-              (1 "Peach") (2 "Purple") (3 "Green")
+              (1 "Peach") (2 "Green") (3 "Purple")
               (5 "Silver") (6 "Orange") (7 "Brown")
               (9 "White") (10 "Gray") (11 "Black")
               (13 "Yellow") (14 "Red") (15 "Blue")
