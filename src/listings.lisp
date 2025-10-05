@@ -68,6 +68,7 @@ wp 5048,1,w,{wpdata > 3},{printf \"Switching context to non-existing thread (tid
 bp ~4,'0x,1,{snap \"brk.snap.png\"; save \"brk.core\",0,10000; printf \"BRK handler invoked at $%02x:%04x\", b@(4661),  -2+w@(2+sp)}
 bp ~4,'0x,1,{snap \"fault.snap.png\"; save \"fault.core\",0,10000; printf \"Minor Fault %x.%x.%x.%x invoked at $%02x:%04x\", b@(1+w@(1+sp)), b@(2+w@(1+sp)), b@(3+w@(1+sp)), b@(4+w@(1+sp)), b@(4661),  -2+w@(1+sp)}
 rp {pc<8000},{printf \"Program counter underflow\"}
+bp c024,1,{printf \"NMI selector: $%04x (scanline %d)\", w@97, beamy;go}
 printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
                 (or break 0)
