@@ -22,7 +22,7 @@
           when (and label (numberp addr) (< 5 (length label)) (search "Map" label))
             collect (cons label addr))))
 
-(defun decode-attributes-block (bytes)
+(defun decode-attributes-block (bytes &optional dump)
   (labels ((splain-bit (byte bit label &optional more)
              (when (plusp (logand (ash 1 bit) (elt bytes byte)))
                (format t "~&~10t~a" label)
@@ -58,8 +58,18 @@
     (splain-bit 2 6 "XXX undefined byte 2 bit 6")
     (splain-bit 2 7 "Exit"
                 (lambda ()
-                  (format t "~&~12tExit reference ID: ~d"
-                          (logand #x1f (elt bytes 5)))))
+                  (if dump
+                      (let ((ref (logand #x1f (elt bytes 5))))
+                        (format t "~&~12tExit reference ID: ~d
+~14tExit to locale $~2,'0x (~a) at (~d, ~d)"
+                                ref
+                                (elt dump (+ 0 (* 3 ref) #x7c00))
+                                (car (find-if (lambda (pair) (= (cdr pair) (elt dump (+ 0 (* 3 ref) #x7c00))))
+                                              (read-map-labels)))
+                                (elt dump (+ 1 (* 3 ref) #x7c00))
+                                (elt dump (+ 1 (* 3 ref) #x7c00))))
+                      (let ((ref (logand #x1f (elt bytes 5))))
+                        (format t "~&~12tExit reference ID: ~d (no decode available)" ref)))))
     (when (plusp (logand #x07 (elt bytes 3)))
       (format t "~&~10tSpeed: ~d" (logand #x07 (elt bytes 3))))
     (when (= #x10 (logand #x30 (elt bytes 3)))
@@ -95,7 +105,7 @@
              (attributes (get-attributes attr-id)))
         (format t "~2&Decoding tile at (~d, ~d): attribute ID $~2,'0x (~:*~d) at $~4,'0x"
                 x y attr-id (attribute-addr attr-id))
-        (decode-attributes-block attributes)))))
+        (decode-attributes-block attributes dump)))))
 
 (defun decode-all-attributes (&optional (dump (load-dump-into-mem)))
   (fresh-line) (terpri)
@@ -110,7 +120,7 @@
               do (return)
             do (progn
                  (format t "~%ATTR # $~2,'0x (~:*~d)" i)
-                 (decode-attributes-block bytes))))))
+                 (decode-attributes-block bytes dump))))))
 
 (defun decode-map (&optional (dump (load-dump-into-mem)))
   (let ((addresses (read-map-labels)))
