@@ -748,11 +748,11 @@ Update map/s or script to agree with one another and DO-OVER."
   (let ((locale.xml (load-other-map locale)))
     (destructuring-bind (locale-id x y)
         (find-entrance-by-name locale.xml point locale)
-      (format *trace-output* " Found at (~3d, ~3d)." x y)
+      (format *trace-output* " Found at (~2d, ~2d)." x y)
       (or (position (list locale-id x y) exits :test #'equalp)
-          (progn
-            (setf (cdr (last exits)) (cons (list locale-id x y) nil))
-            (1- (length exits)))))))
+          (prog1
+              (length exits)
+            (setf (cdr (last exits)) (cons (list locale-id x y) nil)))))))
 
 (defvar *enemies-by-name* (make-hash-table :test #'equalp))
 
