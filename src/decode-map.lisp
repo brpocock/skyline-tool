@@ -59,7 +59,7 @@
     (splain-bit 2 7 "Exit"
                 (lambda ()
                   (if dump
-                      (let ((ref (logand #x1f (elt bytes 5))))
+                      (let ((ref (1- (logand #x1f (elt bytes 4)))))
                         (format t "~&~12tExit reference ID: ~d
 ~14tExit to locale $~2,'0x (~a) at (~d, ~d)"
                                 ref
@@ -67,7 +67,7 @@
                                 (car (find-if (lambda (pair) (= (cdr pair) (elt dump (+ 0 (* 3 ref) #x7c00))))
                                               (read-map-labels)))
                                 (elt dump (+ 1 (* 3 ref) #x7c00))
-                                (elt dump (+ 1 (* 3 ref) #x7c00))))
+                                (elt dump (+ 2 (* 3 ref) #x7c00))))
                       (let ((ref (logand #x1f (elt bytes 5))))
                         (format t "~&~12tExit reference ID: ~d (no decode available)" ref)))))
     (when (plusp (logand #x07 (elt bytes 3)))
