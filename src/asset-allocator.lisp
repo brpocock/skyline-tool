@@ -76,7 +76,9 @@
                           kind existing name id)
                  (reload-assets ()
                    :report "Reload the assets to check for changed IDs"
-                   (setf *maps-ids* nil)
+                   (setf *maps-ids* nil
+                         *assets-list* nil
+                         *asset-ids-seen* nil)
                    (go top)))
                (setf (gethash id (gethash kind seen-ids)) name)))))
        (setf (gethash asset index-hash) builds))))
