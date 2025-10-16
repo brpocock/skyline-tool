@@ -1740,7 +1740,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                  (cl-ppcre:regex-replace-all
                   "’r"
                   (cl-ppcre:regex-replace-all
-                   "’ll"
+                   "ll"
                    (cl-ppcre:regex-replace-all
                     "I’"
                     (cl-ppcre:regex-replace-all
@@ -1752,7 +1752,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                        (cl-ppcre:regex-replace-all
                         "(\\.\\.\\.+)"
                         (cl-ppcre:regex-replace-all
-                         "(\\b[A-Za-z0-9-']+\\b *)\\[.*?\\]( *)"
+                         "(\\b[A-Za-z0-9-']+\\b *)\\[[a-z ]*\\]( *)"
                          (cl-ppcre:regex-replace-all
                           "\\'"
                           (cl-ppcre:regex-replace-all
@@ -1766,7 +1766,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                       "-")
                      "{i’ll}")
                     "{i’}")
-                   "{’ll}")
+                   "{ll}")
                   "{’r}")
                  "{li}")
                 "{fi}")
