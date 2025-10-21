@@ -6,7 +6,8 @@
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
   (:panes (menu-list-pane :application :height 700 :width 450
                                        :display-function 'display-launcher-menu)
-          (interactor :interactor :height 125 :width 450))
+          (interactor :interactor :height 125 :width 450
+                                  :max-height 125))
   (:layouts (default (clim:vertically () menu-list-pane interactor)))
   (:icon (mapcar
           (lambda (name)
@@ -168,7 +169,7 @@ asset) changes, this may work."
                              (dump-peek (+ 2 break-signal) mem)
                              (dump-peek (+ 3 break-signal) mem))))
       (unless (every #'zerop break-bytes)
-        (let ((break-code (coerce (mapcar #'minifont->char break-bytes) 'string)))
+        (let ((break-code (minifont->unicode break-bytes :replace #\?)))
           (format t "~2%A DebugBreak occurred, which will result in the crash screen.
 The signal code was ~a" break-code)
           (explain-error-code break-code))))
@@ -176,13 +177,12 @@ The signal code was ~a" break-code)
                            (* #x100 (dump-peek (+ 1 minor-fault-count) mem)))))
       (unless (zerop faults-count)
         (format t "~2%There have been ~:d minor fault~:p reported" faults-count)))
-    (let ((fault-bytes (list (dump-peek last-minor-fault mem)
-                             (dump-peek (+ 1 last-minor-fault) mem)
-                             (dump-peek (+ 2 last-minor-fault) mem)
-                             (dump-peek (+ 3 last-minor-fault) mem))))
+    (let ((fault-bytes (vector (dump-peek last-minor-fault mem) 
+                               (dump-peek (+ 1 last-minor-fault) mem) 
+                               (dump-peek (+ 2 last-minor-fault) mem) 
+                               (dump-peek (+ 3 last-minor-fault) mem))))
       (unless (every #'zerop fault-bytes)
-        (let ((fault-code (coerce (mapcar (rcurry #'minifont->char :replace #\?) fault-bytes)
-                                  'string)))
+        (let ((fault-code (minifont->unicode fault-bytes :replace #\?)))
           (format t "~2%The last minor fault signal code was ~a" fault-code)
           (explain-error-code fault-code))))
     (terpri) (terpri) (force-output))) 
@@ -222,10 +222,26 @@ The signal code was ~a" break-code)
         (dotimes (bank #x40)
           (cond
             ((or (< bank (first-assets-bank build)) (= bank #x3f))
-             (format t "~%Bank $~2,'0x — fill" bank)
-             (incf sum #x4000))
+             (let ((size (ignore-errors
+                          (parse-integer
+                           (remove-if-not #'digit-char-p
+                                          (read-file-into-string
+                                           (make-pathname :directory '(:relative "Source" "Generated")
+                                                          :type "size"
+                                                          :name (format nil "Bank~(~2,'0x~).Public.NTSC" bank))))))))
+               (unless size
+                 (setf size #x4000)
+                 (format t "~%Bank $~2,'0x *size file not parsed" bank))
+               (when (= bank #x3f)
+                 (let ((sh-size (with-input-from-file (sh #p"Object/StagehandHigh.o")
+                                  (file-length sh))))
+                   (format t "~%Stagehand High included in Bank $3F — $~4,'0x (~:d)" sh-size sh-size)
+                   (incf size sh-size)))
+               (incf sum size)
+               (format t "~%Bank $~2,'0x — $~4,'0x (~:d) (~d%)"
+                       bank size size (round (/ size 163.84)))))
             ((= bank #x3e)
-             (format t "~%Bank $3e — unavailable on 7800GD")
+             (format t "~%Bank $3E — unavailable on 7800GD")
              (incf sum #x4000))
             (t
              (let ((size (read-asset-bank-size bank build region)))

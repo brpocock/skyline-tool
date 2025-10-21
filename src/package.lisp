@@ -20,10 +20,59 @@
            #:compile-map
            #:compile-sound
            #:compile-music
+           #:compile-script
            #:command
            #:build-banking
            #:c
-           #:bye))
+           #:bye
+           #:about-skyline-tool
+           #:allocate-assets
+           #:atari800-label-file
+           #:blob-rip-7800
+           #:burn-rom
+           #:check-for-absent-assets
+           #:compile-animation-sequences
+           #:compile-art-7800
+           #:compile-code
+           #:compile-enemies
+           #:compile-font-command
+           #:compile-forth
+           #:compile-item-drops
+           #:compile-midi
+           #:compile-obj
+           #:compile-shops
+           #:compile-tileset
+           #:collect-strings
+           #:extract-tileset-palette
+           #:gui
+           #:labels-to-forth
+           #:labels-to-mame
+           #:labels-to-include
+           #:make-classes-for-oops
+           #:prepend-fundamental-mode
+           #:push-7800gd-bin
+           #:push-7800gd-bin-no-execute
+           #:repl
+           #:run-script
+           #:play-script-on-atarivox
+           #:write-actor-prototypes
+           #:write-asset-bank
+           #:write-asset-ids
+           #:write-cart-header
+           #:write-character-ids
+           #:write-docks-index
+           #:write-equipment-index
+           #:write-flags-tables
+           #:write-gimp-palettes
+           #:write-inventory-tables
+           #:write-keys-tables
+           #:write-orchestration
+           #:write-projection-tables.s
+           #:write-sound-effects-file
+           #:write-master-makefile
+           #:run-for-port
+           #:run-gui
+           #:run-repl))
 
 (in-package :skyline-tool)
 

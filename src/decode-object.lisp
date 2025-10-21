@@ -50,14 +50,18 @@
         (offset 0)
         (fields (list)))
     (with-input-from-file (classes.defs pathname :if-does-not-exist :error)
-      (let ((parent-class (loop for line = (read-line classes.defs)
+      (let ((parent-class (loop for line = (read-line classes.defs nil nil)
+                                while line
                                 do (when (and (< (length class-name-<) (length line))
                                               (string= line
                                                        class-name-<
                                                        :end1 (length class-name-<)))
-                                     (return (subseq line (length class-name-<)))))))
-        (unless parent-class
-          (error "Can't determine parent class of ~s" class-name))
+                                     (return (subseq line (length class-name-<))))
+                                finally (unless line
+                                          (cerror "Ignore and continue"
+                                                  "Can't determine parent class of ~s" class-name)
+                                          (return-from read-class-fields-from-defs
+                                            (list nil 0))))))
         (destructuring-bind (f$ o$) (read-class-fields-from-defs parent-class pathname)
           (setf fields f$ offset o$))
         (loop for line = (read-line classes.defs nil nil)
@@ -131,6 +135,38 @@
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
   (:method ((field (eql :course-finished-p)) value s)
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
+  (:method ((field (eql :bresenham-course-delta-x)) value s)
+    (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
+            (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
+            (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)))))
+  (:method ((field (eql :bresenham-course-delta-y)) value s)
+    (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
+            (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
+            (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)) )))
+  (:method ((field (eql :bresenham-course-absolute-delta-x)) value s)
+    (format s " = $~4,'0x ≈ ~f tiles"
+            (+ (first value) (* #x100 (second value)))
+            (/ (+ (first value) (* #x100 (second value))) 1024.0)))
+  (:method ((field (eql :bresenham-course-absolute-delta-y)) value s)
+    (format s " = $~4,'0x ≈ ~f tiles"
+            (+ (first value) (* #x100 (second value)))
+            (/ (+ (first value) (* #x100 (second value))) 1024.0)))
+  (:method ((field (eql :bresenham-course-sign-x)) value s)
+    (case (first value)
+      (1 (format s " = + (right, east)"))
+      (#xff (format s " = - (left, west)"))
+      (0 (format s " = zero"))
+      (otherwise (format s " = invalid"))))
+  (:method ((field (eql :bresenham-course-sign-y)) value s)
+    (case (first value)
+      (1 (format s " = + (down, south)"))
+      (#xff (format s " = - (up, north)"))
+      (0 (format s " = zero"))
+      (otherwise (format s " = invalid"))))
+  (:method ((field (eql :bresenham-course-total-length)) value s)
+    (format s " = $~4,'0x ≈ ~f tiles"
+            (+ (first value) (* #x100 (second value)))
+            (/ (+ (first value) (* #x100 (second value))) 1024.0)))
   (:method ((field (eql :course-waypoint-x)) value s)
     (format s " = ~d" (first value)))
   (:method ((field (eql :course-waypoint-y)) value s)
@@ -152,7 +188,7 @@
   (:method ((field (eql :palette-color)) value s)
     (format s " = ~a"
             (case (first value)
-              (1 "Peach") (2 "Purple") (3 "Green")
+              (1 "Peach") (2 "Green") (3 "Purple")
               (5 "Silver") (6 "Orange") (7 "Brown")
               (9 "White") (10 "Gray") (11 "Black")
               (13 "Yellow") (14 "Red") (15 "Blue")
@@ -225,7 +261,7 @@
               (#x80 "No Shield")
               (otherwise "(invalid value)"))))
   (:method ((field (eql :character-equipment)) value s)
-    ;; TODO move these into JSON
+    ;; TODO: #1220 move these into JSON
     (format s " = ~a"
             (case (first value)
               (#x80 "No Item")
@@ -253,6 +289,12 @@
                                          (or *npc-stats* (load-npc-stats))))
                      (getf npc :name)
                      "(unknown)"))))))
+  (:method ((field (eql :particle-kind)) value s)
+    (format s " = ~a" (case (first value)
+                        (1 "Emote")
+                        (2 "Rain Splat")
+                        (3 "Rain Splash")
+                        (otherwise "(invalid)"))))
   (:method ((field (eql :character-decal-kind)) value s)
     (format s " = ~a" (case (first value)
                         (0 "The Player")
@@ -270,7 +312,7 @@
                         (12 "Block 2 NPC")
                         (13 "Block 3 NPC")
                         (14 "Block 4 NPC")
-                        (15 "(reserved for expansion)")
+                        (15 "(Reserved for expansion)")
                         (otherwise "(invalid)")))))
 
 (defun decode-object (dump &optional offset everything)
@@ -364,11 +406,13 @@
                                 (coerce (subseq dump field-start next-offset)
                                         'list))
                         (if (string= "CharacterName" field-name)
-                            (format t "~%“~a”"
-                                    (minifont->unicode
-                                     (subseq dump field-start
-                                             (+ field-start
-                                                (elt dump (cdr (elt class-fields (1+ i))))))))
+                            (clim:with-text-style (t
+                                                   (clim:make-text-style :serif :italic 16))
+                              (format t "~%“~(~a~)”"
+                                      (minifont->unicode
+                                       (subseq dump field-start
+                                               (+ field-start
+                                                  (elt dump (cdr (elt class-fields (1+ i)))))))))
                             (print-field-value (make-keyword
                                                 (string-upcase
                                                  (cl-change-case:param-case field-name)))
@@ -424,7 +468,7 @@
                  (when (hash-table-count summary)
                    (format t "~2%Classes in use:~{~%~3t~4:d × ~a~}~%"
                            (alist-plist
-                            (reverse (sort (hash-table-alist summary)
+                            (reverse (sort (cons (cons "Player" 1) (hash-table-alist summary))
                                            #'string>
                                            :key #'car)))))
                  summary))))
@@ -481,25 +525,25 @@
                             (unless quietp
                               (terpri)
                               (clim:surrounding-output-with-border
-                               (t :shape :drop-shadow
-                                  :ink clim:+red+)
-                               (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
-                                       j bam (bam-block->object-address j))))
+                                  (t :shape :drop-shadow
+                                     :ink clim:+red+)
+                                (format t "⚠ Block $~2,'0x allocated in BAM (value $~2,'0x) but not reachable:  ($~4,'0x)"
+                                        j bam (bam-block->object-address j))))
                             (push j unreachable ))
                            (visitation
                             (unless quietp
                               (terpri)
                               (clim:surrounding-output-with-border
-                               (t :shape :drop-shadow
-                                  :ink clim:+red+)
-                               (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
-                                       j (bam-block->object-address j))))
+                                  (t :shape :drop-shadow
+                                     :ink clim:+red+)
+                                (format t "⚠ Block NOT allocated in BAM but reachable to objects: $~2,'0x ($~4,'0x)"
+                                        j (bam-block->object-address j))))
                             (push j squatters)))
                       finally (return-from mark-and-sweep-objects
                                 (values unreachable squatters)))))
 
 (defun room-for-objects (&optional (dump (load-dump-into-mem)))
-  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump)
+  (multiple-value-bind (unreachable squatters) (mark-and-sweep-objects :dump dump :quietp t)
     (format t "~%Object pool map (○ available, ● used~@[, ☠ unreachable~]~@[, ✗squatters~])"
             unreachable squatters)
     (let ((longest-span 0)
@@ -540,15 +584,15 @@
          (format t "~{~%~{~a~^ ~}~}" rows))
         (t (terpri)
          (clim:formatting-table (t)
-                                (clim:formatting-row (t)
-                                                     (loop for addr from #x40 below #x100 by 8
-                                                           do (clim:formatting-cell (t)
-                                                                                    (format t "~2,'0x" addr))))
-                                (dolist (row rows)
-                                  (clim:formatting-row (t)
-                                                       (dolist (el row)
-                                                         (clim:formatting-cell (t)
-                                                                               (princ el))))))))
+           (clim:formatting-row (t)
+             (loop for addr from #x40 below #x100 by 8
+                   do (clim:formatting-cell (t)
+                        (format t "~2,'0x" addr))))
+           (dolist (row rows)
+             (clim:formatting-row (t)
+               (dolist (el row)
+                 (clim:formatting-cell (t)
+                   (princ el))))))))
       
       (format t "~&
 Room for objects:
@@ -561,18 +605,18 @@ Room for objects:
               free-blocks (* 8 free-blocks)
               (round (* 100 (/ free-blocks #xc0)))
               longest-span (* 8 longest-span)))
-    (when unreachable
-      (terpri) (terpri)
-      (clim:surrounding-output-with-border (t :shape :drop-shadow
-                                              :ink clim:+red+)
-                                           (if (= 1 (length unreachable))
-                                               (format t "⚠ An unreachable leaked object exists:")
-                                               (format t "⚠ Unreachable leaked objects exist:")))
-      (dolist (bam unreachable)
-        (let ((address (bam-block->object-address bam)))
-          (format t "~2&Unreachable object? block $~2,'0x for address $~4,'0x:"
-                  bam address)
-          (decode-object-at dump address))))))
+    #+ () (when unreachable
+            (terpri) (terpri)
+            (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                    :ink clim:+red+)
+              (if (= 1 (length unreachable))
+                  (format t "⚠ An unreachable leaked object exists:")
+                  (format t "⚠ Unreachable leaked objects exist:")))
+            (dolist (bam unreachable)
+              (let ((address (bam-block->object-address bam)))
+                (format t "~2&Unreachable object? block $~2,'0x for address $~4,'0x"
+                        bam address)
+                (decode-object-at dump address))))))
 
 (defun decode-self-object (&optional (dump (load-dump-into-mem)))
   (multiple-value-bind (low pointer) (dump-peek "Self")
@@ -604,8 +648,8 @@ Room for objects:
 (defun show-room-for-objects ()
   "Show how much room objects take up in the dump"
   (clim-simple-echo:run-in-simple-echo #'room-for-objects
-                                       :width 1111
-                                       :height 1111
+                                       :width 1000
+                                       :height 500
                                        :process-name "Room for Objects"))
 
 (defun echo-forth-stack ()
@@ -750,12 +794,16 @@ Room for objects:
      (when (= (1+ line) last-line)
        (format t "~%—"))))
   (format t "~%
-DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d"
+DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d …
+
+DialogueTextLines: ~d …Room: ~d"
           (dump-peek "DialogueLines")
           (dump-peek "DialogueLinesToShow")
           (dump-peek "DialogueLinesTarget")
-          (dump-peek "DialogueLinesShown")))
-
+          (dump-peek "DialogueLinesShown")
+          (dump-peek "DialogueTextLines")
+          (dump-peek "DialogueTextLinesRoom")))
+  
 (defun show-dialogue-buffers ()
   "Show the contents of the dialogue buffers"
   (clim-simple-echo:run-in-simple-echo #'decode-dialogue

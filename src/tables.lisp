@@ -424,7 +424,7 @@ GameFlag: .block~2%"
                                   collect 0)))
       (loop for name in '(:character-id :hp :ac :pitch :speed
                           :kind :hair-color :skin-color :clothes-color
-                          :head :body)
+                          :head :body :equipment :shield)
             for asm-name = (cl-change-case:pascal-case (string name))
             do (progn
                  (format source "~%~a:~%~10t.byte $00, $00~32t; Player, Narrator" asm-name)
@@ -454,6 +454,145 @@ GameFlag: .block~2%"
       (format code "~2%~10tDockNames = (~{DockName~d~^, ~})"
               (loop for i from 1 upto max-dock-id collecting i))
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
+
+(defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods"))
+  "Read the orchestration table from Source/Tables/Orchestration.ods"
+  (format *trace-output* "~&Reading orchestration from ~a" (enough-namestring pathname))
+  (finish-output *trace-output*)
+  (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
+    (loop for row in table
+          when (and row (not (emptyp (string-trim #(#\Space) (getf row :instrument)))))
+            collecting (list :instrument (getf row :instrument)
+                             :distortion (make-keyword (string-upcase (getf row :distortion)))
+                             :attack-addend (parse-number (getf row :attack-addend))
+                             :decay-subtrahend (parse-number (getf row :decay-subtrahend))
+                             :decay-duration (parse-number (getf row :decay-duration))
+                             :release-subtrahend (parse-number (getf row :release-subtrahend))
+                             :tia-distortion (parse-number (getf row :tia-distortion))))))
+
+(defun write-orchestration (&optional (input #p"Source/Tables/Orchestration.ods")
+                                      (output #p"Source/Generated/Orchestration.s"))
+  "Write the orchestration tables to a source code file. 
+
+INPUT & OUTPUT pathnames can be given."
+  (with-simple-restart (do-over "Re-read the Orchestration.ods file")
+    (with-output-to-file (out output :if-exists :supersede)
+      (format *trace-output* "~&Going to write orchestration tables from ~a to source code file ~a…"
+              (enough-namestring input) (enough-namestring output))
+      (format out ";;;; Phantasia ~a~%;;; This file is generated from ~a~2%"
+              (enough-namestring output) (enough-namestring input))
+      (let ((table (read-orchestration input)))
+        (format out "~2%~10tNumInstruments = ~d" (length table))
+        (format out "~2%;;; FIXME: #1236 PAL support 
+;;; (multiple-value-bind (int fract) (floor (/ (* 1.0 60) 50)) (list int (floor (* fract #x100))))
+;;; FIXME: #1236 PAL support")
+        (format out "~2%InstrumentHokeyDistortion:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (ash (or (parse-integer (string (getf row :distortion)) :junk-allowed t) 10) 4)
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentTIADistortion:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (getf row :tia-distortion)
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentAttackAddend:")
+        (dolist (row table)
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :attack-addend))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore fract))
+                    (getf row :attack-addend)
+                    int)
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
+        (format out "~2%InstrumentAttackFraction:")
+        (dolist (row table)
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :attack-addend)))))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore int))
+                    (getf row :attack-addend)
+                    (floor (* #x100 fract)))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
+        (format out "~2%InstrumentDecaySubtrahend:")
+        (dolist (row table)
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :decay-subtrahend))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore fract))
+                    (getf row :decay-subtrahend)
+                    int)
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
+        (format out "~2%InstrumentDecayFraction:")
+        (dolist (row table)
+          (dolist (row table)
+            (format out "~%~10t.if TV == NTSC")
+            (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                    (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
+                    (title-case (getf row :instrument)))
+            (format out "~%~10t.else")
+            (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                    (multiple-value-bind (int fract)
+                        (floor (/ 60.0 50.0))
+                      (declare (ignore int))
+                      (getf row :decay-subtrahend)
+                      (floor (* #x100 fract)))
+                    (title-case (getf row :instrument)))
+            (format out "~%~10t.fi")))
+        (format out "~2%InstrumentDecayDuration:")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :decay-duration))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentReleaseSubtrahend:")
+        (dolist (row table)
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (getf row :release-subtrahend))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore fract))
+                    (getf row :release-subtrahend)
+                    int)
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
+        (format out "~2%InstrumentReleaseFraction:")
+        (dolist (row table)
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :release-subtrahend)))))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore int))
+                    (getf row :release-subtrahend)
+                    (floor (* #x100 fract)))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
+        (format out "~2%;;; End of Orchestration~2%")))))
 
 (defun write-equipment-index (&optional (pathname #p"Source/Generated/EquipmentIndex.s"))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
@@ -495,15 +634,13 @@ GameFlag: .block~2%"
                   (list ".byte $~2,'0x" #'hex :index
                         ".byte $~2,'0x" #'hex :decal-bank
                         ".byte ~aClass" #'here? '(:entity-class :entity)
-                        ".byte ~aSize" #'here? '(:entity-class :entity-size)
                         ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
                         ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
                         "" #'drawing-mode-filter :drawing-mode
                         ".byte ~aClass" #'here? '(:course-class :course)
-                        ".byte ~aSize" #'here? '(:course-class :course-size)
                         ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
                         ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
-                        ".byte Sound_~a" #'here? :sound
+                        ".byte Song_~a_ID" #'here? :sound
                         ".byte $~2,'0x" #'hex :up
                         ".byte $~2,'0x" #'hex :down
                         ".byte $~2,'0x" #'hex :left

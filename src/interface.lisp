@@ -24,11 +24,11 @@
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
+        :compile-midi 'midi-compile
         :compile-obj 'compile-obj
         :compile-code 'compile-skylisp
         :compile-shops 'compile-shops
         :collect-strings 'collect-strings
-        :compile-music 'compile-music
         :compile-script 'compile-script
         :compile-shops 'compile-shops
         :compile-tileset 'compile-tileset
@@ -58,7 +58,9 @@
         :write-gimp-palettes 'write-gimp-palettes
         :write-inventory-tables 'write-inventory-tables
         :write-keys-tables 'write-keys-tables
+        :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
+        :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile))
 
 (defun run-repl ()

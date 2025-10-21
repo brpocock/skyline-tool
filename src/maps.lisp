@@ -75,7 +75,7 @@
                                          1000)))
                         (push frame-tile sequence)
                         (push duration sequence)))
-                    ;; TODO If  the sequence  uses a  frame already  defined as
+                    ;; TODO: #1218 If  the sequence  uses a  frame already  defined as
                     ;; a part of another sequence, omit it.
                     (add-animation (reverse sequence))))))))))
     animations))
@@ -175,7 +175,7 @@
 (defun find-effective-attributes (tileset x y objects attributes
                                   exits enemies &key tile-width)
   "Find the effective attributes for the tile X Y using TILESET, OBJECTS, ATTRIBUTES, EXITS and ENEMIES."
-  (declare (ignore enemies)) ; TODO
+  (declare (ignore enemies)) ; TODO: #1238
   (let ((effective-objects (remove-if-not (lambda (el)
                                             (and (equal "object" (car el))
                                                  (object-covers-tile-p x y el :tile-width tile-width)))
@@ -259,7 +259,7 @@
   (reduce #'logior (remove-if #'null (flatten list))))
 
 (defun collect-decal-object (object enemies base-tileset decal-tileset &key (tile-width 8))
-  (declare (ignore enemies)) ; TODO
+  (declare (ignore enemies)) ; TODO: #1238
   (let ((x (floor (parse-number (assocdr "x" (second object))) tile-width))
         (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
         (name (or (assocdr "name" (second object) nil) "(Unnamed decal)")))
@@ -323,8 +323,8 @@
          (exits-table (cons nil nil))
          (decals-table (cons nil nil))
          (enemies (make-array 0 :element-type 'cons :adjustable t :fill-pointer t)))
-    (assert (<= 13 (array-dimension ground 1) 64) ()
-            "The tile map must have from 13-64 (not ~:d) rows"
+    (assert (<= 10 (array-dimension ground 1) 64) ()
+            "The tile map must have from 10-64 (not ~:d) rows"
             (array-dimension ground 1))
     (assert (<= 20 (array-dimension ground 0) 127) ()
             "The tile map must have from 20-127 (not ~:d) columns"
@@ -533,7 +533,7 @@
                              best-distance distance)))
                 finally (return best)))
         (cond
-          ;; TODO make a proper error with presentation methods to handle this
+          ;; TODO: #1219 make a proper error with presentation methods to handle this
           ((clim:extended-output-stream-p *trace-output*)
            (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
 All colors: ~s~@[~% at (~3d,~3d)~]"
@@ -748,11 +748,11 @@ Update map/s or script to agree with one another and DO-OVER."
   (let ((locale.xml (load-other-map locale)))
     (destructuring-bind (locale-id x y)
         (find-entrance-by-name locale.xml point locale)
-      (format *trace-output* " Found at (~3d, ~3d)." x y)
+      (format *trace-output* " Found at (~2d, ~2d)." x y)
       (or (position (list locale-id x y) exits :test #'equalp)
-          (progn
-            (setf (cdr (last exits)) (cons (list locale-id x y) nil))
-            (1- (length exits)))))))
+          (prog1
+              (length exits)
+            (setf (cdr (last exits)) (cons (list locale-id x y) nil)))))))
 
 (defvar *enemies-by-name* (make-hash-table :test #'equalp))
 
@@ -797,7 +797,7 @@ Update map/s or script to agree with one another and DO-OVER."
                (cond ((eql t value) (set-bit byte bit))
                      ((eql :off value) (clear-bit byte bit))
                      (t (warn "Unrecognized value ~s for property ~s" value property))))))
-    
+
     (when (tile-collision-p xml 4 0) (set-bit 0 #x01))
     (when (tile-collision-p xml 4 15) (set-bit 0 #x02))
     (when (tile-collision-p xml 0 7) (set-bit 0 #x04))
@@ -1129,31 +1129,44 @@ range is 0 - #xffffffff (4,294,967,295)"
         do (write-byte byte stream)))
 
 (define-constant +minifont-punctuation+
-  " ,.?!/&+-×÷=“”’;:…@❓ñ♪©•↑↓←→"
+  " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0"
   :test 'string=)
 
 (defun char->minifont (char)
+  ;; Treat pilcrow (¶) as a space for minifont encoding. The pilcrow is a
+  ;; control/markup character in scripts, not a glyph in the minifont. Mapping
+  ;; it to space ensures validation/round-trip checks don't falsely fail while
+  ;; preserving layout semantics.
   (cond
     ((or (char<= #\0 char #\9)
          (char<= #\a char #\z)
          (char<= #\A char #\Z))
      (digit-char-p char 36))
-    ((char= #\apostrophe char)
-     (if-let ((n #.(position #\’ +minifont-punctuation+ :test #'char=)))
+    ((char= char #\¶)
+     #xd2)
+    ((char= char #\apostrophe)
+     (if-let (n #.(position #\’ +minifont-punctuation+ :test #'char=))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
-    (t (or (let ((pos (position (char-downcase char) +minifont-punctuation+ :test #'char=)))
-             (when pos (+ 36 pos)))
-           (error "Cannot encode character “~:c” (~a) in minifont"
-                  char (sentence-case (char-name char)))))))
+    (t (if-let (pos (position (char-downcase char) +minifont-punctuation+ :test #'char=))
+         (+ 36 pos)
+         (error "Cannot encode character “~:c” (~a) in minifont"
+                char (sentence-case (char-name char)))))))
 
-(defun minifont->char (byte &key replace)
+(defun minifont->char (byte &key (replace #\❓))
   (unless replace
-    (check-type byte (integer 0 63) "a minifont character value (0-63)"))
+    (check-type byte (or (integer 0 127) (integer #xd2 #xd2)) "a minifont character value (0-127 or $d2)"))
   (cond
-    ((<= 0 byte 35) (char (format nil "~36r" byte) 0))
-    ((or (< byte 0) (> byte 63)) replace)
-    (t (elt +minifont-punctuation+ (- byte 36)))))
+    ((<= 0 byte 35) (format nil "~36r" byte))
+    ((= #xd2 byte) "¶")
+    ((or (< byte 0) (> byte 127)) (string replace))
+    ((= #x70 byte) "I’")
+    ((= #x71 byte) "ll")
+    ((= #x72 byte) "’r")
+    ((= #x75 byte) "li")
+    ((= #x76 byte) "fi")
+    ((= #x77 byte) "’s")
+    (t (string (elt +minifont-punctuation+ (- byte 36))))))
 
 (defun unicode->minifont (string)
   (let ((mini-string (make-array (length string) :element-type '(unsigned-byte 8))))
@@ -1162,19 +1175,18 @@ range is 0 - #xffffffff (4,294,967,295)"
     mini-string))
 
 (defun minifont->unicode (string &key replace)
-  (let ((uni-string (make-string (length string))))
-    (loop for i below (length string)
-          do (setf (aref uni-string i) (minifont->char (aref string i) :replace replace)))
-    uni-string))
+  (apply #'concatenate 'string
+         (loop for i below (length string)
+               collecting (minifont->char (elt string i) :replace replace))))
 
 (defun decal-invisible-p (decal)
   (= #xff (elt decal 2)))
 
 (defun assemble-binary (source-pathname)
   (let (#+ () (combined-source-pathname
-          (make-pathname :directory (append (list "Source" "Generated")
-                                            (subseq (pathname-directory source-pathname) 1))
-                         :defaults source-pathname)))
+                (make-pathname :directory (append (list "Source" "Generated")
+                                                  (subseq (pathname-directory source-pathname) 1))
+                               :defaults source-pathname)))
     (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
             (enough-namestring source-pathname))
     #(#x60) ; rts
@@ -1245,7 +1257,7 @@ range is 0 - #xffffffff (4,294,967,295)"
       (assert (< (fill-pointer s) #xc00) ()
               "Overflow (to ~:d byte~:p) in attributes table when trying to add ~s (from among ~:d attribute~:p)"
               (fill-pointer s) attr (length attributes-table)))
-    
+
     ;; exits list
     (setf (fill-pointer s) #xc00)
     (dolist (exit exits-table)
