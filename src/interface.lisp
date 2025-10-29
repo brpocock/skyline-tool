@@ -19,8 +19,12 @@
         :compile-index 'compile-index
         :compile-animation-sequences 'compile-animation-sequences
         :compile-art 'compile-art
+        :compile-chaos-character 'compile-chaos-character
         :compile-enemies 'compile-enemies
         :compile-font 'compile-font-command
+        :compile-2600-font-8x16 'compile-2600-font-8x16
+        :compile-2600-playfield 'compile-2600-playfield
+        :compile-2600-special-sprites 'compile-2600-special-sprites
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
@@ -524,5 +528,8 @@ See COPYING for details
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))
+
+#+mcclim (assert (fboundp 'clim-debugger:debugger))
+
 
 #+mcclim (assert (fboundp 'clim-debugger:debugger))
