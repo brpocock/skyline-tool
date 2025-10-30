@@ -81,15 +81,41 @@
       (asdf:system-relative-pathname
        :skyline-tool (make-pathname :directory '(:relative :up) :name "Project" :type "json" ))))
 
-(defparameter *game-title* (cdr (assoc :*game *project.json*)))
-(defparameter *part-number*  (cdr (assoc :*part-number *project.json*)))
-(defparameter *studio* (cdr (assoc :*studio *project.json*)))
-(defparameter *publisher* (cdr (assoc :*publisher *project.json*)))
-(defparameter *machine* (cdr (assoc :*machine *project.json*)))
-(defparameter *sound* (cdr (assoc :*sound *project.json*)))
-(defparameter *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*))))
-(defparameter *default-skin-color* (cdr (assoc :*default-skin-color *project.json*)))
-(defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))
-(defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+;; Robust JSON key accessor supporting CamelCase (preferred), lowercase, and legacy starred keys
+(defun %json-get (table &rest keys)
+  (labels ((lookup (k)
+             (cond
+               ((hash-table-p table)
+                (multiple-value-bind (val foundp) (gethash k table)
+                  (when foundp val)))
+               ((listp table)
+                (let ((cell (assoc k table :test #'equal)))
+                  (when cell (cdr cell))))
+               (t nil))))
+    (or (some #'lookup keys)
+        (let* ((alts (loop for k in keys append
+                            (cond
+                              ((stringp k) (list (string-downcase k) (string-upcase k)))
+                              ((symbolp k)
+                               (let ((s (string k)))
+                                 (list (intern s :keyword)
+                                       (intern (string-downcase s) :keyword)
+                                       (intern (string-upcase s) :keyword)
+                                       (string s) (string-downcase s) (string-upcase s))))
+                              (t (list k))))))
+          (some #'lookup alts)))))
+
+(defparameter *game-title* (%json-get *project.json* :Game :game :*game))
+(defparameter *part-number*  (%json-get *project.json* :PartNumber :partnumber :*part-number))
+(defparameter *studio* (%json-get *project.json* :Studio :studio :*studio))
+(defparameter *publisher* (%json-get *project.json* :Publisher :publisher :*publisher))
+(defparameter *machine* (%json-get *project.json* :Machine :machine :*machine))
+(defparameter *sound* (%json-get *project.json* :Sound :sound :*sound))
+(defparameter *common-palette*
+  (let ((v (%json-get *project.json* :CommonPalette :common-palette :*common-palette)))
+    (when v (mapcar #'intern v))))
+(defparameter *default-skin-color* (%json-get *project.json* :DefaultSkinColor :default-skin-color :*default-skin-color))
+(defparameter *default-hair-color* (%json-get *project.json* :DefaultHairColor :default-hair-color :*default-hair-color))
+(defparameter *default-clothes-color* (%json-get *project.json* :DefaultClothesColor :default-clothes-color :*default-clothes-color))
 
 (defvar *region* :ntsc)
