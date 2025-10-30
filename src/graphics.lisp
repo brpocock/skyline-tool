@@ -2776,9 +2776,9 @@ Columns: ~d
           (loop for action from 0 below 16
                 do (format out "~12trem Action ~d~%" action)
                    (loop for frame from 0 below 8
-                         do (let* ((original-frame-index (+ frame (* action 16)))
+                         do (let* ((original-frame-index (+ frame (* action 8)))
                                    (deduplicated-index (gethash original-frame-index frame-map)))
-                              (format out "~12t~d~%" deduplicated-index)))
+                              (format out "~12t~d~%" (or deduplicated-index 0))))
                    (format out "~%"))
           (format out "~10tend~%"))
         
@@ -2813,9 +2813,9 @@ Columns: ~d
                                          (png-read:image-data png)
                                          α)))
       
-      ;; Validate dimensions (64×16 for 16 characters of 8×16 each)
-      (unless (and (= width 64) (= height 16))
-        (error "Font must be 64×16 pixels for 16 characters of 8×16 each, got ~d×~d" width height))
+      ;; Validate dimensions (128×16 for 16 characters of 8×16 each)
+      (unless (and (= width 128) (= height 16))
+        (error "Font must be 128×16 pixels for 16 characters of 8×16 each, got ~d×~d" width height))
       
       (with-open-file (out output-file :direction :output :if-exists :supersede)
         ;; Start subroutine with label
@@ -2829,7 +2829,8 @@ Columns: ~d
         (loop for char from 0 below 16
               do (let ((char-start-x (* char 8)))
                    (format out "~12trem Character ~d~%" char)
-                   (loop for row from 0 below 16
+                   ;; Invert Y: batariBASIC expects rows bottom-to-top
+                   (loop for row from 15 downto 0
                          do (let ((row-bits (loop for bit from 0 below 8
                                                  for pixel-x = (+ char-start-x bit)
                                                  collect (if (plusp (aref palette-pixels pixel-x row))
@@ -2991,31 +2992,47 @@ Columns: ~d
    
    Returns list of frames, each frame is a list of 16 rows, each row is a list of 8 bits."
   (loop for frame from 0 below 8
-        collect (let ((frame-start-y (* frame 16)))
-                  (loop for pose from 0 below 16
-                        collect (let ((pose-start-x (* pose 8)))
+        collect (let ((frame-start-x (* frame 8)))
+                  (loop for action from 0 below 16
+                        collect (let ((action-start-y (* action 16)))
                                  (loop for row from 0 below 16
                                        collect (loop for bit from 0 below 8
-                                                     for pixel-x = (+ pose-start-x bit)
-                                                     for pixel-y = (+ frame-start-y row)
+                                                     for pixel-x = (+ frame-start-x bit)
+                                                     for pixel-y = (+ action-start-y row)
                                                      collect (if (plusp (aref palette-pixels pixel-x pixel-y))
                                                                 1 0))))))))
 
 (defun deduplicate-frames (all-frames)
-  "Deduplicate frame bitmaps and handle blank rows by repeating previous valid frames.
+  "Deduplicate frame bitmaps and handle blank frames/rows by repeating patterns.
    
-   Returns list of unique frames with blank rows filled by repeating valid frames."
-  (let* ((flattened-frames (mapcar #'flatten-frame all-frames))
-         (unique-frames (remove-duplicates flattened-frames :test #'equalp))
-         (processed-frames (mapcar #'process-blank-rows unique-frames)))
-    processed-frames))
+   Blank frames are replaced with repeated patterns of frames to their left.
+   Blank rows are replaced with the entire row above.
+   
+   Returns list of unique frames with blank frames/rows filled by repeating patterns."
+  (let* ((processed-frames (process-blank-frames all-frames))
+         (flattened-frames (mapcar #'flatten-frame processed-frames))
+         (unique-frames (remove-duplicates flattened-frames :test #'equalp)))
+    unique-frames))
 
 (defun flatten-frame (frame)
   "Flatten a frame (list of poses) into a single bitmap."
   (apply #'append frame))
 
+(defun process-blank-frames (all-frames)
+  "Process blank frames by replacing them with repeated patterns of frames to their left."
+  (let ((processed-frames '())
+        (last-valid-frame nil))
+    (loop for frame in all-frames
+          do (let ((processed-frame (process-blank-rows frame)))
+               (if (blank-frame-p processed-frame)
+                   (push (or last-valid-frame (make-blank-frame)) processed-frames)
+                   (progn
+                     (setf last-valid-frame processed-frame)
+                     (push processed-frame processed-frames)))))
+    (reverse processed-frames)))
+
 (defun process-blank-rows (frame)
-  "Process blank rows by repeating the last valid frame's data."
+  "Process blank rows by repeating the entire row above."
   (let ((processed-rows '())
         (last-valid-row nil))
     (loop for row in frame
@@ -3028,7 +3045,15 @@ Columns: ~d
 
 (defun blank-row-p (row)
   "Check if a row is blank (all zeros)."
-  (every #'zerop row))
+  (every (lambda (x) (eql x 0)) row))
+
+(defun blank-frame-p (frame)
+  "Check if a frame is blank (all rows are blank)."
+  (every #'blank-row-p frame))
+
+(defun make-blank-frame ()
+  "Create a blank frame (16 rows of 8 zeros each)."
+  (make-list 16 :initial-element (make-list 8 :initial-element 0)))
 
 (defun build-frame-mapping (all-frames unique-frames)
   "Build mapping from original frame indices to deduplicated indices."
@@ -3037,7 +3062,7 @@ Columns: ~d
     (loop for original-index from 0 below (length flattened-frames)
           for original-frame = (nth original-index flattened-frames)
           do (let ((deduplicated-index (position original-frame unique-frames :test #'equalp)))
-               (setf (gethash original-index mapping) deduplicated-index)))
+               (setf (gethash original-index mapping) (or deduplicated-index 0))))
     mapping))
 
 (defun compile-2600-special-sprites (output-file png-file)
