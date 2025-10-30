@@ -83,7 +83,7 @@
 (test batch-character-compilation
   "Test that all character sprites can be compiled without errors"
   (let ((character-names '("Bernie" "CurlingSweeper" "Dragonet" "EXOPilot"
-                          "FatTony" "GrizzardHandler" "Harpy" "KnightGuy"
+                          "FatTony" "Megax" "Harpy" "KnightGuy"
                           "Frooty" "Nefertem" "NinjishGuy" "PorkChop"
                           "RadishGoblin" "RoboTito" "Ursulo" "VegDog")))
     (dolist (char character-names)
@@ -102,4 +102,5 @@
 (defun run-sprite-compilation-tests ()
   "Run all sprite compilation regression tests"
   (run! 'sprite-compilation-tests))
+
 
