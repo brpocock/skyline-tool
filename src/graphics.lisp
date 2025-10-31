@@ -2740,9 +2740,8 @@ Columns: ~d
            (height (png-read:height png))
            (width (png-read:width png))
            (α (png-read:transparency png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
-                                         α)))
+           (rgb-data (png-read:image-data png))
+           (palette-pixels (png->palette height width rgb-data α)))
       
       ;; Validate dimensions (64×256 for 8 frames × 16 poses of 8×16 each)
       (unless (and (= width 64) (= height 256))
@@ -2750,10 +2749,8 @@ Columns: ~d
       
       (with-open-file (out output-file :direction :output :if-exists :supersede)
         ;; Start subroutine with label
-        (format out "~a~%" subroutine-name)
-        
-        (format out "~10trem Character data for ~a - 8 frames × 16 poses~%" char-name)
-        (format out "~%")
+        (format out "~%~a~%" subroutine-name)
+        (format out "~%~10trem Character data for ~a - 8 frames × 16 poses~2%" char-name)
         
         ;; Extract all frame bitmaps and deduplicate them
         (let* ((all-frames (extract-all-frames palette-pixels))
@@ -2766,8 +2763,8 @@ Columns: ~d
           (loop for frame-data in unique-frames
                 do (loop for row in frame-data
                          do (let ((row-value (reduce (lambda (acc bit)
-                                                        (+ (* acc 2) (if bit 1 0)))
-                                                      row :initial-value 0)))
+                                                       (+ (* acc 2) (if bit 1 0)))
+                                                     row :initial-value 0)))
                               (format out "~12t%~8,'0b~%" row-value))))
           (format out "end~%~%")
           
@@ -2983,20 +2980,26 @@ Columns: ~d
            (nearest-index (position min-distance distances)))
       (or nearest-index 0))))
 
-(defun extract-all-frames (palette-pixels)
+(defun extract-all-frames (palette-pixels rgb-data)
   "Extract all 8×16 frame bitmaps from 64×256 character image.
    
-   Returns list of frames, each frame is a list of 16 rows, each row is a list of 8 bits."
-  (loop for frame from 0 below 8
-        collect (let ((frame-start-x (* frame 8)))
-                  (loop for action from 0 below 16
-                        collect (let ((action-start-y (* action 16)))
-                                 (loop for row from 0 below 16
-                                       collect (loop for bit from 0 below 8
-                                                     for pixel-x = (+ frame-start-x bit)
-                                                     for pixel-y = (+ action-start-y row)
-                                                     collect (if (and (aref palette-pixels pixel-x pixel-y) (plusp (aref palette-pixels pixel-x pixel-y)))
-                                                                1 0))))))))
+   Returns list of frames, each frame is a list of 16 rows, each row is a list of 8 bits.
+   Uses RGB values directly to determine black (bit 0) vs non-black (bit 1)."
+  (destructuring-bind (w h bpp) (array-dimensions rgb-data)
+    (loop for frame from 0 below 8
+          collect (let ((frame-start-x (* frame 8)))
+                    (loop for action from 0 below 16
+                          collect (let ((action-start-y (* action 16)))
+                                   (loop for row from 0 below 16
+                                         collect (loop for bit from 0 below 8
+                                                       for pixel-x = (+ frame-start-x bit)
+                                                       for pixel-y = (+ action-start-y row)
+                                                       for r = (aref rgb-data pixel-x pixel-y 0)
+                                                       for g = (aref rgb-data pixel-x pixel-y 1)
+                                                       for b = (aref rgb-data pixel-x pixel-y 2)
+                                                       collect (if (and (= r 0) (= g 0) (= b 0))
+                                                                   0
+                                                                   1)))))))))
 
 (defun deduplicate-frames (all-frames)
   "Deduplicate frame bitmaps and handle blank frames/rows by repeating patterns.
