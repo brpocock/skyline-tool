@@ -3,7 +3,11 @@
 ;;;; 
 ;;;; FiveAM regression tests to prevent sprite compilation failures
 
-(in-package :skyline-tool-tests)
+(defpackage :skyline-tool/test/sprites
+  (:use :cl :fiveam :skyline-tool)
+  (:export #:sprite-compilation-tests))
+
+(in-package :skyline-tool/test/sprites)
 
 (def-suite sprite-compilation-tests
   :description "Regression tests for sprite compilation pipeline")

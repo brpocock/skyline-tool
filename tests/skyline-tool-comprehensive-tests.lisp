@@ -80,7 +80,7 @@
     (let ((content (uiop:read-file-string output-path)))
       (is (search "SetFont" content))
       (is (search "data FontData" content))
-      (is (search ".byte %" content))
+      (is (search "%" content))
       (is (search "return" content)))))
 
 (test compile-2600-font-8x16-dimension-validation

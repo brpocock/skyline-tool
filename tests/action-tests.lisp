@@ -10,15 +10,35 @@
 
 (in-suite action-tests)
 
+;; Smoke test to ensure suite registration works
+(test action-suite-smoke
+  (is (= 0 0)))
+
 ;; Helper function for testing - avoid make dependencies
 (defun compile-script-from-string (script-string)
   "Compile a Fountain script from a string and return the Forth output"
-  (with-output-to-string (output)
-    (let ((*standard-output* output))
-    ;; This is really bad form, since we're reaching under its
-    ;; skirt and yanking the crank directly, but it seems to work
-    ;; for now, so I'll accept it.
-      (skyline-tool::compile-fountain-string script-string))))
+  (let* ((root (asdf:system-source-directory :skyline-tool))
+         (npc-path (merge-pathnames "tests/data/NPCStats.ods" root))
+         (map-source (merge-pathnames "tests/data/AmsCalypso2.tmx" root))
+         (map-target (merge-pathnames "Source/Maps/Ships/AmsCalypso2.tmx" root))
+         (created-map nil))
+    (with-output-to-string (output)
+      (let ((*standard-output* output)
+            (skyline-tool::*common-palette*
+              (append '("purple" "peach" "brown" "yellow" "green")
+                      skyline-tool::*common-palette*)))
+        (let ((*npc-stats* nil))
+          (when (probe-file npc-path)
+            (skyline-tool::load-npc-stats npc-path))
+          (when (and (probe-file map-source)
+                     (not (probe-file map-target)))
+            (setf created-map t)
+            (ensure-directories-exist map-target)
+            (uiop:copy-file map-source map-target))
+          (unwind-protect
+               (skyline-tool::compile-fountain-string script-string)
+            (when created-map
+              (ignore-errors (delete-file map-target))))))))
 
 
 ;; Test gesture actions
@@ -340,3 +360,4 @@ NORVILLE stops waving arms.
 (defun run-action-tests ()
   "Run all action tests and return results"
   (fiveam:run! 'action-tests))
+)
