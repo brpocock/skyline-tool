@@ -2758,32 +2758,28 @@ Columns: ~d
         ;; Extract all frame bitmaps and deduplicate them
         (let* ((all-frames (extract-all-frames palette-pixels))
                (unique-frames (deduplicate-frames all-frames))
-               (frame-map (build-frame-mapping all-frames unique-frames)))
+               (frame-map (build-frame-mapping all-frames unique-frames))
+               (sprite-label (format nil "~aSprite" (string-capitalize char-name))))
           
-          ;; Generate deduplicated frame data
-          (format out "~10tdata CharacterFrames~%")
-          (loop for frame-index from 0 below (length unique-frames)
-                do (let ((frame-data (nth frame-index unique-frames)))
-                     (format out "~12trem Frame ~d~%" frame-index)
-                     (loop for row from 0 below 16
-                           do (let ((row-bits (nth row frame-data)))
-                                (format out "~12t.byte %~{~d~}~%" row-bits)))
-                     (format out "~%")))
-          (format out "~10tend~%~%")
+          ;; Generate deduplicated frame data (batariBASIC format: % binary, no .byte, no remarks in data)
+          (format out "~10tdata ~a~%" sprite-label)
+          (loop for frame-data in unique-frames
+                do (loop for row in frame-data
+                         do (let ((row-value (reduce (lambda (acc bit)
+                                                        (+ (* acc 2) (if bit 1 0)))
+                                                      row :initial-value 0)))
+                              (format out "~12t%~8,'0b~%" row-value))))
+          (format out "end~%~%")
           
-          ;; Generate indirection table with deduplication mapping
-          (format out "~10tdata CharacterFrameMap~%")
-          (loop for action from 0 below 16
-                do (format out "~12trem Action ~d~%" action)
-                   (loop for frame from 0 below 8
-                         do (let* ((original-frame-index (+ frame (* action 8)))
-                                   (deduplicated-index (gethash original-frame-index frame-map)))
-                              (format out "~12t~d~%" (or deduplicated-index 0))))
-                   (format out "~%"))
-          (format out "~10tend~%"))
-        
-        ;; End subroutine with return
-        (format out "~10treturn~%"))))
+          ;; Generate indirection table with deduplication mapping BF (8 numbers per action per line, comma-separated)
+          (format out "~10tdata ~aFrameMap~%" sprite-label)
+          (loop for pose from 0 below 16
+                do (let ((indices (loop for frame from 0 below 8
+                                        collect (let* ((original-frame-index (+ frame (* pose 8)))
+                                                       (deduplicated-index (gethash original-frame-index frame-map)))
+                                                  (or deduplicated-index 0)))))
+                     (format out "~12t~{~d~^, ~}~%" indices)))
+          (format out "end~%")))))
   
   ;; Return success
   t)
@@ -2899,7 +2895,7 @@ Columns: ~d
                           (loop for x from 0 below width
                                 collect (if (plusp (aref palette-pixels x row))
                                            "X" "."))))
-          (format out "~%")
+          (format out "end~%")
           
           ;; Generate color data based on TV standard
           (ecase (intern (string-upcase tv-standard) :keyword)
@@ -2999,7 +2995,7 @@ Columns: ~d
                                        collect (loop for bit from 0 below 8
                                                      for pixel-x = (+ frame-start-x bit)
                                                      for pixel-y = (+ action-start-y row)
-                                                     collect (if (plusp (aref palette-pixels pixel-x pixel-y))
+                                                     collect (if (and (aref palette-pixels pixel-x pixel-y) (plusp (aref palette-pixels pixel-x pixel-y)))
                                                                 1 0))))))))
 
 (defun deduplicate-frames (all-frames)
