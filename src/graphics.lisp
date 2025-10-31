@@ -1247,7 +1247,7 @@ Proceed with caution."))
         (compile-font-generic *machine* nil font font-input)))))
 
 (defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  (declare (ignore))
+  (declare (ignore height width image-nybbles))
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
@@ -2180,13 +2180,11 @@ an error."
   (let ((tiles (make-array (list 4 8) :element-type 'fixnum)))
     (dotimes (y 8)
       (dotimes (2x 4)
-        (let ((big-endian-p (evenp 2x)))
-          (let* ((left (aref screen (* 2x 2) y))
-                 (right (aref screen (1+ (* 2x 2)) y))
-                 #+ ()  (tile-hash (tile-hash left right big-endian-p))
-                 (merged-tile (or (gethash tile-hash *merged-tiles*)
-                                  (setf (gethash tile-hash *merged-tiles*)
-                                        (incf *tile-counter*)))))
+        (let ((big-endian-p (evenp 2x))
+              (left (aref screen (* 2x 2) y))
+              (right (aref screen (1+ (* 2x 2)) y)))
+          (declare (ignore big-endian-p left right))
+          (let* ((merged-tile (incf *tile-counter*)))
             (assert (<= merged-tile *tile-counter*))
             (setf (aref tiles 2x y) merged-tile)))))
     tiles))
@@ -2753,30 +2751,29 @@ Columns: ~d
         (format out "~%~10trem Character data for ~a - 8 frames × 16 poses~2%" char-name)
         
         ;; Extract all frame bitmaps and deduplicate them
-        (let* ((all-frames (extract-all-frames palette-pixels))
-               (unique-frames (deduplicate-frames all-frames))
-               (frame-map (build-frame-mapping all-frames unique-frames))
+        (let* ((all-frames (extract-all-frames rgb-data))
                (sprite-label (format nil "~aSprite" (string-capitalize char-name))))
-          
-          ;; Generate deduplicated frame data (batariBASIC format: % binary, no .byte, no remarks in data)
-          (format out "~10tdata ~a~%" sprite-label)
-          (loop for frame-data in unique-frames
-                do (loop for row in frame-data
-                         do (let ((row-value (reduce (lambda (acc bit)
-                                                       (+ (* acc 2) (if bit 1 0)))
-                                                     row :initial-value 0)))
-                              (format out "~12t%~8,'0b~%" row-value))))
-          (format out "end~%~%")
-          
-          ;; Generate indirection table with deduplication mapping BF (8 numbers per action per line, comma-separated)
-          (format out "~10tdata ~aFrameMap~%" sprite-label)
-          (loop for pose from 0 below 16
-                do (let ((indices (loop for frame from 0 below 8
-                                        collect (let* ((original-frame-index (+ frame (* pose 8)))
-                                                       (deduplicated-index (gethash original-frame-index frame-map)))
-                                                  (or deduplicated-index 0)))))
-                     (format out "~12t~{~d~^, ~}~%" indices)))
-          (format out "end~%")))))
+          (multiple-value-bind (unique-frames frame-mapping)
+              (deduplicate-frames-with-mapping all-frames)
+            
+            ;; Generate deduplicated frame data (batariBASIC format: % binary, no .byte, no remarks in data)
+            (format out "~10tdata ~a~%" sprite-label)
+            (loop for frame-byte-vec in unique-frames
+                  do (progn
+                       ;; Write all 16 rows of this frame
+                       (loop for row-byte across frame-byte-vec
+                             do (format out "~12t%~8,'0b~%" row-byte))
+                       ;; Double newline between frames for clarity
+                       (format out "~%")))
+            (format out "end~%~%")
+            
+            ;; Generate indirection table with deduplication mapping (8 numbers per action per line, comma-separated)
+            (format out "~10tdata ~aFrameMap~%" sprite-label)
+            (loop for action from 0 below 16
+                  do (let ((indices (loop for frame from 0 below 8
+                                          collect (aref frame-mapping (+ action (* frame 16))))))
+                       (format out "~12t~{~d~^, ~}~%" indices)))
+            (format out "end~%"))))))
   
   ;; Return success
   t)
@@ -2980,12 +2977,15 @@ Columns: ~d
            (nearest-index (position min-distance distances)))
       (or nearest-index 0))))
 
-(defun extract-all-frames (palette-pixels rgb-data)
+(defun extract-all-frames (rgb-data)
   "Extract all 8×16 frame bitmaps from 64×256 character image.
    
    Returns list of frames, each frame is a list of 16 rows, each row is a list of 8 bits.
    Uses RGB values directly to determine black (bit 0) vs non-black (bit 1)."
   (destructuring-bind (w h bpp) (array-dimensions rgb-data)
+    (declare (ignore w h))
+    (unless (>= bpp 3)
+      (error "RGB data must have at least 3 components, got ~d" bpp))
     (loop for frame from 0 below 8
           collect (let ((frame-start-x (* frame 8)))
                     (loop for action from 0 below 16
@@ -2997,72 +2997,74 @@ Columns: ~d
                                                        for r = (aref rgb-data pixel-x pixel-y 0)
                                                        for g = (aref rgb-data pixel-x pixel-y 1)
                                                        for b = (aref rgb-data pixel-x pixel-y 2)
-                                                       collect (if (and (= r 0) (= g 0) (= b 0))
-                                                                   0
-                                                                   1)))))))))
+                                                       for is-black = (and (= r 0) (= g 0) (= b 0))
+                                                       collect (if is-black 0 1)))))))))
 
-(defun deduplicate-frames (all-frames)
-  "Deduplicate frame bitmaps and handle blank frames/rows by repeating patterns.
-   
-   Blank frames are replaced with repeated patterns of frames to their left.
-   Blank rows are replaced with the entire row above.
-   
-   Returns list of unique frames with blank frames/rows filled by repeating patterns."
-  (let* ((processed-frames (process-blank-frames all-frames))
-         (flattened-frames (mapcar #'flatten-frame processed-frames))
-         (unique-frames (remove-duplicates flattened-frames :test #'equalp)))
-    unique-frames))
+(defun row-to-byte (row)
+  "Convert a row (list of 8 bits) to a byte (unsigned-byte 8)."
+  (reduce (lambda (acc bit)
+            (+ (* acc 2) (if bit 1 0)))
+          row
+          :initial-value 0))
 
-(defun flatten-frame (frame)
-  "Flatten a frame (list of poses) into a single bitmap."
-  (apply #'append frame))
-
-(defun process-blank-frames (all-frames)
-  "Process blank frames by replacing them with repeated patterns of frames to their left."
-  (let ((processed-frames '())
-        (last-valid-frame nil))
-    (loop for frame in all-frames
-          do (let ((processed-frame (process-blank-rows frame)))
-               (if (blank-frame-p processed-frame)
-                   (push (or last-valid-frame (make-blank-frame)) processed-frames)
-                   (progn
-                     (setf last-valid-frame processed-frame)
-                     (push processed-frame processed-frames)))))
-    (reverse processed-frames)))
+(defun frame-to-byte-vector (frame)
+  "Convert a frame (list of 16 rows) to a vector of 16 bytes (unsigned-byte 8).
+   Each row is converted from 8 bits to a single byte."
+  (let ((byte-vector (make-array 16 :element-type '(unsigned-byte 8))))
+    (loop for row in frame
+          for i from 0
+          do (setf (aref byte-vector i) (row-to-byte row)))
+    byte-vector))
 
 (defun process-blank-rows (frame)
-  "Process blank rows by repeating the entire row above."
+  "Process blank rows by repeating the entire row above.
+   Returns a new frame with blank rows filled."
   (let ((processed-rows '())
         (last-valid-row nil))
     (loop for row in frame
-          do (if (blank-row-p row)
+          do (if (every #'zerop row)
                  (push (or last-valid-row (make-list 8 :initial-element 0)) processed-rows)
                  (progn
                    (setf last-valid-row row)
                    (push row processed-rows))))
     (reverse processed-rows)))
 
-(defun blank-row-p (row)
-  "Check if a row is blank (all zeros)."
-  (every (lambda (x) (eql x 0)) row))
-
-(defun blank-frame-p (frame)
-  "Check if a frame is blank (all rows are blank)."
-  (every #'blank-row-p frame))
-
-(defun make-blank-frame ()
-  "Create a blank frame (16 rows of 8 zeros each)."
-  (make-list 16 :initial-element (make-list 8 :initial-element 0)))
-
-(defun build-frame-mapping (all-frames unique-frames)
-  "Build mapping from original frame indices to deduplicated indices."
-  (let ((mapping (make-hash-table :test #'equalp))
-        (flattened-frames (mapcar #'flatten-frame all-frames)))
-    (loop for original-index from 0 below (length flattened-frames)
-          for original-frame = (nth original-index flattened-frames)
-          do (let ((deduplicated-index (position original-frame unique-frames :test #'equalp)))
-               (setf (gethash original-index mapping) (or deduplicated-index 0))))
-    mapping))
+(defun deduplicate-frames-with-mapping (all-frames)
+  "Deduplicate frame bitmaps using vector-push-extend and equalp comparison.
+   
+   Process blank frames by repeating from left, blank rows by repeating from above.
+   Returns (values unique-frames-list frame-mapping-vector).
+   
+   unique-frames-list: List of unique frames as byte vectors (16 bytes each)
+   frame-mapping-vector: Vector mapping original frame index -> deduplicated index"
+  (let ((unique-frames (make-array 0 :adjustable t :fill-pointer 0))
+        (frame-mapping (make-array (* 8 16) :element-type '(unsigned-byte 8)))
+        (last-valid-frame nil))
+    
+    ;; Process all 8 frames × 16 actions = 128 total frames
+    (loop for frame-idx from 0 below 8
+          for frame-list in all-frames
+          do (loop for action-idx from 0 below 16
+                   for action-frame in frame-list
+                   for original-idx = (+ action-idx (* frame-idx 16))
+                   do (let* ((processed-frame (process-blank-rows action-frame))
+                             (is-blank (every (lambda (row) (every #'zerop row)) processed-frame))
+                             (final-frame (if is-blank
+                                              (or last-valid-frame processed-frame)
+                                              processed-frame))
+                             (byte-vec (frame-to-byte-vector final-frame))
+                             (existing-idx (position byte-vec 
+                                                    (coerce unique-frames 'list)
+                                                    :test #'equalp)))
+                        (unless is-blank
+                          (setf last-valid-frame final-frame))
+                        (if existing-idx
+                            (setf (aref frame-mapping original-idx) existing-idx)
+                            (progn
+                              (setf (aref frame-mapping original-idx) (fill-pointer unique-frames))
+                              (vector-push-extend byte-vec unique-frames))))))
+    
+    (values (coerce unique-frames 'list) frame-mapping)))
 
 (defun compile-2600-special-sprites (output-file png-file)
   "Compile special sprites from PNG to batariBASIC format.
