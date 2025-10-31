@@ -1420,7 +1420,9 @@ Music:~:*
   (format *trace-output* "~&Compiling ~a to format ~a for frame rate ~a into ~a"
           (enough-namestring input) format frame-rate (enough-namestring output))
   (finish-output *trace-output*)
-  (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
-                                  (make-keyword format) (make-keyword frame-rate))
-                     (make-keyword format) output))
+  (let* ((format-key (make-keyword (string-upcase format)))
+         (rate-key   (make-keyword (string-upcase frame-rate))))
+    (write-song-binary (score->song (midi->score input rate-key)
+                                    format-key rate-key)
+                       format-key output)))
 
