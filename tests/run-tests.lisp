@@ -5,9 +5,11 @@
 
 (require :asdf)
 
-(load (make-pathname :defaults *load-pathname*
-                     :directory (list :relative "SkylineTool")
-                     :name "setup" :type "lisp"))
+;; Load setup.lisp from SkylineTool root directory
+(let ((setup-path (merge-pathnames "setup.lisp"
+                                   (uiop:pathname-parent-directory-pathname
+                                    (uiop:pathname-directory-pathname *load-pathname*)))))
+  (load setup-path))
 
 (ql:quickload :fiveam)
 (ql:quickload :skyline-tool/test)
