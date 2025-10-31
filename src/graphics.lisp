@@ -629,7 +629,7 @@ PNG image in an unsuitable format:
                 finally (return palette))))
     (assert (every (lambda (color) (member color offer)) new)
             (offer) "The offered palette of (~{$~2,'0x~^ ~}) did not contain colors in (~{$~2,'0x~^ ~})
-(tried to preserve palette indices from (~{$~2,'0x~^ ~})~@[ or (~{$~2,'0x~^ ~})~]" offer new old)
+(tried to preserve palette indices from (~{$~2,'0x~^ ~})~@[ or (~{$~2,'0x~^ ~})~]" offer new old))
     offer))
 
 (assert (equalp '(0 1 2 3) (try-to-maintain-palette '(3 2 1 0) '(0 1 2 3))))
@@ -2727,11 +2727,15 @@ Columns: ~d
    Outputs:
    - Deduplicated unique frame bitmaps with Phantasia-style optimization
    - Indirection matrix (16 poses × 8 frames)
-   - Blank tile patterns: 11111111, 12121212, 12341234, 12345678"
+   - Blank frames eliminated by repeating left frame or copying row above
+   - Y-inverted for batariBASIC kernel format (bottom-to-top)"
   
   ;; Complete implementation for chaos character compilation
   (let* ((char-name (pathname-name xcf-file))
-         (subroutine-name (format nil "SetCharacter~a" (string-capitalize char-name))))
+         (char-name-capitalized (string-capitalize char-name))
+         (subroutine-name (format nil "SetCharacter~a" char-name-capitalized))
+         (frames-data-name (format nil "~aFrames" char-name-capitalized))
+         (framemap-data-name (format nil "~aFrameMap" char-name-capitalized)))
     
     ;; Use existing PNG processing functions (XCF converted to PNG)
     (let* ((png (png-read:read-png-file xcf-file))
@@ -2747,33 +2751,24 @@ Columns: ~d
       
       (with-open-file (out output-file :direction :output :if-exists :supersede)
         ;; Start subroutine with label
-        (format out "~%~a~%" subroutine-name)
-        (format out "~%~10trem Character data for ~a - 8 frames × 16 poses~2%" char-name)
+        (format out "~a~%" subroutine-name)
+        (format out "~10trem Character data for ~a - 8 frames × 16 poses~%" char-name)
+        (format out "~%")
         
-        ;; Extract all frame bitmaps and deduplicate them
-        (let* ((all-frames (extract-all-frames rgb-data))
-               (sprite-label (format nil "~aSprite" (string-capitalize char-name))))
-          (multiple-value-bind (unique-frames frame-mapping)
-              (deduplicate-frames-with-mapping all-frames)
-            
-            ;; Generate deduplicated frame data (batariBASIC format: % binary, no .byte, no remarks in data)
-            (format out "~10tdata ~a~%" sprite-label)
-            (loop for frame-byte-vec in unique-frames
-                  do (progn
-                       ;; Write all 16 rows of this frame
-                       (loop for row-byte across frame-byte-vec
-                             do (format out "~12t%~8,'0b~%" row-byte))
-                       ;; Double newline between frames for clarity
-                       (format out "~%")))
-            (format out "end~%~%")
-            
-            ;; Generate indirection table with deduplication mapping (8 numbers per action per line, comma-separated)
-            (format out "~10tdata ~aFrameMap~%" sprite-label)
-            (loop for action from 0 below 16
-                  do (let ((indices (loop for frame from 0 below 8
-                                          collect (aref frame-mapping (+ action (* frame 16))))))
-                       (format out "~12t~{~d~^, ~}~%" indices)))
-            (format out "end~%"))))))
+        ;; Extract all frame bitmaps and process blank frames/rows
+        (let* ((all-frames (extract-all-frames-y-inverted palette-pixels))
+               (processed-frames (eliminate-blank-frames all-frames))
+               (unique-frames (deduplicate-frames processed-frames))
+               (frame-map (build-frame-mapping processed-frames unique-frames)))
+          
+          ;; Generate deduplicated frame data
+          (output-chaos-character-frames out frames-data-name unique-frames)
+          
+          ;; Generate indirection table with deduplication mapping
+          (output-chaos-character-frame-map out framemap-data-name frame-map))
+        
+        ;; End subroutine with return
+        (format out "~10treturn~%"))))
   
   ;; Return success
   t)
@@ -2815,19 +2810,25 @@ Columns: ~d
         (format out "~%")
         
         ;; Generate font data for each character
+        ;; Comments come BEFORE the data block, not inside
+        (format out "~10trem Font bitmap data (16 characters, 8×16 each)~%")
         (format out "~10tdata FontData~%")
         (loop for char from 0 below 16
               do (let ((char-start-x (* char 8)))
-                   (format out "~12trem Character ~d~%" char)
                    ;; Invert Y: batariBASIC expects rows bottom-to-top
                    (loop for row from 15 downto 0
                          do (let ((row-bits (loop for bit from 0 below 8
                                                  for pixel-x = (+ char-start-x bit)
                                                  collect (if (plusp (aref palette-pixels pixel-x row))
-                                                            1 0))))
-                              (format out "~12t.byte %~{~d~}~%" row-bits))))
-                   (format out "~%"))
-        (format out "~10tend~%")
+                                                            1 0)))
+                                  (row-byte (reduce (lambda (acc bit) (+ (* acc 2) bit)) row-bits :initial-value 0))
+                                  (binary-str (format nil "%~8,'0b" row-byte)))
+                              ;; batariBASIC format: %binary (no .byte directive)
+                              (format out "~12t~a~%" binary-str)))
+                   ;; Blank line between characters (no comments allowed in data block)
+                   (format out "~%")))
+        ;; end must be in column 1 (no indentation)
+        (format out "end~%")
         
         ;; End subroutine with return
         (format out "~10treturn~%"))))
@@ -2844,17 +2845,21 @@ Columns: ~d
    - Black pixels = 0, white pixels = 1
    
    TV Standards supported:
-   - NTSC: Standard colors
-   - PAL: PAL-specific colors  
-   - SECAM: High/low nybble matching colors ($00 blank, $ee white, etc.)
+   - NTSC: Color-per-row using NTSC palette
+   - PAL: Color-per-row using PAL palette
+   - SECAM: Color-per-row using armored SECAM colors (nybble-matching format)
    
    Outputs:
-   - Playfield data in batariBASIC format with .byte directives
-   - Binary format for playfield bitmap
-   - Color data appropriate for TV standard"
+   - Playfield data in batariBASIC format (X/. format)
+   - Color-per-row data (pfcolors:) for all TV standards (armored format for SECAM)"
   
-  ;; MVP implementation for playfield compilation using existing subroutines
-  (let* ((screen-name (pathname-name png-file))
+  ;; Set region for color analysis
+  (let* ((tv-keyword (intern (string-upcase tv-standard) :keyword))
+         (*region* (ecase tv-keyword
+                     (:NTSC :ntsc)
+                     (:PAL :pal)
+                     (:SECAM :secam)))
+         (screen-name (pathname-name png-file))
          (subroutine-name (format nil "SetPlayfield~a" (string-capitalize screen-name))))
     
     ;; Use existing PNG processing functions
@@ -2875,40 +2880,82 @@ Columns: ~d
         ;; Start subroutine with label
         (format out "~a~%" subroutine-name)
         
-        ;; Generate playfield data using existing functions
-        (let ((playfield-colors (playfield-color-analysis palette-pixels width height)))
-          
-          (format out "~10trem Playfield data for ~a (~a) - ~d×~d~%" 
-                  screen-name tv-standard width height)
-          (format out "~%")
-          
-          ;; Generate playfield data structure using X/. format
-          (format out "~10tplayfield:~%")
-          (loop for row from 0 below height
-                do (format out "~12t~{~a~}~%" 
-                          (loop for x from 0 below width
-                                collect (if (plusp (aref palette-pixels x row))
-                                           "X" "."))))
-          (format out "end~%")
-          
-          ;; Generate color data based on TV standard
-          (ecase (intern (string-upcase tv-standard) :keyword)
-            (:NTSC
+        (format out "~10trem Playfield data for ~a (~a) - ~d×~d~%" 
+                screen-name tv-standard width height)
+        (format out "~%")
+        
+        ;; Generate playfield data structure using X/. format
+        (format out "~10tplayfield:~%")
+        (loop for row from 0 below height
+              do (format out "~12t~{~a~}~%" 
+                        (loop for x from 0 below width
+                              collect (if (plusp (aref palette-pixels x row))
+                                         "X" "."))))
+        (format out "end~%~%")
+        
+        ;; Generate color-per-row data based on TV standard
+        (ecase tv-keyword
+          (:NTSC
+           ;; NTSC: Color-per-row using NTSC palette
+           (let ((playfield-colors (playfield-color-analysis palette-pixels width height)))
+             (format out "~10trem Color-per-row for NTSC~%")
              (format out "~10tpfcolors:~%")
-             (format out "~12t~{$~2,'0x~^, ~}" playfield-colors)
-             (format out "~%"))
-            (:PAL
+             (loop for row from 0 below height
+                   for color = (nth row playfield-colors)
+                   do (format out "~12t$~2,'0x~%" color))
+             (format out "end~%~%")))
+          (:PAL
+           ;; PAL: Color-per-row using PAL palette
+           (let ((playfield-colors (playfield-color-analysis palette-pixels width height)))
+             (format out "~10trem Color-per-row for PAL~%")
              (format out "~10tpfcolors:~%")
-             (format out "~12t~{$~2,'0x~^, ~}" playfield-colors)
-             (format out "~%"))
-            (:SECAM
-             (format out "~10trem SECAM uses COLUPF=white, no pfcolors needed~%")))
-          
-          ;; End subroutine with return
-          (format out "~10treturn~%"))))
-    
+             (loop for row from 0 below height
+                   for color = (nth row playfield-colors)
+                   do (format out "~12t$~2,'0x~%" color))
+             (format out "end~%~%")))
+          (:SECAM
+           ;; SECAM: Color-per-row using armored SECAM colors (high/low nybbles match)
+           ;; Armored SECAM colors have extra color bits for stability
+           ;; Blue (index 1) = $11, Green (index 2) = $22, White (index 7) = $ee, etc.
+           (let ((playfield-colors (playfield-color-analysis palette-pixels width height)))
+             (format out "~10trem Color-per-row for SECAM (armored colors)~%")
+             (format out "~10tpfcolors:~%")
+             (loop for row from 0 below height
+                   for color-index = (nth row playfield-colors)
+                   for secam-color = (secam-color-index-to-nybble-matching color-index)
+                   do (format out "~12t$~2,'0x~%" secam-color))
+             (format out "end~%~%"))))
+        
+        ;; End subroutine with return
+        (format out "~10treturn~%"))))
+  
   ;; Return success
-  t))
+  t)
+
+(defun secam-color-index-to-nybble-matching (color-index)
+  "Convert SECAM color index (0-7) to armored SECAM color format.
+   
+   Armored SECAM colors use matching high/low nybbles with extra color bits
+   for improved color stability. These are the standard SECAM color format:
+   - 0 (COLBLACK) = $00
+   - 1 (COLBLUE) = $11
+   - 2 (COLGREEN) = $22
+   - 3 (COLCYAN) = $33
+   - 4 (COLRED) = $44
+   - 5 (COLMAGENTA) = $55
+   - 6 (COLYELLOW) = $66
+   - 7 (COLWHITE) = $ee (special case, not $77!)
+   
+   Formula: index | (index << 4), except white uses $ee"
+  (ecase color-index
+    (0 #x00)   ; COLBLACK
+    (1 #x11)   ; COLBLUE
+    (2 #x22)   ; COLGREEN
+    (3 #x33)   ; COLCYAN
+    (4 #x44)   ; COLRED
+    (5 #x55)   ; COLMAGENTA
+    (6 #x66)   ; COLYELLOW
+    (7 #xee))) ; COLWHITE (special: $ee not $77)
 
 (defun playfield-color-analysis (palette-pixels width height)
   "Analyze playfield colors to find dominant non-black color per row.
@@ -2977,44 +3024,168 @@ Columns: ~d
            (nearest-index (position min-distance distances)))
       (or nearest-index 0))))
 
-(defun extract-all-frames (rgb-data)
+(defun output-chaos-character-frames (stream frames-data-name unique-frames)
+  "Output deduplicated frame bitmaps to stream in batariBASIC format.
+   
+   frame-data already Y-inverted by extract-all-frames-y-inverted:
+     [0]=row 15 (top of image), [15]=row 0 (bottom of image)
+   batariBASIC expects bottom-to-top, so output forward (0 to 15) which gives bottom-to-top"
+  (format stream "~10trem Unique frame bitmaps (deduplicated)~%")
+  (format stream "~10tdata ~a~%" frames-data-name)
+  (loop for frame-index from 0 below (length unique-frames)
+        do (let ((frame-data (nth frame-index unique-frames)))
+             (output-single-frame stream frame-data)
+             ;; Blank line between frames (no comments allowed in data block)
+             (format stream "~%")))
+  ;; end must be in column 1 (no indentation)
+  (format stream "end~%~%"))
+
+(defun output-single-frame (stream frame-data)
+  "Output a single frame's 16 rows to stream in batariBASIC binary format."
+  (loop for row from 0 to 15
+        do (let ((row-bits (nth row frame-data))
+                 ;; Convert list of 8 bits to binary string: %00011011
+                 (row-byte (reduce (lambda (acc bit) (+ (* acc 2) bit)) row-bits :initial-value 0))
+                 (binary-str (format nil "%~8,'0b" row-byte)))
+             (format stream "~12t~a~%" binary-str))))
+
+(defun output-chaos-character-frame-map (stream framemap-data-name frame-map)
+  "Output frame mapping indirection table to stream.
+   
+   Format: 8 comma-delimited integers per line, 16 lines total
+   Frame index = frame + (action * 8)"
+  (format stream "~10trem Frame mapping (16 actions × 8 frames)~%")
+  (format stream "~10tdata ~a~%" framemap-data-name)
+  (loop for action from 0 below 16
+        do (let ((frame-indices (loop for frame from 0 below 8
+                                     for original-frame-index = (+ frame (* action 8))
+                                     collect (gethash original-frame-index frame-map 0))))
+             ;; Output 8 comma-delimited integers per line
+             (format stream "~12t~{~d~^, ~}~%" frame-indices)))
+  ;; end must be in column 1 (no indentation)
+  (format stream "end~%~%"))
+
+(defun output-special-sprites-data (stream palette-pixels)
+  "Output special sprites data block to stream in batariBASIC format."
+  (format stream "~10tdata SpecialSprites~%")
+  (loop for sprite from 0 below 3
+        do (let ((sprite-start-x (* sprite 8)))
+             (format stream "~12trem Sprite ~d~%" sprite)
+             (output-special-sprite-rows stream palette-pixels sprite-start-x)
+             (format stream "~%")))
+  (format stream "end~%"))
+
+(defun output-special-sprite-rows (stream palette-pixels sprite-start-x)
+  "Output 16 rows of a special sprite to stream."
+  (loop for row from 0 below 16
+        do (let ((row-bits (loop for bit from 0 below 8
+                                for pixel-x = (+ sprite-start-x bit)
+                                collect (if (plusp (aref palette-pixels pixel-x row))
+                                           1 0))))
+             (format stream "~12t.byte %~{~d~}~%" row-bits))))
+
+(defun extract-all-frames (palette-pixels)
   "Extract all 8×16 frame bitmaps from 64×256 character image.
    
-   Returns list of frames, each frame is a list of 16 rows, each row is a list of 8 bits.
-   Uses RGB values directly to determine black (bit 0) vs non-black (bit 1)."
-  (destructuring-bind (w h bpp) (array-dimensions rgb-data)
-    (declare (ignore w h))
-    (unless (>= bpp 3)
-      (error "RGB data must have at least 3 components, got ~d" bpp))
-    (loop for frame from 0 below 8
-          collect (let ((frame-start-x (* frame 8)))
-                    (loop for action from 0 below 16
-                          collect (let ((action-start-y (* action 16)))
-                                   (loop for row from 0 below 16
-                                         collect (loop for bit from 0 below 8
-                                                       for pixel-x = (+ frame-start-x bit)
-                                                       for pixel-y = (+ action-start-y row)
-                                                       for r = (aref rgb-data pixel-x pixel-y 0)
-                                                       for g = (aref rgb-data pixel-x pixel-y 1)
-                                                       for b = (aref rgb-data pixel-x pixel-y 2)
-                                                       for is-black = (and (= r 0) (= g 0) (= b 0))
-                                                       collect (if is-black 0 1)))))))))
+   Image layout: 8 frames horizontally × 16 actions vertically
+   Each frame is 8×16 pixels
+   
+   Returns list of 128 frames (8 frames × 16 actions), each frame is a list of 16 rows, each row is a list of 8 bits.
+   Frame index = frame + (action * 8)"
+  (loop for action from 0 below 16
+        append (loop for frame from 0 below 8
+                     collect (let ((frame-start-x (* frame 8))
+                                   (action-start-y (* action 16)))
+                               ;; Extract 8×16 frame bitmap
+                               (loop for row from 0 below 16
+                                     collect (loop for bit from 0 below 8
+                                                   for pixel-x = (+ frame-start-x bit)
+                                                   for pixel-y = (+ action-start-y row)
+                                                   collect (if (plusp (aref palette-pixels pixel-x pixel-y))
+                                                             1 0)))))))
 
-(defun row-to-byte (row)
-  "Convert a row (list of 8 bits) to a byte (unsigned-byte 8)."
-  (reduce (lambda (acc bit)
-            (+ (* acc 2) (if bit 1 0)))
-          row
-          :initial-value 0))
+(defun extract-all-frames-y-inverted (palette-pixels)
+  "Extract all 8×16 frame bitmaps from 64×256 character image with Y-inversion.
+   
+   batariBASIC expects frames with row 0 at bottom, row 15 at top.
+   So we extract rows in reverse order (15 down to 0).
+   
+   Returns list of 128 frames, each frame is a list of 16 rows (Y-inverted), each row is a list of 8 bits."
+  (loop for action from 0 below 16
+        append (loop for frame from 0 below 8
+                     collect (let ((frame-start-x (* frame 8))
+                                   (action-start-y (* action 16)))
+                               ;; Extract frame with Y-inversion: row 15 (top) first, row 0 (bottom) last
+                               (loop for sprite-row from 15 downto 0
+                                     collect (loop for bit from 0 below 8
+                                                   for pixel-x = (+ frame-start-x bit)
+                                                   for pixel-y = (+ action-start-y sprite-row)
+                                                   collect (if (plusp (aref palette-pixels pixel-x pixel-y))
+                                                             1 0)))))))
 
-(defun frame-to-byte-vector (frame)
-  "Convert a frame (list of 16 rows) to a vector of 16 bytes (unsigned-byte 8).
-   Each row is converted from 8 bits to a single byte."
-  (let ((byte-vector (make-array 16 :element-type '(unsigned-byte 8))))
-    (loop for row in frame
-          for i from 0
-          do (setf (aref byte-vector i) (row-to-byte row)))
-    byte-vector))
+(defun deduplicate-frames (all-frames)
+  "Deduplicate frame bitmaps.
+   
+   Returns list of unique frames (as lists of rows, not flattened).
+   Preserves frame structure for proper output formatting."
+  (let ((seen (make-hash-table :test #'equalp))
+        (unique-frames '()))
+    (loop for frame in all-frames
+          unless (gethash frame seen)
+          do (setf (gethash frame seen) t)
+             (push frame unique-frames))
+    ;; Return in original order
+    (reverse unique-frames)))
+
+(defun flatten-frame (frame)
+  "Flatten a frame (list of poses) into a single bitmap."
+  (apply #'append frame))
+
+(defun eliminate-blank-frames (all-frames)
+  "Eliminate blank frames by replacing with left frame or copying row above.
+   
+   Structure: 16 actions × 8 frames = 128 frames total
+   For each action (row), frames go left-to-right (0-7)
+   - Blank frames: repeat leftmost non-blank frame in same action
+   - If entire action row is blank: copy from action above (recursively)
+   
+   Returns processed frames with no all-zero frames."
+  (let ((processed-frames (make-array 128 :initial-element nil))
+        (actions 16)
+        (frames-per-action 8))
+    ;; Process action by action (row by row)
+    (loop for action from 0 below actions
+          do (let ((action-start-index (* action frames-per-action))
+                   (last-valid-frame-in-action nil))
+               ;; First, process blank rows within frames
+               (loop for frame-offset from 0 below frames-per-action
+                     for frame-index = (+ action-start-index frame-offset)
+                     do (let ((frame (nth frame-index all-frames))
+                              (processed-frame (process-blank-rows frame)))
+                          (if (blank-frame-p processed-frame)
+                              ;; Blank frame: use left frame or copy from action above
+                              (let ((replacement (or last-valid-frame-in-action
+                                                    (copy-frame-from-action-above processed-frames action actions frames-per-action))))
+                                (setf (aref processed-frames frame-index) replacement)
+                                (unless last-valid-frame-in-action
+                                  (setf last-valid-frame-in-action replacement)))
+                              ;; Non-blank frame: use it
+                              (progn
+                                (setf (aref processed-frames frame-index) processed-frame)
+                                (setf last-valid-frame-in-action processed-frame)))))))
+    ;; Convert array back to list
+    (coerce processed-frames 'list)))
+
+(defun copy-frame-from-action-above (processed-frames current-action total-actions frames-per-action)
+  "Copy frame from action above if available, otherwise return blank frame."
+  (if (> current-action 0)
+      ;; Look at previous action, use its last frame (rightmost)
+      (let ((prev-action-start (* (- current-action 1) frames-per-action))
+            (prev-action-last-frame-index (+ prev-action-start (- frames-per-action 1))))
+        (or (aref processed-frames prev-action-last-frame-index)
+            (make-blank-frame)))
+      ;; Top action: return blank frame (will be handled by caller)
+      (make-blank-frame)))
 
 (defun process-blank-rows (frame)
   "Process blank rows by repeating the entire row above.
@@ -3029,42 +3200,30 @@ Columns: ~d
                    (push row processed-rows))))
     (reverse processed-rows)))
 
-(defun deduplicate-frames-with-mapping (all-frames)
-  "Deduplicate frame bitmaps using vector-push-extend and equalp comparison.
+(defun blank-row-p (row)
+  "Check if a row is blank (all zeros)."
+  (every (lambda (x) (eql x 0)) row))
+
+(defun blank-frame-p (frame)
+  "Check if a frame is blank (all rows are blank)."
+  (every #'blank-row-p frame))
+
+(defun make-blank-frame ()
+  "Create a blank frame (16 rows of 8 zeros each)."
+  (make-list 16 :initial-element (make-list 8 :initial-element 0)))
+
+(defun build-frame-mapping (all-frames unique-frames)
+  "Build mapping from original frame indices (0-127) to deduplicated unique frame indices.
    
-   Process blank frames by repeating from left, blank rows by repeating from above.
-   Returns (values unique-frames-list frame-mapping-vector).
-   
-   unique-frames-list: List of unique frames as byte vectors (16 bytes each)
-   frame-mapping-vector: Vector mapping original frame index -> deduplicated index"
-  (let ((unique-frames (make-array 0 :adjustable t :fill-pointer 0))
-        (frame-mapping (make-array (* 8 16) :element-type '(unsigned-byte 8)))
-        (last-valid-frame nil))
-    
-    ;; Process all 8 frames × 16 actions = 128 total frames
-    (loop for frame-idx from 0 below 8
-          for frame-list in all-frames
-          do (loop for action-idx from 0 below 16
-                   for action-frame in frame-list
-                   for original-idx = (+ action-idx (* frame-idx 16))
-                   do (let* ((processed-frame (process-blank-rows action-frame))
-                             (is-blank (every (lambda (row) (every #'zerop row)) processed-frame))
-                             (final-frame (if is-blank
-                                              (or last-valid-frame processed-frame)
-                                              processed-frame))
-                             (byte-vec (frame-to-byte-vector final-frame))
-                             (existing-idx (position byte-vec 
-                                                    (coerce unique-frames 'list)
-                                                    :test #'equalp)))
-                        (unless is-blank
-                          (setf last-valid-frame final-frame))
-                        (if existing-idx
-                            (setf (aref frame-mapping original-idx) existing-idx)
-                            (progn
-                              (setf (aref frame-mapping original-idx) (fill-pointer unique-frames))
-                              (vector-push-extend byte-vec unique-frames))))))
-    
-    (values (coerce unique-frames 'list) frame-mapping)))
+   all-frames: list of 128 frames (already processed for blanks)
+   unique-frames: list of unique frames
+   Returns hash table mapping original-index -> unique-index"
+  (let ((mapping (make-hash-table)))
+    (loop for original-index from 0 below (length all-frames)
+          for original-frame = (nth original-index all-frames)
+          do (let ((unique-index (position original-frame unique-frames :test #'equalp)))
+               (setf (gethash original-index mapping) (or unique-index 0))))
+    mapping))
 
 (defun compile-2600-special-sprites (output-file png-file)
   "Compile special sprites from PNG to batariBASIC format.
@@ -3080,44 +3239,31 @@ Columns: ~d
   
   ;; Complete implementation for special sprites compilation
   (let* ((sprite-name (pathname-name png-file))
-         (subroutine-name (format nil "SetSpecialSprites~a" (string-capitalize sprite-name))))
+         (subroutine-name (format nil "SetSpecialSprites~a" (string-capitalize sprite-name)))
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (α (png-read:transparency png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)
+                                       α)))
     
-    ;; Use existing PNG processing functions
-    (let* ((png (png-read:read-png-file png-file))
-           (height (png-read:height png))
-           (width (png-read:width png))
-           (α (png-read:transparency png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
-                                         α)))
+    ;; Validate dimensions (24×16 for 3 sprites of 8×16 each)
+    (unless (and (= width 24) (= height 16))
+      (error "Special sprites must be 24×16 pixels for 3 sprites of 8×16 each, got ~d×~d" width height))
+    
+    (with-open-file (out output-file :direction :output :if-exists :supersede)
+      ;; Start subroutine with label
+      (format out "~a~%" subroutine-name)
       
-      ;; Validate dimensions (24×16 for 3 sprites of 8×16 each)
-      (unless (and (= width 24) (= height 16))
-        (error "Special sprites must be 24×16 pixels for 3 sprites of 8×16 each, got ~d×~d" width height))
+      (format out "~10trem Special sprites data for ~a - 3 sprites~%" sprite-name)
+      (format out "~%")
       
-      (with-open-file (out output-file :direction :output :if-exists :supersede)
-        ;; Start subroutine with label
-        (format out "~a~%" subroutine-name)
-        
-        (format out "~10trem Special sprites data for ~a - 3 sprites~%" sprite-name)
-        (format out "~%")
-        
-        ;; Generate sprite data for each special sprite
-        (format out "~10tdata SpecialSprites~%")
-        (loop for sprite from 0 below 3
-              do (let ((sprite-start-x (* sprite 8)))
-                   (format out "~12trem Sprite ~d~%" sprite)
-                   (loop for row from 0 below 16
-                         do (let ((row-bits (loop for bit from 0 below 8
-                                                 for pixel-x = (+ sprite-start-x bit)
-                                                 collect (if (plusp (aref palette-pixels pixel-x row))
-                                                            1 0))))
-                              (format out "~12t.byte %~{~d~}~%" row-bits))))
-                   (format out "~%"))
-        (format out "~10tend~%")
-        
-        ;; End subroutine with return
-        (format out "~10treturn~%"))))
+      ;; Generate sprite data for each special sprite
+      (output-special-sprites-data out palette-pixels)
+      
+      ;; End subroutine with return
+      (format out "~10treturn~%")))
   
   ;; Return success
   t)
