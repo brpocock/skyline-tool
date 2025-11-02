@@ -1172,6 +1172,159 @@ Shape:~{~{~a~}~2%~}
                         colors)))
       (format *trace-output* "~% Done writing to ~A" out-file-name))))
 
+(defun compile-batari-48px-command (png-file output-bas &rest args)
+  "Command-line wrapper for compile-batari-48px.
+   Arguments: PNG-FILE OUTPUT-BAS [titlescreen-kernel-p] [tv-standard]
+   If third arg is 't' or 'T', enables titlescreen kernel mode.
+   If fourth arg exists, uses it as TV standard (:ntsc, :pal, :secam)."
+  (let* ((titlescreen-kernel-p (and args (string-equal (first args) "t")))
+         (tv-standard (cond ((and args (>= (length args) 2))
+                            (let ((std (string-upcase (second args))))
+                              (cond ((string= std "NTSC") :ntsc)
+                                    ((string= std "PAL") :pal)
+                                    ((string= std "SECAM") :secam)
+                                    (t :ntsc))))
+                           (t :ntsc))))
+    (compile-batari-48px png-file output-bas
+                        :titlescreen-kernel-p titlescreen-kernel-p
+                        :tv-standard tv-standard)))
+
+(defun compile-batari-48px (png-file output-bas &key (titlescreen-kernel-p nil) (tv-standard :ntsc))
+  "Compile a 48×42 pixel PNG bitmap to batariBASIC data format.
+   Output format: 6 columns × 42 bytes, inverted-y (bottom-to-top),
+   one byte per row, then double-newline before next column.
+   Binary format: %00000000 with NO remarks inside data block.
+   
+   When TITLESCREEN-KERNEL-P is T:
+   - Extracts color-per-line data from source PNG
+   - Uses ×2 drawing style (double-height mode, 42 rows → 84 scanlines)
+   - Outputs color data for each row (each row becomes 2 scanlines)
+   - Output format suitable for titlescreen kernel minikernel
+   - Determines minikernel slot (1, 2, or 3) from output filename:
+     * Art.AtariAge.s → 48x2_1
+     * Art.Interworldly.s → 48x2_2
+     * Art.ChaosFight.s → 48x2_3
+   
+   Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
+  (let* ((input-path (uiop:ensure-pathname png-file))
+         (png (png-read:read-png-file input-path))
+         (width (png-read:width png))
+         (height (png-read:height png))
+         (rgb (png-read:image-data png))
+         (alpha (png-read:transparency png))
+         (output-path (uiop:ensure-pathname output-bas))
+         (output-name (pathname-name output-path))
+         ;; Determine minikernel slot from output filename
+         (kernel-slot (cond ((or (search "AtariAge" output-name :test #'string-equal)
+                                (search "Publisher" output-name :test #'string-equal))
+                            1)
+                           ((or (search "Interworldly" output-name :test #'string-equal)
+                                (search "Author" output-name :test #'string-equal))
+                            2)
+                           ((or (search "ChaosFight" output-name :test #'string-equal)
+                                (search "Title" output-name :test #'string-equal))
+                            3)
+                           (t 1)))  ; Default to slot 1
+         (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot)))
+    (unless (= width 48)
+      (error "Bitmap must be 48 pixels wide; got ~a" width))
+    (unless (= height 42)
+      (error "Bitmap must be 42 pixels tall; got ~a" height))
+    (let* ((*machine* 2600)
+           (*region* tv-standard)
+           (palette (png->palette height width rgb alpha))
+           (pixels (make-array (list width height)
+                              :element-type '(unsigned-byte 8)))
+           (label-name (cl-change-case:pascal-case (pathname-base-name input-path))))
+      ;; Convert RGB to 1bpp bitmap (black/white) for shape data
+      (loop for y from 0 below height
+            do (loop for x from 0 below width
+                     do (let ((r (aref rgb x y 0))
+                              (g (aref rgb x y 1))
+                              (b (aref rgb x y 2))
+                              (a (if alpha (aref alpha x y) 255)))
+                          (setf (aref pixels x y)
+                                (if (and (>= a 128)
+                                         (> (+ r g b) (* 3 128)))
+                                    1 0)))))
+      ;; Extract color-per-line data if titlescreen kernel mode
+      (let* ((shape (48px-array-to-bytes pixels))
+             (colors-per-line (when titlescreen-kernel-p
+                                (loop for y from 0 below height
+                                      collect (dominant-playfield-color palette width y)))))
+        (ensure-directories-exist output-path)
+        (with-open-file (stream output-path
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          (if titlescreen-kernel-p
+              ;; Titlescreen kernel assembly format (×2 drawing style)
+              ;; Match exact format from existing 48x2_N_image.s files
+              (progn
+                ;; Header banner
+                (format stream ";;; Chaos Fight - ~a~%" (namestring output-path))
+                (format stream "~%")
+                (format stream ";;;; This is a generated file, do not edit.~%")
+                (format stream "~%")
+                ;; Essential data without verbose comments
+                (format stream "~a_window = ~d~%" kernel-prefix height)
+                (format stream "~%")
+                (format stream "~a_height = ~d~%" kernel-prefix height)
+                (format stream "~%")
+                (format stream "   if >. != >[.+(~a_height)]~%" kernel-prefix)
+                (format stream "      align 256~%")
+                (format stream "   endif~%")
+                (format stream " BYTE 0 ; leave this here!~%")
+                (format stream "~%~%")
+                (format stream "~a_colors ~%" kernel-prefix)
+                ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
+                (loop for y from (1- height) downto 0
+                      for color-idx = (elt colors-per-line y)
+                      for color-byte = (playfield-color-byte color-idx tv-standard)
+                      do (format stream "~tBYTE $~2,'0X~%" color-byte))
+                (format stream "~%")
+                (format stream " ifnconst ~a_PF1~%" kernel-prefix)
+                (format stream "~a_PF1~%" kernel-prefix)
+                (format stream " endif~%")
+                (format stream "~tBYTE %00000000~%")
+                (format stream " ifnconst ~a_PF2~%" kernel-prefix)
+                (format stream "~a_PF2~%" kernel-prefix)
+                (format stream " endif~%")
+                (format stream "~tBYTE %00000000~%")
+                (format stream " ifnconst ~a_background~%" kernel-prefix)
+                (format stream "~a_background~%" kernel-prefix)
+                (format stream " endif~%")
+                (format stream "~tBYTE $00~%")
+                (format stream "~%")
+                ;; Output bitmap columns (6 columns: 00-05)
+                (loop for column from 0 below 6
+                      do (format stream "   if >. != >[.+~a_height]~%" kernel-prefix)
+                      do (format stream "      align 256~%")
+                      do (format stream "   endif~%")
+                      do (format stream "~%~%")
+                      do (format stream "~a_~2,'0D~%" kernel-prefix column)
+                      ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
+                      (loop for row from (1- height) downto 0
+                            for byte = (elt (elt shape column) row)
+                            for binary = (format nil "~8,'0b" byte)
+                            do (format stream "~tBYTE %~a~%" binary))
+                      (format stream "~%~%")))
+              ;; Basic batariBASIC data format (backward compatibility)
+              (progn
+                (format stream "rem Generated bitmap data from ~a~%" (pathname-name png-file))
+                (format stream "rem Do not edit - regenerate from source artwork~%~%")
+                (format stream "data Bitmap~a~%" label-name)
+                (loop for column below 6
+                      do (loop for row from 41 downto 0
+                               for byte = (elt (elt shape column) row)
+                               for binary = (format nil "~8,'0b" byte)
+                               do (format stream "~%        %~a" binary))
+                      do (format stream "~%~%"))
+                (format stream "end~%")))
+        (format *trace-output* "~% Done writing batariBASIC bitmap to ~A (~:[basic~;titlescreen kernel~] format)" 
+                output-path titlescreen-kernel-p)
+        output-path)))))
+
 (defun reverse-7-or-8 (shape)
   (let* ((height (length shape))
          (group-height (if (zerop (mod height 7)) 7 8)))

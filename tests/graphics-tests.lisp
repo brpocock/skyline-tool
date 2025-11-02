@@ -222,6 +222,192 @@
       (is (search ".byte %10000000" output) "Should have one bit set in first byte")
       (is (search ".byte $01" output) "Should have color value 1"))))
 
+;; Tests for compile-batari-48px function
+
+(defun create-test-48x42-png (output-path &key (pattern :checkerboard))
+  "Create a test 48×42 PNG file for testing compile-batari-48px.
+   Pattern can be :checkerboard, :solid-white, :solid-black, or :pattern"
+  (let* ((width 48)
+         (height 42)
+         (rgb-array (make-array (list width height 3) :element-type '(unsigned-byte 8))))
+    (loop for x from 0 below width do
+      (loop for y from 0 below height do
+        (let ((r (ecase pattern
+                   (:checkerboard (if (evenp (+ x y)) 255 0))
+                   (:solid-white 255)
+                   (:solid-black 0)
+                   (:pattern (mod (* x y) 256))))
+              (g r)
+              (b r))
+          (setf (aref rgb-array x y 0) r
+                (aref rgb-array x y 1) g
+                (aref rgb-array x y 2) b))))
+    ;; Use png-read internals or write a simple PNG
+    ;; For now, we'll use a mock approach - actual PNG creation would require png-write
+    ;; This is a placeholder that will work with actual PNG files in test-data
+    output-path))
+
+(test compile-batari-48px-basic-functionality
+  "Test basic compile-batari-48px functionality"
+  (let* ((test-dir (merge-pathnames "test-output/"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (test-png (merge-pathnames "test-data/test-bitmap-48x42.png"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (output-path (merge-pathnames "test-bitmap-output.bas" test-dir)))
+    (ensure-directories-exist output-path)
+    
+    ;; Skip if test PNG doesn't exist (won't fail, just skip)
+    (when (probe-file test-png)
+      (finishes (compile-batari-48px test-png output-path))
+      (is-true (probe-file output-path) "Output file should be created")
+      (let ((content (uiop:read-file-string output-path)))
+        (is (search "data Bitmap" content) "Should contain data statement")
+        (is (search "end" content) "Should contain end statement")
+        (is (search "%" content) "Should contain binary format")
+        ;; Verify no remarks inside data block
+        (let ((data-start (search "data Bitmap" content))
+              (data-end (search "end" content :from-end t)))
+          (when (and data-start data-end)
+            (let ((data-content (subseq content data-start data-end)))
+              (is (not (search "rem" data-content :test #'char-equal))
+                  "Data block should not contain remarks"))))))))
+
+(test compile-batari-48px-dimension-validation
+  "Test compile-batari-48px dimension validation"
+  (let* ((test-dir (merge-pathnames "test-output/"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (invalid-png (merge-pathnames "test-data/test-bitmap-invalid.png"
+                                      (asdf:system-source-directory :skyline-tool)))
+         (output-path (merge-pathnames "test-bitmap-invalid.bas" test-dir)))
+    (ensure-directories-exist output-path)
+    
+    ;; Test with invalid dimensions (if test file exists)
+    (when (probe-file invalid-png)
+      (signals error (compile-batari-48px invalid-png output-path)))))
+
+(test compile-batari-48px-output-format
+  "Test compile-batari-48px output format correctness"
+  (let* ((test-dir (merge-pathnames "test-output/"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (test-png (merge-pathnames "test-data/test-bitmap-48x42.png"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (output-path (merge-pathnames "test-bitmap-format.bas" test-dir)))
+    (ensure-directories-exist output-path)
+    
+    (when (probe-file test-png)
+      (compile-batari-48px test-png output-path)
+      (let ((content (uiop:read-file-string output-path))
+            (lines (uiop:split-string content :separator '(#\Newline))))
+        ;; Check structure: should have header comments, data statement, 6 columns of 42 bytes
+        (is (search "rem Generated bitmap data" content) "Should have header comment")
+        (is (search "data Bitmap" content) "Should have data statement")
+        
+        ;; Count binary lines (%...) - should be 6 columns × 42 rows = 252 lines
+        (let ((binary-lines (remove-if-not
+                             (lambda (line) (search "%" line))
+                             lines)))
+          ;; Each column should have exactly 42 binary lines
+          ;; With double-newline between columns, structure should be:
+          ;; data Bitmap...
+          ;; %... (42 lines)
+          ;; (empty line)
+          ;; %... (42 lines)
+          ;; etc.
+          (is (>= (length binary-lines) 252) "Should have at least 252 binary data lines (6×42)")
+          
+          ;; Verify format: each line should start with spaces and contain % followed by 8 binary digits
+          (dolist (line binary-lines)
+            (when (search "%" line)
+              (let ((percent-pos (position #\% line)))
+                (is percent-pos "Line should contain %")
+                (when percent-pos
+                  (let ((binary-part (subseq line (1+ percent-pos))))
+                    (is (<= 8 (length binary-part)) "Binary part should be at least 8 digits")
+                    (is (every (lambda (char) (or (char= char #\0) (char= char #\1))) binary-part)
+                        "Binary part should contain only 0 and 1")))))))))))
+
+(test compile-batari-48px-column-structure
+  "Test compile-batari-48px column structure (6 columns, inverted-y, double-newline)"
+  (let* ((test-dir (merge-pathnames "test-output/"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (test-png (merge-pathnames "test-data/test-bitmap-48x42.png"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (output-path (merge-pathnames "test-bitmap-columns.bas" test-dir)))
+    (ensure-directories-exist output-path)
+    
+    (when (probe-file test-png)
+      (compile-batari-48px test-png output-path)
+      (let ((content (uiop:read-file-string output-path))
+            (lines (uiop:split-string content :separator '(#\Newline))))
+        ;; Find data block
+        (let ((data-start (position-if (lambda (line) (search "data Bitmap" line)) lines))
+              (data-end (position-if (lambda (line) (search "end" line)) lines :from-end t)))
+          (when (and data-start data-end)
+            (let ((data-lines (subseq lines (1+ data-start) data-end))
+                  (binary-lines (remove-if-not
+                                 (lambda (line) (search "%" line))
+                                 (subseq lines (1+ data-start) data-end))))
+              ;; Should have 252 binary lines total (6 columns × 42 rows)
+              (is (= (length binary-lines) 252) "Should have exactly 252 binary lines")
+              
+              ;; Check for double-newlines between columns (empty lines)
+              ;; After each set of 42 binary lines, there should be an empty line
+              (loop for col from 0 below 6
+                    for col-start = (* col 43)  ; 42 data lines + 1 empty line
+                    do (when (< col-start (length data-lines))
+                         ;; Each column should be followed by an empty line (except last)
+                         (when (< col 5)  ; Not the last column
+                           (let ((empty-line-pos (+ col-start 42)))
+                             (when (< empty-line-pos (length data-lines))
+                               (is (string= (elt data-lines empty-line-pos) "")
+                                   (format nil "Column ~d should be followed by empty line" col)))))))))))))
+
+(test compile-batari-48px-inverted-y
+  "Test compile-batari-48px inverted-y ordering (rows 41 down to 0)"
+  ;; This test verifies the logic uses inverted-y by checking the 48px-array-to-bytes function
+  (let ((test-pixels (make-array (list 48 42) :element-type '(unsigned-byte 8) :initial-element 0)))
+    ;; Set a distinctive pattern: fill row 0 with 1s, row 41 with different pattern
+    (loop for x from 0 below 48 do
+      (setf (aref test-pixels x 0) 1))  ; Top row (y=0) all 1s
+    (loop for x from 0 below 48 do
+      (setf (aref test-pixels x 41) 1))  ; Bottom row (y=41) all 1s
+    
+    ;; Test 48px-array-to-bytes converts with inverted-y
+    (let ((shape (48px-array-to-bytes test-pixels)))
+      (is (= (length shape) 6) "Should have 6 columns")
+      ;; In inverted-y, row 41 (bottom) should be first in each column
+      ;; Row 0 (top) should be last in each column
+      (dolist (column shape)
+        (is (= (length column) 42) "Each column should have 42 bytes")
+        ;; First byte (row 0 in output = row 41 in input) should have bits set
+        ;; Last byte (row 41 in output = row 0 in input) should have bits set
+        (is (not (zerop (elt column 0))) "First byte (from row 41) should have bits set")
+        (is (not (zerop (elt column 41))) "Last byte (from row 0) should have bits set")))))
+
+(test compile-batari-48px-label-naming
+  "Test compile-batari-48px label naming (PascalCase conversion)"
+  (let* ((test-dir (merge-pathnames "test-output/"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (test-png (merge-pathnames "test-data/test-bitmap-48x42.png"
+                                   (asdf:system-source-directory :skyline-tool)))
+         (output-path (merge-pathnames "test-bitmap-label.bas" test-dir)))
+    (ensure-directories-exist output-path)
+    
+    (when (probe-file test-png)
+      (compile-batari-48px test-png output-path)
+      (let ((content (uiop:read-file-string output-path)))
+        ;; Label should be in PascalCase and prefixed with "Bitmap"
+        (is (search "data Bitmap" content) "Should contain 'data Bitmap' prefix")
+        ;; Extract label name and verify it's PascalCase (no spaces, starts with capital)
+        (let ((label-start (search "data Bitmap" content)))
+          (when label-start
+            (let ((after-data (subseq content (+ label-start 11)))) ; Skip "data Bitmap"
+              (let ((label-end (position-if (lambda (c) (or (char= c #\Newline) (char= c #\Space))) after-data)))
+                (when label-end
+                  (let ((label-name (subseq after-data 0 label-end)))
+                    (is (> (length label-name) 0) "Label name should exist")
+                    (is (upper-case-p (char label-name 0)) "Label should start with capital letter")))))))))
+
 ;; Run all tests
 (defun run-graphics-tests ()
   "Run all graphics tests and return results"

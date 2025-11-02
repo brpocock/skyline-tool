@@ -25,6 +25,7 @@
         :compile-2600-font-8x16 'compile-2600-font-8x16
         :compile-2600-playfield 'compile-2600-playfield
         :compile-2600-special-sprites 'compile-2600-special-sprites
+        :compile-batari-48px 'compile-batari-48px-command
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
