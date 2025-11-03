@@ -1487,11 +1487,11 @@ Music:~:*
                       audcv audf duration-frames delay-frames
                       audcv audc volume audf duration-frames delay-frames)
               (setf time (+ start-time duration))))
-          (format out "end~%")))
+          (format out "end~%"))
         
-        ;; Trace output
+        ;; Trace output (inside let block so note-count is in scope)
         (format *trace-output* " … wrote ~:d note~:p for batariBASIC format" note-count)
-        (terpri *trace-output*)))
+        (terpri *trace-output*))))
     t)
 
 (defun write-batari-song (output-filename input-filename &optional (polyphony 2) frame-rate)
@@ -1518,8 +1518,14 @@ Music:~:*
           (enough-namestring input) format frame-rate (enough-namestring output))
   (finish-output *trace-output*)
   (let* ((format-key (make-keyword (string-upcase format)))
-         (rate-key   (make-keyword (string-upcase frame-rate))))
-    (write-song-binary (score->song (midi->score input rate-key)
-                                    format-key rate-key)
+         (rate-key   (make-keyword (string-upcase frame-rate)))
+         ;; Convert numeric frame rates to keywords for batariBASIC
+         (normalized-rate (cond ((or (string= frame-rate "60") (eql rate-key :60))
+                                (setf *batari-frame-rate* :ntsc) :ntsc)
+                               ((or (string= frame-rate "50") (eql rate-key :50))
+                                (setf *batari-frame-rate* :pal) :pal)
+                               (t rate-key))))
+    (write-song-binary (score->song (midi->score input normalized-rate)
+                                    format-key normalized-rate)
                        format-key output)))
 
