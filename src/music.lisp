@@ -1448,16 +1448,36 @@ Music:~:*
       (format out "rem AUDCV = (AUDC << 4) | AUDV (upper/lower nybbles)~%")
       (format out "rem Polyphony: ~d voice~:p~2%" polyphony)
       
-      (let ((time 0)
-            (note-count 0)
-            ;; For 2-voice polyphony, alternate note assignment
+      (let ((note-count 0)
+            ;; For 2-voice polyphony, assign to voice 1 only when necessary due to overlap
             (voice0-notes (list))
-            (voice1-notes (list)))
-        ;; Separate notes into voices if polyphony=2
-        (loop for note in hokey-notes for i from 0
-              do (if (and (= polyphony 2) (oddp i))
-                     (push note voice1-notes)
-                     (push note voice0-notes)))
+            (voice1-notes (list))
+            (voice0-end-time 0)
+            (voice1-end-time 0))
+        ;; Separate notes into voices based on actual polyphony requirements
+        (if (= polyphony 2)
+            ;; Smart assignment: prefer voice 0, use voice 1 only when voice 0 is busy
+            (dolist (note hokey-notes)
+              (let ((start-time (hokey-note-start-time note))
+                    (duration (hokey-note-duration note))
+                    (end-time (+ start-time duration)))
+                (if (>= start-time voice0-end-time)
+                    ;; Voice 0 is free, use it
+                    (progn
+                      (push note voice0-notes)
+                      (setf voice0-end-time end-time))
+                    ;; Voice 0 is busy, check voice 1
+                    (if (>= start-time voice1-end-time)
+                        ;; Voice 1 is free, use it
+                        (progn
+                          (push note voice1-notes)
+                          (setf voice1-end-time end-time))
+                        ;; Both voices busy, use voice 0 anyway (overlap will occur)
+                        (progn
+                          (push note voice0-notes)
+                          (setf voice0-end-time end-time))))))
+            ;; Single voice: all notes go to voice 0
+            (setf voice0-notes hokey-notes))
         (setf voice0-notes (reverse voice0-notes)
               voice1-notes (reverse voice1-notes))
         
@@ -1481,8 +1501,8 @@ Music:~:*
             (incf note-count)))
         (format out "end~2%")
         
-        ;; Output Voice 1 stream only if polyphony=2
-        (when (= polyphony 2)
+        ;; Output Voice 1 stream only if polyphony=2 and there are notes for voice 1
+        (when (and (= polyphony 2) voice1-notes)
           (format out "data ~a_~a_Voice1~%" label-prefix song-name)
           (setf time 0)
           (dolist (note voice1-notes)
@@ -1498,11 +1518,13 @@ Music:~:*
               (format out "  $~2,'0X, ~2d, ~3d, ~2d  ; AUDCV=$~2,'0X (AUDC=~d AUDV=~d), AUDF=~d, Duration=~d, Delay=~d~%"
                       audcv audf duration-frames delay-frames
                       audcv audc volume audf duration-frames delay-frames)
-              (setf time (+ start-time duration))))
+              (setf time (+ start-time duration))
+              (incf note-count)))
           (format out "end~%"))
         
-        ;; Trace output (inside let block so note-count is in scope)
-        (format *trace-output* " … wrote ~:d note~:p for batariBASIC format" note-count)
+        ;; Trace output (total notes written across all voices)
+        (format *trace-output* " … wrote ~:d note~:p (~d voice 0, ~d voice 1) for batariBASIC format"
+                note-count (length voice0-notes) (length voice1-notes))
         (terpri *trace-output*))))
     t)
 
