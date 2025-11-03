@@ -1488,10 +1488,11 @@ Music:~:*
                       audcv audc volume audf duration-frames delay-frames)
               (setf time (+ start-time duration))))
           (format out "end~%")))
-      
-      (format *trace-output* " … wrote ~:d note~:p for batariBASIC format" note-count)
-      (terpri *trace-output*))
-    t))
+        
+        ;; Trace output
+        (format *trace-output* " … wrote ~:d note~:p for batariBASIC format" note-count)
+        (terpri *trace-output*)))
+    t)
 
 (defun write-batari-song (output-filename input-filename &optional (polyphony 2) frame-rate)
   "Compile MIDI to batariBASIC song format with specified polyphony and frame rate"
