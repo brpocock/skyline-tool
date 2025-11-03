@@ -24,7 +24,6 @@
         :compile-font 'compile-font-command
         :compile-2600-font-8x16 'compile-2600-font-8x16
         :compile-2600-playfield 'compile-2600-playfield
-        :compile-2600-special-sprites 'compile-2600-special-sprites
         :compile-batari-48px 'compile-batari-48px-command
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
@@ -66,7 +65,8 @@
         :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
-        :write-master-makefile 'write-master-makefile))
+        :write-master-makefile 'write-master-makefile
+        :write-batari-song 'write-batari-song))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."

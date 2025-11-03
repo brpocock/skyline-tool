@@ -295,6 +295,9 @@
   :test 'equalp)
 
 (define-constant +vcs-pal-palette+ '()) ;; TODO: #1243: #1225
+;; NOTE: Issue #313 - PAL color definitions need to be implemented.
+;; When this palette is defined, ColorsPAL.h should be verified/updated to match.
+;; PAL colors differ from NTSC due to different TV standard hue phases.
 (define-constant +vcs-secam-palette+
     '((0 0 0) (0 0 255) (0 255 0) (0 255 255)
       (255 0 0) (255 0 255) (255 255 0) (255 255 255))

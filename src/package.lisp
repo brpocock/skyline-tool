@@ -70,6 +70,7 @@
            #:write-projection-tables.s
            #:write-sound-effects-file
            #:write-master-makefile
+           #:write-batari-song
            #:run-for-port
            #:run-gui
            #:run-repl))
