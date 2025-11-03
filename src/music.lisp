@@ -1483,48 +1483,80 @@ Music:~:*
         
         ;; Output Voice 0 stream
         (format out "data ~a_~a_Voice0~%" label-prefix song-name)
-        (setf time 0)
-        (dolist (note voice0-notes)
-          (let* ((start-time (hokey-note-start-time note))
-                 (duration (hokey-note-duration note))
-                 (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))  ; 0-15
-                 (instrument (hokey-note-instrument note))
-                 (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))  ; Use instrument index as AUDC (0-15)
-                 (audcv (logior (ash audc 4) volume))
-                 (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))  ; TIA AUDF is 0-31
-                 (duration-frames (max 1 (round (* duration fps))))
-                 (delay-frames (max 0 (round (* (- start-time time) fps)))))
-            (format out "  $~2,'0X, ~2d, ~3d, ~2d  ; AUDCV=$~2,'0X (AUDC=~d AUDV=~d), AUDF=~d, Duration=~d, Delay=~d~%"
-                    audcv audf duration-frames delay-frames
-                    audcv audc volume audf duration-frames delay-frames)
-            (setf time (+ start-time duration))
-            (incf note-count)))
-        (format out "end~2%")
-        
-        ;; Output Voice 1 stream only if polyphony=2 and there are notes for voice 1
-        (when (and (= polyphony 2) voice1-notes)
-          (format out "data ~a_~a_Voice1~%" label-prefix song-name)
-          (setf time 0)
-          (dolist (note voice1-notes)
+        (let ((voice0-time 0)
+              (voice0-total-duration 0))
+          (dolist (note voice0-notes)
             (let* ((start-time (hokey-note-start-time note))
                    (duration (hokey-note-duration note))
-                   (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))
+                   (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))  ; 0-15
                    (instrument (hokey-note-instrument note))
-                   (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))
+                   (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))  ; Use instrument index as AUDC (0-15)
                    (audcv (logior (ash audc 4) volume))
-                   (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))
+                   (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))  ; TIA AUDF is 0-31
                    (duration-frames (max 1 (round (* duration fps))))
-                   (delay-frames (max 0 (round (* (- start-time time) fps)))))
+                   (delay-frames (max 0 (round (* (- start-time voice0-time) fps)))))
               (format out "  $~2,'0X, ~2d, ~3d, ~2d  ; AUDCV=$~2,'0X (AUDC=~d AUDV=~d), AUDF=~d, Duration=~d, Delay=~d~%"
                       audcv audf duration-frames delay-frames
                       audcv audc volume audf duration-frames delay-frames)
-              (setf time (+ start-time duration))
+              (setf voice0-time (+ start-time duration)
+                    voice0-total-duration (max voice0-total-duration (+ start-time duration)))
               (incf note-count)))
+          ;; Store total Voice 0 duration in seconds (for Voice 1 matching)
+          (setf time voice0-total-duration))
+        (format out "end~2%")
+        
+        ;; Output Voice 1 stream - always present for polyphony=2, filled with rests if needed
+        (when (= polyphony 2)
+          (format out "data ~a_~a_Voice1~%" label-prefix song-name)
+          (let ((voice1-time 0)
+                (voice1-events (list)))
+            ;; Collect all Voice 1 notes as events with timing
+            (dolist (note voice1-notes)
+              (let* ((start-time (hokey-note-start-time note))
+                     (duration (hokey-note-duration note))
+                     (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))
+                     (instrument (hokey-note-instrument note))
+                     (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))
+                     (audcv (logior (ash audc 4) volume))
+                     (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))
+                     (duration-frames (max 1 (round (* duration fps))))
+                     (start-frames (round (* start-time fps))))
+                (push (list :start start-frames :duration duration-frames :audcv audcv :audf audf) voice1-events)))
+            (setf voice1-events (sort voice1-events #'< :key (lambda (e) (getf e :start))))
+            
+            ;; Generate Voice 1 track: rests + actual notes
+            (let ((current-time 0)
+                  (end-time (round (* time fps)))  ; Match Voice 0 total duration
+                  (event-index 0))
+              (loop while (< current-time end-time)
+                    do (let ((next-event-time (if (< event-index (length voice1-events))
+                                                  (getf (elt voice1-events event-index) :start)
+                                                  end-time))
+                             (gap (- next-event-time current-time)))
+                         (if (and (< event-index (length voice1-events))
+                                  (= current-time next-event-time))
+                             ;; Output actual note at this time
+                             (let ((event (elt voice1-events event-index)))
+                               (format out "  $~2,'0X, ~2d, ~3d,  0  ; AUDCV=$~2,'0X, AUDF=~d, Duration=~d, Delay=0~%"
+                                       (getf event :audcv) (getf event :audf) (getf event :duration)
+                                       (getf event :audcv) (getf event :audf) (getf event :duration))
+                               (incf current-time (getf event :duration))
+                               (incf event-index)
+                               (incf note-count))  ; Count Voice 1 notes
+                             ;; Fill gap with rest(s) - handle gaps > 255 frames by splitting
+                             (when (> gap 0)
+                               (loop while (> gap 0)
+                                     do (let ((rest-duration (min gap 255)))
+                                          (format out "  $00,  0, ~3d,  0  ; Rest (AUDC=0 AUDV=0), Duration=~d~%"
+                                                  rest-duration rest-duration)
+                                          (incf current-time rest-duration)
+                                          (incf note-count)  ; Count rest entries
+                                          (setf gap (- gap rest-duration))))))))))
           (format out "end~%"))
         
-        ;; Trace output (total notes written across all voices)
-        (format *trace-output* " … wrote ~:d note~:p (~d voice 0, ~d voice 1) for batariBASIC format"
-                note-count (length voice0-notes) (length voice1-notes))
+        ;; Trace output (total notes/entries written across all voices)
+        (format *trace-output* " … wrote ~:d note~:p/rest~:p for batariBASIC format"
+                note-count)
         (terpri *trace-output*))))
     t)
 
