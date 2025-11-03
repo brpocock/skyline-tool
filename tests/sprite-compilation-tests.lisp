@@ -86,10 +86,10 @@
 
 (test batch-character-compilation
   "Test that all character sprites can be compiled without errors"
-  (let ((character-names '("Bernie" "Curler" "Dragonet" "EXOPilot"
+  (let ((character-names '("Bernie" "Curler" "DragonOfStorms" "ZoeRyen"
                           "FatTony" "Megax" "Harpy" "KnightGuy"
                           "Frooty" "Nefertem" "NinjishGuy" "PorkChop"
-                          "RadishGoblin" "RoboTito" "Ursulo" "VegDog")))
+                          "RadishGoblin" "RoboTito" "Ursulo" "Shamone")))
     (dolist (char character-names)
       (let ((png-path (format nil "Source/Art/~A.png" char))
             (output-path (format nil "test-~A.s" char)))
