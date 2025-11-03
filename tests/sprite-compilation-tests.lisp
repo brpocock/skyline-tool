@@ -86,7 +86,7 @@
 
 (test batch-character-compilation
   "Test that all character sprites can be compiled without errors"
-  (let ((character-names '("Bernie" "Curler" "Dragonet" "EXOPilot"
+  (let ((character-names '("Bernie" "Curler" "Dragonet" "ZoeRyen"
                           "FatTony" "Megax" "Harpy" "KnightGuy"
                           "Frooty" "Nefertem" "NinjishGuy" "PorkChop"
                           "RadishGoblin" "RoboTito" "Ursulo" "VegDog")))
