@@ -407,9 +407,24 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
                         (when (tty-xterm-p)
                           (ansi-color-pixel r g b))
                         r g b))
-            ((= 100 (hash-table-count *palette-warnings*))
-             (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
+                        ((= 100 (hash-table-count *palette-warnings*))
+             (warn-once "Over 100 colors not in palette, further warnings suppressed.")))                                                                       
           use))))
+
+(defun find-nearest-palette-color (rgb-color)
+  "Find the nearest Atari 2600 palette color to the given RGB color using DUFY.
+   
+   RGB-COLOR should be a list (r g b) where each component is 0-255.
+   Returns the palette index (0-127 for NTSC, 0-127 for PAL, 0-7 for SECAM).
+   Uses machine-palette which properly handles *region*."
+  (destructuring-bind (r g b) rgb-color
+    (check-type r (integer 0 #xff))
+    (check-type g (integer 0 #xff))
+    (check-type b (integer 0 #xff))
+    (destructuring-bind (nearest-r nearest-g nearest-b)
+        (find-nearest-in-palette (machine-palette) r g b)
+      (or (position (list nearest-r nearest-g nearest-b) (machine-palette) :test 'equalp)
+          0))))
 
 (defun png->palette (height width rgb &optional α)
   (check-type height (integer 0 *))
