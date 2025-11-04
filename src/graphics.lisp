@@ -1219,9 +1219,10 @@ Shape:~{~{~a~}~2%~}
    - Outputs color data for each row (each row becomes 2 scanlines)
    - Output format suitable for titlescreen kernel minikernel
    - Determines minikernel slot (1, 2, or 3) from output filename:
-     * Art.AtariAge.s → 48x2_1
-     * Art.Interworldly.s → 48x2_2
-     * Art.ChaosFight.s → 48x2_3
+     * Art.AtariAge.s → 48x2_1 (AtariAge logo)
+     * Art.AtariAgeText.s → 48x2_2 (AtariAge text, replaces Interworldly on Publisher)
+     * Art.Interworldly.s → 48x2_2 (Interworldly, conflicts with AtariAgeText - not currently used)
+     * Art.ChaosFight.s → 48x2_3 (ChaosFight logo)
    
    Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
   (let* ((input-path (uiop:ensure-pathname png-file))
@@ -1233,15 +1234,17 @@ Shape:~{~{~a~}~2%~}
          (output-path (uiop:ensure-pathname output-bas))
          (output-name (pathname-name output-path))
          ;; Determine minikernel slot from output filename
-         (kernel-slot (cond ((or (search "AtariAge" output-name :test #'string-equal)
+         (kernel-slot (cond ((search "AtariAgeText" output-name :test #'string-equal)
+                            2)  ; AtariAgeText uses slot 2
+                           ((or (search "AtariAge" output-name :test #'string-equal)
                                 (search "Publisher" output-name :test #'string-equal))
-                            1)
+                            1)  ; AtariAge logo uses slot 1
                            ((or (search "Interworldly" output-name :test #'string-equal)
                                 (search "Author" output-name :test #'string-equal))
-                            2)
+                            4)  ; Interworldly uses slot 4
                            ((or (search "ChaosFight" output-name :test #'string-equal)
                                 (search "Title" output-name :test #'string-equal))
-                            3)
+                            3)  ; ChaosFight uses slot 3
                            (t 1)))  ; Default to slot 1
          (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot)))
     (unless (= width 48)

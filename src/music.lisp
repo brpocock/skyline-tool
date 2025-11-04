@@ -1267,31 +1267,39 @@ Music:~:*
 
 ;; For batariBASIC generation, we convert to TIA notes with proper frame rate
 (defun score->batari-notes (score frame-rate)
-  (remove-if #'null
-             (mapcar (lambda (score-note)
-                       (let ((key (getf score-note :key)))
-                         (unless (<= 24 key 72)
-                           (warn "Note ~a is unlikely to play correctly on TIA"
-                                 (midi->note-name key)))
-                         (multiple-value-bind (instrument _hokey-f _hokey-error)
-                             (hokey-reckon key (getf score-note :instrument))
-                           (declare (ignore _hokey-f _hokey-error))
-                           (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
-                               (best-tia-note-for key 0 (if (keywordp frame-rate) frame-rate (make-keyword (string-upcase frame-rate))))
-                             (declare (ignore _tia-c))
-                             (let ((start-time (getf score-note :time))
-                                   (duration (getf score-note :duration))
-                                   (velocity (getf score-note :velocity)))
-                               (when (and velocity start-time duration)
-                                 (make-hokey-note :start-time start-time
-                                                  :duration duration
-                                                  :instrument instrument
-                                                  :hokey-f 0  ; Not used for batariBASIC
-                                                  :hokey-error 0  ; Not used for batariBASIC
-                                                  :tia-f (or tia-f 0)
-                                                  :tia-error tia-error
-                                                  :volume (/ velocity 127))))))))
-                     score)))
+  (let ((orchestra (get-orchestration))
+        (tv-type (if (keywordp frame-rate) frame-rate (make-keyword (string-upcase frame-rate)))))
+    (remove-if #'null
+               (mapcar (lambda (score-note)
+                         (let ((key (getf score-note :key)))
+                           (unless (<= 24 key 72)
+                             (warn "Note ~a is unlikely to play correctly on TIA"
+                                   (midi->note-name key)))
+                           (multiple-value-bind (instrument-index _hokey-f _hokey-error)
+                               (hokey-reckon key (getf score-note :instrument))
+                             (declare (ignore _hokey-f _hokey-error))
+                             ;; Look up TIA distortion (AUDC) from orchestration
+                             (let ((tia-distortion (if (and (numberp instrument-index)
+                                                           (< instrument-index (length orchestra)))
+                                                      (or (getf (elt orchestra instrument-index) :tia-distortion) 1)
+                                                      1)))  ; Default to 1 if lookup fails
+                               ;; Use nearest TIA note selection with proper distortion and TV standard
+                               (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
+                                   (best-tia-note-for key tia-distortion tv-type)
+                                 (declare (ignore _tia-c))
+                                 (let ((start-time (getf score-note :time))
+                                       (duration (getf score-note :duration))
+                                       (velocity (getf score-note :velocity)))
+                                   (when (and velocity start-time duration)
+                                     (make-hokey-note :start-time start-time
+                                                      :duration duration
+                                                      :instrument instrument-index
+                                                      :hokey-f 0  ; Not used for batariBASIC
+                                                      :hokey-error 0  ; Not used for batariBASIC
+                                                      :tia-f (or tia-f 0)
+                                                      :tia-error tia-error
+                                                      :volume (/ velocity 127)))))))))
+                       score))))
 
 (defmethod score->song (score (format (eql :batariBASIC)) frame-rate)
   (score->batari-notes score frame-rate))
@@ -1488,13 +1496,18 @@ Music:~:*
         ;; Output Voice 0 stream
         (format out "data ~a_~a_Voice0~%" label-prefix song-name)
         (let ((voice0-time 0)
-              (voice0-total-duration 0))
+              (voice0-total-duration 0)
+              (orchestra (get-orchestration)))
           (dolist (note voice0-notes)
             (let* ((start-time (or (hokey-note-start-time note) 0))
                    (duration (or (hokey-note-duration note) 0))
                    (volume (max 0 (min 15 (round (* 15 (or (hokey-note-volume note) 0))))))  ; 0-15
                    (instrument (hokey-note-instrument note))
-                   (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))  ; Use instrument index as AUDC (0-15)
+                   ;; Get TIA AUDC (distortion) from orchestration TIA column
+                   (audc (if (and (numberp instrument)
+                                  (< instrument (length orchestra)))
+                             (max 0 (min 15 (or (getf (elt orchestra instrument) :tia-distortion) 1)))
+                             1))  ; Default to 1 if orchestration lookup fails
                    (audcv (logior (ash audc 4) volume))
                    (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))  ; TIA AUDF is 0-31
                    (duration-frames (max 1 (round (* duration fps))))
@@ -1505,6 +1518,8 @@ Music:~:*
               (setf voice0-time (+ start-time duration)
                     voice0-total-duration (max voice0-total-duration (+ start-time duration)))
               (incf note-count)))
+          ;; Add end marker: lag=0 marks end of song
+          (format out "  $00,  0,  0,  0  ; End marker (lag=0)~%")
           ;; Store total Voice 0 duration in seconds (for Voice 1 matching)
           (setf time voice0-total-duration))
         (format out "end~2%")
@@ -1513,14 +1528,19 @@ Music:~:*
         (when (= polyphony 2)
           (format out "data ~a_~a_Voice1~%" label-prefix song-name)
           (let ((voice1-time 0)
-                (voice1-events (list)))
+                (voice1-events (list))
+                (orchestra (get-orchestration)))
             ;; Collect all Voice 1 notes as events with timing
             (dolist (note voice1-notes)
               (let* ((start-time (or (hokey-note-start-time note) 0))
                      (duration (or (hokey-note-duration note) 0))
                      (volume (max 0 (min 15 (round (* 15 (or (hokey-note-volume note) 0))))))
                      (instrument (hokey-note-instrument note))
-                     (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))
+                     ;; Get TIA AUDC (distortion) from orchestration TIA column
+                     (audc (if (and (numberp instrument)
+                                    (< instrument (length orchestra)))
+                               (max 0 (min 15 (or (getf (elt orchestra instrument) :tia-distortion) 1)))
+                               1))  ; Default to 1 if orchestration lookup fails
                      (audcv (logior (ash audc 4) volume))
                      (audf (max 0 (min 31 (round (or (hokey-note-tia-f note) 0)))))
                      (duration-frames (max 1 (round (* duration fps))))
@@ -1555,7 +1575,9 @@ Music:~:*
                                                   rest-duration rest-duration)
                                           (incf current-time rest-duration)
                                           (incf note-count)  ; Count rest entries
-                                          (setf gap (- gap rest-duration))))))))))
+                                          (setf gap (- gap rest-duration))))))))
+            ;; Add end marker: lag=0 marks end of song
+            (format out "  $00,  0,  0,  0  ; End marker (lag=0)~%")))
           (format out "end~%"))
         
         ;; Trace output (total notes/entries written across all voices)
