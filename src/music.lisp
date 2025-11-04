@@ -1462,8 +1462,8 @@ Music:~:*
         (if (= polyphony 2)
             ;; Smart assignment: prefer voice 0, use voice 1 only when voice 0 is busy
             (dolist (note hokey-notes)
-              (let ((start-time (hokey-note-start-time note))
-                    (duration (hokey-note-duration note))
+              (let ((start-time (or (hokey-note-start-time note) 0))
+                    (duration (or (hokey-note-duration note) 0))
                     (end-time (+ start-time duration)))
                 (if (>= start-time voice0-end-time)
                     ;; Voice 0 is free, use it
@@ -1490,9 +1490,9 @@ Music:~:*
         (let ((voice0-time 0)
               (voice0-total-duration 0))
           (dolist (note voice0-notes)
-            (let* ((start-time (hokey-note-start-time note))
-                   (duration (hokey-note-duration note))
-                   (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))  ; 0-15
+            (let* ((start-time (or (hokey-note-start-time note) 0))
+                   (duration (or (hokey-note-duration note) 0))
+                   (volume (max 0 (min 15 (round (* 15 (or (hokey-note-volume note) 0))))))  ; 0-15
                    (instrument (hokey-note-instrument note))
                    (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))  ; Use instrument index as AUDC (0-15)
                    (audcv (logior (ash audc 4) volume))
@@ -1516,9 +1516,9 @@ Music:~:*
                 (voice1-events (list)))
             ;; Collect all Voice 1 notes as events with timing
             (dolist (note voice1-notes)
-              (let* ((start-time (hokey-note-start-time note))
-                     (duration (hokey-note-duration note))
-                     (volume (max 0 (min 15 (round (* 15 (hokey-note-volume note))))))
+              (let* ((start-time (or (hokey-note-start-time note) 0))
+                     (duration (or (hokey-note-duration note) 0))
+                     (volume (max 0 (min 15 (round (* 15 (or (hokey-note-volume note) 0))))))
                      (instrument (hokey-note-instrument note))
                      (audc (if (numberp instrument) (max 0 (min 15 instrument)) 1))
                      (audcv (logior (ash audc 4) volume))
