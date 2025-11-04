@@ -456,7 +456,8 @@ GameFlag: .block~2%"
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
 
 (defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods"))
-  "Read the orchestration table from Source/Tables/Orchestration.ods"
+  "Read the orchestration table from Source/Tables/Orchestration.ods
+Column mapping: 'TIA' or 'TIA-Distortion' column maps to :tia-distortion property"
   (format *trace-output* "~&Reading orchestration from ~a" (enough-namestring pathname))
   (finish-output *trace-output*)
   (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
@@ -468,7 +469,9 @@ GameFlag: .block~2%"
                              :decay-subtrahend (parse-number (getf row :decay-subtrahend))
                              :decay-duration (parse-number (getf row :decay-duration))
                              :release-subtrahend (parse-number (getf row :release-subtrahend))
-                             :tia-distortion (parse-number (getf row :tia-distortion))))))
+                             ;; Support both "TIA" and "TIA-Distortion" column names
+                             :tia-distortion (or (parse-number (getf row :tia-distortion))
+                                                 (parse-number (getf row :tia)))))))
 
 (defun write-orchestration (&optional (input #p"Source/Tables/Orchestration.ods")
                                       (output #p"Source/Generated/Orchestration.s"))
