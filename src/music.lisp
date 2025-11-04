@@ -1533,10 +1533,10 @@ Music:~:*
                   (end-time (round (* time fps)))  ; Match Voice 0 total duration
                   (event-index 0))
               (loop while (< current-time end-time)
-                    do (let ((next-event-time (if (< event-index (length voice1-events))
-                                                  (getf (elt voice1-events event-index) :start)
-                                                  end-time))
-                             (gap (- next-event-time current-time)))
+                    do (let* ((next-event-time (if (< event-index (length voice1-events))
+                                                   (getf (elt voice1-events event-index) :start)
+                                                   end-time))
+                              (gap (- next-event-time current-time)))
                          (if (and (< event-index (length voice1-events))
                                   (= current-time next-event-time))
                              ;; Output actual note at this time
