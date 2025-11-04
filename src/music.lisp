@@ -1462,9 +1462,9 @@ Music:~:*
         (if (= polyphony 2)
             ;; Smart assignment: prefer voice 0, use voice 1 only when voice 0 is busy
             (dolist (note hokey-notes)
-              (let ((start-time (or (hokey-note-start-time note) 0))
-                    (duration (or (hokey-note-duration note) 0))
-                    (end-time (+ start-time duration)))
+              (let* ((start-time (or (hokey-note-start-time note) 0))
+                     (duration (or (hokey-note-duration note) 0))
+                     (end-time (+ start-time duration)))
                 (if (>= start-time voice0-end-time)
                     ;; Voice 0 is free, use it
                     (progn
