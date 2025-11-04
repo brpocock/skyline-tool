@@ -1277,17 +1277,20 @@ Music:~:*
                              (hokey-reckon key (getf score-note :instrument))
                            (declare (ignore _hokey-f _hokey-error))
                            (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
-                               (best-tia-note-for key 0 frame-rate)
+                               (best-tia-note-for key 0 (if (keywordp frame-rate) frame-rate (make-keyword (string-upcase frame-rate))))
                              (declare (ignore _tia-c))
-                             (when (getf score-note :velocity)
-                               (make-hokey-note :start-time (getf score-note :time)
-                                                :duration (getf score-note :duration)
-                                                :instrument instrument
-                                                :hokey-f 0  ; Not used for batariBASIC
-                                                :hokey-error 0  ; Not used for batariBASIC
-                                                :tia-f (or tia-f 0)
-                                                :tia-error tia-error
-                                                :volume (/ (getf score-note :velocity) 127)))))))
+                             (let ((start-time (getf score-note :time))
+                                   (duration (getf score-note :duration))
+                                   (velocity (getf score-note :velocity)))
+                               (when (and velocity start-time duration)
+                                 (make-hokey-note :start-time start-time
+                                                  :duration duration
+                                                  :instrument instrument
+                                                  :hokey-f 0  ; Not used for batariBASIC
+                                                  :hokey-error 0  ; Not used for batariBASIC
+                                                  :tia-f (or tia-f 0)
+                                                  :tia-error tia-error
+                                                  :volume (/ velocity 127))))))))
                      score)))
 
 (defmethod score->song (score (format (eql :batariBASIC)) frame-rate)
@@ -1453,7 +1456,8 @@ Music:~:*
             (voice0-notes (list))
             (voice1-notes (list))
             (voice0-end-time 0)
-            (voice1-end-time 0))
+            (voice1-end-time 0)
+            (time 0))  ; Total duration of Voice 0 track in seconds (used for Voice 1 matching)
         ;; Separate notes into voices based on actual polyphony requirements
         (if (= polyphony 2)
             ;; Smart assignment: prefer voice 0, use voice 1 only when voice 0 is busy
