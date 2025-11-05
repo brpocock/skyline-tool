@@ -360,7 +360,7 @@
                            (let ((empty-line-pos (+ col-start 42)))
                              (when (< empty-line-pos (length data-lines))
                                (is (string= (elt data-lines empty-line-pos) "")
-                                   (format nil "Column ~d should be followed by empty line" col)))))))))))))
+                                   (format nil "Column ~d should be followed by empty line" col))))))))))))))
 
 (test compile-batari-48px-inverted-y
   "Test compile-batari-48px inverted-y ordering (rows 41 down to 0)"
@@ -406,7 +406,7 @@
                 (when label-end
                   (let ((label-name (subseq after-data 0 label-end)))
                     (is (> (length label-name) 0) "Label name should exist")
-                    (is (upper-case-p (char label-name 0)) "Label should start with capital letter")))))))))
+                    (is (upper-case-p (char label-name 0)) "Label should start with capital letter")))))))))))
 
 ;; Run all tests
 (defun run-graphics-tests ()

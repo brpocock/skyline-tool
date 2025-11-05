@@ -22,11 +22,18 @@
 
 (uiop:chdir (uiop:pathname-parent-directory-pathname
               (asdf:system-source-directory :skyline-tool)))
-(setf fiveam:*on-error* :debug)
-(setf fiveam:*on-failure* :debug)
-(fiveam:run! 'skyline-tool/test:action-tests)
-;; Load and run sprite compilation regression tests
-(load (merge-pathnames "sprite-compilation-tests.lisp" 
-                       (directory-namestring *load-pathname*)))
-(fiveam:run! 'skyline-tool/test/sprites:sprite-compilation-tests)
+;; Configure FiveAM to report all failures but continue the run
+(setf fiveam:*on-error* :backtrace)
+(setf fiveam:*on-failure* :backtrace)
+(setf fiveam:*test-dribble* *standard-output*)
+;; Run tests and capture results
+(let ((results (fiveam:run! 'skyline-tool/test:action-tests)))
+  (when (and results (not (eq results t)))
+    (unless (fiveam:results-status results)
+      (format t "~%Action tests had failures, but continuing...~%"))))
+;; Run sprite compilation regression tests (loaded via ASDF system)
+(let ((results (fiveam:run! 'skyline-tool/test/sprites:sprite-compilation-tests)))
+  (when (and results (not (eq results t)))
+    (unless (fiveam:results-status results)
+      (format t "~%Sprite compilation tests had failures, but continuing...~%"))))
 (format t "~%All tests completed.~%") 

@@ -21,7 +21,9 @@
          (npc-path (merge-pathnames "tests/data/NPCStats.ods" root))
          (map-source (merge-pathnames "tests/data/AmsCalypso2.tmx" root))
          (map-target (merge-pathnames "Source/Maps/Ships/AmsCalypso2.tmx" root))
-         (created-map nil))
+         (map-target-dir (uiop:pathname-directory-pathname map-target))
+         (created-map nil)
+         (created-dir nil))
     (with-output-to-string (output)
       (let ((*standard-output* output)
             (skyline-tool::*common-palette*
@@ -30,15 +32,24 @@
         (let ((*npc-stats* nil))
           (when (probe-file npc-path)
             (skyline-tool::load-npc-stats npc-path))
-          (when (and (probe-file map-source)
-                     (not (probe-file map-target)))
-            (setf created-map t)
-            (ensure-directories-exist map-target)
-            (uiop:copy-file map-source map-target))
+          (when (probe-file map-source)
+            (unless (probe-file map-target-dir)
+              (setf created-dir t)
+              (ensure-directories-exist map-target-dir))
+            (unless (probe-file map-target)
+              (setf created-map t)
+              (uiop:copy-file map-source map-target)))
           (unwind-protect
                (skyline-tool::compile-fountain-string script-string)
             (when created-map
-              (ignore-errors (delete-file map-target))))))))
+              (ignore-errors (delete-file map-target)))
+            (when (and created-dir map-target-dir)
+              ;; Try to remove directory if empty (ignore errors if not empty or other issues)
+              (ignore-errors
+                (when (uiop:directory-exists-p map-target-dir)
+                  (let ((files (uiop:directory-files map-target-dir)))
+                    (when (null files)
+                      (uiop:delete-empty-directory map-target-dir)))))))))))
 
 
 ;; Test gesture actions
