@@ -33,7 +33,7 @@
           (when (probe-file npc-path)
             (skyline-tool::load-npc-stats npc-path))
           (when (probe-file map-source)
-            (unless (probe-file map-target-dir)
+            (unless (uiop:directory-exists-p map-target-dir)
               (setf created-dir t)
               (ensure-directories-exist map-target-dir))
             (unless (probe-file map-target)
@@ -49,7 +49,7 @@
                 (when (uiop:directory-exists-p map-target-dir)
                   (let ((files (uiop:directory-files map-target-dir)))
                     (when (null files)
-                      (uiop:delete-empty-directory map-target-dir)))))))))))
+                      (uiop:delete-empty-directory map-target-dir))))))))))))
 
 
 ;; Test gesture actions
@@ -371,4 +371,3 @@ NORVILLE stops waving arms.
 (defun run-action-tests ()
   "Run all action tests and return results"
   (fiveam:run! 'action-tests))
-)
