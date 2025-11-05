@@ -37,7 +37,7 @@
               (setf created-dir t)
               (ensure-directories-exist map-target-dir))
             (unless (probe-file map-target)
-              (setf created-map t)
+            (setf created-map t)
               (uiop:copy-file map-source map-target)))
           (unwind-protect
                (skyline-tool::compile-fountain-string script-string)
