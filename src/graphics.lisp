@@ -1237,8 +1237,8 @@ Shape:~{~{~a~}~2%~}
    Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
   (let* ((input-path (uiop:ensure-pathname png-file))
          (png (progn
-                (unless (probe-file input-path)
-                  (error "PNG file does not exist: ~a" input-path))
+                (with-open-file (stream input-path :if-does-not-exist :error)
+                  (declare (ignore stream)))
                 (png-read:read-png-file input-path)))
          (width (png-read:width png))
          (height (png-read:height png))
