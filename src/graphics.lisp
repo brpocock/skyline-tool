@@ -565,7 +565,10 @@ PNG image in an unsuitable format:
 
 (defun compile-2600-font-8x16 (output-bas png-path)
   (let* ((input-path (uiop:ensure-pathname png-path))
-         (png (png-read:read-png-file input-path))
+         (png (progn
+                (unless (probe-file input-path)
+                  (error "PNG file does not exist: ~a" input-path))
+                (png-read:read-png-file input-path)))
          (width (png-read:width png))
          (height (png-read:height png)))
     (unless (and (> width 0) (zerop (mod width 8)))
@@ -640,7 +643,10 @@ PNG image in an unsuitable format:
 (defun compile-2600-playfield (output-bas png-path &optional tv-standard)
   (declare (ignore tv-standard))
   (let* ((input-path (uiop:ensure-pathname png-path))
-         (png (png-read:read-png-file input-path))
+         (png (progn
+                (unless (probe-file input-path)
+                  (error "PNG file does not exist: ~a" input-path))
+                (png-read:read-png-file input-path)))
          (width (png-read:width png))
          (height (png-read:height png))
          (rgb (png-read:image-data png))
@@ -715,7 +721,11 @@ PNG image in an unsuitable format:
       output-bas)))
 
 (defun compile-chaos-character (output-bas png-path)
-  (let* ((png (png-read:read-png-file png-path))
+  (let* ((png-pathname (uiop:ensure-pathname png-path))
+         (png (progn
+                (unless (probe-file png-pathname)
+                  (error "PNG file does not exist: ~a" png-pathname))
+                (png-read:read-png-file png-pathname)))
          (width (png-read:width png))
          (height (png-read:height png)))
     (unless (= width 64)
@@ -1226,7 +1236,10 @@ Shape:~{~{~a~}~2%~}
    
    Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
   (let* ((input-path (uiop:ensure-pathname png-file))
-         (png (png-read:read-png-file input-path))
+         (png (progn
+                (unless (probe-file input-path)
+                  (error "PNG file does not exist: ~a" input-path))
+                (png-read:read-png-file input-path)))
          (width (png-read:width png))
          (height (png-read:height png))
          (rgb (png-read:image-data png))
