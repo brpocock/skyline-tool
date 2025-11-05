@@ -1494,7 +1494,7 @@ Music:~:*
               voice1-notes (reverse voice1-notes))
         
         ;; Output Voice 0 stream
-        (format out "data ~a_~a_Voice0~%" label-prefix song-name)
+        (format out "          data ~a_~a_Voice0~%" label-prefix song-name)
         (let ((voice0-time 0)
               (voice0-total-duration 0)
               (orchestra (get-orchestration)))
@@ -1526,7 +1526,7 @@ Music:~:*
         
         ;; Output Voice 1 stream - always present for polyphony=2, filled with rests if needed
         (when (= polyphony 2)
-          (format out "data ~a_~a_Voice1~%" label-prefix song-name)
+          (format out "          data ~a_~a_Voice1~%" label-prefix song-name)
           (let ((voice1-time 0)
                 (voice1-events (list))
                 (orchestra (get-orchestration)))
