@@ -492,11 +492,14 @@ See COPYING for details
   (command (append '("port") subcommand)))
 
 (defun command (argv)
-  (format *trace-output* "~&Skyline tool (© 2025) invoked:
+  (let ((verb (and (< 1 (length argv)) (second argv))))
+    ;; Suppress banner for clean-redefs to avoid polluting stdout
+    (unless (string-equal verb "clean-redefs")
+      (format *trace-output* "~&Skyline tool (© 2025) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
-          argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-  (finish-output *trace-output*)
+              argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+      (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+      (finish-output *trace-output*)))
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)
