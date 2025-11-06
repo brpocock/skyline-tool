@@ -456,8 +456,7 @@ GameFlag: .block~2%"
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
 
 (defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods"))
-  "Read the orchestration table from Source/Tables/Orchestration.ods
-Column mapping: 'TIA' or 'TIA-Distortion' column maps to :tia-distortion property"
+  "Read the orchestration table from Source/Tables/Orchestration.ods"
   (format *trace-output* "~&Reading orchestration from ~a" (enough-namestring pathname))
   (finish-output *trace-output*)
   (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
