@@ -1613,7 +1613,7 @@ Music:~:*
                                         :type "o"
                                         :directory '(:relative "Object" "Assets"))))
   "Compile INPUT for device FORMAT with FRAME-RATE TV (eg NTSC)"
-  (format *trace-output* "~&Compiling ~a to format ~a for frame rate ~a into ~a"
+  (format *trace-output* "~&Compiling ~a to format ~a for frame rate ~a into ~a~%"
           (enough-namestring input) format frame-rate (enough-namestring output))
   (finish-output *trace-output*)
   (let* ((format-key (make-keyword (string-upcase format)))
