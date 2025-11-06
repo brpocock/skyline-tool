@@ -82,7 +82,8 @@ Parses the format structurally based on how batariBASIC generates it:
 - Valid values: temp1-temp6, var0-var47, a-z, or assembly expressions (.skipL...)
 - Detects concatenation when value contains invalid patterns and truncates at boundary.
 Outputs cleaned file to *standard-output*."
-  (let ((redefs-path (pathname redefs-file))
+  (let ((*trace-output* *error-output*)
+        (redefs-path (pathname redefs-file))
         (lines-fixed 0)
         (lines-kept 0))
     (with-input-from-file (input redefs-path)
@@ -120,9 +121,9 @@ Outputs cleaned file to *standard-output*."
                                         ;; Can't fix - skip it
                                         (incf lines-fixed))))))))))))
     (when (plusp lines-fixed)
-      (format *error-output* "~&Cleaned redefs file: fixed ~d malformed entries, kept ~d valid entries~%"
+      (format *trace-output* "~&Cleaned redefs file: fixed ~d malformed entries, kept ~d valid entries~%"
               lines-fixed lines-kept)
-      (finish-output *error-output*))))
+      (finish-output *trace-output*))))
 
 (defun valid-redef-value-p (value)
   "Check if VALUE is a valid batariBASIC redefinition value.
