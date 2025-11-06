@@ -1498,7 +1498,10 @@ Music:~:*
               voice1-notes (reverse voice1-notes))
         
         ;; Output Voice 0 stream
-        (format out "          data ~a_~a_Voice0~%" label-prefix song-name)
+        ;; Sound effects (monophonic) don't need _Voice0 suffix, songs (polyphonic) do
+        (if (= polyphony 1)
+            (format out "          data ~a_~a~%" label-prefix song-name)
+            (format out "          data ~a_~a_Voice0~%" label-prefix song-name))
         (let ((voice0-time 0)
               (voice0-total-duration 0)
               (orchestra (get-orchestration)))
