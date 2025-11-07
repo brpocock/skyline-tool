@@ -74,9 +74,8 @@ printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
                 (or break 0)
                 (or minor-fault 0))))))
 
-(defun clean-redefs (redefs-file)
-  "Clean and validate batariBASIC variable redefinitions file.
-  
+(defun clean-redefs-and-extract (redefs-file)
+  "Clean malformed lines from REDEFS-FILE and reemit valid mappings.
 Parses the format structurally based on how batariBASIC generates it:
 - Format: variable_name = value
 - Valid values: temp1-temp6, var0-var47, a-z, or assembly expressions (.skipL...)
@@ -105,18 +104,23 @@ Outputs cleaned file to *standard-output*."
                         (if (not equals-pos)
                             ;; No equals sign - skip malformed line
                             (incf lines-fixed)
-                            (let ((var-name (string-trim '(#\Space #\Tab) (subseq trimmed 0 equals-pos)))
-                                  (value-raw (string-trim '(#\Space #\Tab) (subseq trimmed (1+ equals-pos)))))
+                            (let* ((var-name (string-trim '(#\Space #\Tab) (subseq trimmed 0 equals-pos)))
+                                   (value-raw (string-trim '(#\Space #\Tab) (subseq trimmed (1+ equals-pos))))
+                                   (desired-operator (if (or (string= var-name "vblank_time")
+                                                             (string= var-name "overscan_time"))
+                                                         " .set "
+                                                         " = ")))
                               (if (valid-redef-value-p value-raw)
-                                  ;; Valid - keep it
+                                  ;; Valid - keep it (with possible operator adjustment)
                                   (progn
-                                    (write-line trimmed *standard-output*)
+                                    (write-line (concatenate 'string var-name desired-operator value-raw)
+                                                *standard-output*)
                                     (incf lines-kept))
                                   ;; Invalid - try to fix by truncating at concatenation boundary
                                   (let ((fixed-value (fix-concatenated-value value-raw)))
                                     (if fixed-value
                                         (progn
-                                          (format *standard-output* "~a = ~a~%" var-name fixed-value)
+                                          (format *standard-output* "~a~a~a~%" var-name desired-operator fixed-value)
                                           (incf lines-fixed))
                                         ;; Can't fix - skip it
                                         (incf lines-fixed))))))))))))

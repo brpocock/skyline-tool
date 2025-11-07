@@ -44,7 +44,7 @@
         :labels-to-forth 'labels-to-forth
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
-        :clean-redefs 'clean-redefs
+        :clean-redefs 'clean-redefs-and-extract
         :make-classes-for-oops 'make-classes-for-oops
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
