@@ -76,3 +76,314 @@ printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 
 (defparameter *banks-used* nil)
 
+(defun clean-redefs-and-extract (redefs-file)
+  "Clean malformed lines from REDEFS-FILE and reemit valid mappings.
+Parses the format structurally based on how batariBASIC generates it:
+- Format: variable_name = value
+- Valid values: temp1-temp6, var0-var47, a-z, or assembly expressions (.skipL...)
+- Detects concatenation when value contains invalid patterns and truncates at boundary.
+Outputs cleaned file to *standard-output*."
+  (let ((*trace-output* *error-output*)
+        (redefs-path (pathname redefs-file))
+        (lines-fixed 0)
+        (lines-kept 0))
+    (with-input-from-file (input redefs-path)
+      (loop for line = (read-line input nil nil)
+            while line
+            do (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Newline) line)))
+                 (cond
+                   ;; Skip empty lines
+                   ((zerop (length trimmed))
+                    (values))
+                   ;; Keep comment lines
+                   ((char= (char trimmed 0) #\;)
+                    (write-line trimmed *standard-output*)
+                    (incf lines-kept))
+                   ;; Parse variable = value format
+                   (t (multiple-value-bind (var-name value-raw)
+                         (parse-redefs-line trimmed)
+                       (when (or (null var-name) (null value-raw)
+                                 (needs-song-sound-fix trimmed value-raw))
+                         (multiple-value-setq (var-name value-raw)
+                           (recover-missing-equals trimmed)))
+                       (if (or (null var-name) (null value-raw))
+                           ;; Unable to parse - skip malformed line
+                           (progn
+                             (format *trace-output* "Skipping malformed redefs line: ~a~%" trimmed)
+                             (incf lines-fixed))
+                           (let* ((desired-operator (if (or (string= var-name "vblank_time")
+                                                            (string= var-name "overscan_time"))
+                                                        " .set "
+                                                        " = ")))
+                             (if (valid-redef-value-p value-raw)
+                                 ;; Valid - keep it (with possible operator adjustment)
+                                 (progn
+                                   (write-line (concatenate 'string var-name desired-operator value-raw)
+                                               *standard-output*)
+                                   (incf lines-kept))
+                                 ;; Invalid - try to fix by truncating at concatenation boundary
+                                 (let ((fixed-value (fix-concatenated-value value-raw)))
+                                   (if fixed-value
+                                       (progn
+                                         (format *standard-output* "~a~a~a~%" var-name desired-operator fixed-value)
+                                         (incf lines-fixed))
+                                       ;; Can't fix - skip it
+                                       (incf lines-fixed))))))))))))
+    (when (plusp lines-fixed)
+      (format *trace-output* "~&Cleaned redefs file: fixed ~d malformed entries, kept ~d valid entries~%"
+              lines-fixed lines-kept)
+      (finish-output *trace-output*))))
+
+(defun valid-redef-value-p (value)
+  "Check if VALUE is a valid batariBASIC redefinition value.
+Valid formats: temp1-temp6, var0-var47, a-z, r000-w127, or assembly expressions starting with '.'"
+  (cond
+    ((zerop (length value)) nil)
+    ;; Assembly expression: .skipL... or similar - check for concatenation
+    ((char= (char value 0) #\.)
+     ;; Check if it's a valid assembly expression (no concatenation)
+     (let ((underscore-pos (position #\_ value)))
+       (if (and underscore-pos
+                (< (1+ underscore-pos) (length value))
+                (upper-case-p (char value (1+ underscore-pos))))
+           nil  ; Concatenation detected
+           t)))  ; Valid assembly expression
+    ;; Simple identifier: temp1-temp6
+    ((and (>= (length value) 5)
+          (string= value "temp" :end1 4)
+          (digit-char-p (char value 4))
+          (or (= (length value) 5)
+              (and (= (length value) 6) (digit-char-p (char value 5)))))
+     t)
+    ;; var0-var47
+    ((and (>= (length value) 4)
+          (string= value "var" :end1 3)
+          (every #'digit-char-p (subseq value 3)))
+     (let ((num (parse-integer value :start 3 :junk-allowed t)))
+       (and num (<= 0 num 47))))
+    ;; Single letter a-z
+    ((and (= (length value) 1)
+          (lower-case-p (char value 0)))
+     t)
+    ;; Register: r000-w127 format
+    ((and (>= (length value) 4)
+          (member (char value 0) '(#\r #\w))
+          (every #'digit-char-p (subseq value 1)))
+     t)
+    ;; Decimal literal (optional leading sign)
+    ((numeric-literal-p value)
+     t)
+    ;; Hex ($xx) or binary (%xx) literal
+    ((or (hex-literal-p value)
+         (binary-literal-p value))
+     t)
+    ;; Simple symbol (letters, digits, underscore)
+    ((simple-symbol-p value)
+     t)
+    ;; Invalid - contains concatenation patterns
+    (t nil)))
+
+(defun simple-symbol-p (value)
+  "Return true when VALUE is a simple identifier (letters, digits, underscore)."
+  (and (> (length value) 0)
+       (or (alpha-char-p (char value 0))
+           (char= (char value 0) #\_))
+       (every (lambda (c)
+                (or (alphanumericp c)
+                    (char= c #\_)))
+              value)))
+
+(defun song-sound-prefix-p (value)
+  "Return true when VALUE begins with a Song*/Sound* symbol prefix."
+  (and value
+       (or (and (>= (length value) 4)
+                (string-equal value "Song" :end1 4))
+           (and (>= (length value) 5)
+                (string-equal value "Sound" :end1 5)))))
+
+(defun parse-redefs-line (line)
+  "Parse LINE from 2600basic_variable_redefs.h, recovering missing '=' cases."
+  (let ((equals-pos (position #\= line)))
+    (if equals-pos
+        (values (string-trim '(#\Space #\Tab) (subseq line 0 equals-pos))
+                (string-trim '(#\Space #\Tab) (subseq line (1+ equals-pos))))
+        (split-missing-equals line))))
+
+(defun split-missing-equals (line)
+  "Attempt to recover VAR and VALUE when '=' was elided during generation."
+  (labels ((return-split (lhs rhs)
+             (let ((trimmed-lhs (string-trim '(#\Space #\Tab) lhs))
+                   (trimmed-rhs (string-trim '(#\Space #\Tab) rhs)))
+               (if (or (zerop (length trimmed-lhs))
+                       (zerop (length trimmed-rhs)))
+                   (values nil nil)
+                   (values trimmed-lhs trimmed-rhs)))))
+    (cond
+      ;; Case 1: whitespace-separated tokens
+      ((position #\Space line)
+       (let ((space-pos (position #\Space line)))
+         (return-split (subseq line 0 space-pos)
+                       (subseq line space-pos))))
+      ;; Case 2: CamelCase or PascalCase concatenation after lowercase/digit
+      (t (loop for idx downfrom (1- (length line)) above 0
+               for prev = (char line (1- idx))
+               for curr = (char line idx)
+               when (and (upper-case-p curr)
+                         (or (lower-case-p prev)
+                             (digit-char-p prev)))
+                 do (let ((lhs (subseq line 0 idx))
+                          (rhs (subseq line idx)))
+                      (return (if (song-sound-prefix-p (string-trim '(#\Space #\Tab) rhs))
+                                  (values (string-trim '(#\Space #\Tab) line)
+                                          (string-trim '(#\Space #\Tab) rhs))
+                                  (return-split lhs rhs))))
+               finally (return (values nil nil)))))))
+
+(defun recover-missing-equals (line)
+  "Secondary recovery pass for lines missing '=' using domain-specific heuristics."
+  (let* ((candidates (list (search " SongPointers" line :test #'char-equal)
+                           (search "SongPointers" line :test #'char-equal)
+                           (search " Song_" line :test #'char-equal)
+                           (search "Song_" line :test #'char-equal)
+                           (search " Sound_" line :test #'char-equal)
+                           (search "Sound_" line :test #'char-equal)))
+         (pos (car (remove-if-not #'identity candidates))))
+    (if pos
+        (values (string-trim '(#\Space #\Tab) (subseq line 0 pos))
+                (string-trim '(#\Space #\Tab) (subseq line pos)))
+        (values nil nil))))
+
+(defun needs-song-sound-fix (original-line value-raw)
+  "Return true when ORIGINAL-LINE references Song/Sound symbols but VALUE-RAW misses the prefix."
+  (and original-line
+       (let ((line-has-prefix (or (search "Song" original-line :test #'char-equal)
+                                  (search "Sound" original-line :test #'char-equal))))
+         (and line-has-prefix
+              (or (null value-raw)
+                  (not (song-sound-prefix-p value-raw)))))))
+
+(defun fix-concatenated-value (value)
+  "Fix concatenated value by truncating at the concatenation boundary.
+Returns the valid prefix, or nil if no valid prefix can be determined."
+  (cond
+    ((zerop (length value)) nil)
+    ;; If starts with '.', it's an assembly expression - check for concatenation
+    ((char= (char value 0) #\.)
+     (let ((underscore-pos (position #\_ value)))
+       (if (and underscore-pos
+                (< (1+ underscore-pos) (length value))
+                (upper-case-p (char value (1+ underscore-pos))))
+           ;; Concatenation detected - truncate before underscore
+           (if (> underscore-pos 1)
+               (subseq value 0 underscore-pos)
+               nil)
+           value)))
+    ;; Numeric literal
+    ((numeric-literal-p value)
+     (truncate-numeric value))
+    ;; Hex literal
+    ((hex-literal-p value)
+     (truncate-prefixed-literal value))
+    ;; Binary literal
+    ((binary-literal-p value)
+     (truncate-prefixed-literal value))
+    ;; If starts with 'temp', extract just tempN
+    ((and (>= (length value) 4)
+          (string= value "temp" :end1 4))
+     (if (and (>= (length value) 5) (digit-char-p (char value 4)))
+         (let ((digit-end (position-if-not #'digit-char-p value :start 4)))
+           (if digit-end
+               (subseq value 0 digit-end)
+               value))
+         nil))
+    ;; If starts with 'var', extract just varN
+    ((and (>= (length value) 3)
+          (string= value "var" :end1 3))
+     (if (and (>= (length value) 4) (digit-char-p (char value 3)))
+         (let ((digit-end (position-if-not #'digit-char-p value :start 3)))
+           (if digit-end
+               (subseq value 0 digit-end)
+               value))
+         nil))
+    ;; Single letter
+    ((and (= (length value) 1)
+          (lower-case-p (char value 0)))
+     value)
+    ;; Register format r000 or w000
+    ((and (>= (length value) 4)
+          (member (char value 0) '(#\r #\w))
+          (every #'digit-char-p (subseq value 1)))
+     (let ((digit-end (position-if-not #'digit-char-p value :start 1)))
+       (if digit-end
+           (subseq value 0 digit-end)
+           value)))
+    ;; Try to extract valid prefix before concatenation
+    (t (let ((concat-pos (detect-concatenation-boundary value)))
+         (if concat-pos
+             (let ((prefix (subseq value 0 concat-pos)))
+               ;; Only return if the prefix is a valid value
+               (if (valid-redef-value-p prefix)
+                   prefix
+                   nil))
+             nil)))))
+
+(defun numeric-literal-p (value)
+  "Return true if VALUE is a decimal literal with optional sign."
+  (and (> (length value) 0)
+       (let ((start (if (member (char value 0) '(#\+ #\-)) 1 0)))
+         (and (< start (length value))
+              (every #'digit-char-p (subseq value start))))))
+
+(defun hex-literal-p (value)
+  "Return true if VALUE is a $-prefixed hexadecimal literal."
+  (and (> (length value) 1)
+       (char= (char value 0) #\$)
+       (every #'hex-digit-p (subseq value 1))))
+
+(defun binary-literal-p (value)
+  "Return true if VALUE is a %-prefixed binary literal."
+  (and (> (length value) 1)
+       (char= (char value 0) #\%)
+       (every (lambda (c) (or (char= c #\0) (char= c #\1)))
+              (subseq value 1))))
+
+(defun truncate-numeric (value)
+  "Return numeric prefix of VALUE (handles optional sign)."
+  (let* ((start (if (member (char value 0) '(#\+ #\-)) 1 0))
+         (end (position-if-not #'digit-char-p value :start start)))
+    (cond
+      ((null end) value)
+      ((and (= end start) (> start 0))
+       nil) ; sign without digits
+      (t (subseq value 0 end)))))
+
+(defun truncate-prefixed-literal (value)
+  "Return prefix of VALUE for literals starting with $ or %."
+  (let ((end (position-if-not #'alphanumericp value :start 1)))
+    (if end
+        (subseq value 0 end)
+        value)))
+
+(defun hex-digit-p (char)
+  (not (null (digit-char-p char 16))))
+
+(defun detect-concatenation-boundary (value)
+  "Detect where concatenation starts in VALUE.
+Returns position where concatenation begins, or nil if no concatenation detected."
+  (let ((len (length value)))
+    (when (plusp len)
+      (cond
+        ;; Lowercase followed by uppercase (like \"tempSong\")
+        ((lower-case-p (char value 0))
+         (let ((upper-pos (position-if #'upper-case-p value :start 1)))
+           (when (and upper-pos
+                      (> upper-pos 1)
+                      (every (lambda (c) (or (lower-case-p c) (digit-char-p c)))
+                             (subseq value 1 upper-pos)))
+             upper-pos)))
+        ;; Underscore followed by uppercase (like \"temp_Song\")
+        (t (let ((underscore-pos (position #\_ value)))
+             (when (and underscore-pos
+                        (< (1+ underscore-pos) len)
+                        (upper-case-p (char value (1+ underscore-pos))))
+               (1+ underscore-pos))))))))
