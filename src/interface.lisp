@@ -44,7 +44,6 @@
         :labels-to-forth 'labels-to-forth
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
-        :clean-redefs 'clean-redefs-and-extract
         :make-classes-for-oops 'make-classes-for-oops
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
@@ -493,13 +492,11 @@ See COPYING for details
 
 (defun command (argv)
   (let ((verb (and (< 1 (length argv)) (second argv))))
-    ;; Suppress banner for clean-redefs to avoid polluting stdout
-    (unless (string-equal verb "clean-redefs")
-      (format *trace-output* "~&Skyline tool (© 2025) invoked:
+    (format *trace-output* "~&Skyline tool (© 2025) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
-              argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-      (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-      (finish-output *trace-output*)))
+            argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+    (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+    (finish-output *trace-output*))
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)

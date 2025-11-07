@@ -306,6 +306,13 @@
         (let ((binary-lines (remove-if-not
                              (lambda (line) (search "%" line))
                              lines)))
+          ;; Ensure every binary line actually contains a %
+          (let ((lines-missing-percent
+                 (remove-if (lambda (line) (position #\% line))
+                            binary-lines)))
+            (is (zerop (length lines-missing-percent))
+                "Every binary line must include a % prefix"))
+          
           ;; Each column should have exactly 42 binary lines
           ;; With double-newline between columns, structure should be:
           ;; data Bitmap...
@@ -319,7 +326,7 @@
           (dolist (line binary-lines)
             (when (search "%" line)
               (let ((percent-pos (position #\% line)))
-                (is percent-pos "Line should contain %")
+                (is (not (null percent-pos)) "Line should contain %")
                 (when percent-pos
                   (let ((binary-part (subseq line (1+ percent-pos))))
                     (is (<= 8 (length binary-part)) "Binary part should be at least 8 digits")
