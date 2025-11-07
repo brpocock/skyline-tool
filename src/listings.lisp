@@ -161,6 +161,13 @@ Valid formats: temp1-temp6, var0-var47, a-z, r000-w127, or assembly expressions 
           (member (char value 0) '(#\r #\w))
           (every #'digit-char-p (subseq value 1)))
      t)
+    ;; Decimal literal (optional leading sign)
+    ((numeric-literal-p value)
+     t)
+    ;; Hex ($xx) or binary (%xx) literal
+    ((or (hex-literal-p value)
+         (binary-literal-p value))
+     t)
     ;; Invalid - contains concatenation patterns
     (t nil)))
 
@@ -180,6 +187,15 @@ Returns the valid prefix, or nil if no valid prefix can be determined."
                (subseq value 0 underscore-pos)
                nil)
            value)))
+    ;; Numeric literal
+    ((numeric-literal-p value)
+     (truncate-numeric value))
+    ;; Hex literal
+    ((hex-literal-p value)
+     (truncate-prefixed-literal value))
+    ;; Binary literal
+    ((binary-literal-p value)
+     (truncate-prefixed-literal value))
     ;; If starts with 'temp', extract just tempN
     ((and (>= (length value) 4)
           (string= value "temp" :end1 4))
@@ -219,6 +235,46 @@ Returns the valid prefix, or nil if no valid prefix can be determined."
                    prefix
                    nil))
              nil)))))
+
+(defun numeric-literal-p (value)
+  "Return true if VALUE is a decimal literal with optional sign."
+  (and (> (length value) 0)
+       (let ((start (if (member (char value 0) '(#\+ #\-)) 1 0)))
+         (and (< start (length value))
+              (every #'digit-char-p (subseq value start))))))
+
+(defun hex-literal-p (value)
+  "Return true if VALUE is a $-prefixed hexadecimal literal."
+  (and (> (length value) 1)
+       (char= (char value 0) #\$)
+       (every #'hex-digit-p (subseq value 1))))
+
+(defun binary-literal-p (value)
+  "Return true if VALUE is a %-prefixed binary literal."
+  (and (> (length value) 1)
+       (char= (char value 0) #\%)
+       (every (lambda (c) (or (char= c #\0) (char= c #\1)))
+              (subseq value 1))))
+
+(defun truncate-numeric (value)
+  "Return numeric prefix of VALUE (handles optional sign)."
+  (let* ((start (if (member (char value 0) '(#\+ #\-)) 1 0))
+         (end (position-if-not #'digit-char-p value :start start)))
+    (cond
+      ((null end) value)
+      ((and (= end start) (> start 0))
+       nil) ; sign without digits
+      (t (subseq value 0 end)))))
+
+(defun truncate-prefixed-literal (value)
+  "Return prefix of VALUE for literals starting with $ or %."
+  (let ((end (position-if-not #'alphanumericp value :start 1)))
+    (if end
+        (subseq value 0 end)
+        value)))
+
+(defun hex-digit-p (char)
+  (not (null (digit-char-p char 16))))
 
 (defun detect-concatenation-boundary (value)
   "Detect where concatenation starts in VALUE.
