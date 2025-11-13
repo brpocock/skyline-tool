@@ -1276,7 +1276,18 @@ Shape:~{~{~a~}~2%~}
                                 (search "Title" output-name :test #'string-equal))
                             3)  ; ChaosFight uses slot 3
                            (t 1)))  ; Default to slot 1
-         (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot)))
+         (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot))
+         ;; Determine page address for bitmap data (pack four bitmaps on adjacent pages)
+         (page-address (cond ((= kernel-slot 1)
+                             "$f100")  ; AtariAge at $f100
+                            ((= kernel-slot 2)
+                             "$f200")  ; AtariAgeText at $f200
+                            ((= kernel-slot 3)
+                             "$f300")  ; ChaosFight at $f300
+                            ((= kernel-slot 4)
+                             "$f400")  ; Author at $f400
+                            (t
+                             "$f100"))))  ; Default to $f100
     (unless (= width 48)
       (error "Bitmap must be 48 pixels wide; got ~a" width))
     (unless (= height 42)
@@ -1302,58 +1313,45 @@ Shape:~{~{~a~}~2%~}
       (let* ((shape (48px-array-to-bytes pixels))
              (colors-per-line (when titlescreen-kernel-p
                                 (loop for y from 0 below height
-                                      collect (dominant-playfield-color palette width y)))))
+                                      collect (dominant-playfield-color palette width y))))
+             ;; Create color output path: Art.Name.s -> Art.Name.colors.s
+             (color-output-path (when titlescreen-kernel-p
+                                  (make-pathname :directory (pathname-directory output-path)
+                                                 :name (format nil "~a.colors" (pathname-name output-path))
+                                                 :type (pathname-type output-path)))))
         (ensure-directories-exist output-path)
-        (with-open-file (stream output-path
-                                :direction :output
-                                :if-exists :supersede
-                                :if-does-not-exist :create)
-          (if titlescreen-kernel-p
-              ;; Titlescreen kernel assembly format (×2 drawing style)
-              ;; Match exact format from existing 48x2_N_image.s files
-              (progn
+        (when color-output-path
+          (ensure-directories-exist color-output-path))
+        (if titlescreen-kernel-p
+            ;; Titlescreen kernel assembly format (×2 drawing style)
+            ;; Colors are written to a separate file to allow bitmap data to be page-aligned
+            (progn
+              ;; Write bitmap data file (without colors)
+              (with-open-file (stream output-path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
                 ;; Header banner
                 (format stream ";;; Chaos Fight - ~a~%" (namestring output-path))
                 (format stream "~%")
                 (format stream ";;;; This is a generated file, do not edit.~%")
+                (format stream ";;;; Color tables are in separate .colors.s files~%")
+                (format stream ";;;; Bitmap data is packed at page-aligned address ~a~%" page-address)
+                (format stream "~%")
+                ;; Set absolute address for bitmap data (page-aligned)
+                (format stream "   org ~a~%" page-address)
                 (format stream "~%")
                 ;; Essential data without verbose comments
                 (format stream "~a_window = ~d~%" kernel-prefix height)
                 (format stream "~%")
                 (format stream "~a_height = ~d~%" kernel-prefix height)
                 (format stream "~%")
-                (format stream "   if >. != >[.+(~a_height)]~%" kernel-prefix)
-                (format stream "      align 256~%")
-                (format stream "   endif~%")
                 (format stream " BYTE 0 ; leave this here!~%")
                 (format stream "~%~%")
-                (format stream "~a_colors ~%" kernel-prefix)
-                ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
-                (loop for y from (1- height) downto 0
-                      for color-idx = (elt colors-per-line y)
-                      for color-byte = (playfield-color-byte color-idx tv-standard)
-                      do (format stream "~tBYTE $~2,'0X~%" color-byte))
-                (format stream "~%")
-                (format stream " ifnconst ~a_PF1~%" kernel-prefix)
-                (format stream "~a_PF1~%" kernel-prefix)
-                (format stream " endif~%")
-                (format stream "~tBYTE %00000000~%")
-                (format stream " ifnconst ~a_PF2~%" kernel-prefix)
-                (format stream "~a_PF2~%" kernel-prefix)
-                (format stream " endif~%")
-                (format stream "~tBYTE %00000000~%")
-                (format stream " ifnconst ~a_background~%" kernel-prefix)
-                (format stream "~a_background~%" kernel-prefix)
-                (format stream " endif~%")
-                (format stream "~tBYTE $00~%")
-                (format stream "~%")
-                (format stream "~a_values = ~a_00~%" kernel-prefix kernel-prefix)
-                (format stream "~%")
+                ;; Note: Color table, PF1, PF2, and background are in separate .colors.s file at $f500
                 ;; Output bitmap columns (6 columns: 00-05)
+                ;; Alignment only at beginning (line above), not between strips
                 (loop for column from 0 below 6
-                      do (format stream "   if >* != >(* + ~a_height)~%" kernel-prefix)
-                      do (format stream "      align 256~%")
-                      do (format stream "   endif~%")
                       do (format stream "~%~%")
                       do (format stream "~a_~2,'0D~%" kernel-prefix column)
                       ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
@@ -1362,8 +1360,49 @@ Shape:~{~{~a~}~2%~}
                             for binary = (format nil "~8,'0b" byte)
                             do (format stream "~tBYTE %~a~%" binary))
                       (format stream "~%~%")))
-              ;; Basic batariBASIC data format (backward compatibility)
-              (progn
+              ;; Write color table, PF1, PF2, and background to separate file
+              ;; These will be combined into titlescreen_colors.s at $f500
+              (with-open-file (color-stream color-output-path
+                                            :direction :output
+                                            :if-exists :supersede
+                                            :if-does-not-exist :create)
+                ;; Header banner
+                (format color-stream ";;; Chaos Fight - ~a~%" (namestring color-output-path))
+                (format color-stream "~%")
+                (format color-stream ";;;; This is a generated file, do not edit.~%")
+                (format color-stream ";;;; Color table, PF1, PF2, and background for ~a bitmap~%" kernel-prefix)
+                (format color-stream ";;;; This file will be included in titlescreen_colors.s at $f500~%")
+                (format color-stream "~%")
+                (format color-stream "~a_colors ~%" kernel-prefix)
+                ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
+                (loop for y from (1- height) downto 0
+                      for color-idx = (elt colors-per-line y)
+                      for color-byte = (playfield-color-byte color-idx tv-standard)
+                      do (format color-stream "~tBYTE $~2,'0X~%" color-byte))
+                (format color-stream "~%")
+                ;; PF1, PF2, and background (will be at $f500 with colors)
+                (format color-stream " ifnconst ~a_PF1~%" kernel-prefix)
+                (format color-stream "~a_PF1~%" kernel-prefix)
+                (format color-stream " endif~%")
+                (format color-stream "~tBYTE %00000000~%")
+                (format color-stream " ifnconst ~a_PF2~%" kernel-prefix)
+                (format color-stream "~a_PF2~%" kernel-prefix)
+                (format color-stream " endif~%")
+                (format color-stream "~tBYTE %00000000~%")
+                (format color-stream " ifnconst ~a_background~%" kernel-prefix)
+                (format color-stream "~a_background~%" kernel-prefix)
+                (format color-stream " endif~%")
+                (format color-stream "~tBYTE $00~%")
+                (format color-stream "~%"))
+              (format *trace-output* "~% Done writing titlescreen kernel bitmap to ~A~%" output-path)
+              (format *trace-output* "~% Done writing color table to ~A~%" color-output-path)
+              (values output-path color-output-path))
+            ;; Basic batariBASIC data format (backward compatibility)
+            (progn
+              (with-open-file (stream output-path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
                 (format stream "rem Generated bitmap data from ~a~%" (pathname-name png-file))
                 (format stream "rem Do not edit - regenerate from source artwork~%~%")
                 (format stream "data Bitmap~a~%" label-name)
@@ -1373,10 +1412,9 @@ Shape:~{~{~a~}~2%~}
                                for binary = (format nil "~8,'0b" byte)
                                do (format stream "~%        %~a" binary))
                       do (format stream "~%~%"))
-                (format stream "end~%")))
-        (format *trace-output* "~% Done writing batariBASIC bitmap to ~A (~:[basic~;titlescreen kernel~] format)" 
-                output-path titlescreen-kernel-p)
-        output-path)))))
+                (format stream "end~%"))
+              (format *trace-output* "~% Done writing batariBASIC bitmap to ~A~%" output-path)
+              output-path))))))
 
 (defun reverse-7-or-8 (shape)
   (let* ((height (length shape))
