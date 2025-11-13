@@ -1347,9 +1347,11 @@ Shape:~{~{~a~}~2%~}
                 (format stream " endif~%")
                 (format stream "~tBYTE $00~%")
                 (format stream "~%")
+                (format stream "~a_values = ~a_00~%" kernel-prefix kernel-prefix)
+                (format stream "~%")
                 ;; Output bitmap columns (6 columns: 00-05)
                 (loop for column from 0 below 6
-                      do (format stream "   if >. != >[.+~a_height]~%" kernel-prefix)
+                      do (format stream "   if >* != >(* + ~a_height)~%" kernel-prefix)
                       do (format stream "      align 256~%")
                       do (format stream "   endif~%")
                       do (format stream "~%~%")
