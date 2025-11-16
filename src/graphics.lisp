@@ -1336,10 +1336,12 @@ Shape:~{~{~a~}~2%~}
                 (format stream "~%")
                 (format stream ";;;; This is a generated file, do not edit.~%")
                 (format stream ";;;; Color tables are in separate .colors.s files~%")
-                (format stream ";;;; Bitmap data is packed at page-aligned address ~a~%" page-address)
+                (format stream ";;;; Bitmap data is packed at page-aligned address ~a (CPU/RORG space)~%" page-address)
                 (format stream "~%")
-                ;; Set absolute address for bitmap data (page-aligned)
-                (format stream "   org ~a~%" page-address)
+                ;; Set relocatable CPU address for bitmap data (titlescreen kernel always runs in bank 9)
+                ;; NOTE: We must *not* change the assembler's file offset here, or we blow past Bank 9's file space.
+                ;;       Using RORG keeps the CPU address correct ($F100/$F200/…) without seeking the output file.
+                (format stream "   rorg ~a~%" page-address)
                 (format stream "~%")
                 ;; Essential data without verbose comments
                 (format stream "~a_window = ~d~%" kernel-prefix height)
