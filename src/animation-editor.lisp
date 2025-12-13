@@ -121,7 +121,9 @@
    (%palette :type integer :initform 0 :accessor anim-seq-editor-palette
              :initarg :palette)
    (%preview-frame :initform 0 :accessor anim-seq-editor-preview-frame)
-   (%animation-thread :initform nil :accessor anim-seq-editor-animation-thread))
+   (%animation-thread :initform nil :accessor anim-seq-editor-animation-thread)
+   (%cached-tile-dump :initform nil :accessor anim-seq-editor-cached-tile-dump)
+   (%cached-tile-sheet-name :initform nil :accessor anim-seq-editor-cached-tile-sheet-name))
   (:panes (anim-seq-filmstrip-pane :application :height 550 :width 1800
                                                 :display-function 'display-anim-seq-filmstrip)
           (interactor :interactor :height 250 :width 400
@@ -366,7 +368,10 @@
   (let ((new-seq (create-new-animation-sequence)))
     (setf (anim-seq-editor-index *anim-seq-editor-frame*) (length *animation-sequences*)
           (anim-seq-editor-sequence *anim-seq-editor-frame*) new-seq
-          (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0))
+          (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0
+          ;; Clear tileset cache when switching sequences
+          (anim-seq-editor-cached-tile-dump *anim-seq-editor-frame*) nil
+          (anim-seq-editor-cached-tile-sheet-name *anim-seq-editor-frame*) nil))
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
@@ -377,7 +382,11 @@
         (anim-seq-editor-sequence *anim-seq-editor-frame*)
         (find-animation-sequence id)
 
-        (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0)
+        (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0
+
+        ;; Clear tileset cache when switching sequences
+        (anim-seq-editor-cached-tile-dump *anim-seq-editor-frame*) nil
+        (anim-seq-editor-cached-tile-sheet-name *anim-seq-editor-frame*) nil)
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
@@ -1657,6 +1666,24 @@
     (if (> frame-count 0)
         (let* ((current-frame-idx (anim-seq-editor-preview-frame window))
                (frame-ref (or (elt (simple-animation-sequence-frames seq) current-frame-idx) 0))
+               (tile-sheet-name (simple-animation-sequence-tile-sheet seq))
+               (major-kind (simple-animation-sequence-major-kind seq))
+               ;; Load tileset from cache or disk
+               (tile-dump
+                (if (and (anim-seq-editor-cached-tile-dump window)
+                         (equal (anim-seq-editor-cached-tile-sheet-name window)
+                                tile-sheet-name))
+                    ;; Use cached tileset
+                    (anim-seq-editor-cached-tile-dump window)
+                    ;; Load and cache new tileset
+                    (let ((dump (load-tile-sheet-object-by-name
+                                 tile-sheet-name
+                                 (ecase major-kind
+                                   ((:background :scenery) nil)
+                                   (:npc t)))))
+                      (setf (anim-seq-editor-cached-tile-dump window) dump
+                            (anim-seq-editor-cached-tile-sheet-name window) tile-sheet-name)
+                      dump)))
                ;; Calculate appropriate scale to fit in preview pane while maintaining aspect ratio
                (bytes-width (simple-animation-sequence-bytes-width seq))
                (mode (simple-animation-sequence-write-mode seq))
@@ -1678,15 +1705,11 @@
               (progn
                 (terpri pane)
                 (display-maria-art pane
-                                  :dump (load-tile-sheet-object-by-name
-                                         (simple-animation-sequence-tile-sheet seq)
-                                         (ecase (simple-animation-sequence-major-kind seq)
-                                           ((:background :scenery) nil)
-                                           (:npc t)))
+                                  :dump tile-dump
                                   :mode mode
                                   :address (* bytes-width frame-ref)
                                   :colors (read-palette-for-tile-sheet
-                                           (simple-animation-sequence-tile-sheet seq)
+                                           tile-sheet-name
                                            (anim-seq-editor-palette window)
                                            :write-mode mode)
                                   :var-colors #(#x48 #x88 #xc8)
