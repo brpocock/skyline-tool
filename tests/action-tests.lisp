@@ -1,6 +1,7 @@
 (defpackage :skyline-tool/test
   (:use :cl :skyline-tool :fiveam)
-  (:export #:action-tests))
+  (:export #:action-tests
+           #:animation-preview-tests))
 (in-package :skyline-tool/test)
 
 #|(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))|#

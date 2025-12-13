@@ -92,4 +92,5 @@
   :depends-on (:skyline-tool :fiveam)
   :components ((:module "tests"
                 :components ((:file "action-tests")
-                             (:file "text-transcription-tests")))))
+                             (:file "text-transcription-tests")
+                             (:file "animation-preview-tests")))))
