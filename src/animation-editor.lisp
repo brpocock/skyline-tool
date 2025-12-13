@@ -119,7 +119,9 @@
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
    (%sequence :accessor anim-seq-editor-sequence)
    (%palette :type integer :initform 0 :accessor anim-seq-editor-palette
-             :initarg :palette))
+             :initarg :palette)
+   (%preview-frame :initform 0 :accessor anim-seq-editor-preview-frame)
+   (%animation-thread :initform nil :accessor anim-seq-editor-animation-thread))
   (:panes (anim-seq-filmstrip-pane :application :height 550 :width 1800
                                                 :display-function 'display-anim-seq-filmstrip)
           (interactor :interactor :height 250 :width 400
@@ -153,7 +155,42 @@
                                                           (anim-seq-editor-sequence frame))
                                                      ((:enemy :sentinel :nefertem) 6)
                                                      (otherwise 0)))))
-    (clim:redisplay-frame-panes frame)))
+    (clim:redisplay-frame-panes frame))
+  (start-preview-animation frame))
+
+(defun start-preview-animation (frame)
+  "Start the background animation thread for the preview pane."
+  (when (anim-seq-editor-animation-thread frame)
+    (bt:destroy-thread (anim-seq-editor-animation-thread frame)))
+  (setf (anim-seq-editor-animation-thread frame)
+        (bt:make-thread
+         (lambda ()
+           (loop
+             (handler-case
+                 (let* ((seq (anim-seq-editor-sequence frame))
+                        (frame-count (simple-animation-sequence-frame-count seq))
+                        (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq)))
+                        (delay (/ 1.0 fps)))
+                   (when (> frame-count 0)
+                     ;; Advance to next frame
+                     (setf (anim-seq-editor-preview-frame frame)
+                           (mod (1+ (anim-seq-editor-preview-frame frame))
+                                frame-count))
+                     ;; Request redisplay
+                     (clim:redisplay-frame-pane frame
+                                                (clim:find-pane-named frame 'anim-seq-preview-pane)
+                                                :force-p t))
+                   (sleep delay))
+               (condition (c)
+                 (format *error-output* "~%Preview animation error: ~a~%" c)
+                 (sleep 1)))))
+         :name "Animation Preview Thread")))
+
+(defmethod clim:frame-exit :before ((frame anim-seq-editor-frame))
+  "Clean up the animation thread when the frame closes."
+  (when (anim-seq-editor-animation-thread frame)
+    (bt:destroy-thread (anim-seq-editor-animation-thread frame))
+    (setf (anim-seq-editor-animation-thread frame) nil)))
 
 (defmethod update-params ((frame anim-seq-editor-frame))
   (unless (slot-boundp frame '%sequence)
@@ -319,7 +356,8 @@
   (save-all-animation-sequences)
   (let ((new-seq (create-new-animation-sequence)))
     (setf (anim-seq-editor-index *anim-seq-editor-frame*) (length *animation-sequences*)
-          (anim-seq-editor-sequence *anim-seq-editor-frame*) new-seq))
+          (anim-seq-editor-sequence *anim-seq-editor-frame*) new-seq
+          (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0))
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
@@ -328,7 +366,9 @@
   (setf (anim-seq-editor-index *anim-seq-editor-frame*) id
         
         (anim-seq-editor-sequence *anim-seq-editor-frame*)
-        (find-animation-sequence id))
+        (find-animation-sequence id)
+        
+        (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0)
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
 
@@ -1601,9 +1641,45 @@
     (object)
   (list))
 
-(defun display-anim-preview (_window pane)
-  (declare (ignore _window))
-  (format pane "TODO: #1234 Display a preview of the animation here"))
+(defun display-anim-preview (window pane)
+  "Display an animated preview of the current animation sequence."
+  (let* ((seq (anim-seq-editor-sequence window))
+         (frame-count (simple-animation-sequence-frame-count seq)))
+    ;; Title
+    (clim:with-text-face (pane :bold)
+      (format pane "~%~20tAnimation Preview~%~%"))
+    (if (> frame-count 0)
+        (let* ((current-frame-idx (anim-seq-editor-preview-frame window))
+               (frame-ref (or (elt (simple-animation-sequence-frames seq) current-frame-idx) 0))
+               (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq))))
+          ;; Display the current frame
+          (format pane "~10t")
+          (display-maria-art pane
+                            :dump (load-tile-sheet-object-by-name
+                                   (simple-animation-sequence-tile-sheet seq)
+                                   (ecase (simple-animation-sequence-major-kind seq)
+                                     ((:background :scenery) nil)
+                                     (:npc t)))
+                            :mode (simple-animation-sequence-write-mode seq)
+                            :address (* (simple-animation-sequence-bytes-width seq)
+                                       frame-ref)
+                            :colors (read-palette-for-tile-sheet
+                                     (simple-animation-sequence-tile-sheet seq)
+                                     (anim-seq-editor-palette window)
+                                     :write-mode
+                                     (simple-animation-sequence-write-mode seq))
+                            :var-colors #(#x48 #x88 #xc8)
+                            :width (simple-animation-sequence-bytes-width seq))
+          ;; Display frame info
+          (terpri pane)
+          (format pane "~%~10tFrame ~d of ~d~%~10t~{~a ~a~} FPS~%"
+                  (1+ current-frame-idx)
+                  frame-count
+                  (substitute #\Space 0
+                             (multiple-value-list (floor fps)))))
+        ;; If there are no frames, just say so
+        (format pane "~%~10t(No frames in this sequence)"))))
+
 
 (defun sort-matching-lists-by-decal-kind (a b)
   (let ((d-a (position (elt a 0) +decal-kinds+))
