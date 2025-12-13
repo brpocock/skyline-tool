@@ -1657,8 +1657,25 @@
     (if (> frame-count 0)
         (let* ((current-frame-idx (anim-seq-editor-preview-frame window))
                (frame-ref (or (elt (simple-animation-sequence-frames seq) current-frame-idx) 0))
-               (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq))))
-          ;; Display the current frame (scaled down to fit)
+               (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq)))
+               ;; Calculate appropriate scale to fit in preview pane while maintaining aspect ratio
+               ;; Image is 16 rows tall, width depends on bytes-width and mode
+               (bytes-width (simple-animation-sequence-bytes-width seq))
+               (mode (simple-animation-sequence-write-mode seq))
+               ;; In 160a mode: each byte = 4 pixels wide, in 160b: each byte = 2 pixels wide
+               (image-width-pixels (* bytes-width (ecase mode (:160a 4) (:160b 2))))
+               (image-height-pixels 16)
+               ;; Pane dimensions (approximate usable area)
+               (max-width 600)
+               (max-height 180)
+               ;; Calculate scale factors for width and height
+               (scale-x (/ max-width image-width-pixels))
+               (scale-y (/ max-height image-height-pixels))
+               ;; Use the smaller scale to ensure both dimensions fit (maintain aspect ratio)
+               (scale (min scale-x scale-y))
+               ;; Unit size (must be at least 1)
+               (unit (max 1 (floor scale))))
+          ;; Display the current frame (scaled to fit while maintaining aspect ratio)
           (format pane "~5t")
           (handler-case
               (display-maria-art pane
@@ -1667,17 +1684,15 @@
                                        (ecase (simple-animation-sequence-major-kind seq)
                                          ((:background :scenery) nil)
                                          (:npc t)))
-                                :mode (simple-animation-sequence-write-mode seq)
-                                :address (* (simple-animation-sequence-bytes-width seq)
-                                           frame-ref)
+                                :mode mode
+                                :address (* bytes-width frame-ref)
                                 :colors (read-palette-for-tile-sheet
                                          (simple-animation-sequence-tile-sheet seq)
                                          (anim-seq-editor-palette window)
-                                         :write-mode
-                                         (simple-animation-sequence-write-mode seq))
+                                         :write-mode mode)
                                 :var-colors #(#x48 #x88 #xc8)
-                                :width (simple-animation-sequence-bytes-width seq)
-                                :unit 8)  ; Scaled down from default 16 to fit in preview pane
+                                :width bytes-width
+                                :unit unit)
             (error (e)
               ;; If there's an error loading the graphic, show a message
               (format pane "~%~10t[Error displaying frame: ~a]" e)))
