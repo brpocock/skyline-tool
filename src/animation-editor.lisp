@@ -170,17 +170,20 @@
                  (let* ((seq (anim-seq-editor-sequence frame))
                         (frame-count (simple-animation-sequence-frame-count seq))
                         (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq)))
-                        (delay (/ 1.0 fps)))
-                   (when (> frame-count 0)
+                        (delay (/ 1.0 fps))
+                        (preview-pane (clim:find-pane-named frame 'anim-seq-preview-pane)))
+                   (when (and preview-pane (> frame-count 0))
                      ;; Advance to next frame
                      (setf (anim-seq-editor-preview-frame frame)
                            (mod (1+ (anim-seq-editor-preview-frame frame))
                                 frame-count))
-                     ;; Request redisplay (wrap in handler-case to catch display errors)
+                     ;; Clear and redisplay the pane
                      (handler-case
-                         (clim:redisplay-frame-pane frame
-                                                    (clim:find-pane-named frame 'anim-seq-preview-pane)
-                                                    :force-p t)
+                         (progn
+                           ;; Clear the pane's output history to force redraw
+                           (clim:window-clear preview-pane)
+                           ;; Redisplay with the new frame
+                           (clim:redisplay-frame-pane frame preview-pane :force-p t))
                        (error (e)
                          ;; Silently ignore display errors - they'll retry next frame
                          (declare (ignore e)))))
@@ -1651,23 +1654,18 @@
   "Display an animated preview of the current animation sequence."
   (let* ((seq (anim-seq-editor-sequence window))
          (frame-count (simple-animation-sequence-frame-count seq)))
-    ;; Title
-    (clim:with-text-face (pane :bold)
-      (format pane "~%~10tAnimation Preview~%~%"))
     (if (> frame-count 0)
         (let* ((current-frame-idx (anim-seq-editor-preview-frame window))
                (frame-ref (or (elt (simple-animation-sequence-frames seq) current-frame-idx) 0))
-               (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq)))
                ;; Calculate appropriate scale to fit in preview pane while maintaining aspect ratio
-               ;; Image is 16 rows tall, width depends on bytes-width and mode
                (bytes-width (simple-animation-sequence-bytes-width seq))
                (mode (simple-animation-sequence-write-mode seq))
                ;; In 160a mode: each byte = 4 pixels wide, in 160b: each byte = 2 pixels wide
                (image-width-pixels (* bytes-width (ecase mode (:160a 4) (:160b 2))))
                (image-height-pixels 16)
-               ;; Pane dimensions (approximate usable area)
-               (max-width 600)
-               (max-height 180)
+               ;; Pane dimensions - make preview smaller to fit better
+               (max-width 300)
+               (max-height 150)
                ;; Calculate scale factors for width and height
                (scale-x (/ max-width image-width-pixels))
                (scale-y (/ max-height image-height-pixels))
@@ -1675,36 +1673,30 @@
                (scale (min scale-x scale-y))
                ;; Unit size (must be at least 1)
                (unit (max 1 (floor scale))))
-          ;; Display the current frame (scaled to fit while maintaining aspect ratio)
-          (format pane "~5t")
+          ;; Display the current frame (centered, scaled to fit)
           (handler-case
-              (display-maria-art pane
-                                :dump (load-tile-sheet-object-by-name
-                                       (simple-animation-sequence-tile-sheet seq)
-                                       (ecase (simple-animation-sequence-major-kind seq)
-                                         ((:background :scenery) nil)
-                                         (:npc t)))
-                                :mode mode
-                                :address (* bytes-width frame-ref)
-                                :colors (read-palette-for-tile-sheet
+              (progn
+                (terpri pane)
+                (display-maria-art pane
+                                  :dump (load-tile-sheet-object-by-name
                                          (simple-animation-sequence-tile-sheet seq)
-                                         (anim-seq-editor-palette window)
-                                         :write-mode mode)
-                                :var-colors #(#x48 #x88 #xc8)
-                                :width bytes-width
-                                :unit unit)
+                                         (ecase (simple-animation-sequence-major-kind seq)
+                                           ((:background :scenery) nil)
+                                           (:npc t)))
+                                  :mode mode
+                                  :address (* bytes-width frame-ref)
+                                  :colors (read-palette-for-tile-sheet
+                                           (simple-animation-sequence-tile-sheet seq)
+                                           (anim-seq-editor-palette window)
+                                           :write-mode mode)
+                                  :var-colors #(#x48 #x88 #xc8)
+                                  :width bytes-width
+                                  :unit unit))
             (error (e)
-              ;; If there's an error loading the graphic, show a message
-              (format pane "~%~10t[Error displaying frame: ~a]" e)))
-          ;; Display frame info
-          (terpri pane)
-          (format pane "~%~10tFrame ~d of ~d~%~10t~{~a ~a~} FPS~%"
-                  (1+ current-frame-idx)
-                  frame-count
-                  (substitute #\Space 0
-                             (multiple-value-list (floor fps)))))
+              ;; If there's an error loading the graphic, show a simple message
+              (format pane "~%[Error: ~a]" e))))
         ;; If there are no frames, just say so
-        (format pane "~%~10t(No frames in this sequence)"))))
+        (format pane "~%(No frames)"))))
 
 
 (defun sort-matching-lists-by-decal-kind (a b)
