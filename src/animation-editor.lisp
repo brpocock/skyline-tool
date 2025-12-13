@@ -176,13 +176,19 @@
                      (setf (anim-seq-editor-preview-frame frame)
                            (mod (1+ (anim-seq-editor-preview-frame frame))
                                 frame-count))
-                     ;; Request redisplay
-                     (clim:redisplay-frame-pane frame
-                                                (clim:find-pane-named frame 'anim-seq-preview-pane)
-                                                :force-p t))
+                     ;; Request redisplay (wrap in handler-case to catch display errors)
+                     (handler-case
+                         (clim:redisplay-frame-pane frame
+                                                    (clim:find-pane-named frame 'anim-seq-preview-pane)
+                                                    :force-p t)
+                       (error (e)
+                         ;; Silently ignore display errors - they'll retry next frame
+                         (declare (ignore e)))))
                    (sleep delay))
                (condition (c)
-                 (format *error-output* "~%Preview animation error: ~a~%" c)
+                 ;; Only log unexpected errors, not display errors
+                 (unless (search "Lock" (format nil "~a" c))
+                   (format *error-output* "~%Preview animation error: ~a~%" c))
                  (sleep 1)))))
          :name "Animation Preview Thread")))
 
@@ -364,10 +370,10 @@
 (define-anim-seq-editor-frame-command (com-switch-to-sequence :name t :menu t) ((id 'integer))
   (save-all-animation-sequences)
   (setf (anim-seq-editor-index *anim-seq-editor-frame*) id
-        
+
         (anim-seq-editor-sequence *anim-seq-editor-frame*)
         (find-animation-sequence id)
-        
+
         (anim-seq-editor-preview-frame *anim-seq-editor-frame*) 0)
   (update-params *anim-seq-editor-frame*)
   (clim:redisplay-frame-panes *anim-seq-editor-frame*))
@@ -434,7 +440,7 @@
 
 (define-anim-seq-editor-frame-command (com-next-palette :name t) ()
   (setf (anim-seq-editor-palette *anim-seq-editor-frame*)
-        (ecase (simple-animation-sequence-write-mode 
+        (ecase (simple-animation-sequence-write-mode
                 (anim-seq-editor-sequence *anim-seq-editor-frame*))
           (:160a (mod (1+ (anim-seq-editor-palette *anim-seq-editor-frame*)) 8))
           (:160b (if (zerop (logand 4 (anim-seq-editor-palette *anim-seq-editor-frame*)))
@@ -450,7 +456,7 @@
 
 (define-anim-seq-editor-frame-command (com-switch-palette :name t) ((palette 'integer))
   (setf (anim-seq-editor-palette *anim-seq-editor-frame*)
-        (ecase (simple-animation-sequence-write-mode 
+        (ecase (simple-animation-sequence-write-mode
                 (anim-seq-editor-sequence *anim-seq-editor-frame*))
           (:160a (mod palette 8))
           (:160b (if (zerop palette) 0 4))))
@@ -481,7 +487,7 @@
                  name (all-npc-art-sheets-for-kind
                        (simple-animation-sequence-decal-kind
                         (anim-seq-editor-sequence *anim-seq-editor-frame*)))))))
-  
+
   (setf (simple-animation-sequence-tile-sheet
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
         name)
@@ -766,7 +772,7 @@
                        (format pane "~d byte~:p"
                                (simple-animation-sequence-bytes-width seq))))
                    (force-output pane)))
-          
+
           (clim:with-output-as-presentation (pane nil 'simple-animation-sequence-index)
             (format pane "~&No sequence selected"))))))
 
@@ -815,7 +821,7 @@
               (lambda (row)
                 (parse-animation-sequence-row-from-ss row))
               (second spreadsheet)))
-            
+
             *animation-assignments*
             (let ((hash (make-hash-table :test 'equalp)))
               (mapcar
@@ -854,14 +860,14 @@
         (clods:cell-style "ce-header" "ce-normal" text-props-title
                           :border-bottom '(:thin :solid "#000000"))
         (clods:cell-style "ce-link" "ce-normal" text-props-link)
-        
+
         ;; column styles
         (clods:column-style "co-column" nil :width "5.0cm")
-        
+
         ;; row styles
         (clods:row-style "ro-normal" nil :height "10.5pt" :use-optimal-height t)
         (clods:row-style "ro-title" nil :height "14pt" :use-optimal-height t))
-      
+
       (clods:with-body ()
         (clods:with-table ("Caution")
           (clods:with-header-columns ()
@@ -907,7 +913,7 @@
                                           (simple-animation-sequence-frame-rate-scalar seq))
                                        2))))
               (dotimes (frame 8)
-                (clods:cell (format nil "~2,'0x" 
+                (clods:cell (format nil "~2,'0x"
                                     (aref
                                      (simple-animation-sequence-frames seq)
                                      frame))))
@@ -1432,7 +1438,7 @@
                                      :address (* width n)
                                      :colors colors
                                      :var-colors #(#x48 #x88 #xc8)
-                                     :width width 
+                                     :width width
                                      :unit 5/2)))))))))
   (terpri pane)
   (terpri pane)
@@ -1647,29 +1653,34 @@
          (frame-count (simple-animation-sequence-frame-count seq)))
     ;; Title
     (clim:with-text-face (pane :bold)
-      (format pane "~%~20tAnimation Preview~%~%"))
+      (format pane "~%~10tAnimation Preview~%~%"))
     (if (> frame-count 0)
         (let* ((current-frame-idx (anim-seq-editor-preview-frame window))
                (frame-ref (or (elt (simple-animation-sequence-frames seq) current-frame-idx) 0))
                (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq))))
-          ;; Display the current frame
-          (format pane "~10t")
-          (display-maria-art pane
-                            :dump (load-tile-sheet-object-by-name
-                                   (simple-animation-sequence-tile-sheet seq)
-                                   (ecase (simple-animation-sequence-major-kind seq)
-                                     ((:background :scenery) nil)
-                                     (:npc t)))
-                            :mode (simple-animation-sequence-write-mode seq)
-                            :address (* (simple-animation-sequence-bytes-width seq)
-                                       frame-ref)
-                            :colors (read-palette-for-tile-sheet
-                                     (simple-animation-sequence-tile-sheet seq)
-                                     (anim-seq-editor-palette window)
-                                     :write-mode
-                                     (simple-animation-sequence-write-mode seq))
-                            :var-colors #(#x48 #x88 #xc8)
-                            :width (simple-animation-sequence-bytes-width seq))
+          ;; Display the current frame (scaled down to fit)
+          (format pane "~5t")
+          (handler-case
+              (display-maria-art pane
+                                :dump (load-tile-sheet-object-by-name
+                                       (simple-animation-sequence-tile-sheet seq)
+                                       (ecase (simple-animation-sequence-major-kind seq)
+                                         ((:background :scenery) nil)
+                                         (:npc t)))
+                                :mode (simple-animation-sequence-write-mode seq)
+                                :address (* (simple-animation-sequence-bytes-width seq)
+                                           frame-ref)
+                                :colors (read-palette-for-tile-sheet
+                                         (simple-animation-sequence-tile-sheet seq)
+                                         (anim-seq-editor-palette window)
+                                         :write-mode
+                                         (simple-animation-sequence-write-mode seq))
+                                :var-colors #(#x48 #x88 #xc8)
+                                :width (simple-animation-sequence-bytes-width seq)
+                                :unit 8)  ; Scaled down from default 16 to fit in preview pane
+            (error (e)
+              ;; If there's an error loading the graphic, show a message
+              (format pane "~%~10t[Error displaying frame: ~a]" e)))
           ;; Display frame info
           (terpri pane)
           (format pane "~%~10tFrame ~d of ~d~%~10t~{~a ~a~} FPS~%"
