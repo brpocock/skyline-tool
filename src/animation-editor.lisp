@@ -179,13 +179,13 @@
                      (setf (anim-seq-editor-preview-frame frame)
                            (mod (1+ (anim-seq-editor-preview-frame frame))
                                 frame-count))
-                     ;; Clear and redisplay the pane
+                     ;; Directly update the pane
                      (handler-case
-                         (progn
-                           ;; Clear the pane's output history to force redraw
-                           (clim:window-clear preview-pane)
-                           ;; Redisplay with the new frame
-                           (clim:redisplay-frame-pane frame preview-pane :force-p t))
+                         (clim:with-output-to-drawing-stream (stream preview-pane)
+                           ;; Clear the stream
+                           (clim:window-clear stream)
+                           ;; Draw directly to the stream
+                           (display-anim-preview frame stream))
                        (error (e)
                          ;; Silently ignore display errors - they'll retry next frame
                          (declare (ignore e)))))
