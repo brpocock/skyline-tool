@@ -181,7 +181,7 @@
                                 frame-count))
                      ;; Directly update the pane
                      (handler-case
-                         (clim:with-output-to-drawing-stream (stream preview-pane)
+                         (let ((stream (clim:pane-stream preview-pane)))
                            ;; Clear the stream
                            (clim:window-clear stream)
                            ;; Draw directly to the stream
