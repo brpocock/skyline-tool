@@ -181,11 +181,11 @@
                                 frame-count))
                      ;; Directly update the pane
                      (handler-case
-                         (let ((stream (clim:pane-stream preview-pane)))
-                           ;; Clear the stream
-                           (clim:window-clear stream)
-                           ;; Draw directly to the stream
-                           (display-anim-preview frame stream))
+                         (progn
+                           ;; Clear the pane
+                           (clim:window-clear preview-pane)
+                           ;; Draw directly to the pane
+                           (display-anim-preview frame preview-pane))
                        (error (e)
                          ;; Silently ignore display errors - they'll retry next frame
                          (declare (ignore e)))))
