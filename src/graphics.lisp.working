@@ -1606,13 +1606,14 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
           (when (not (emptyp (color-not-in-palette-image c)))
             (color-not-in-palette-image c))
           (color-not-in-palette-pixel c)
-          (color-not-in-palette-palette c))
+          (coerce (color-not-in-palette-palette c) 'list))
   #+ () ;; TODO: #1243: #1242
   (print-image (color-not-in-palette-image-pixels c)
                (color-not-in-palette-palette c)
                ))
 
 (defun pixel-into-palette (pixel palette &key x0 y0 x i image best-fit-p)
+  (check-type pixel (integer 0 #xff))
   (let ((index (or (position pixel palette)
                    (when best-fit-p
                      (destructuring-bind (r g b) (elt (machine-palette) pixel)
@@ -1641,7 +1642,7 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
           #\Escape))
 
 (defun pixels-to-ansi (pixels &key x y)
-  (labels ((tb ()
+  (flet ((tb ()
              (terpri)
              (princ (ansi-color-pixel 0 0 0))
              (dotimes (x0 (array-dimension pixels 0))
@@ -1666,11 +1667,11 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
 
 (defun pixels-to-clim (pixels &key x y (stream t))
   (let ((s (or stream t)))
-    (labels ((tb ()
+    (flet ((tb ()
                (terpri)
                (print-clim-pixel (list 0 0 0) s)
                (dotimes (x0 (array-dimension pixels 0))
-                 (print-clim-pixel (loop repeat 3 collect (if (= x x0) #xff 0)) s))
+                 (print-clim-pixel (let ((val (if (= x x0) #xff 0))) (list val val val)) s))
                (print-clim-pixel (list 0 0 0) s)))
       (format t "~& Image (~:d×~:d pixels):"
               (array-dimension pixels 0)
@@ -1726,6 +1727,108 @@ an error."
                  (indices (pixels-into-palette byte-pixels palette
                                                :x0 (* b 4) :y0 y
                                                :best-fit-p best-fit-p)))
+            (push (logior
+                   (ash (aref indices 0) 6)
+                   (ash (aref indices 1) 4)
+                   (ash (aref indices 2) 2)
+                   (aref indices 3))
+                  bytes)))
+        (push (reverse bytes) bytes-across)))
+    (reverse bytes-across)))
+
+(defun 7800-image-to-320a (image &key byte-width height palette best-fit-p)
+  "@cindex graphics conversion
+@cindex 320A mode
+@cindex monochrome graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: &key image (2D array), byte-width (integer), height (integer), palette (vector), best-fit-p (boolean)
+@item Returns: list of byte lists
+@item Side Effects: none
+@end table
+
+Convert image data to 320A mode bytes for monochrome graphics display.
+
+@strong{320A Mode Characteristics:}
+@itemize
+@item 8 pixels per byte (1 bit per pixel)
+@item Monochrome display (2 colors: background + foreground)
+@item 320 pixels horizontal resolution
+@item 1 bit per pixel = 1/8 byte per pixel
+@end itemize
+
+@strong{Conversion Process:}
+@itemize
+@item Extract 8-pixel wide columns from image
+@item Map pixels to palette indices (0 or 1)
+@item Pack 8 bits into single byte (MSB left)
+@item Return list of byte rows for each column
+@end itemize
+
+Used internally by BLOB ripping for monochrome stamp conversion."
+  (let ((bytes-across (list)))
+    (dotimes (b byte-width)
+      (let ((bytes (list)))
+        (dotimes (y height)
+          (let ((byte-pixels (extract-region image
+                                             (* b 8) y
+                                             (1- (* (1+ b) 8)) y)))
+            ;; For 320A, treat as monochrome - convert to 0/1 based on palette
+            (let ((indices (pixels-into-palette byte-pixels palette
+                                                :x0 (* b 8) :y0 y
+                                                :best-fit-p best-fit-p)))
+              (push (reduce #'logior
+                            (mapcar (lambda (bit)
+                                      (ash (if (zerop (aref indices bit)) 0 1)
+                                           (- 7 bit)))
+                                    '(7 6 5 4 3 2 1 0)))
+                    bytes))))
+        (push (reverse bytes) bytes-across)))
+    (reverse bytes-across)))
+
+(defun 7800-image-to-320c (image &key byte-width height palette best-fit-p)
+  "@cindex graphics conversion
+@cindex 320C mode
+@cindex color graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: &key image (2D array), byte-width (integer), height (integer), palette (vector), best-fit-p (boolean)
+@item Returns: list of byte lists
+@item Side Effects: none
+@end table
+
+Convert image data to 320C mode bytes for 4-color graphics display.
+
+@strong{320C Mode Characteristics:}
+@itemize
+@item 4 pixels per byte (2 bits per pixel)
+@item 4-color display (background + 3 colors)
+@item 320 pixels horizontal resolution
+@item 2 bits per pixel = 1/4 byte per pixel
+@end itemize
+
+@strong{Conversion Process:}
+@itemize
+@item Extract 4-pixel wide columns from image
+@item Map pixels to palette indices (0-3)
+@item Pack 4 × 2-bit values into single byte
+@item Return list of byte rows for each column
+@end itemize
+
+Used internally by BLOB ripping for color stamp conversion."
+  (let ((bytes-across (list)))
+    (dotimes (b byte-width)
+      (let ((bytes (list)))
+        (dotimes (y height)
+          (let* ((byte-pixels (extract-region image
+                                              (* b 4) y
+                                              (1- (* (1+ b) 4)) y))
+                 (indices (pixels-into-palette byte-pixels palette
+                                               :x0 (* b 4) :y0 y
+                                               :best-fit-p best-fit-p)))
+            ;; 320C packs 4 pixels into 1 byte, 2 bits per pixel
             (push (logior
                    (ash (aref indices 0) 6)
                    (ash (aref indices 1) 4)
@@ -2046,7 +2149,43 @@ an error."
                          (read-7800-art-index index-in))))))
 
 (defun compile-art (index-out &rest png-files)
-  "Compile to create INDEX-OUT from PNG-FILE/s"
+  "Compiles PNG image files into binary graphics data for INDEX-OUT.
+
+@cindex graphics compilation
+@cindex PNG processing
+@cindex sprite compilation
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: index-out (pathname designator), &rest png-files (pathname designators)
+@item Returns: nil
+@item Side Effects: Updates graphics index file and generates binary graphics data
+@end table
+
+This function processes PNG image files, converting them into the binary format required by the MARIA graphics processor. The compilation process includes:
+
+@itemize
+@item PNG image loading and validation
+@item Color palette extraction and optimization
+@item Graphics data compression and formatting
+@item Index file updates for asset management
+@item Platform-specific optimizations (7800, 5200, etc.)
+@end itemize
+
+Multiple PNG files can be processed in a single call, with all output directed to the specified index file.
+
+@strong{Supported Formats:}
+PNG images with indexed color or RGB color modes.
+
+@strong{Output:}
+Binary graphics data and updated asset index for game engine loading.
+
+@strong{Example:}
+@example
+(compile-art #p\"Object/Assets/Sprites.index\"
+             #p\"Source/Art/Player.png\"
+             #p\"Source/Art/Enemies.png\")
+@end example"
   (let ((*machine* (or (when (every #'digit-char-p (first png-files))
                          (prog1
                              (parse-integer (first png-files))
@@ -2321,6 +2460,36 @@ but world “~a” needs ~:d for the ~r level~:p
           (return-from blank-stamp-p nil)))))
   t)
 
+(defun stamp-is-monochrome-p (stamp)
+  "@cindex graphics mode detection
+@cindex monochrome detection
+@cindex 320A mode suitability
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: stamp (2D array of palette indices)
+@item Returns: boolean
+@item Side Effects: none
+@end table
+
+Determine if a 4×16 pixel stamp contains only 2 colors, making it suitable for 320A monochrome mode.
+
+@strong{Detection Logic:}
+@itemize
+@item Counts unique palette indices in the stamp
+@item Returns true if ≤ 2 unique colors found
+@item Suitable for 320A mode (1 bit per pixel)
+@item False indicates 320C mode needed (2 bits per pixel)
+@end itemize
+
+Used by 320A/C mode ripping to automatically select appropriate graphics mode per stamp."
+  (let ((colors (make-hash-table)))
+    (destructuring-bind (width height) (array-dimensions stamp)
+      (dotimes (x width)
+        (dotimes (y height)
+          (setf (gethash (aref stamp x y) colors) t)))
+      (<= (hash-table-count colors) 2))))
+
 (defun limit-region-to-palette (region palette &key (allow-imperfect-p t))
   (let ((output (make-array (array-dimensions region)))
         (rgb (mapcar #'palette->rgb (coerce palette 'list))))
@@ -2343,26 +2512,43 @@ but world “~a” needs ~:d for the ~r level~:p
                                     (pathname-name png-file))
                  :type "s"))
 
-(declaim (ftype (function ((integer 1 *) (integer 1 *) (array * (* *)))
-                          (values null &optional))
-                check-height+width-for-blob))
 (defun check-height+width-for-blob (height width palette-pixels)
-  "Validate dimensions and pixel data for BLOB generation.
-
-Parameters:
-- HEIGHT: Image height in pixels (must be 16n+1)
-- WIDTH: Image width in pixels (must be multiple of 4)
-- PALETTE-PIXELS: 2D array of palette indices
-
-Signals error if dimensions are invalid."
-  (check-type height (integer 1 *) "HEIGHT must be a positive integer")
-  (check-type width (integer 1 *) "WIDTH must be a positive integer")
-  (check-type palette-pixels array "PALETTE-PIXELS must be an array")
   (assert (zerop (mod width 4)) (width)
           "BLOB ripper requires width mod 4, not ~d (4 × ~{~d + ~d~})"
           width (multiple-value-list (floor width 4)))
   (assert (zerop (mod (1- height) 16)) (height)
           "BLOB ripper requires height mod 16 + 1, not ~d (16 × ~{~d + ~d~})"
+          height (multiple-value-list (floor height 16)))
+  (format *trace-output* " (~:d×~:d px)" width height)
+  (finish-output *trace-output*)
+  (assert (= (array-dimension palette-pixels 0) width))
+  (assert (= (array-dimension palette-pixels 1) height)))
+
+(defun check-height+width-for-blob-320ac (height width palette-pixels)
+  "@cindex dimension validation
+@cindex 320A/C mode validation
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: height (integer), width (integer), palette-pixels (2D array)
+@item Returns: nil (signals error if invalid)
+@item Side Effects: Outputs dimensions to *trace-output*, signals assertion errors
+@end table
+
+Validate dimensions and palette data for 320A/C mode BLOB ripping.
+
+@strong{Requirements:}
+@itemize
+@item Width must be exactly 320 pixels
+@item Height must be (N × 16) + 1 pixels for palette strip
+@item Palette pixels array dimensions must match width × height
+@end itemize
+
+Signals assertion errors for invalid dimensions."
+  (assert (= width 320) (width)
+          "320A/C BLOB ripper requires width = 320px, not ~d" width)
+  (assert (zerop (mod (1- height) 16)) (height)
+          "320A/C BLOB ripper requires height mod 16 + 1, not ~d (16 × ~{~d + ~d~})"
           height (multiple-value-list (floor height 16)))
   (format *trace-output* " (~:d×~:d px)" width height)
   (finish-output *trace-output*)
@@ -2446,13 +2632,152 @@ Signals error if dimensions are invalid."
                (* 4 (hash-table-count spans))
                (length stamp-buffer)))))
 
-(defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
-  "Rip a Bitmap Large Object Block in mode 160A from PNG-FILE.
+(defun blob/write-spans-320ac (spans output &key imperfectp)
+  "Write spans for 320A/C mode, handling both monochrome (320A) and color (320C) stamps."
+  (format output "~2%Spans:~%")
+  (let ((stamp-buffer (make-array #x1000 :adjustable t))
+        (stamp-offsets (make-hash-table)))
+    (loop for span being the hash-keys in spans using (hash-value id)
+          for serial from 0
+          do (progn
+               (if (and (< serial #x100)
+                        (>= (+ serial (length span)) #x100))
+                   (setf serial #x100))
+               (blob/write-span-to-stamp-buffer-320ac span stamp-buffer
+                                                      :stamp-offsets stamp-offsets
+                                                      :serial serial
+                                                      :output output
+                                                      :id id
+                                                      :imperfectp imperfectp)
+               (incf serial (length span))))
+    (format *trace-output* " writing 320A/C stamps … ")
+    (format output "~2%;;; Binary stamp data follows.~%")
+    (hex-dump-bytes stamp-buffer output)
+    (format output "~2%~10t.bend~%")
+    (format output "~2%;;; This size marker is the estimated amount of ROM that this
+;;; blob may take up, used for allocation purposes.
+;;; $SIZE$~x~%"
+            (+ #x20
+               (* 4 (hash-table-count spans))
+               (length stamp-buffer)))))
 
-Pass --imperfect to  NOT signal errors if any pixels  don't fit the 160A
-rules perfectly."
+(defun blob/write-span-to-stamp-buffer-320ac (span stamp-buffer
+                                              &key stamp-offsets serial output id
+                                                   imperfectp)
+  "Write a span of stamps for 320A/C mode, detecting and converting each stamp appropriately."
+  (setf (gethash id stamp-offsets) serial)
+  (let ((start (+ (* #x1000 (floor serial #x100))
+                  (mod serial #x100))))
+    (when (>= start (array-dimension stamp-buffer 0))
+      (adjust-array stamp-buffer (+ #x1000 (array-dimension stamp-buffer 0))))
+    (format output "~%~10tSpan~x = * + $~4,'0x" id start)
+    (dotimes (stamp (length span))
+      (let* ((stamp-data (elt span stamp))
+             (mode (if (stamp-is-monochrome-p stamp-data) :320a :320c))
+             (bytes (if (eq mode :320a)
+                        ;; 320A mode: 8 pixels per byte, monochrome
+                        (let ((bytes-across (7800-image-to-320a stamp-data
+                                                               :byte-width 1
+                                                               :height 16
+                                                               :palette #(0 1)
+                                                               :best-fit-p imperfectp)))
+                          (assert (= 1 (length bytes-across)))
+                          (car bytes-across))
+                        ;; 320C mode: 4 pixels per byte, 4 colors
+                        (let ((bytes-across (7800-image-to-320c stamp-data
+                                                               :byte-width 1
+                                                               :height 16
+                                                               :palette #(0 1 2 3)
+                                                               :best-fit-p imperfectp)))
+                          (assert (= 1 (length bytes-across)))
+                          (car bytes-across)))))
+        (dotimes (byte 16)
+          (let ((i (+ start stamp (* #x100 byte))))
+            (assert (let ((b (aref stamp-buffer i)))
+                      (or (null b) (zerop b))) ()
+                      "Stamp buffer contains ~x at index ~x; serial ~x, stamp ~x"
+                      (aref stamp-buffer i) i serial stamp)
+            (setf (aref stamp-buffer i)
+                  (elt bytes (- 15 byte)))))))))
+
+(defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
+  "@cindex BLOB ripping
+@cindex graphics mode auto-detection
+@cindex 160A mode
+@cindex 320A/C mode
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
+@end table
+
+Rip a Bitmap Large Object Block from PNG-FILE, automatically selecting the appropriate Atari 7800 graphics mode based on image width.
+
+@strong{Mode Selection:}
+@itemize
+@item 320px width → 320A/C mixed mode (navigation charts)
+@item Other widths → 160A mode (standard sprites)
+@end itemize
+
+@strong{Graphics Modes:}
+@table @asis
+@item 160A Mode
+4 pixels per byte, 25 palettes, for general sprite graphics
+@item 320A/C Mode
+Mixed monochrome (320A) and color (320C) modes for 320px wide navigation displays
+@end table
+
+Pass --imperfect to allow imperfect palette matches instead of signaling errors."
   (format *trace-output* "~&Ripping BLOB from ~a … " (enough-namestring png-file))
   (finish-output *trace-output*)
+  (let* ((*machine* 7800)
+         (*region* :ntsc)
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)))
+         (output-pathname (png-to-blob-pathname png-file))
+         (imperfectp (or (eql :imperfect imperfectp$)
+                         (equal imperfectp$ "--imperfect"))))
+    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
+    ;; Route to appropriate ripping method based on width
+    (if (= width 320)
+        (blob-rip-7800-320ac png-file imperfectp$)
+        (blob-rip-7800-160a png-file imperfectp$))))
+
+(defun blob-rip-7800-160a (png-file &optional (imperfectp$ nil))
+  "@cindex BLOB ripping
+@cindex 160A graphics mode
+@cindex sprite graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
+@end table
+
+Rip a Bitmap Large Object Block in 160A mode from PNG-FILE for standard sprite graphics.
+
+@strong{Graphics Mode:}
+@itemize
+@item 4 pixels per byte (2 bits per pixel)
+@item Up to 25 palettes (background + 8 palettes × 3 colors each)
+@item Variable width (multiple of 4 pixels)
+@item Height multiple of 16 + 1 pixels (palette strip)
+@end itemize
+
+@strong{Use Cases:}
+@itemize
+@item Character sprites and animations
+@item Game objects and items
+@item General purpose graphics (non-320px wide)
+@end itemize
+
+Pass --imperfect to allow imperfect palette matches instead of signaling errors."
   (let* ((*machine* 7800)
          (*region* :ntsc)
          (png (png-read:read-png-file png-file))
@@ -2541,7 +2866,217 @@ Blob_~a:~10t.block~2%"
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
         (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%")))
+    (format *trace-output* " … done!~%"))
+    (let* ((palettes (extract-palettes palette-pixels))
+           (palettes-list (2a-to-lol palettes))
+           (stamps (extract-4×16-stamps palette-pixels))
+           (zones (floor height 16))
+           (columns (floor width 4))
+           (spans (make-hash-table :test 'equalp))
+           (stamp-counting 0)
+           (next-span-id 0))
+      (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
+      (ensure-directories-exist output-pathname)
+      (with-output-to-file (output output-pathname :if-exists :supersede)
+        (format output ";;; Bitmap Large Object Block for Atari 7800
+;;; Derived from source file ~a. This is a generated file.~3%
+
+Blob_~a:~10t.block~2%"
+                (enough-namestring png-file)
+                (assembler-label-name (pathname-name png-file)))
+        (write-blob-palettes png output)
+        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+        (dotimes (zone zones)
+          (format output "~2&Zone~d:" zone)
+          (flet ((emit-span (x span pal-index)
+                   (when span
+                     (let ((id (or (gethash span spans)
+                                   (prog1
+                                       (setf (gethash span spans) (prog1 next-span-id
+                                                                    (incf next-span-id)))
+                                     (cond
+                                       ((and (< stamp-counting #x100)
+                                             (< (+ stamp-counting (length span)) #x100))
+                                        (incf stamp-counting (length span)))
+                                       ((and (< stamp-counting #x100)
+                                             (>= (+ stamp-counting (length span)) #x100))
+                                        (setf stamp-counting #x100))
+                                       (t (incf stamp-counting)))))))
+                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                               id pal-index (length span)
+                               (- x (* 4 (length span))))))))
+            (loop with span = nil
+                  with last-palette = nil
+                  for x from 0 by 4
+                  for column from 0 below columns
+                  for stamp = (aref stamps column zone)
+                  for palette = (or (when (and last-palette
+                                               (tile-fits-palette-p
+                                                stamp
+                                                (elt palettes-list last-palette)))
+                                      last-palette)
+                                    (best-palette stamp palettes
+                                                  :allow-imperfect-p imperfectp
+                                                  :x column :y zone))
+                  for paletted-stamp = (limit-region-to-palette
+                                        stamp (elt palettes-list palette)
+                                        :allow-imperfect-p imperfectp)
+                  do
+                     (cond
+                       ((zerop column)
+                        (setf span (list paletted-stamp)
+                              last-palette palette))
+                       ((blank-stamp-p stamp (aref palettes 0 0))
+                        (emit-span x span last-palette)
+                        (setf span nil
+                              last-palette nil))
+                       ((and (or (null last-palette)
+                                 (= palette last-palette))
+                             (< (length span) 31))
+                        (appendf span (list paletted-stamp))
+                        (setf last-palette palette))
+                       (t
+                        (emit-span x span last-palette)
+                        (setf span (list paletted-stamp)
+                              last-palette palette)))
+                  finally
+                     (emit-span x span last-palette)))
+          (format output "~%~10t.word $0000"))
+        (blob/write-spans spans output :imperfectp imperfectp)))
+    (format *trace-output* " … done!~%"))
+
+(defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
+  "@cindex BLOB ripping
+@cindex 320A/C graphics mode
+@cindex navigation chart graphics
+@cindex mixed mode graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
+@end table
+
+Rip a Bitmap Large Object Block in mixed 320A/C mode from PNG-FILE for 320px wide navigation chart graphics.
+
+@strong{Graphics Mode:}
+@itemize
+@item Uses 320A mode for monochrome stamps (1 bit per pixel)
+@item Uses 320C mode for color stamps (2 bits per pixel, 4 colors)
+@item Automatically detects appropriate mode per 4×16 pixel stamp
+@end itemize
+
+@strong{Requirements:}
+@itemize
+@item Image width must be exactly 320 pixels
+@item Image height must be (N × 16) + 1 pixels (palette strip)
+@item PNG should contain appropriate palette data
+@end itemize
+
+Pass --imperfect to allow imperfect palette matches instead of signaling errors."
+  (let* ((*machine* 7800)
+         (*region* :ntsc)
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)))
+         (output-pathname (png-to-blob-pathname png-file))
+         (imperfectp (or (eql :imperfect imperfectp$)
+                         (equal imperfectp$ "--imperfect"))))
+    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
+    (check-height+width-for-blob-320ac height width palette-pixels)
+    (let* ((palettes (extract-palettes palette-pixels))
+           (palettes-list (2a-to-lol palettes))
+           (stamps (extract-4×16-stamps palette-pixels)) ; Use 4px stamps for 320C mode
+           (zones (floor height 16))
+           (columns (floor width 4)) ; 320 / 4 = 80 columns
+           (spans (make-hash-table :test 'equalp))
+           (stamp-counting 0)
+           (next-span-id 0))
+      (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
+      (force-output *trace-output*)
+      (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
+      (force-output *trace-output*)
+      (ensure-directories-exist output-pathname)
+      (with-output-to-file (output output-pathname :if-exists :supersede)
+        (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
+;;; Derived from source file ~a. This is a generated file.~3%
+
+Blob_~a:~10t.block~2%"
+                (enough-namestring png-file)
+                (assembler-label-name (pathname-name png-file)))
+        (write-blob-palettes png output)
+        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+        (dotimes (zone zones)
+          (format output "~2&Zone~d:" zone)
+          (flet ((emit-span (x span pal-index mode)
+                   (when span
+                     (let ((id (or (gethash span spans)
+                                   (prog1
+                                       (setf (gethash span spans) (prog1 next-span-id
+                                                                    (incf next-span-id)))
+                                     (cond
+                                       ((and (< stamp-counting #x100)
+                                             (< (+ stamp-counting (length span)) #x100))
+                                        (incf stamp-counting (length span)))
+                                       ((and (< stamp-counting #x100)
+                                             (>= (+ stamp-counting (length span)) #x100))
+                                        (setf stamp-counting #x100))
+                                       (t (incf stamp-counting)))))))
+                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                               id pal-index (length span)
+                               (- x (length span))))))
+            (loop with span = nil
+                  with last-palette = nil
+                  with last-mode = nil
+                  for x from 0 by 1
+                  for column from 0 below columns
+                  for stamp = (aref stamps column zone)
+                  for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
+                  for palette = (or (when (and last-palette
+                                               (tile-fits-palette-p
+                                                stamp
+                                                (elt palettes-list last-palette)))
+                                      last-palette)
+                                    (best-palette stamp palettes
+                                                  :allow-imperfect-p imperfectp
+                                                  :x column :y zone))
+                  for paletted-stamp = (limit-region-to-palette
+                                        stamp (elt palettes-list palette)
+                                        :allow-imperfect-p imperfectp)
+                  do (when (= (mod column 20) 0)
+                       (format *trace-output* " col ~d/~d…" column columns)
+                       (force-output *trace-output*))
+                     (cond
+                       ((zerop column)
+                        (setf span (list paletted-stamp)
+                              last-palette palette
+                              last-mode mode))
+                       ((blank-stamp-p stamp (aref palettes 0 0))
+                        (emit-span x span last-palette last-mode)
+                        (setf span nil
+                              last-palette nil
+                              last-mode nil))
+                       ((and (or (null last-palette)
+                                 (= palette last-palette))
+                             (eq mode last-mode)
+                             (< (length span) 31))
+                        (appendf span (list paletted-stamp))
+                        (setf last-palette palette
+                              last-mode mode))
+                       (t
+                        (emit-span x span last-palette last-mode)
+                        (setf span (list paletted-stamp)
+                              last-palette palette
+                              last-mode mode)))
+                  finally
+                     (emit-span x span last-palette last-mode)))
+          (format output "~%~10t.word $0000"))
+        (blob/write-spans-320ac spans output :imperfectp imperfectp))
+        (format output "~2%~10t.endblock~%"))
+    (format *trace-output* " … done!~%"))))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

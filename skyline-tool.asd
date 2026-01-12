@@ -93,4 +93,7 @@
   :components ((:module "tests"
                 :components ((:file "action-tests")
                              (:file "text-transcription-tests")
-                             (:file "animation-preview-tests")))))
+                             (:file "animation-preview-tests")
+                             (:file "graphics-tests")
+                             (:file "build-tests")
+                             (:file "interface-tests")))))
