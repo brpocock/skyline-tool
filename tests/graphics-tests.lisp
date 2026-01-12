@@ -159,7 +159,7 @@
 
 ;; Test monochrome stamp detection
 (test stamp-monochrome-detection
-  "Test that stamp monochrome detection works correctly"
+  "Test that stamp monochrome detection works correctly for 320A/C mode selection"
   (let ((mono-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
                                :initial-contents '(0 0 0 0
                                                  0 0 0 0
@@ -176,7 +176,7 @@
                                                  0 0 0 0
                                                  0 0 0 0
                                                  0 0 0 0
-                                                 0 0 0 0))))
+                                                 0 0 0 0)))
         (color-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
                                 :initial-contents '(0 0 0 0
                                                   0 0 0 0
@@ -192,12 +192,103 @@
                                                   0 0 0 0
                                                   0 0 0 0
                                                   0 0 0 0
-                                                  2 0 0 0  ; Value 2 requires 320C mode (4-color palette)
+                                                  2 0 0 0  ; Value 2 requires 320C mode (4 colors + transparent)
                                                   0 0 0 0))))
-    ;; Monochrome stamp should be detected as monochrome
+    ;; Monochrome stamp (only 0,1 values) should be detected as monochrome for 320A
     (is-true (stamp-is-monochrome-p mono-stamp))
-    ;; Stamp with 4-color values (2) should not be monochrome
+    ;; Stamp with values >1 should not be monochrome (requires 320C)
     (is-false (stamp-is-monochrome-p color-stamp))))
+
+;; Test 320A encoding with known input/output
+(test 320a-encoding-basic
+  "Test 320A encoding with predictable input and expected output"
+  (let* ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8)
+                                :initial-contents '(0 1 0 1 0 1 0 1))) ; Alternating 0,1 pattern
+         (palette (vector #(0 0 0) #(255 255 255))) ; Black=0, White=1
+         (result (7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette)))
+    ;; Should produce 1 byte column with 1 row
+    (is (= 1 (length result))) ; 1 column
+    (is (= 1 (length (first result)))) ; 1 row per column
+    ;; The pattern 0 1 0 1 0 1 0 1 should encode to #b01010101 = 85
+    (is (= 85 (first (first result))))))
+
+;; Test 320A encoding with all zeros (transparent)
+(test 320a-encoding-all-transparent
+  "Test 320A encoding with all transparent pixels"
+  (let* ((test-image (make-array '(8 2) :element-type '(unsigned-byte 8)
+                                :initial-element 0))
+         (palette (vector #(0 0 0) #(255 255 255)))
+         (result (7800-image-to-320a test-image :byte-width 1 :height 2 :palette palette)))
+    ;; Should produce all zero bytes
+    (is (= 1 (length result))) ; 1 column
+    (is (= 2 (length (first result)))) ; 2 rows
+    (is (= 0 (first (first result))))
+    (is (= 0 (second (first result))))))
+
+;; Test 320A encoding with all ones (solid color)
+(test 320a-encoding-all-solid
+  "Test 320A encoding with all solid color pixels"
+  (let* ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8)
+                                :initial-element 1))
+         (palette (vector #(0 0 0) #(255 255 255)))
+         (result (7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette)))
+    ;; Should produce #b11111111 = 255
+    (is (= 1 (length result)))
+    (is (= 1 (length (first result))))
+    (is (= 255 (first (first result))))))
+
+;; Test 320C encoding with known input/output
+(test 320c-encoding-basic
+  "Test 320C encoding with predictable input and expected output"
+  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
+                                :initial-contents '(0 1 2 3))) ; All palette indices 0-3
+         (palette (vector #(0 0 0) #(85 85 85) #(170 170 170) #(255 255 255)))
+         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
+    ;; Should produce 1 byte column with 1 row
+    (is (= 1 (length result))) ; 1 column
+    (is (= 1 (length (first result)))) ; 1 row per column
+    ;; Values 0,1,2,3 should pack to (0 << 6) | (1 << 4) | (2 << 2) | 3 = 0 | 16 | 8 | 3 = 27
+    (is (= 27 (first (first result))))))
+
+;; Test 320C encoding with transparent pixels
+(test 320c-encoding-transparent
+  "Test 320C encoding with transparent pixels (value 0)"
+  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
+                                :initial-element 0)) ; All transparent
+         (palette (vector #(0 0 0) #(255 255 255) #(128 128 128) #(64 64 64)))
+         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
+    ;; Should produce 0 (all pixels are 0)
+    (is (= 1 (length result)))
+    (is (= 1 (length (first result))))
+    (is (= 0 (first (first result))))))
+
+;; Test 320C encoding with maximum values
+(test 320c-encoding-max-values
+  "Test 320C encoding with maximum palette index values"
+  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
+                                :initial-contents '(3 3 3 3))) ; All maximum value (3)
+         (palette (vector #(0 0 0) #(85 85 85) #(170 170 170) #(255 255 255)))
+         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
+    ;; Values 3,3,3,3 should pack to (3 << 6) | (3 << 4) | (3 << 2) | 3 = 192 | 48 | 12 | 3 = 255
+    (is (= 1 (length result)))
+    (is (= 1 (length (first result))))
+    (is (= 255 (first (first result))))))
+
+;; Test encoding error handling
+(test encoding-error-handling
+  "Test that encoding functions handle errors appropriately"
+  (let ((palette (vector #(0 0 0) #(255 255 255)))
+        (invalid-image (make-array '(4 1) :element-type '(unsigned-byte 8)
+                                  :initial-contents '(0 1 5 1)))) ; Value 5 is out of palette range
+    ;; 320A should handle palette mapping errors
+    (handler-case
+        (7800-image-to-320a invalid-image :byte-width 1 :height 1 :palette palette :best-fit-p nil)
+      (error (e) (is-true t "320A encoding should signal error for out-of-palette colors")))
+
+    ;; 320C should handle palette mapping errors
+    (handler-case
+        (7800-image-to-320c invalid-image :byte-width 1 :height 1 :palette palette :best-fit-p nil)
+      (error (e) (is-true t "320C encoding should signal error for out-of-palette colors")))))
 
 ;; Test that would catch 320A/C compilation failures
 (test blob-rip-7800-320ac-compilation-integrity
@@ -233,7 +324,8 @@
                                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                                                   2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2))))
-    ;; Test mode detection - monochrome (0,1) uses 320A, 4-color (0,1,2,3) uses 320C
+    ;; Test mode detection - monochrome (0,1) uses 320A, multi-color uses 320C
+    ;; 320A: 1 color + transparent, 320C: 4 colors + transparent
     (is (eq :320a (if (stamp-is-monochrome-p mono-stamp) :320a :320c)))
     (is (eq :320c (if (stamp-is-monochrome-p color-stamp) :320a :320c)))))
 
