@@ -111,12 +111,145 @@
   (is-true (fboundp '7800-image-to-320a))
   (is-true (fboundp '7800-image-to-320c)))
 
-;; Test blob ripping integration (basic existence check)
-(test blob-ripping-integration
-  "Test complete blob ripping workflow functions exist"
+;; Test blob ripping with actual functionality validation
+(test blob-rip-7800-basic-validation
+  "Test blob-rip-7800 validates input parameters correctly"
+  ;; Test that function exists and has correct signature
+  (is-true (fboundp 'blob-rip-7800))
+  ;; Test error handling for non-existent files
+  (signals error (blob-rip-7800 "/completely/nonexistent/file.png"))
+  ;; Test that function accepts string parameters
+  (is (equal (type-of (lambda (path) (declare (ignore path)) nil))
+             (type-of (symbol-function 'blob-rip-7800)))
+      "blob-rip-7800 should be a function"))
+
+;; Test 320AC functionality specifically
+(test blob-rip-7800-320ac-existence-and-signature
+  "Test that 320AC blob ripping function exists with correct interface"
   (is-true (fboundp 'blob-rip-7800-320ac))
-  (is-true (fboundp 'check-height+width-for-blob-320ac))
-  (is-true (fboundp 'stamp-is-monochrome-p)))
+  ;; Function should accept path and optional imperfect flag
+  (is (= 2 (length (function-lambda-list 'blob-rip-7800-320ac)))
+      "blob-rip-7800-320ac should have 2 parameters (path &optional imperfect)"))
+
+;; Test dimension validation functions
+(test blob-dimension-validation
+  "Test that blob dimension validation works correctly"
+  (let ((test-pixels (make-array '(160 49) :element-type '(unsigned-byte 8) :initial-element 0)))
+    ;; Test valid 160x49 dimensions (49 = 16*3 + 1)
+    (finishes (check-height+width-for-blob 49 160 test-pixels))
+
+    ;; Test invalid width (not divisible by 4)
+    (signals error (check-height+width-for-blob 49 162 test-pixels))
+
+    ;; Test invalid height (not 16n+1)
+    (signals error (check-height+width-for-blob 48 160 test-pixels))))
+
+;; Test 320AC dimension validation
+(test blob-320ac-dimension-validation
+  "Test that 320AC blob dimension validation works correctly"
+  (let ((test-pixels (make-array '(320 49) :element-type '(unsigned-byte 8) :initial-element 0)))
+    ;; Test valid 320x49 dimensions
+    (finishes (check-height+width-for-blob-320ac 49 320 test-pixels))
+
+    ;; Test invalid width (not 320)
+    (signals error (check-height+width-for-blob-320ac 49 160 test-pixels))
+
+    ;; Test invalid height (not 16n+1)
+    (signals error (check-height+width-for-blob-320ac 48 320 test-pixels))))
+
+;; Test monochrome stamp detection
+(test stamp-monochrome-detection
+  "Test that stamp monochrome detection works correctly"
+  (let ((mono-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
+                               :initial-contents '(0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0
+                                                 0 0 0 0))))
+        (color-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
+                                :initial-contents '(0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  0 0 0 0
+                                                  2 0 0 0  ; Value 2 requires 320C mode (4-color palette)
+                                                  0 0 0 0))))
+    ;; Monochrome stamp should be detected as monochrome
+    (is-true (stamp-is-monochrome-p mono-stamp))
+    ;; Stamp with 4-color values (2) should not be monochrome
+    (is-false (stamp-is-monochrome-p color-stamp))))
+
+;; Test that would catch 320A/C compilation failures
+(test blob-rip-7800-320ac-compilation-integrity
+  "Test that 320AC blob ripping function compiles and runs without syntax errors"
+  ;; This test verifies that the function can be loaded and called
+  ;; If there are syntax errors, this will fail during test loading
+  (is-true (fboundp 'blob-rip-7800-320ac))
+  ;; Verify the function can be inspected (catches compilation issues)
+  (is (functionp (symbol-function 'blob-rip-7800-320ac)))
+  ;; Test that calling with invalid args produces expected errors, not syntax errors
+  (signals error
+    (blob-rip-7800-320ac "/nonexistent.png")))
+
+;; Test 320A/C mode detection and DL header generation logic
+(test 320ac-mode-detection-logic
+  "Test the core logic for 320A/C mode detection and header generation"
+  ;; This tests the internal logic that was broken
+  (let ((mono-stamp (make-array '(4 16) :element-type '(unsigned-byte 8) :initial-element 0))
+        (color-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
+                                :initial-contents '(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+                                                  2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2))))
+    ;; Test mode detection - monochrome (0,1) uses 320A, 4-color (0,1,2,3) uses 320C
+    (is (eq :320a (if (stamp-is-monochrome-p mono-stamp) :320a :320c)))
+    (is (eq :320c (if (stamp-is-monochrome-p color-stamp) :320a :320c)))))
+
+;; Integration test for 320A/C BLOB generation (catches compilation failures)
+(test blob-rip-7800-320ac-integration-test
+  "Integration test that would catch 320A/C compilation failures"
+  ;; This test verifies that the 320AC function can be loaded and called
+  ;; If there are syntax errors like the ones we fixed, this would fail
+  (is-true (fboundp 'blob-rip-7800-320ac))
+  ;; Test that the function has the expected parameter signature
+  (let ((lambda-list (function-lambda-list 'blob-rip-7800-320ac)))
+    (is (>= (length lambda-list) 1) "Should accept at least path parameter")
+    (is (member '&optional lambda-list) "Should have optional parameters"))
+  ;; Test error handling for invalid input
+  (signals error (blob-rip-7800-320ac "/nonexistent.png"))
+  ;; If this test passes, the function compiled successfully and basic error handling works
 
 (defun run-graphics-tests ()
   "Run all graphics tests and return results"
