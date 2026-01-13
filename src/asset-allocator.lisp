@@ -1560,3 +1560,11 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
           (parse-integer (aref size 0) :radix 16))))))
 
 
+
+(defun collect-assets (&rest args)
+  "Stub function for collect-assets command"
+  (format t "collect-assets called with args: ~A~%" args))
+
+(defun prepend-fundamental-mode (&rest args)
+  "Stub function for prepend-fundamental-mode command"
+  (format t "prepend-fundamental-mode called with args: ~A~%" args))

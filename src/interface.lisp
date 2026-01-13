@@ -35,6 +35,7 @@
         :collect-assets 'collect-assets
         :compile-critters 'compile-critters
         :compile-art-7800 'compile-art-7800
+        :compile-art-5200 'compile-art-5200
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
@@ -394,7 +395,7 @@ Supply a list of verb(s) to see detailed documentation"
  Skyline-Tool
  ————————————
 
-Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com); 
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
 Copyright © 2024-2025 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.

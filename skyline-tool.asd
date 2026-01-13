@@ -96,4 +96,5 @@
                              (:file "animation-preview-tests")
                              (:file "graphics-tests")
                              (:file "build-tests")
-                             (:file "interface-tests")))))
+                             (:file "interface-tests")
+                             (:file "5200-tests")))))

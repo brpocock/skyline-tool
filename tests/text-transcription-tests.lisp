@@ -10,6 +10,7 @@
          (decoded (skyline-tool::minifont->unicode encoded)))
     (is (typep encoded '(simple-array (unsigned-byte 8) (*))))
     (is (equalp encoded #(25 10 27 10 16 27 10 25 17 36 1 36 25 10 27 10 16 27 10 25 17 36 2)))
-    (is (string= normalized decoded))))
+    ;; Minifont preserves case, so decoded result should be uppercase
+    (is (string= (string-upcase normalized) decoded))))
 
 

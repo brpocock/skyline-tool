@@ -1271,6 +1271,12 @@ range is 0 - #xffffffff (4,294,967,295)"
     s))
 
 (defun compile-map (pathname)
+  "Compile Tiled map (TMX) files into binary format for the game engine.
+
+PATHNAME: Path to the TMX map file to compile
+
+Processes TMX XML files and generates optimized binary map data with
+collision information, tile indices, and other game-specific metadata."
   (format *trace-output* "~&Loading tile map from ~a" (enough-namestring pathname))
   (read-map-ids-table)
   (let ((canon-name (format nil "~a.~a"

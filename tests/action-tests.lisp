@@ -1,3 +1,6 @@
+;;; Phantasia SkylineTool/tests/action-tests.lisp
+;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+
 (defpackage :skyline-tool/test
   (:use :cl :skyline-tool :fiveam)
   (:export #:action-tests
