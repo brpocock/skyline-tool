@@ -79,3 +79,175 @@
                       (is-true (every (lambda (c) (digit-char-p c 16)) hex-str)
                                "DECLE value should contain only hex digits: ~A"
                                hex-str))))))))))))
+
+;; Helper function to create a test palette array
+(defun make-test-palette-array (width height &optional (default-color 0))
+  "Create a test palette array filled with DEFAULT-COLOR"
+  (let ((array (make-array (list width height) :element-type '(unsigned-byte 8))))
+    (dotimes (x width)
+      (dotimes (y height)
+        (setf (aref array x y) default-color)))
+    array))
+
+;; Test 3: Dimension validation - flooring and nonzero
+(test gram-compiler-dimension-validation
+  "Test that dimensions are properly validated and floored"
+  (with-temp-gram-output (output-path "test-dim-validation.s")
+    (let ((test-png (make-pathname :name "test" :type "png"))
+          (test-array (make-test-palette-array 16 16)))
+      ;; Test with non-integer dimensions (should be floored)
+      (handler-case
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :height 16.7
+                                          :width 16.9
+                                          :palette-pixels test-array)
+        (error (e)
+          (fail "Should accept floored non-integer dimensions: ~A" e)))
+      ;; Test with zero dimensions (should error)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :height 0
+                                        :width 16
+                                        :palette-pixels (make-test-palette-array 16 16)))
+      ;; Test with negative dimensions (should error)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :height -8
+                                        :width 16
+                                        :palette-pixels (make-test-palette-array 16 16))))))
+
+;; Test 4: Array dimension usage
+(test gram-compiler-array-dimension-usage
+  "Test that array dimensions are used correctly when height/width not provided"
+  (with-temp-gram-output (output-path "test-array-dim.s")
+    (let ((test-png (make-pathname :name "test" :type "png"))
+          (test-array (make-test-palette-array 24 32)))
+      ;; Should use array dimensions when height/width not provided
+      (handler-case
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :palette-pixels test-array)
+        (error (e)
+          (fail "Should use array dimensions: ~A" e)))
+      ;; Verify dimensions match array
+      (is (= 24 (array-dimension test-array 0)))
+      (is (= 32 (array-dimension test-array 1))))))
+
+;; Test 5: Dimension mismatch detection
+(test gram-compiler-dimension-mismatch
+  "Test that dimension mismatches are detected"
+  (with-temp-gram-output (output-path "test-dim-mismatch.s")
+    (let ((test-png (make-pathname :name "test" :type "png"))
+          (test-array (make-test-palette-array 16 16)))
+      ;; Mismatch in width should error
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 24
+                                        :height 16
+                                        :palette-pixels test-array))
+      ;; Mismatch in height should error
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 16
+                                        :height 24
+                                        :palette-pixels test-array)))))
+
+;; Test 6: Flooring division for card counts
+(test gram-compiler-card-count-flooring
+  "Test that card counts are properly floored"
+  (with-temp-gram-output (output-path "test-card-count.s")
+    (let ((test-png (make-pathname :name "test" :type "png"))
+          ;; 17x17 array: should produce 2x2 cards (floor(17/8) = 2)
+          (test-array (make-test-palette-array 17 17)))
+      (handler-case
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :palette-pixels test-array)
+        (error (e)
+          (fail "Should handle non-multiple dimensions: ~A" e)))
+      ;; Verify output contains expected number of DECLE statements
+      ;; 2x2 cards = 4 cards, each with 4 DECLE = 16 DECLE total
+      (let ((content (uiop:read-file-string output-path)))
+        (let ((decle-count 0)
+              (pos 0))
+          (loop
+            (let ((found-pos (search "DECLE" content :start2 pos)))
+              (when (null found-pos)
+                (return))
+              (incf decle-count)
+              (setf pos (+ found-pos 5))))
+          (is (= 16 decle-count)
+              "Expected 16 DECLE statements (2×2 cards × 4 DECLE), got ~D"
+              decle-count))))))
+
+;; Test 7: Fuzz test - various array sizes
+(test gram-compiler-fuzz-array-sizes
+  "Fuzz test with various array sizes"
+  (dolist (size '((8 8) (16 8) (8 16) (16 16) (24 24) (32 32) (17 17) (15 15) (9 9)))
+    (destructuring-bind (w h) size
+      (with-temp-gram-output (output-path (format nil "fuzz-~Dx~D.s" w h))
+        (let ((test-png (make-pathname :name (format nil "fuzz-~Dx~D" w h) :type "png"))
+              (test-array (make-test-palette-array w h)))
+          (handler-case
+              (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                              :palette-pixels test-array)
+            (error (e)
+              (fail "Fuzz test failed for ~D×~D array: ~A" w h e))))))))
+
+;; Test 8: Fuzz test - non-integer dimensions
+(test gram-compiler-fuzz-non-integer-dims
+  "Fuzz test with non-integer dimension values"
+  (dolist (dim-pair '((8.1 8.9) (16.5 16.5) (24.999 24.999) (32.01 32.99)))
+    (destructuring-bind (w h) dim-pair
+      (let ((floored-w (floor w))
+            (floored-h (floor h)))
+        (with-temp-gram-output (output-path (format nil "fuzz-floor-~Dx~D.s" floored-w floored-h))
+          (let ((test-png (make-pathname :name (format nil "fuzz-floor-~Dx~D" floored-w floored-h) :type "png"))
+                (test-array (make-test-palette-array floored-w floored-h)))
+            (handler-case
+                (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                                :width w
+                                                :height h
+                                                :palette-pixels test-array)
+              (error (e)
+                (fail "Fuzz test failed for floored dimensions ~D×~D from ~F×~F: ~A"
+                      floored-w floored-h w h e)))))))))
+
+;; Test 9: Regression test - single card output
+(test gram-compiler-regression-single-card
+  "Regression test: Single 8×8 card produces exactly 4 DECLE statements"
+  (with-temp-gram-output (output-path "regression-single-card.s")
+    (let ((test-png (make-pathname :name "single-card" :type "png"))
+          (test-array (make-test-palette-array 8 8)))
+      (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                      :palette-pixels test-array)
+      (let ((content (uiop:read-file-string output-path)))
+        (let ((decle-count 0)
+              (pos 0))
+          (loop
+            (let ((found-pos (search "DECLE" content :start2 pos)))
+              (when (null found-pos)
+                (return))
+              (incf decle-count)
+              (setf pos (+ found-pos 5))))
+          (is (= 4 decle-count)
+              "Single card should produce exactly 4 DECLE statements, got ~D"
+              decle-count))))))
+
+;; Test 10: Regression test - byte packing order
+(test gram-compiler-regression-byte-packing
+  "Regression test: Verify byte packing into 16-bit words"
+  (with-temp-gram-output (output-path "regression-byte-packing.s")
+    (let ((test-png (make-pathname :name "byte-packing" :type "png"))
+          ;; Create array with pattern: first row all white (palette index 7), rest black
+          (test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      ;; Set first row (y=0) to white (7), rest to black (0)
+      (dotimes (x 8)
+        (setf (aref test-array x 0) 7))
+      (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                      :palette-pixels test-array)
+      ;; First row all white = byte $FF, rest black = byte $00
+      ;; Packed: ($FF << 8) | $00 = $FF00, then $0000, $0000, $0000
+      (let ((content (uiop:read-file-string output-path)))
+        (is-true (search "$FF00" content)
+                 "First DECLE should be $FF00 (first row all white packed with second row)")
+        (is-true (search "$0000" content)
+                 "Remaining DECLE statements should be $0000")))))

@@ -1406,20 +1406,32 @@ Image must be monochrome (black=0, white=1 pixel values).
 All cards in the source image are output as one file."
   (check-type png-file (or pathname string))
   (check-type out-dir (or pathname string))
-  (when height (check-type height (integer 1)))
-  (when width (check-type width (integer 1)))
-  ;; Load PNG if height/width not provided
-  (unless (and height width palette-pixels)
+  ;; Load PNG if palette-pixels not provided
+  (unless palette-pixels
     (let* ((png (png-read:read-png-file png-file))
            (png-height (png-read:height png))
            (png-width (png-read:width png))
-           (α (png-read:transparency png))
-           (png-palette-pixels (png->palette png-height png-width
-                                            (png-read:image-data png)
-                                            α)))
-      (setf height (or height png-height)
-            width (or width png-width)
-            palette-pixels (or palette-pixels png-palette-pixels))))
+           (α (png-read:transparency png)))
+      (setf palette-pixels (png->palette png-height png-width
+                                        (png-read:image-data png)
+                                        α))))
+  ;; Get dimensions from array if not provided
+  (setf width (or width (array-dimension palette-pixels 0))
+        height (or height (array-dimension palette-pixels 1)))
+  ;; Validate dimensions: floor to nearest int and ensure nonzero
+  (setf width (floor width))
+  (setf height (floor height))
+  (assert (plusp width) (width) "Width must be positive, got ~D" width)
+  (assert (plusp height) (height) "Height must be positive, got ~D" height)
+  ;; Verify dimensions match array
+  (assert (= (array-dimension palette-pixels 0) width)
+          (width palette-pixels)
+          "Width ~D does not match array dimension ~D"
+          width (array-dimension palette-pixels 0))
+  (assert (= (array-dimension palette-pixels 1) height)
+          (height palette-pixels)
+          "Height ~D does not match array dimension ~D"
+          height (array-dimension palette-pixels 1))
   ;; Check if monochrome (only black=0 and white=7 palette indices)
   (let ((colors (image-colours palette-pixels height width)))
     (unless (subsetp colors '(0 7) :test '=)
@@ -1430,8 +1442,8 @@ All cards in the source image are output as one file."
                                   (pathname-name png-file)
                                   :type "s")
                    out-dir))
-        (cards-across (/ width 8))
-        (cards-down (/ height 8)))
+        (cards-across (floor (/ width 8)))
+        (cards-down (floor (/ height 8))))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
       (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
