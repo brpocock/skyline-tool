@@ -3044,8 +3044,8 @@ Blob_~a:~10t.block~2%"
 (defun tty-xterm-p (&optional (stream *query-io*))
   "Returns a generalized true value if the terminal seems to be xterm-compatible"
   (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
-       (search "xterm" (sb-posix:getenv "TERM"))
-       (not (equal "dumb" (sb-posix:getenv "TERM")))))
+       (search "xterm" (uiop:getenv "TERM"))
+       (not (equal "dumb" (uiop:getenv "TERM")))))
 
 (defun write-gimp-palette (name colors &optional color-names)
   (with-output-to-file (pal (make-pathname :name name
