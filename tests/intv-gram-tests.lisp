@@ -289,3 +289,7 @@
                  "First DECLE should be $FF00 (first row all white packed with second row)")
         (is-true (search "$0000" content)
                  "Remaining DECLE statements should be $0000")))))
+
+(defun run-intv-gram-tests ()
+  "Run all Intellivision GRAM compiler tests and return results"
+  (fiveam:run! 'intv-gram-tests))

@@ -11,7 +11,9 @@
            #:makefile-tests
            #:music-tests
            #:intv-asset-converters
-           #:intv-card-layouts))
+           #:intv-card-layouts
+           #:intv-gram-tests
+           #:run-intv-gram-tests))
 (in-package :skyline-tool/test)
 
 #|(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))|#
