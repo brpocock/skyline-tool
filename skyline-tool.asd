@@ -3,11 +3,11 @@
 (asdf:defsystem :skyline-tool
   :description "A tool for building tile-based adventure games for 8-bit systems"
   :author "Bruce-Robert Pocock"
-  :version "0.9.0"
+  :version "0.9.1"
   :maintainer "Bruce-Robert Pocock"
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT" ; if this poses a problem, ask me for a waiver.
-  :long-name "The Skyline tools for building ARPG's for Atari 2600 and more"
+  :long-name "The Skyline tools for building ARPG's for various machines"
 
   :depends-on ( ;; broken into lines for easier sorting
                :alexandria
@@ -47,57 +47,59 @@
   :serial t
 
   :components
-  (;;(:file "gray-streams-pipe")
-   (:module "src"
+  (   (:module "src"
     :components ((:file "package")
-                 (:file "utils")
-                 (:file "misc")
-                 (:file "clim-simple-echo")
-                 (:file "assembly")
-                 (:file "7800gd-debug")
-                 (:file "7800gd-interface"
-                  :depends-on ("7800gd-debug" "eprom"))
-                 (:file "music")
-                 (:file "eprom")
-                 (:file "forth")
-                 (:file "fountain")
-                 (:file "graphics")
-                 (:file "maps")
-                 (:file "oops")
-                 (:file "i18n-l10n")
-                 (:file "listings")
-                 (:file "decode-animation-buffers")
-                 (:file "decode-header"
-                  :depends-on ("peek"))
-                 (:file "decode-decal"
-                  :depends-on ("peek"))
-                 (:file "decode-map")
-                 (:file "decode-object")
-                 (:file "peek")
-                 (:file "runner")
-                 (:file "animation-editor")
-                 (:file "launcher")
-                 (:file "skylisp")
-                 (:file "tables")
-                 (:file "threed")
-                 (:file "asset-allocator")
-                 (:file "atarivox")
-                 (:file "interface")
-                 ;; (:file "maps") ;; Temporarily disabled due to compilation issues
-                 ))
+                 (:file "utils" :depends-on ("package"))
+                 (:file "misc" :depends-on ("package"))
+                 (:file "clim-simple-echo" :depends-on ("package"))
+                 (:file "assembly" :depends-on ("package"))
+                 (:file "7800gd-debug" :depends-on ("package"))
+                 (:file "7800gd-interface" :depends-on ("package" "7800gd-debug" "eprom"))
+                 (:file "music" :depends-on ("package"))
+                 (:file "eprom" :depends-on ("package"))
+                 (:file "forth" :depends-on ("package"))
+                 (:file "fountain" :depends-on ("package"))
+                 (:file "graphics" :depends-on ("package"))
+                 (:file "maps" :depends-on ("package"))
+                 (:file "oops" :depends-on ("package"))
+                 (:file "i18n-l10n" :depends-on ("package"))
+                 (:file "listings" :depends-on ("package"))
+                 (:file "decode-animation-buffers" :depends-on ("package"))
+                 (:file "decode-header" :depends-on ("package" "peek"))
+                 (:file "decode-decal" :depends-on ("package" "peek"))
+                 (:file "decode-map" :depends-on ("package"))
+                 (:file "decode-object" :depends-on ("package"))
+                 (:file "peek" :depends-on ("package"))
+                 (:file "runner" :depends-on ("package"))
+                 (:file "animation-editor" :depends-on ("package"))
+                 (:file "launcher" :depends-on ("package"))
+                 (:file "skylisp" :depends-on ("package"))
+                 (:file "tables" :depends-on ("package"))
+                 (:file "threed" :depends-on ("package"))
+                 (:file "asset-allocator" :depends-on ("package"))
+                 (:file "atarivox" :depends-on ("package"))
+                 (:file "interface" :depends-on ("package"))))))
 
 ;; Separate test system
 (asdf:defsystem :skyline-tool/test
   :description "Tests for Skyline-Tool"
   :author "Bruce-Robert Pocock"
-  :version "0.9.0"
+  :version "0.9.1"
   :depends-on (:skyline-tool :fiveam)
   :components ((:module "tests"
-                :components ((:file "action-tests")
-                             (:file "text-transcription-tests")
-                             (:file "animation-preview-tests")
-                             (:file "graphics-tests")
-                             (:file "build-tests")
-                             (:file "interface-tests")
-                             (:file "makefile-functions-tests")
-                             (:file "music-tests")))))
+                :components ((:file "package")
+                             (:file "action-tests" :depends-on ("package"))
+                             (:file "text-transcription-tests" :depends-on ("package"))
+                             (:file "animation-preview-tests" :depends-on ("package"))
+                             (:file "graphics-tests" :depends-on ("package"))
+                             (:file "build-tests" :depends-on ("package"))
+                             (:file "interface-tests" :depends-on ("package"))
+                             (:file "makefile-functions-tests" :depends-on ("package"))
+                             (:file "music-tests" :depends-on ("package"))
+                             (:file "compiler-tests" :depends-on ("package"))
+                             (:file "speech-filter-test" :depends-on ("package"))
+                             (:file "display-list-tests" :depends-on ("package"))
+                             (:file "multiplatform-tests" :depends-on ("package"))
+                             (:file "intv-gram-tests" :depends-on ("package")))))
+  :perform (asdf:test-op (o c)
+             (funcall (intern "RUN!" :fiveam))))

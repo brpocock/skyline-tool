@@ -1469,7 +1469,7 @@ All cards in the source image are output as one file."
                                   for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
                                   for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
                                   for word = (logior (ash byte-first 8) byte-second)
-                                  do (format src-file "    DECLE   $~4,'0X~%" word))))))
+                                  do (format src-file "    DECLE   $~4,'0X~%" word))))))))
         (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
@@ -3244,8 +3244,8 @@ Blob_~a:~10t.block~2%"
                      (emit-span x span last-palette last-mode)))
           (format output "~%~10t.word $0000"))
         (blob/write-spans-320ac spans output :imperfectp imperfectp)
-        (format output "~2%~10t.endblock~%")))
-    (format *trace-output* " … done!~%"))
+    (format output "~2%~10t.bend~%"))
+  (format *trace-output* " … done!~%"))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

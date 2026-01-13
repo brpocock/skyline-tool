@@ -4,7 +4,7 @@
 
 (defun read-forth-word ()
   (when *forth-input-stuffing*
-    (return-from read-forth-word (pop *forth-input-stuffing*))) 
+    (return-from read-forth-word (pop *forth-input-stuffing*)))
   (when (member (peek-char nil *standard-input* nil)
                 '(#\Space #\Page #\Tab #\Newline))
     (loop for char = (read-char *standard-input* nil nil)
@@ -225,7 +225,7 @@
                     ("(" nil forth/comment-parens)
                     ("C\"" nil forth/c-quote)
                     ;; Platform-specific speech commands will be added dynamically
-                    )
+                    ))
       (destructuring-bind (word runtime &optional compile-time) sdef
         (setf (gethash word dict) (list runtime compile-time (list :source :system)))))
     (with-input-from-file (*standard-input* *forth-bootstrap-pathname*)
@@ -235,18 +235,21 @@
         (compile-forth-script :dictionary dict)))
 
     ;; Add platform-specific speech commands after bootstrap
-    (ecase *machine*
-      (7800 ;; Atari 7800 uses SpeakJet
+    (case *machine*
+      ((2600 7800) ;; Atari 2600 & 7800 use SpeakJet (AtariVox)
        (setf (gethash "SpeakJet[" dict)
-             (list nil 'forth/speakjet-quote (list :source :system)))
-       ;; Discard IntelliVoice commands silently
-       (setf (gethash "IntelliVoice[" dict)
+             (list nil 'forth/speakjet-quote (list :source :system))
+             (gethash "IntelliVoice[" dict)
              (list nil 'forth/discard-speech (list :source :system))))
       (2609 ;; Intellivision uses IntelliVoice
        (setf (gethash "IntelliVoice[" dict)
-             (list nil 'forth/intellivoice-quote (list :source :system)))
-       ;; Discard SpeakJet commands silently
+             (list nil 'forth/intellivoice-quote (list :source :system))
+             (gethash "SpeakJet[" dict)
+             (list nil 'forth/discard-speech (list :source :system))))
+      (otherwise ;; Other platforms don't support speech
        (setf (gethash "SpeakJet[" dict)
+             (list nil 'forth/discard-speech (list :source :system))
+             (gethash "IntelliVoice[" dict)
              (list nil 'forth/discard-speech (list :source :system)))))
 
     (format *trace-output* " ( bootstrap complete )~2%")

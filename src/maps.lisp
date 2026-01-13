@@ -1085,8 +1085,7 @@ Tileset object containing image data, tile dimensions, and palette information."
              (when rest
                (push (concatenate 'vector rle rest) fully)))))))
     (when fully
-      (reduce #'shorter fully))))
-
+      (reduce #'shorter fully)))))
 
 (defun rle-compress (source)
   (let ((lparallel:*kernel* (lparallel:make-kernel
