@@ -1406,34 +1406,32 @@ Image must be monochrome (black=0, white=1 pixel values).
 All cards in the source image are output as one file."
   (check-type png-file (or pathname string))
   (check-type out-dir (or pathname string))
-  ;; Load PNG if palette-pixels not provided
-  (unless palette-pixels
-    (let* ((png (png-read:read-png-file png-file))
-           (png-height (png-read:height png))
-           (png-width (png-read:width png))
-           (α (png-read:transparency png)))
-      (setf palette-pixels (png->palette png-height png-width
-                                        (png-read:image-data png)
-                                        α))))
-  ;; Get dimensions: use provided values or extract from array
-  (setf width (or width (array-dimension palette-pixels 0))
-        height (or height (array-dimension palette-pixels 1)))
-  ;; Validate dimensions: floor to nearest int and ensure nonzero
-  (setf width (floor width))
-  (setf height (floor height))
-  (assert (plusp width) (width) "Width must be positive, got ~D" width)
-  (assert (plusp height) (height) "Height must be positive, got ~D" height)
-  ;; Validate dimensions are within array bounds
-  (assert (<= width (array-dimension palette-pixels 0))
-          (width palette-pixels)
-          "Width ~D exceeds array width ~D"
-          width (array-dimension palette-pixels 0))
-  (assert (<= height (array-dimension palette-pixels 1))
-          (height palette-pixels)
-          "Height ~D exceeds array height ~D"
-          height (array-dimension palette-pixels 1))
-  ;; Check if monochrome (only black=0 and white=7 palette indices)
-  (let ((colors (image-colours palette-pixels height width)))
+  (let* ((palette-pixels (or palette-pixels
+                              (let* ((png (png-read:read-png-file png-file))
+                                     (png-height (png-read:height png))
+                                     (png-width (png-read:width png))
+                                     (α (png-read:transparency png)))
+                                (png->palette png-height png-width
+                                             (png-read:image-data png)
+                                             α))))
+         (array-width (array-dimension palette-pixels 0))
+         (array-height (array-dimension palette-pixels 1))
+         (width (floor (or width array-width)))
+         (height (floor (or height array-height))))
+    ;; Validate dimensions: ensure nonzero
+    (assert (plusp width) (width) "Width must be positive, got ~D" width)
+    (assert (plusp height) (height) "Height must be positive, got ~D" height)
+    ;; Validate dimensions are within array bounds
+    (assert (<= width array-width)
+            (width palette-pixels)
+            "Width ~D exceeds array width ~D"
+            width array-width)
+    (assert (<= height array-height)
+            (height palette-pixels)
+            "Height ~D exceeds array height ~D"
+            height array-height)
+    ;; Check if monochrome (only black=0 and white=7 palette indices)
+    (let ((colors (image-colours palette-pixels height width)))
     (unless (subsetp colors '(0 7) :test '=)
       (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
             png-file colors)))
@@ -1472,7 +1470,7 @@ All cards in the source image are output as one file."
                                   for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
                                   for word = (logior (ash byte-first 8) byte-second)
                                   do (format src-file "    DECLE   $~4,'0X~%" word))))))
-      (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))
+        (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
