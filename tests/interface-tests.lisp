@@ -82,7 +82,11 @@
   (let* ((invocation (symbol-value (find-symbol "*INVOCATION*" :skyline-tool)))
          (expected-commands '(:allocate-assets :blob-rip-7800 :compile-art-7800 :compile-forth
                              :compile-map :compile-script :compile-tileset :extract-tileset-palette
+<<<<<<< HEAD
                              :labels-to-forth :labels-to-mame :patch-7800gd
+=======
+                             :labels-to-forth :labels-to-mame :patch-7800gd :prepend-fundamental-mode
+>>>>>>> origin/lynx
                              :push-7800gd :write-actor-prototypes :write-asset-ids :write-character-ids
                              :write-gimp-palettes :write-master-makefile :help :--help :-h)))
     (dolist (cmd expected-commands)
@@ -129,7 +133,7 @@
 ;; Test MIDI/audio functions
 (test midi-functions
   "Test that MIDI and audio functions exist"
-  (let ((midi-functions '(midi-compile compile-forth)))
+  (let ((midi-functions '(midi-compile compile-music compile-sound compile-forth)))
     (dolist (func-name midi-functions)
       (let ((func (find-symbol (string-upcase (string func-name)) :skyline-tool)))
         (is-true func "~A function should exist" func-name)
@@ -229,9 +233,15 @@
 ;; Test that interface functions have proper documentation
 (test interface-function-documentation
   "Test that interface functions have docstrings"
+<<<<<<< HEAD
   (let ((functions-to-check '(blob-rip-7800 compile-script
                             allocate-assets compile-forth labels-to-forth
                             labels-to-mame write-actor-prototypes
+=======
+  (let ((functions-to-check '(blob-rip-7800 compile-art-7800 compile-map compile-script compile-tileset
+                            allocate-assets compile-forth extract-tileset-palette labels-to-forth
+                            labels-to-mame prepend-fundamental-mode write-actor-prototypes
+>>>>>>> origin/lynx
                             write-asset-ids write-character-ids write-gimp-palettes write-master-makefile)))
     (dolist (func-name functions-to-check)
       (let ((func (find-symbol (string-upcase (string func-name)) :skyline-tool)))

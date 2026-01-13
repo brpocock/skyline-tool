@@ -348,7 +348,7 @@
          (#\, 44)
          ((#\← #\<) 45)
          (#\> 46)
-         (otherwise (error "Can't encode ~s in Atari minimalist coding" char))))))
+         (otherwise (error "Can't encode ~s in ATARI minimalist coding" char))))))
 
 (defun char->font (char)
   (ecase *machine*
@@ -911,16 +911,16 @@ inventory_end = *
     (64 "Commodore 64")
     (88 "Super Nintendo Entertainment System")
     (128 "Commodore 128")
-    (200 "Atari Lynx")
+    (200 "ATARI Lynx")
     (222 "Apple //gs")
     (223 "BBC Micro")
     (264 "Commodore Plus/4 (16)")
     (1591 "Intellivision")
     (1601 "Sega Genesis (MegaDrive)")
-    (2600 "Atari Video Computer System CX-2600")
+    (2600 "ATARI Video Computer System CX-2600")
     (3010 "Sega Master System")
-    (5200 "Atari Video SuperSystem CX-5200")
-    (7800 "Atari Video ProSystem CX-7800")))
+    (5200 "ATARI Video SuperSystem CX-5200")
+    (7800 "ATARI Video ProSystem CX-7800")))
 
 (defun machine-valid-p ()
   (assert (and (machine-short-name) (machine-long-name))
@@ -1106,24 +1106,64 @@ then use $f9 (512kiB) banking."
   (format s "#<Hash-Table (~s): ~s>" (hash-table-test hash-table) (hash-table-plist hash-table)))
 ;;
 (defun write-cart-header (header-name binary-name)
-  (ecase *machine*
-    (5200
-     (let ((size (ql-util:file-size binary-name)))
-       (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+  (cond
+          ((eql *machine* 200)
+           (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
                                                 :if-exists :supersede)
-         (write-byte (char-code #\C) header)
-         (write-byte (char-code #\A) header)
-         (write-byte (char-code #\R) header)
-         (write-byte (char-code #\T) header)
-         (write-bytes #(0 0 0) header)
-         (write-byte (ecase size
-                       (#x8000 4)
-                       (#x10000 71)
-                       (#x20000 72)
-                       (#x40000 73)
-                       (#x80000 74))
-                     header)
-         (write-bytes #(0 0 0 0 0 0 0 0) header))))))
+             ;; LYNX header (64 bytes total)
+             (write-byte (char-code #\L) header)
+             (write-byte (char-code #\Y) header)
+             (write-byte (char-code #\N) header)
+             (write-byte (char-code #\X) header)
+             (write-byte 0 header) ;; bank0_page
+             (write-byte 0 header) ;; bank1_page
+             (write-byte 1 header) ;; version
+             ;; cart_name (32 bytes, null-terminated)
+             (let ((name-str (format nil "~a~c" (or *game-title* "Unknown") #\null)))
+               (loop for i from 0 below 32
+                     do (write-byte (if (< i (length name-str))
+                                        (char-code (aref name-str i))
+                                        0)
+                                    header)))
+             ;; manuf_name (16 bytes, null-terminated)
+             (let ((manuf-str (format nil "~a~c" (or *studio* "Unknown") #\null)))
+               (loop for i from 0 below 16
+                     do (write-byte (if (< i (length manuf-str))
+                                        (char-code (aref manuf-str i))
+                                        0)
+                                    header)))
+             (write-byte #x00 header) ;; rotat_mode low
+             (write-byte #xA0 header) ;; rotat_mode high
+             ;; spare (7 bytes of zeros)
+             (dotimes (i 7)
+               (write-byte 0 header))
+             ;; Append the binary data
+             (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
+               (let ((bytes-written 0))
+                 (loop for byte = (read-byte binary nil nil)
+                       while byte
+                       do (write-byte byte header)
+                          (incf bytes-written))
+                 (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
+          ((eql *machine* 5200)
+           (let ((size (ql-util:file-size binary-name)))
+             (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                                  :if-exists :supersede)
+               (write-byte (char-code #\C) header)
+               (write-byte (char-code #\A) header)
+               (write-byte (char-code #\R) header)
+               (write-byte (char-code #\T) header)
+               (write-bytes #(0 0 0) header)
+               (write-byte (ecase size
+                             (#x8000 4)
+                             (#x10000 71)
+                             (#x20000 72)
+                             (#x40000 73)
+                             (#x80000 74))
+                           header)
+               (write-bytes #(0 0 0 0 0 0 0 0) header))))
+    (t
+     (error "Unsupported machine type: ~a" *machine*))))
 
 (defun prepend-fundamental-mode (file)
   (let ((contents (read-file-into-string file)))

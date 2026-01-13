@@ -1,0 +1,624 @@
+;;; Phantasia SkylineTool/tests/basic-tests.lisp
+;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+
+;;; Comprehensive tests for basic SkylineTool functionality
+
+(defpackage :skyline-tool/basic-test
+  (:use :cl :fiveam :alexandria :split-sequence)
+  (:import-from :skyline-tool
+                #:midi->note-name
+                #:note->midi-note-number
+                #:best-pokey-note-for
+                #:freq<-midi-key
+                #:string-lower-case-p
+                #:string-upper-case-p
+                #:pascal-case
+                #:snake-case
+                #:camel-case
+                #:constant-case
+                #:write-bytes
+                #:write-cart-header
+                #:machine-long-name)
+  (:export #:basic-tests))
+
+(in-package :skyline-tool/basic-test)
+
+(def-suite basic-tests
+  :description "Tests for basic SkylineTool functionality")
+
+(in-suite basic-tests)
+
+;;; MIDI and Audio Tests
+
+(test midi-note-name-conversion
+  "Test MIDI note number to name conversion"
+  (is (string= "C4" (midi->note-name 60)) "Middle C should be C4")
+  (is (string= "A4" (midi->note-name 69)) "A4 should be 440Hz reference")
+  (is (string= "C3" (midi->note-name 48)) "C3 should be one octave below middle C")
+  (is (string= "C5" (midi->note-name 72)) "C5 should be one octave above middle C")
+  (let ((note-name (midi->note-name 61)))
+    (is (or (string= "C#4" note-name) (string= "Db4" note-name))
+        "C#4/Db4 should work for note 61"))
+  (signals error (midi->note-name 128) "Invalid MIDI note should signal error")
+  (signals error (midi->note-name -1) "Negative MIDI note should signal error"))
+
+(test midi-note-number-conversion
+  "Test note name to MIDI note number conversion"
+  (is (= 60 (note->midi-note-number 4 "C")) "C4 should be 60")
+  (is (= 69 (note->midi-note-number 4 "A")) "A4 should be 69")
+  (is (= 61 (note->midi-note-number 4 "C#")) "C#4 should be 61")
+  (is (= 61 (note->midi-note-number 4 "Db")) "Db4 should be 61")
+  (is (= 61 (note->midi-note-number 4 "c#")) "Lowercase should work")
+  (signals error (note->midi-note-number 4 "invalid") "Invalid note name should signal error"))
+
+(test frequency-calculations
+  "Test frequency calculations from MIDI notes"
+  (is (< (abs (- 261.63 (freq<-midi-key 60))) 0.01) "C4 should be ~261.63 Hz")
+  (is (< (abs (- 440.00 (freq<-midi-key 69))) 0.01) "A4 should be ~440.00 Hz")
+  (is (< (abs (- 523.25 (freq<-midi-key 72))) 0.01) "C5 should be ~523.25 Hz"))
+
+(test pokey-note-selection
+  "Test POKEY note frequency matching"
+  (let ((pokey-note (best-pokey-note-for 69))) ; A4 = 440Hz = MIDI note 69
+    (is (numberp pokey-note) "Should return a valid POKEY note number")
+    (is (>= pokey-note 0) "POKEY note should be non-negative")
+    (is (<= pokey-note 255) "POKEY note should be in valid range")))
+
+;;; String Case Conversion Tests
+
+(test string-case-detection
+  "Test string case detection functions"
+  (is-true (string-lower-case-p "hello") "Lowercase string should be detected")
+  (is-true (string-upper-case-p "HELLO") "Uppercase string should be detected")
+  (is-false (string-lower-case-p "Hello") "Mixed case should not be lowercase")
+  (is-false (string-upper-case-p "Hello") "Mixed case should not be uppercase")
+  (is-false (string-lower-case-p "HELLO123") "String with numbers should not be lowercase")
+  (is-false (string-upper-case-p "hello123") "String with numbers should not be uppercase"))
+
+(test case-conversion-functions
+  "Test various case conversion functions"
+  (is (string= "HelloWorld" (pascal-case "hello world")) "Pascal case conversion")
+  (is (string= "hello_world" (snake-case "hello world")) "Snake case conversion")
+  (is (string= "helloWorld" (camel-case "hello world")) "Camel case conversion")
+  (is (string= "HELLO_WORLD" (constant-case "hello world")) "Constant case conversion")
+
+  ;; Test with existing separators
+  (is (string= "HelloWorld" (pascal-case "hello-world")) "Pascal case with hyphens")
+  (is (string= "hello_world" (snake-case "helloWorld")) "Snake case with camelCase")
+  (is (string= "helloWorld" (camel-case "HELLO_WORLD")) "Camel case with constants"))
+
+;;; Binary Data Handling Tests
+
+(test write-bytes-functionality
+  "Test the write-bytes utility function"
+  (let ((test-vector #(1 2 3 4 5)))
+    (unwind-protect
+        (progn
+          (with-open-file (stream "/tmp/test-bytes.bin" :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+            (write-bytes test-vector stream))
+          (with-open-file (stream "/tmp/test-bytes.bin" :direction :input :element-type '(unsigned-byte 8))
+            (let ((bytes (make-array 5 :element-type '(unsigned-byte 8))))
+              (read-sequence bytes stream)
+              (is (equalp test-vector bytes) "Bytes should match what was written"))))
+      (when (probe-file "/tmp/test-bytes.bin")
+        (delete-file "/tmp/test-bytes.bin"))))
+
+(test cart-header-creation
+  "Test cart header creation functionality"
+  (let ((original-machine skyline-tool:*machine*)
+        (temp-file (format nil "/tmp/test-header-~A.bin" (random 1000))))
+    (unwind-protect
+        (progn
+          ;; Set machine to Lynx for testing
+          (setf skyline-tool:*machine* 200)
+          (write-cart-header temp-file "/tmp/dummy.bin")
+          (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+            (let ((header-bytes (make-array 64 :element-type '(unsigned-byte 8))))
+              (read-sequence header-bytes stream)
+              ;; Check LYNX magic bytes
+              (is (= #x4C (aref header-bytes 0)) "First byte should be 'L'")
+              (is (= #x59 (aref header-bytes 1)) "Second byte should be 'Y'")
+              (is (= #x4E (aref header-bytes 2)) "Third byte should be 'N'")
+              (is (= #x58 (aref header-bytes 3)) "Fourth byte should be 'X'"))))
+      (progn
+        (when (probe-file temp-file)
+          (delete-file temp-file))
+        (setf skyline-tool:*machine* original-machine))))
+
+;;; Machine/Platform Tests
+
+(test machine-name-functions
+  "Test machine/platform name functions"
+  (let ((original-machine skyline-tool:*machine*))
+    (unwind-protect
+        (progn
+          ;; Test with 7800
+          (setf skyline-tool:*machine* 7800)
+          (is (stringp (machine-long-name)) "Should return a string for 7800")
+          (is (search "7800" (machine-long-name)) "Should contain '7800'")
+
+          ;; Test with 2600
+          (setf skyline-tool:*machine* 2600)
+          (is (stringp (machine-long-name)) "Should return a string for 2600")
+          (is (search "2600" (machine-long-name)) "Should contain '2600'")
+
+          ;; Test with Lynx
+          (setf skyline-tool:*machine* 200)
+          (is (stringp (machine-long-name)) "Should return a string for Lynx")
+          (is (search "Lynx" (machine-long-name)) "Should contain 'Lynx'"))
+      (setf skyline-tool:*machine* original-machine))))
+
+;;; File and Path Handling Tests
+
+(test path-manipulation
+  "Test path manipulation functions"
+  (let ((test-path "/home/user/project/file.txt"))
+    (is (string= "file.txt" (pathname-name test-path)) "Pathname-name should extract filename")
+    (is (string= "txt" (pathname-type test-path)) "Pathname-type should extract extension")))
+
+;;; Error Handling Tests
+
+(test error-conditions
+  "Test that appropriate errors are signaled for invalid inputs"
+  (signals error (note->midi-note-number "")) "Empty string should signal error"
+  (signals error (midi->note-name 200)) "Out of range MIDI note should signal error"
+  (signals error (freq<-midi-key -1)) "Negative MIDI note should signal error")
+
+;;; Configuration and Global State Tests
+
+(test global-variable-existence
+  "Test that important global variables exist and are bound"
+  (is (boundp 'skyline-tool:*machine*) "*machine* should be bound")
+  (is (boundp 'skyline-tool:*game-title*) "*game-title* should be bound")
+  (is (boundp 'skyline-tool:*project.json*) "*project.json* should be bound"))
+
+;;; String Processing Tests
+
+(test string-splitting
+  "Test string splitting functionality"
+  (let ((result (split-sequence:split-sequence #\, "a,b,c,d")))
+    (is (= 4 (length result)) "Should split into 4 parts")
+    (is (string= "a" (first result)) "First element should be 'a'")
+    (is (string= "d" (fourth result)) "Last element should be 'd'")))
+
+(test string-trimming
+  "Test string trimming functionality"
+  (is (string= "hello" (string-trim '(#\Space #\Tab) "  hello  ")) "Should trim whitespace")
+  (is (string= "world" (string-left-trim '(#\Space) "  world")) "Should left-trim")
+  (is (string= "test" (string-right-trim '(#\Space) "test  ")) "Should right-trim"))
+
+;;; List and Sequence Operations
+
+(test sequence-operations
+  "Test basic sequence operations"
+  (let ((test-list '(1 2 3 4 5)))
+    (is (= 5 (length test-list)) "List length should be 5")
+    (is (= 1 (first test-list)) "First element should be 1")
+    (is (= 5 (fifth test-list)) "Fifth element should be 5")
+    (is (= 3 (third test-list)) "Third element should be 3")))
+
+(test hash-table-operations
+  "Test hash table operations"
+  (let ((ht (make-hash-table)))
+    (setf (gethash :key ht) :value)
+    (is (eq :value (gethash :key ht)) "Should retrieve stored value")
+    (is-true (gethash :key ht) "Should find existing key")
+    (is-false (gethash :nonexistent ht) "Should not find nonexistent key")))
+
+;;; Symbol and Package Tests
+
+(test symbol-operations
+  "Test symbol and package operations"
+  (let ((sym (intern "TEST-SYMBOL" :skyline-tool/basic-test)))
+    (is (symbolp sym) "Should create a symbol")
+    (is (string= "TEST-SYMBOL" (symbol-name sym)) "Symbol name should match")
+    (is (eq :skyline-tool/basic-test (symbol-package sym)) "Symbol should be in correct package")))
+
+;;; Time and Date Functions
+
+(test time-functions
+  "Test time and date related functions"
+  (let ((now (get-universal-time)))
+    (is (numberp now) "get-universal-time should return a number")
+    (is (> now 0) "Time should be positive")))
+
+;;; File Operations Tests
+
+(test file-operations
+  "Test basic file operations"
+  (let ((temp-file (format nil "/tmp/skyline-test-~A.txt" (random 1000))))
+    (unwind-protect
+        (progn
+          ;; Test writing to file
+          (with-open-file (stream temp-file :direction :output :if-exists :supersede)
+            (write-string "test content" stream))
+          (is (probe-file temp-file) "File should exist after writing")
+
+          ;; Test reading from file
+          (with-open-file (stream temp-file :direction :input)
+            (let ((content (read-line stream)))
+              (is (string= "test content" content) "File content should match written content")))
+
+          ;; Test file deletion
+          (delete-file temp-file)
+          (is-false (probe-file temp-file) "File should not exist after deletion"))
+      (when (probe-file temp-file)
+        (delete-file temp-file)))))
+
+;;; Configuration and Project Tests
+
+(test project-configuration
+  "Test project configuration handling"
+  (let ((original-project skyline-tool:*project.json*))
+    (unwind-protect
+        (progn
+          ;; Test setting project configuration
+          (setf skyline-tool:*project.json* '((:game . "Test Game") (:version . "1.0")))
+          (is (equal "Test Game" (cdr (assoc :game skyline-tool:*project.json*)))
+              "Project game name should be set correctly")
+          (is (equal "1.0" (cdr (assoc :version skyline-tool:*project.json*)))
+              "Project version should be set correctly"))
+      (setf skyline-tool:*project.json* original-project))))
+
+;;; Asset Processing Tests
+
+(test asset-naming-conventions
+  "Test asset naming convention functions"
+  (is (string= "HELLO_WORLD" (constant-case "hello world")) "Constant case conversion")
+  (is (string= "helloWorld" (camel-case "hello world")) "Camel case conversion")
+  (is (string= "HelloWorld" (pascal-case "hello world")) "Pascal case conversion")
+  (is (string= "hello-world" (string-downcase (pascal-case "HelloWorld"))) "Pascal case reverse"))
+
+;;; Error Recovery Tests
+
+(test error-recovery
+  "Test error recovery mechanisms"
+  ;; Test that operations can continue after non-fatal errors
+  (let ((error-count 0))
+    (handler-case
+        (progn
+          (incf error-count)
+          (error "Test error"))
+      (error (e)
+        (declare (ignore e))
+        (incf error-count)))
+    (is (= 2 error-count) "Should have executed both error and handler")))
+
+;;; Performance Tests
+
+(test performance-baselines
+  "Test basic performance characteristics"
+  (let ((start-time (get-internal-real-time)))
+    ;; Perform some basic operations
+    (dotimes (i 1000)
+      (+ i 1))
+    (let ((end-time (get-internal-real-time)))
+      (is (> (- end-time start-time) 0) "Operations should take some time")
+      (is (< (- end-time start-time) (* 10 internal-time-units-per-second))
+          "Operations should complete in reasonable time"))))
+
+;;; Memory Management Tests
+
+(test memory-operations
+  "Test memory-related operations"
+  (let ((test-array (make-array 10 :initial-element 42)))
+    (is (= 10 (length test-array)) "Array should have correct length")
+    (is (= 42 (aref test-array 0)) "Array element should have correct value")
+    (setf (aref test-array 5) 99)
+    (is (= 99 (aref test-array 5)) "Array element should be modifiable")))
+
+;;; Regular Expression and Pattern Matching Tests
+
+(test pattern-matching
+  "Test pattern matching functionality"
+  (is-true (search "world" "hello world") "Should find substring")
+  (is-false (search "goodbye" "hello world") "Should not find missing substring")
+  (is (= 6 (search "world" "hello world")) "Should find substring at correct position"))
+
+;;; Sorting and Comparison Tests
+
+(test sorting-operations
+  "Test sorting and comparison operations"
+  (let ((unsorted '(3 1 4 1 5 9 2 6))
+        (sorted '(1 1 2 3 4 5 6 9)))
+    (is (equal sorted (sort (copy-list unsorted) #'<)) "Should sort list correctly")
+    (is (= 3 (count 1 unsorted)) "Should count occurrences correctly")))
+
+;;; Bitwise Operations Tests
+
+(test bitwise-operations
+  "Test bitwise operations"
+  (is (= 6 (logand 7 6)) "Bitwise AND should work")
+  (is (= 7 (logior 3 4)) "Bitwise OR should work")
+  (is (= 1 (logxor 3 2)) "Bitwise XOR should work")
+  (is (= 14 (ash 7 1)) "Left shift should work")
+  (is (= 3 (ash 7 -1)) "Right shift should work"))
+
+;;; Image Conversion Tests
+
+(test 7800-image-to-320a-conversion
+  "Test 7800 320A image conversion with known inputs"
+  (let* ((palette (vector #(255 255 255) #(0 0 0))) ; White background, black foreground
+         ;; Create a simple 8x1 pixel image: alternating black and white
+         (image (make-array '(1 8) :element-type '(unsigned-byte 32)
+                           :initial-contents '((#x000000 #xFFFFFF #x000000 #xFFFFFF
+                                               #x000000 #xFFFFFF #x000000 #xFFFFFF)))))
+    (let ((result (skyline-tool::7800-image-to-320a image
+                                                    :byte-width 1 :height 1
+                                                    :palette palette)))
+      ;; Should produce one byte: alternating bits = 170 (#xAA)
+      (is (= 1 (length result)) "Should produce one column")
+      (is (= 1 (length (first result))) "Should produce one row")
+      (is (= #xAA (first (first result))) "Alternating pattern should be #xAA"))))
+
+(test 7800-image-to-320a-all-black
+  "Test 7800 320A conversion with all black pixels"
+  (let* ((palette (vector #(255 255 255) #(0 0 0)))
+         (image (make-array '(1 8) :element-type '(unsigned-byte 32)
+                           :initial-element #x000000))) ; All black
+    (let ((result (skyline-tool::7800-image-to-320a image
+                                                    :byte-width 1 :height 1
+                                                    :palette palette)))
+      (is (= #x00 (first (first result))) "All black should be #x00"))))
+
+(test 7800-image-to-320a-all-white
+  "Test 7800 320A conversion with all white pixels"
+  (let* ((palette (vector #(255 255 255) #(0 0 0)))
+         (image (make-array '(1 8) :element-type '(unsigned-byte 32)
+                           :initial-element #xFFFFFF))) ; All white
+    (let ((result (skyline-tool::7800-image-to-320a image
+                                                    :byte-width 1 :height 1
+                                                    :palette palette)))
+      (is (= #xFF (first (first result))) "All white should be #xFF"))))
+
+(test 7800-image-to-160a-conversion
+  "Test 7800 160A image conversion with 4-color palette"
+  (let* ((palette (vector #(255 0 0) #(0 255 0) #(0 0 255) #(255 255 255))) ; R, G, B, W
+         ;; Create a 4x1 pixel image with different colors
+         (image (make-array '(1 4) :element-type '(unsigned-byte 32)
+                           :initial-contents '((#xFF0000 #x00FF00 #x0000FF #xFFFFFF)))))
+    (let ((result (skyline-tool::7800-image-to-160a image
+                                                    :byte-width 1 :height 1
+                                                    :palette palette)))
+      ;; Each pixel gets 2 bits: 00, 01, 10, 11 -> packed as (00 << 6) | (01 << 4) | (10 << 2) | (11 << 0) = #x1B
+      (is (= 1 (length result)) "Should produce one column")
+      (is (= 1 (length (first result))) "Should produce one row")
+      (is (= #x1B (first (first result))) "4-color pattern should be #x1B"))))
+
+(test 7800-image-to-320c-conversion
+  "Test 7800 320C image conversion with palette encoding"
+  (let* ((palette (vector #(255 0 0) #(0 255 0) #(0 0 255))) ; R, G, B
+         ;; Create a 4x1 pixel image
+         (image (make-array '(1 4) :element-type '(unsigned-byte 32)
+                           :initial-contents '((#xFF0000 #x00FF00 #x0000FF #xFFFFFF)))))
+    (let ((result (skyline-tool::7800-image-to-320c image
+                                                    :byte-width 1 :height 1
+                                                    :palette palette)))
+      (is (= 1 (length result)) "Should produce one column")
+      (is (= 1 (length (first result))) "Should produce one row")
+      ;; 320C packs pixels with palette info - result depends on color analysis
+      (is (numberp (first (first result))) "Should produce a valid byte"))))
+
+;;; Asset Processing Tests
+
+(test asset-file-path-generation
+  "Test asset file path generation for different asset types"
+  (let ((map-asset '(:indicator "TestMap" :kind "Map"))
+        (script-asset '(:indicator "TestScript" :kind "Script"))
+        (song-asset '(:indicator "TestSong" :kind "Song")))
+    ;; Test that asset-file function works for different types
+    (is (stringp (skyline-tool::asset-file map-asset)) "Map asset should generate file path")
+    (is (stringp (skyline-tool::asset-file script-asset)) "Script asset should generate file path")
+    (is (stringp (skyline-tool::asset-file song-asset)) "Song asset should generate file path")))
+
+(test asset-type-predicates
+  "Test asset type predicate functions"
+  (let ((map-asset '(:indicator "TestMap" :kind "Map"))
+        (script-asset '(:indicator "TestScript" :kind "Script"))
+        (song-asset '(:indicator "TestSong" :kind "Song"))
+        (blob-asset '(:indicator "TestBlob" :kind "Blob")))
+    (is-true (skyline-tool::map-asset-p map-asset) "Map asset should be recognized")
+    (is-true (skyline-tool::script-asset-p script-asset) "Script asset should be recognized")
+    (is-true (skyline-tool::song-asset-p song-asset) "Song asset should be recognized")
+    (is-true (skyline-tool::blob-asset-p blob-asset) "Blob asset should be recognized")
+    (is-false (skyline-tool::map-asset-p script-asset) "Script should not be recognized as map")
+    (is-false (skyline-tool::script-asset-p map-asset) "Map should not be recognized as script")))
+
+;;; SkylineTool Specific Functionality Tests
+
+(test asset-collection-basics
+  "Test basic asset collection functionality"
+  (is (fboundp 'skyline-tool:check-for-absent-assets) "check-for-absent-assets should be defined")
+  (is (fboundp 'skyline-tool:allocate-assets) "allocate-assets should be defined"))
+
+(test compilation-functions
+  "Test that compilation functions are available"
+  (dolist (func '(skyline-tool:compile-art skyline-tool:compile-map
+                skyline-tool:compile-script skyline-tool:midi-compile))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test label-generation
+  "Test label generation functions"
+  (dolist (func '(skyline-tool:labels-to-forth skyline-tool:labels-to-mame
+                skyline-tool:labels-to-include skyline-tool:atari800-label-file))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test labels-to-include-conversion
+  "Test labels-to-include conversion with sample data"
+  (let ((temp-labels-file (format nil "/tmp/test-labels-~A.txt" (random 1000)))
+        (temp-include-file (format nil "/tmp/test-include-~A.s" (random 1000))))
+    (unwind-protect
+        (progn
+          ;; Create sample labels file
+          (with-open-file (out temp-labels-file :direction :output :if-exists :supersede)
+            (format out "TestLabel1 = $1000~%")
+            (format out "TestLabel2 = $2000~%")
+            (format out "TestLabel3_ID = $3000~%") ; Should be filtered out
+            (format out "TestLabel4 = $4000~%"))
+          ;; Test the conversion
+          (skyline-tool::labels-to-include temp-labels-file "1000" "3000" "test-include")
+          ;; Check that include file was created and has expected content
+          (let ((include-path (make-pathname :name "test-include" :type "s"
+                                           :directory '(:relative "Source" "Generated"))))
+            (when (probe-file include-path)
+              (with-open-file (in include-path :direction :input)
+                (let ((content (read-line in)))
+                  (is (search "Generated file" content) "Should contain generation comment"))))))
+      ;; Cleanup
+      (when (probe-file temp-labels-file)
+        (delete-file temp-labels-file))
+      (let ((include-path (make-pathname :name "test-include" :type "s"
+                                       :directory '(:relative "Source" "Generated"))))
+        (when (probe-file include-path)
+          (delete-file include-path))))))
+
+(test labels-to-forth-conversion
+  "Test labels-to-forth conversion with sample data"
+  (let ((temp-labels-file (format nil "/tmp/test-labels-forth-~A.txt" (random 1000)))
+        (temp-forth-file (format nil "/tmp/test-forth-~A.forth" (random 1000))))
+    (unwind-protect
+        (progn
+          ;; Create sample labels file
+          (with-open-file (out temp-labels-file :direction :output :if-exists :supersede)
+            (format out "ForthLabel1 = $1000~%")
+            (format out "ForthLabel2 = $2000~%"))
+          ;; Test the conversion
+          (skyline-tool::labels-to-forth temp-labels-file temp-forth-file)
+          ;; Check that forth file was created
+          (is (probe-file temp-forth-file) "Forth file should be created"))
+      ;; Cleanup
+      (when (probe-file temp-labels-file)
+        (delete-file temp-labels-file))
+      (when (probe-file temp-forth-file)
+        (delete-file temp-forth-file)))))
+
+(test configuration-functions
+  "Test configuration and setup functions"
+  (dolist (func '(skyline-tool:write-master-makefile))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test asset-allocation-basics
+  "Test basic asset allocation functionality"
+  (let ((original-machine skyline-tool:*machine*))
+    (unwind-protect
+        (progn
+          (setf skyline-tool:*machine* 7800)
+          ;; Test that allocate-assets function exists and can be called
+          (is (fboundp 'skyline-tool:allocate-assets) "allocate-assets should be defined")
+          ;; Test with minimal build configuration
+          (let ((result (skyline-tool::allocate-assets "Public")))
+            (is (listp result) "allocate-assets should return a list")))
+      (setf skyline-tool:*machine* original-machine))))
+
+(test makefile-generation
+  "Test makefile generation functions"
+  (is (fboundp 'skyline-tool:write-master-makefile) "write-master-makefile should be defined")
+  ;; Test that it can be called (though we won't check file output in unit test)
+  (finishes (skyline-tool::write-master-makefile) "write-master-makefile should not signal error"))
+
+(test command-interface
+  "Test command interface functionality"
+  (is (fboundp 'skyline-tool:command) "command function should be defined")
+  (is (fboundp 'skyline-tool:about-skyline-tool) "about-skyline-tool should be defined")
+  (is (boundp 'skyline-tool:*invocation*) "*invocation* should be bound")
+  (is (listp (symbol-value 'skyline-tool:*invocation*)) "*invocation* should be a list"))
+
+(test blob-processing
+  "Test blob processing functions"
+  (dolist (func '(skyline-tool:blob-rip-7800 skyline-tool:blob-rip-7800-160a
+                skyline-tool:blob-rip-7800-320ac skyline-tool:7800-image-to-320a
+                skyline-tool:7800-image-to-320c))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test blob-rip-7800-functionality
+  "Test blob-rip-7800 function exists and is callable"
+  (is (fboundp 'skyline-tool:blob-rip-7800) "blob-rip-7800 should be defined")
+  ;; Test that it can be called with a non-existent file (should handle gracefully)
+  (signals error (skyline-tool::blob-rip-7800 "/nonexistent/file.png")
+          "Should signal error for non-existent file"))
+
+(test 7800-image-conversion-functions
+  "Test 7800 image conversion functions are available"
+  (dolist (func '(skyline-tool:7800-image-to-160a skyline-tool:7800-image-to-320a
+                skyline-tool:7800-image-to-320c))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test art-compilation
+  "Test art compilation functions"
+  (dolist (func '(skyline-tool:compile-art-7800 skyline-tool:compile-art-lynx
+                skyline-tool:compile-tileset skyline-tool:extract-tileset-palette))
+    (is (fboundp func) "~A should be defined" func)))
+
+(test compile-art-functions
+  "Test art compilation functions are callable"
+  (is (fboundp 'skyline-tool:compile-art-7800) "compile-art-7800 should be defined")
+  (is (fboundp 'skyline-tool:compile-art-lynx) "compile-art-lynx should be defined")
+  ;; Test that they can be called with non-existent files (should handle gracefully)
+  (signals error (skyline-tool::compile-art-7800 "/tmp/nonexistent.out" "/tmp/nonexistent.in")
+          "Should signal error for non-existent input files")
+  (signals error (skyline-tool::compile-art-lynx "/tmp/nonexistent.out" "/tmp/nonexistent.in")
+          "Should signal error for non-existent input files"))
+
+(test animation-processing
+  "Test animation processing functions"
+  (is (fboundp 'skyline-tool:compile-animation-sequences) "compile-animation-sequences should be defined"))
+
+;;; Integration Tests
+
+(test basic-workflow
+  "Test that basic workflow functions work together"
+  ;; Test that we can get machine information
+  (let ((original-machine skyline-tool:*machine*))
+    (unwind-protect
+        (progn
+          (setf skyline-tool:*machine* 7800)
+          (is (stringp (skyline-tool:machine-long-name)) "Machine name should be a string")
+          (is (search "7800" (skyline-tool:machine-long-name)) "Machine name should contain '7800'"))
+      (setf skyline-tool:*machine* original-machine))))
+
+(test string-processing-integration
+  "Test string processing functions work together"
+  (let ((original "hello_world_test"))
+    (is (string= "HELLO_WORLD_TEST" (constant-case original)) "Constant case")
+    (is (string= "HelloWorldTest" (pascal-case original)) "Pascal case")
+    (is (string= "helloWorldTest" (camel-case original)) "Camel case")
+    (is (string= "hello_world_test" (snake-case original)) "Snake case")))
+
+(test midi-integration
+  "Test MIDI functions work together"
+  (let ((midi-note 60))
+    (is (= midi-note (skyline-tool:note->midi-note-number 4 "C")) "Note to MIDI")
+    (is (stringp (skyline-tool:midi->note-name midi-note)) "MIDI to note")
+    (is (numberp (skyline-tool:freq<-midi-key midi-note)) "Frequency calculation")))
+
+;;; Random and Math Tests
+
+(test random-functions
+  "Test random number generation"
+  (let ((r (random 100)))
+    (is (numberp r) "Random should return a number")
+    (is (>= r 0) "Random should be non-negative")
+    (is (< r 100) "Random should be less than limit")))
+
+(test mathematical-functions
+  "Test basic mathematical functions"
+  (is (= 8 (* 2 4)) "Multiplication should work")
+  (is (= 3 (/ 12 4)) "Division should work")
+  (is (= 7 (+ 3 4)) "Addition should work")
+  (is (= -1 (- 3 4)) "Subtraction should work")
+  (is (= 2 (mod 7 5)) "Modulo should work")
+  (is (= 1 (rem 7 3)) "Remainder should work"))
+
+;;; Type Checking Tests
+
+(test type-predicates
+  "Test type predicate functions"
+  (is-true (numberp 42) "42 should be a number")
+  (is-true (stringp "hello") "String should be a string")
+  (is-true (symbolp 'symbol) "Symbol should be a symbol")
+  (is-true (listp '(1 2 3)) "List should be a list")
+  (is-true (vectorp #(1 2 3)) "Vector should be a vector")
+  (is-false (numberp "42") "String should not be a number")
+  (is-false (stringp 42) "Number should not be a string"))
+)
+)

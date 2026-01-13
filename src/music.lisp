@@ -421,22 +421,23 @@ skipping MIDI music with ~:d track~:p"
                                           table))))
 
   (defun midi->note-name (note)
-    (if note
-        (multiple-value-bind (octave letter) (floor (- note 9) 12)
-          (format nil "~a ~d" (elt '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯") letter)
-                  octave))
-        "Ø"))
+    (if (and note (<= 0 note 127))
+        (multiple-value-bind (octave letter) (floor note 12)
+          (format nil "~a~d" (elt '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B") letter)
+                  (- octave 1)))
+        (error "Invalid MIDI note number: ~a" note)))
 
   (defun note->midi-note-number (octave note-name)
-    (+ 9
+    (+ 12
        (* 12 octave)
-       (or (position note-name '("A" "A#" "B" "C" "C#" "D" "D#" "E" "F" "F#" "G" "G#")
+       (or (position note-name '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B")
                      :test #'string-equal)
-           (position note-name '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯")
+           (position note-name '("C" "Db" "D" "Eb" "E" "F" "Gb" "G" "Ab" "A" "Bb" "B")
                      :test #'string-equal)
-           (let ((index (position note-name '( "A♭" "A" "B♭" "B" "C" "D♭" "D" "E♭" "E" "F" "G♭" "G")
-                                  :test #'string-equal)))
-             (return-from note->midi-note-number (+ 8 (* 12 octave) index))))))
+           (position note-name '("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B")
+                     :test #'string-equal)
+           (position note-name '("C" "D♭" "D" "E♭" "E" "F" "G♭" "G" "A♭" "A" "B♭" "B")
+                     :test #'string-equal))))
 
   (assert (= 60 (note->midi-note-number 4 "C")) ()
           "Note->MIDI-Note-Number is not tuned correctly")
