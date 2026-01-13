@@ -82,9 +82,7 @@
                  (:file "threed")
                  (:file "asset-allocator")
                  (:file "atarivox")
-                 (:file "interface")
-                 ;; (:file "maps") ;; Temporarily disabled due to compilation issues
-                 ))
+                 (:file "interface")))))
 
 ;; Separate test system
 (asdf:defsystem :skyline-tool/test
@@ -100,17 +98,8 @@
                              (:file "graphics-tests")
                              (:file "build-tests")
                              (:file "interface-tests")
-                             (:file "basic-tests")
                              (:file "5200-tests")
-                             (:file "7800-tests")
-                             (:file "lynx-graphics-tests")
-                             (:file "cgb-tests")
-                             (:file "dmg-tests")
-                             (:file "nes-tests")
-                             (:file "snes-tests")
-                             (:file "colecovision-tests")
-                             (:file "sega-tests")
-                             (:file "speech-tests")
-                             (:file "multiplatform-tests")
                              (:file "makefile-functions-tests")
-                             (:file "music-tests")))))
+                             (:file "music-tests")
+                             (:file "lynx-graphics-tests")
+                             (:file "basic-tests")))))

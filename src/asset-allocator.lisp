@@ -136,23 +136,32 @@
 (defgeneric asset-loader-size (kind record-count)
   (:method ((kind (eql :overhead)) record-count)
     (ecase *machine*
-      (7800 12)))
+      (7800 12)
+      ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
+       (error "~A asset loader overhead size not yet implemented" *machine*))))
   (:method ((kind (eql :song)) record-count)
     (ecase *machine*
-      (7800 256)) ; FIXME #124
-    )
+      (7800 256) ; FIXME #124
+      ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
+       (error "~A song asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :script)) record-count)
     (ecase *machine*
-      (7800 (+ 128 (* (1+ record-count) 4)))))
+      (7800 (+ 128 (* (1+ record-count) 4)))
+      ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
+       (error "~A script asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :blob)) record-count)
     (ecase *machine*
-      (7800 (+ 284 1 (* record-count 3)))))
+      (7800 (+ 284 1 (* record-count 3)))
+      ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
+       (error "~A blob asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :map)) record-count)
     (ecase *machine*
       (7800 (+
              #|LoadMap|# 1024 #| approx XXX |#
              #| end of table |# 1
-             #|per record|# (* record-count 3))))))
+             #|per record|# (* record-count 3)))
+      ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
+       (error "~A map asset loader size not yet implemented" *machine*)))))
 
 (defun bank-size (asset-size-hash)
   "The size of the ROM bank indicated by ASSET-SIZE-HASH plus overhead."
@@ -822,7 +831,9 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (not (eql *machine* 200))) ; Lynx (200) does not support speech
+  (ecase *machine*
+    ((2600 5200 7800 2609) t) ; VCS, 5200, 7800 (SpeakJet), Intellivision (IntelliVoice)
+    (t nil))) ; All others: false
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
@@ -1013,7 +1024,7 @@ Dist/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 
 Object/Phantasia.CBM.zip: \\~
 ~{~%~10tObject/Phantasia.CBM/~a ~^ \\~}
-	mkdir -p Dist 
+	mkdir -p Dist
 	zip $@ $^
 
 "

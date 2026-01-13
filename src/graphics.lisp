@@ -3754,3 +3754,57 @@ Columns: ~d
     (8 (error "SECAM palette for Apple II not yet implemented"))
     (9 (error "SECAM palette for Apple III not yet implemented"))
     (10 (error "SECAM palette for Apple IIGS not yet implemented"))))
+;; Platform capability predicates
+
+(defun speech-supported-p (machine)
+  "Return T if the machine supports speech synthesis"
+  (ecase machine
+    (20 t)     ; VCS (SpeakJet)
+    (2609 t)   ; Intellivision (IntelliVoice)
+    (5200 t)   ; Atari 5200 (SpeakJet)
+    (7800 t)   ; Atari 7800 (SpeakJet)
+    (t nil)))  ; All others: false
+
+(defun pal-capable-p (machine)
+  "Return T if the machine supports PAL video standard"
+  (ecase machine
+    (20 t)     ; VCS supports PAL
+    (2609 t)   ; Intellivision supports PAL
+    (5200 t)   ; Atari 5200 supports PAL
+    (7800 t)   ; Atari 7800 supports PAL
+    (35902 t)  ; CGB supports PAL
+    (20953 t)  ; DMG supports PAL
+    (9918 t)   ; ColecoVision supports PAL
+    (1000 t)   ; SG-1000 supports PAL
+    (3010 t)   ; SMS supports PAL
+    (837 t)    ; SGG supports PAL
+    (3 t)      ; NES supports PAL
+    (6 t)      ; SNES supports PAL
+    (7 t)      ; BBC supports PAL
+    (264 t)    ; C16 supports PAL
+    (8 t)      ; Apple II supports PAL
+    (9 t)      ; Apple III supports PAL
+    (10 t)     ; Apple IIGS supports PAL
+    (t nil)))  ; Default: false
+
+(defun secam-capable-p (machine)
+  "Return T if the machine supports SECAM video standard"
+  (ecase machine
+    (20 t)     ; VCS supports SECAM
+    (2609 nil) ; Intellivision does not support SECAM
+    (5200 nil) ; Atari 5200 does not support SECAM
+    (7800 nil) ; Atari 7800 does not support SECAM
+    (35902 nil); CGB does not support SECAM
+    (20953 nil); DMG does not support SECAM
+    (9918 nil) ; ColecoVision does not support SECAM
+    (1000 nil) ; SG-1000 does not support SECAM
+    (3010 nil) ; SMS does not support SECAM
+    (837 nil)  ; SGG does not support SECAM
+    (3 nil)    ; NES does not support SECAM
+    (6 nil)    ; SNES does not support SECAM
+    (7 nil)    ; BBC does not support SECAM
+    (264 nil)  ; C16 does not support SECAM
+    (8 nil)    ; Apple II does not support SECAM
+    (9 nil)    ; Apple III does not support SECAM
+    (10 nil)   ; Apple IIGS does not support SECAM
+    (t nil)))  ; Default: false

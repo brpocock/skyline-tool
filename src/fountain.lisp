@@ -3402,7 +3402,7 @@ FadeColor~:(~a~) FadingTarget C!"
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (member *machine* '(2600 7800 2609))) ; also Vectrex
+  (member *machine* '(2600 7800 2609))) ; VCS (2600), 7800, Intellivision (2609)
 
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
   (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))

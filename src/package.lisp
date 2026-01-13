@@ -193,7 +193,6 @@
       (asdf:system-relative-pathname
        :skyline-tool (make-pathname :directory '(:relative :up) :name "Project" :type "json" ))))
 
-<<<<<<< HEAD
 (defun project-root ()
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
@@ -208,16 +207,5 @@
 (defparameter *default-skin-color* (cdr (assoc :*default-skin-color *project.json*)))
 (defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))
 (defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
-=======
-(defparameter *game-title* nil)
-(defparameter *part-number* nil)
-(defparameter *studio* nil)
-(defparameter *publisher* nil)
-(defparameter *machine* nil)
-(defparameter *sound* nil)
-(defparameter *common-palette* nil)
-(defparameter *default-skin-color* nil)
-(defparameter *default-hair-color* nil)
-(defparameter *default-clothes-color* nil)
 
 (defvar *region* :ntsc)
