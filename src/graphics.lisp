@@ -1727,6 +1727,34 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
   (format *trace-output* "~% Image ~A seems to be a VIC-20 8×8 font" png-file)
   (compile-font-8×8 png-file target-dir height width palette-pixels))
 
+(defmethod dispatch-png% ((machine (eql 9000)) png-file target-dir
+                          png height width α palette-pixels)
+  (cond
+    ;; Lynx sprites: up to 160×102, 16 colors max
+    ((and (<= width 160) (<= height 102))
+     (format *trace-output* "~% Image ~A seems to be a Lynx sprite" png-file)
+     (compile-lynx-sprite png-file target-dir))
+
+    ;; Lynx backgrounds: exactly 160×102
+    ((and (= width 160) (= height 102))
+     (format *trace-output* "~% Image ~A seems to be a Lynx background" png-file)
+     (compile-lynx-blob png-file target-dir))
+
+    ;; Lynx tilesets: multiples of 8×8, up to 160×102
+    ((and (zerop (mod width 8)) (zerop (mod height 8))
+          (<= width 160) (<= height 102))
+     (format *trace-output* "~% Image ~A seems to be a Lynx tileset" png-file)
+     (compile-lynx-tileset png-file target-dir))
+
+    (t
+     (error 'dimension-error
+            :filename png-file
+            :machine 9000
+            :invalid-width width
+            :invalid-height height
+            :max-width 160
+            :max-height 102))))
+
 (defmethod dispatch-png% ((machine (eql 64)) png-file target-dir
                           png height width α palette-pixels)
   (cond
@@ -2566,6 +2594,258 @@ Processes tile graphics for ANTIC Mode D/E and player graphics for PMG system."
 
 (defun compile-art-nes (index-out index-in)
   (error "unimplemented: NES art compilation not yet implemented"))
+
+(defun read-lynx-art-index (index-in)
+  "Read and validate Lynx art index file, returning list of (mode path width height) tuples.
+
+Signals appropriate errors for invalid formats, dimensions, or modes."
+  (let ((png-list (list))
+        (valid-modes '(:sprite :background :tileset)))
+    (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
+    (handler-case
+        (with-input-from-file (index index-in)
+          (loop for line-num from 1
+                for line = (read-line index nil)
+                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
+                                            line)))
+                     (cond
+                       ((emptyp line) nil)
+                       ((char= #\# (char line 0)) nil)
+                       (t (handler-case
+                              (destructuring-bind (png-name mode cell-size)
+                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                                (unless (= 3 (length (split-sequence #\Space line :remove-empty-subseqs t)))
+                                  (error 'format-error
+                                         :filename index-in
+                                         :machine 9000
+                                         :context (format nil "line ~D" line-num)
+                                         :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
+                                         :actual-format line))
+                                (let ((mode-keyword (make-keyword mode)))
+                                  (unless (member mode-keyword valid-modes)
+                                    (error 'mode-error
+                                           :filename index-in
+                                           :machine 9000
+                                           :context (format nil "line ~D" line-num)
+                                           :invalid-mode mode-keyword
+                                           :valid-modes valid-modes))
+                                  (destructuring-bind (width-px height-px)
+                                      (split-sequence #\× cell-size :test #'char=)
+                                    (let ((width (parse-integer width-px :junk-allowed nil))
+                                          (height (parse-integer height-px :junk-allowed nil)))
+                                      ;; Validate dimensions based on mode and Lynx hardware limits
+                                      (ecase mode-keyword
+                                        (:sprite (unless (and (<= width 160) (<= height 102))
+                                                   (error 'dimension-error
+                                                          :filename index-in
+                                                          :machine 9000
+                                                          :context (format nil "~A mode, line ~D" mode cell-size)
+                                                          :invalid-width width
+                                                          :invalid-height height
+                                                          :max-width 160
+                                                          :max-height 102)))
+                                        (:background (unless (and (= width 160) (= height 102))
+                                                        (error 'dimension-error
+                                                               :filename index-in
+                                                               :machine 9000
+                                                               :context (format nil "~A mode, line ~D" mode cell-size)
+                                                               :invalid-width width
+                                                               :invalid-height height
+                                                               :max-width 160
+                                                               :max-height 102)))
+                                        (:tileset (unless (and (<= width 160) (<= height 102))
+                                                    (error 'dimension-error
+                                                           :filename index-in
+                                                           :machine 9000
+                                                           :context (format nil "~A mode, line ~D" mode cell-size)
+                                                           :invalid-width width
+                                                           :invalid-height height
+                                                           :max-width 160
+                                                           :max-height 102))))
+                                      (push (list png-name mode-keyword width height) png-list)))))
+                            (error (e)
+                              (error 'art-conversion-error
+                                     :filename index-in
+                                     :message (format nil "Line ~D: ~A" line-num e)))))))
+          (nreverse png-list))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :message (format nil "Failed to read Lynx art index: ~A" e))))))
+
+(defun parse-into-lynx-bytes (art-index)
+  "Parse Lynx art index into byte data suitable for Lynx hardware.
+
+ART-INDEX: List of (png-name mode-keyword width height) tuples
+Returns: List of bytes representing the compiled graphics data"
+  (let ((bytes (list)))
+    (dolist (art-item art-index)
+      (destructuring-bind (png-name mode width-px height-px) art-item
+        (format *trace-output* "~&~A: parsing in mode ~A (start at $~2,'0x)… "
+                png-name mode (length bytes))
+        (let* ((png (png-read:read-png-file png-name))
+               (height (png-read:height png))
+               (width (png-read:width png))
+               (palette-pixels (png->palette height width
+                                             (png-read:image-data png)
+                                             (png-read:transparency png)))
+               (palette (grab-lynx-palette palette-pixels)))
+          (appendf bytes
+                   (parse-lynx-object mode palette-pixels :width width-px :height height-px
+                                      :palette palette)))
+        (format *trace-output* " … Done. (ends at $~2,'0x)" (1- (length bytes)))))
+    (nreverse bytes)))
+
+(defun parse-lynx-object (mode palette-pixels &key width height palette)
+  "Parse palette pixels into Lynx-specific graphics format.
+
+MODE: :sprite, :background, or :tileset
+PALETTE-PIXELS: 2D array of palette indices
+WIDTH/HEIGHT: Dimensions in pixels
+PALETTE: Lynx palette data
+
+Returns: List of bytes in Lynx format"
+  (ecase mode
+    (:sprite (parse-lynx-sprite palette-pixels width height palette))
+    (:background (parse-lynx-background palette-pixels width height palette))
+    (:tileset (parse-lynx-tileset palette-pixels width height palette))))
+
+(defun parse-lynx-sprite (palette-pixels width height palette)
+  "Convert palette pixels to Lynx sprite format.
+Lynx sprites are stored as 4-bit pixels with palette indices."
+  (let ((bytes (list)))
+    ;; Lynx sprite header (width, height)
+    (push (logand width #xff) bytes)
+    (push (ash width -8) bytes)
+    (push (logand height #xff) bytes)
+    (push (ash height -8) bytes)
+    ;; Sprite data: 4 bits per pixel, packed
+    (loop for y from 0 below height
+          do (loop for x from 0 below width by 2
+                   do (let ((pixel1 (aref palette-pixels y x))
+                            (pixel2 (if (< (1+ x) width)
+                                       (aref palette-pixels y (1+ x))
+                                       0)))
+                        (push (logior (logand pixel1 #x0f)
+                                      (ash (logand pixel2 #x0f) 4))
+                              bytes))))
+    (nreverse bytes)))
+
+(defun parse-lynx-background (palette-pixels width height palette)
+  "Convert palette pixels to Lynx background format.
+Lynx backgrounds are full screen 160×102 with 4-bit pixels."
+  (let ((bytes (list)))
+    ;; Background data: 4 bits per pixel, packed
+    (loop for y from 0 below height
+          do (loop for x from 0 below width by 2
+                   do (let ((pixel1 (aref palette-pixels y x))
+                            (pixel2 (aref palette-pixels y (1+ x))))
+                        (push (logior (logand pixel1 #x0f)
+                                      (ash (logand pixel2 #x0f) 4))
+                              bytes))))
+    (nreverse bytes)))
+
+(defun parse-lynx-tileset (palette-pixels width height palette)
+  "Convert palette pixels to Lynx tileset format.
+Similar to sprites but organized as tiles."
+  ;; For now, treat tileset same as sprites
+  (parse-lynx-sprite palette-pixels width height palette))
+
+(defun grab-lynx-palette (palette-pixels)
+  "Extract palette from Lynx graphics data.
+Lynx uses 12-bit RGB colors (4096 colors total)."
+  ;; Lynx palette is 12-bit: RRRRGGGGBBBB
+  ;; For now, return a simple identity palette
+  (loop for i from 0 below 16
+        collect (list i i i))) ; Simple RGB values
+
+(defun interleave-lynx-bytes (byte-lists)
+  "Interleave multiple byte lists for Lynx format.
+Lynx uses linear byte ordering."
+  (apply #'append (nreverse byte-lists)))
+
+(defun write-lynx-binary (filename bytes)
+  "Write Lynx binary data to file."
+  (format *trace-output* "~&Writing ~A bytes to ~A" (length bytes) filename)
+  (with-open-file (out filename :direction :output :element-type '(unsigned-byte 8)
+                       :if-exists :supersede)
+    (dolist (byte bytes)
+      (write-byte byte out))))
+
+(defun compile-lynx-tileset (png-file out-dir)
+  "Compile Lynx tileset from PNG file.
+
+PNG-FILE: Input PNG file path
+OUT-DIR: Output directory for compiled tileset
+
+Generates Lynx-compatible tileset data from PNG input."
+  (let ((*machine* 9000))
+    (compile-png-generic png-file out-dir :mode :tileset)))
+
+(defun compile-lynx-sprite (png-file out-dir)
+  "Compile Lynx sprite from PNG file.
+
+PNG-FILE: Input PNG file path
+OUT-DIR: Output directory for compiled sprite
+
+Generates Lynx-compatible sprite data from PNG input."
+  (let ((*machine* 9000))
+    (compile-png-generic png-file out-dir :mode :sprite)))
+
+(defun compile-lynx-blob (png-file out-dir)
+  "Compile Lynx blob/background from PNG file.
+
+PNG-FILE: Input PNG file path
+OUT-DIR: Output directory for compiled blob
+
+Generates Lynx-compatible background/blob data from PNG input."
+  (let ((*machine* 9000))
+    (compile-png-generic png-file out-dir :mode :background)))
+
+(defun compile-png-generic (png-file out-dir &key mode)
+  "Generic PNG compilation for Lynx platform.
+
+PNG-FILE: Input PNG file path
+OUT-DIR: Output directory
+MODE: :sprite, :background, or :tileset"
+  (let* ((png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)
+                                       (png-read:transparency png)))
+         (palette (grab-lynx-palette palette-pixels))
+         (bytes (parse-lynx-object mode palette-pixels
+                                   :width width :height height
+                                   :palette palette))
+         (out-file (make-pathname :directory out-dir
+                                  :name (pathname-name png-file)
+                                  :type "bin")))
+    (write-lynx-binary out-file bytes)
+    out-file))
+
+(defun compile-art-lynx (index-out index-in)
+  "Compile art assets for Atari Lynx platform.
+
+INDEX-OUT: Output filename for compiled art data
+INDEX-IN: Input art index file to process
+
+Parses art index files and generates optimized binary data for Lynx hardware.
+Signals appropriate errors for invalid input files or unsupported configurations."
+  (let ((*machine* 9000))
+    (handler-case
+        (write-lynx-binary index-out
+                           (interleave-lynx-bytes
+                            (parse-into-lynx-bytes
+                             (read-lynx-art-index index-in))))
+      (art-conversion-error (e)
+        ;; Re-signal art conversion errors with additional context
+        (error e))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :message (format nil "Failed to compile Lynx art: ~A" e))))))
 
 (defun compile-art-snes (index-out index-in)
   (error "unimplemented: SNES art compilation not yet implemented"))

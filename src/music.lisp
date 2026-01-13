@@ -1558,6 +1558,9 @@ Music:~:*
 
 (defun compile-music-bbc (output-file input-file &optional chip)
   (error "BBC music compilation not yet implemented"))
+
+(defun compile-music-lynx (output-file input-file &optional chip)
+  (error "Lynx music compilation not yet implemented"))
 ;; Speech/phoneme compilation functions (stub implementations)
 (defun compile-speech-7800 (output-file input-file)
   (error "7800 speech compilation (SpeakJet) not yet implemented"))

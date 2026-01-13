@@ -143,7 +143,7 @@
            ;; Platform-specific compilation functions
            #:compile-music-cgb #:compile-music-dmg #:compile-music-nes #:compile-music-snes
            #:compile-music-colecovision #:compile-music-sg1000 #:compile-music-sms #:compile-music-sgg
-           #:compile-music-c16 #:compile-music-a2 #:compile-music-a3 #:compile-music-a2gs #:compile-music-bbc
+           #:compile-music-c16 #:compile-music-a2 #:compile-music-a3 #:compile-music-a2gs #:compile-music-bbc #:compile-music-lynx
            ;; Platform-specific blob ripping functions
            #:blob-rip-cgb-tile #:blob-rip-cgb-sprite #:blob-rip-cgb-font
            #:blob-rip-dmg-tile #:blob-rip-dmg-sprite #:blob-rip-dmg-font
