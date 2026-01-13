@@ -132,11 +132,12 @@
   (push (cons :intv-gram-compiler t) *converter-test-results*))
 
 ;; Test 7: Test file availability
-(format t "6. Test file availability... ")
+(format t "7. Test file availability... ")
 (let ((result (and (probe-file "SkylineTool/tests/graphics-tests.lisp")
                    (probe-file "SkylineTool/tests/music-tests.lisp")
                    (probe-file "SkylineTool/tests/text-transcription-tests.lisp")
-                   (probe-file "SkylineTool/tests/compiler-tests.lisp"))))
+                   (probe-file "SkylineTool/tests/compiler-tests.lisp")
+                   (probe-file "SkylineTool/tests/intv-gram-tests.lisp"))))
   (format t "~:[❌ FAILED~;✅ PASSED~]~%" result)
   (push (cons :test-files result) *converter-test-results*))
 
