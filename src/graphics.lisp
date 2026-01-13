@@ -3003,10 +3003,8 @@ Blob_~a:~10t.block~2%"
     (format *trace-output* " … done!~%")))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
-  ;; Stub implementation - outputs a message for now
-;;           (format output "~%~10t.word $0000"))
   (format *trace-output* "blob-rip-7800-320ac: Processing ~a (imperfectp: ~a)~%" png-file imperfectp$)
-  (format *trace-output* "320A/C BLOB ripping not yet fully implemented~%"))
+  (error "unimplemented: blob-rip-7800-320ac is total failure."))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

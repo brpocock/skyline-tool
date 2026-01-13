@@ -1266,10 +1266,10 @@ mentioned in the top-level Makefile."
                     (write-bank-makefile bank-source
                                          :build build :video video))
                    (t (write-asset-bank-makefile *bank*
-                                                 :build build :video video))))))))
-       (format *trace-output* " … done writing master Makefile.~%")
-       ((64 128)
-        (ensure-directories-exist #p"Source/Generated/")
+                                                 :build build :video video)))))))))
+     (format *trace-output* " … done writing master Makefile.~%"))
+    ((64 128)
+     (ensure-directories-exist #p"Source/Generated/")
      (format *trace-output* "~&Writing master Makefile content …")
      (with-output-to-file (*standard-output* #p"Source/Generated/Makefile" :if-exists :supersede)
        (write-makefile-header)
