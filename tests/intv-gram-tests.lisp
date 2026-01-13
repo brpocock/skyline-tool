@@ -44,3 +44,20 @@
       ;; Verify file has .s extension
       (is (string= "s" (pathname-type output-path))
           "Output file should have .s extension"))))
+
+;; Test 2: DECLE format verification
+(test gram-compiler-decle-format
+  "Test that GRAM compiler outputs DECLE statements in correct format"
+  (with-temp-gram-output (output-path "test-card.s")
+    (let ((input-png (make-pathname :name "test-card" :type "png")))
+      ;; Call the GRAM compiler
+      (skyline-tool::compile-gram-intv input-png *test-gram-dir*)
+      ;; Read the output file
+      (let ((output-content (uiop:read-file-string output-path)))
+        ;; Verify file contains DECLE keyword
+        (is-true (search "DECLE" output-content)
+                 "Output file should contain DECLE statements")
+        ;; Verify DECLE format (should have spaces before DECLE)
+        (is-true (or (search "    DECLE" output-content)
+                     (search "DECLE" output-content))
+                 "Output file should have properly formatted DECLE statements")))))
