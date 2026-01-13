@@ -37,7 +37,7 @@
   (with-temp-gram-output (output-path "test-cards.s")
     (let ((input-png (make-pathname :name "test-cards" :type "png")))
       ;; Call the GRAM compiler (function name TBD)
-      (skyline-tool::compile-gram-intv input-png *test-gram-dir* 8 8 nil)
+      (skyline-tool::compile-gram-intv input-png *test-gram-dir* :height 8 :width 8 :palette-pixels nil)
       ;; Verify output file exists with correct name
       (is-true (probe-file output-path)
                "Output file should exist: ~A" output-path)

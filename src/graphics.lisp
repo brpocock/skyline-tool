@@ -1389,9 +1389,23 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 
       (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
 
-(defun compile-gram-intv (png-file out-dir height width palette-pixels)
-  "Compile GRAM cards from PNG image for Intellivision"
-  (declare (ignore height width palette-pixels))
+(defun compile-gram-intv (png-file out-dir &key height width palette-pixels)
+  "Compile GRAM cards from PNG image PNG-FILE to OUT-DIR.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname designator), out-dir (pathname designator), &key height (integer), width (integer), palette-pixels (array)
+@item Returns: nil
+@item Side Effects: Writes compiled GRAM card data to assembly file
+@end table
+
+Compiles PNG image into GRAM card data for Intellivision.
+Outputs assembly file with DECLE statements for GRAM card data.
+All cards in the source image are output as one file."
+  (check-type png-file (or pathname string))
+  (check-type out-dir (or pathname string))
+  (when height (check-type height (integer 1)))
+  (when width (check-type width (integer 1)))
   (let ((out-file (merge-pathnames
                    (make-pathname :name
                                   (pathname-name png-file)
