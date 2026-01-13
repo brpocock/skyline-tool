@@ -429,7 +429,7 @@ Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/Assets
 	bin/skyline-tool blob-rip-7800 $<"
                blob-name blob-name))
-      ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200) ; Other supported machines without blob support
+      ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without blob support
        (error "Blob generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-art-generation (pathname)
@@ -449,7 +449,7 @@ Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%	~a \\~}~%	bin/skyline-tool
                art-name art-name
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))))
-      ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200) ; Other supported machines without art support
+      ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without art support
        (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-tsx-generation (pathname)
@@ -802,7 +802,7 @@ file ~a.s in bank $~(~2,'0x~)~
            (200 ; Lynx platform
             (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
             (write-asset-compilation/blob-lynx asset-indicator))
-           ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200 7800) ; Other machines - ignore blobs for now
+           ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200 7800) ; Other machines - ignore blobs for now
             (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)" asset-indicator *machine*))))
         ((script-asset-p asset-indicator)
          (format t "~%
@@ -832,7 +832,7 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
   (ecase *machine*
-    ((2600 5200 7800 2609) t) ; VCS, 5200, 7800 (SpeakJet), Intellivision (IntelliVoice)
+    ((2600 7800 2609) t) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
     (t nil))) ; All others: false
 
 (defun asset-loaders (asset-objects)

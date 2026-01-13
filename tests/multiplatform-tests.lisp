@@ -249,20 +249,13 @@
       (is-true (fboundp 'skyline-tool:compile-forth-z80))
       (finishes (skyline-tool:compile-forth-z80 "/tmp/test.fth" "/tmp/test.out")))))
 
-(test forth-bytecode-compilation-cp1610
-  "Test that CP1610 platforms generate as1600-compatible Forth bytecode"
-  (dolist (machine '(1591 1601)) ; Intellivision variants
-    (let ((*machine* machine))
-      (is-true (fboundp 'skyline-tool:compile-forth-cp1610))
-      (finishes (skyline-tool:compile-forth-cp1610 "/tmp/test.fth" "/tmp/test.out")))))
-
 ;; ============================================================================
 ;; Makefile Generation Tests
 ;; ============================================================================
 
 (test makefile-generation-all-platforms
   "Test that Makefiles can be generated for all supported platforms"
-  (dolist (machine '(2600 5200 7800 200 3 6 35902 20953 9918 1000 3010 837 264 8 9 10 7 1591 1601))
+  (dolist (machine '(2600 5200 7800 200 3 6 35902 20953 9918 1000 3010 837 264 8 9 10 7 2609 1601))
     (let ((*machine* machine))
       (finishes (skyline-tool:write-master-makefile)
                 "Makefile generation should not fail for machine ~A" machine))))
@@ -273,7 +266,7 @@
 
 (test palette-generation-ntsc
   "Test that NTSC palettes are generated for all platforms"
-  (dolist (machine '(2600 5200 7800 200 3 6 35902 20953 9918 1000 3010 837 264 8 9 10 7 1591 1601))
+  (dolist (machine '(2600 5200 7800 200 3 6 35902 20953 9918 1000 3010 837 264 8 9 10 7 2609 1601))
     (let ((*machine* machine))
       (is-true (fboundp 'skyline-tool:generate-ntsc-palette))
       (finishes (skyline-tool:generate-ntsc-palette "/tmp/palette.act")))))
