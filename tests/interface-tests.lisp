@@ -9,13 +9,25 @@
                 #:compile-art-7800
                 #:compile-map
                 #:compile-script
-                #:compile-tileset)
-  (:export #:interface-tests))
+                #:compile-tileset
+                #:extract-tileset-palette
+                #:labels-to-forth
+                #:labels-to-mame
+                #:prepend-fundamental-mode
+                #:write-actor-prototypes
+                #:write-asset-ids
+                #:write-character-ids
+                #:write-gimp-palettes
+                #:write-master-makefile)
+  (:export #:interface-tests #:conversion-tests))
 
 (in-package :skyline-tool/interface-test)
 
 (def-suite interface-tests
   :description "Tests for command-line interface functions")
+
+(def-suite conversion-tests
+  :description "Comprehensive functional tests for all Skyline-Tool conversion functions")
 
 (in-suite interface-tests)
 
@@ -238,6 +250,314 @@
         (when (and func (fboundp func))
           (is (documentation func 'function)
               "~A should have documentation" func-name))))))
+
+;; =============================================================================
+;; COMPREHENSIVE CONVERSION FUNCTION TESTS
+;; =============================================================================
+
+(in-suite conversion-tests)
+
+;; Helper functions for conversion tests
+(defun create-temp-file (content &optional (extension "tmp"))
+  "Create a temporary file with CONTENT and return its pathname."
+  (let ((pathname (make-pathname :name (format nil "test-~A-~A" (get-universal-time) (random 1000))
+                                 :type extension
+                                 :directory '(:absolute "tmp"))))
+    (ensure-directories-exist pathname)
+    (with-open-file (stream pathname :direction :output :if-exists :supersede)
+      (write-string content stream))
+    pathname))
+
+(defun cleanup-temp-file (pathname)
+  "Remove a temporary file."
+  (when (probe-file pathname)
+    (delete-file pathname)))
+
+(defmacro with-temp-files ((&rest bindings) &body body)
+  "Create temporary files, execute BODY, then clean up."
+  `(let ,bindings
+     (unwind-protect
+         (progn ,@body)
+       ,@(mapcar (lambda (binding)
+                   `(cleanup-temp-file ,(car binding)))
+                 bindings))))
+
+;; =============================================================================
+;; WRITE-MASTER-MAKEFILE TESTS
+;; =============================================================================
+
+(test write-master-makefile-generates-valid-makefile
+  "Test that write-master-makefile generates a syntactically valid Makefile"
+  (let ((output-file (make-pathname :name "test-makefile" :type "mak" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    (unwind-protect
+        (progn
+          (finishes (write-master-makefile))
+          ;; Check that some key targets exist in the generated Makefile
+          (is-true (probe-file "Source/Generated/Makefile")
+                   "Generated Makefile should exist")
+          (when (probe-file "Source/Generated/Makefile")
+            (with-open-file (stream "Source/Generated/Makefile")
+              (let ((content (make-string (file-length stream))))
+                (read-sequence content stream)
+                ;; Check for essential Makefile syntax
+                (is (search ".PHONY:" content) "Makefile should contain .PHONY targets")
+                (is (search "all:" content) "Makefile should contain all target")
+                (is (search "clean:" content) "Makefile should contain clean target")))))
+      ;; Clean up the generated file if we created it
+      (when (probe-file output-file)
+        (delete-file output-file)))))
+
+(test write-master-makefile-includes-all-targets
+  "Test that write-master-makefile includes all expected build targets"
+  (finishes (write-master-makefile))
+  (is-true (probe-file "Source/Generated/Makefile")
+           "Generated Makefile should exist")
+  (when (probe-file "Source/Generated/Makefile")
+    (with-open-file (stream "Source/Generated/Makefile")
+      (let ((content (make-string (file-length stream))))
+        (read-sequence content stream)
+        ;; Check for key targets that should be generated
+        (is (search "Dist/Phantasia.Public.NTSC.a78:" content)
+            "Should include Public NTSC build target")
+        (is (search "Dist/Phantasia.Demo.NTSC.a78:" content)
+            "Should include Demo NTSC build target")
+        (is (search "Dist/Phantasia.Test.a78:" content)
+            "Should include Test build target")))))
+
+;; =============================================================================
+;; WRITE-GIMP-PALETTES TESTS
+;; =============================================================================
+
+(test write-gimp-palettes-creates-palette-files
+  "Test that write-gimp-palettes creates GIMP palette files"
+  (let ((original-dir (uiop:getcwd)))
+    (unwind-protect
+        (progn
+          ;; Change to ensure we're in the right directory for relative paths
+          (uiop:chdir (asdf:system-source-directory :skyline-tool))
+          (uiop:chdir (make-pathname :directory '(:relative "..")))
+          (finishes (write-gimp-palettes))
+          ;; Check that palette files were created
+          (let ((ntsc-palette (probe-file "Tools/Atari-7800-NTSC.gpl"))
+                (pal-palette (probe-file "Tools/Atari-7800-PAL.gpl")))
+            (is-true ntsc-palette "NTSC palette file should be created")
+            (is-true pal-palette "PAL palette file should be created")
+            ;; Verify content structure
+            (when ntsc-palette
+              (with-open-file (stream ntsc-palette)
+                (let ((first-line (read-line stream)))
+                  (is (search "GIMP Palette" first-line)
+                      "Palette file should start with GIMP header"))))))
+      (uiop:chdir original-dir))))
+
+;; =============================================================================
+;; EXTRACT-TILESET-PALETTE TESTS (already exists in graphics-tests)
+;; =============================================================================
+
+;; Skip - already tested in graphics-tests.lisp
+
+;; =============================================================================
+;; LABELS-TO-FORTH TESTS
+;; =============================================================================
+
+(test labels-to-forth-converts-basic-labels
+  "Test that labels-to-forth converts assembler labels to Forth constants"
+  (with-temp-files ((input-file (create-temp-file "TestLabel = $1234
+AnotherLabel = $ABCD
+EndLabel = *"))
+                   (output-file (make-pathname :name "test-output" :type "forth" :directory '(:absolute "tmp"))))
+    (finishes (labels-to-forth input-file output-file))
+    (is-true (probe-file output-file) "Output file should be created")
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          (is (search "$1234 CONSTANT TestLabel" content)
+              "Should convert TestLabel to Forth constant")
+          (is (search "$ABCD CONSTANT AnotherLabel" content)
+              "Should convert AnotherLabel to Forth constant"))))))
+
+(test labels-to-forth-handles-hex-values
+  "Test that labels-to-forth correctly handles hexadecimal values"
+  (with-temp-files ((input-file (create-temp-file "HexLabel = $DEAD
+DecimalLabel = 1234"))
+                   (output-file (make-pathname :name "test-hex" :type "forth" :directory '(:absolute "tmp"))))
+    (finishes (labels-to-forth input-file output-file))
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          (is (search "$DEAD CONSTANT HexLabel" content)
+              "Should preserve hex format in Forth")
+          (is (search "$4D2 CONSTANT DecimalLabel" content)
+              "Should convert decimal to hex in Forth"))))))
+
+;; =============================================================================
+;; LABELS-TO-MAME TESTS
+;; =============================================================================
+
+(test labels-to-mame-converts-to-debug-format
+  "Test that labels-to-mame converts labels to MAME debug format"
+  (with-temp-files ((input-file (create-temp-file "Break = $1234
+MinorFault = $5678
+CurrentBank = $9ABC"))
+                   (output-file (make-pathname :name "test-mame" :type "mame" :directory '(:absolute "tmp"))))
+    (finishes (labels-to-mame input-file output-file))
+    (is-true (probe-file output-file) "MAME output file should be created")
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          (is (search "wp" content) "Should contain MAME watchpoint commands")
+          (is (search "$1234" content) "Should include converted addresses"))))))
+
+;; =============================================================================
+;; PREPEND-FUNDAMENTAL-MODE TESTS
+;; =============================================================================
+
+(test prepend-fundamental-mode-modifies-list-file
+  "Test that prepend-fundamental-mode adds fundamental mode entries"
+  (with-temp-files ((input-file (create-temp-file "test_entry = $1000
+another_entry = $2000"))
+                   (output-file (make-pathname :name "test-list" :type "txt" :directory '(:absolute "tmp"))))
+    (finishes (prepend-fundamental-mode input-file))
+    ;; The function modifies the input file in place
+    (is-true (probe-file input-file) "Input file should still exist")
+    (when (probe-file input-file)
+      (with-open-file (stream input-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          ;; Check that fundamental mode entries were added
+          (is (search "fundamental" (string-downcase content))
+              "Should add fundamental mode entries"))))))
+
+;; =============================================================================
+;; WRITE-ASSET-IDS TESTS
+;; =============================================================================
+
+(test write-asset-ids-generates-forth-and-asm-files
+  "Test that write-asset-ids generates both Forth and assembly output"
+  (let ((index-file (create-temp-file "test-asset-1.png 160A 8×8
+test-asset-2.png 320C 16×16"))
+        (forth-output (make-pathname :name "AssetIDs-test" :type "forth" :directory '(:absolute "tmp")))
+        (asm-output (make-pathname :name "AssetIDs-test" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist forth-output)
+    (unwind-protect
+        (progn
+          (finishes (write-asset-ids index-file))
+          (is-true (probe-file forth-output) "Forth output should be generated")
+          (is-true (probe-file asm-output) "Assembly output should be generated")
+          ;; Check content
+          (when (probe-file forth-output)
+            (with-open-file (stream forth-output)
+              (let ((content (make-string (file-length stream))))
+                (read-sequence content stream)
+                (is (search "CONSTANT" content) "Forth file should contain constants"))))
+          (when (probe-file asm-output)
+            (with-open-file (stream asm-output)
+              (let ((content (make-string (file-length stream))))
+                (read-sequence content stream)
+                (is (search ".equ" content) "Assembly file should contain .equ directives")))))
+      (cleanup-temp-file index-file)
+      (cleanup-temp-file forth-output)
+      (cleanup-temp-file asm-output))))
+
+;; =============================================================================
+;; WRITE-CHARACTER-IDS TESTS
+;; =============================================================================
+
+(test write-character-ids-generates-character-tables
+  "Test that write-character-ids generates character ID tables from spreadsheet"
+  (let ((spreadsheet-file (create-temp-file "TestCharacter,1,Description
+AnotherCharacter,2,Another Description"))
+        (forth-output (make-pathname :name "CharacterIDs-test" :type "forth" :directory '(:absolute "tmp")))
+        (asm-output (make-pathname :name "CharacterIDs-test" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist forth-output)
+    (unwind-protect
+        (progn
+          (finishes (write-character-ids spreadsheet-file))
+          (is-true (probe-file forth-output) "Forth output should be generated")
+          (is-true (probe-file asm-output) "Assembly output should be generated"))
+      (cleanup-temp-file spreadsheet-file)
+      (cleanup-temp-file forth-output)
+      (cleanup-temp-file asm-output))))
+
+;; =============================================================================
+;; WRITE-ACTOR-PROTOTYPES TESTS
+;; =============================================================================
+
+(test write-actor-prototypes-generates-prototype-data
+  "Test that write-actor-prototypes generates actor prototype assembly"
+  (let ((spreadsheet-file (create-temp-file "Character,HP,Attack,Defense
+TestChar,100,50,25"))
+        (output-file (make-pathname :name "ActorPrototypes-test" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    (unwind-protect
+        (progn
+          (finishes (write-actor-prototypes spreadsheet-file))
+          (is-true (probe-file output-file) "Output file should be generated")
+          (when (probe-file output-file)
+            (with-open-file (stream output-file)
+              (let ((content (make-string (file-length stream))))
+                (read-sequence content stream)
+                (is (search ".byte" content) "Should contain assembly .byte directives")))))
+      (cleanup-temp-file spreadsheet-file)
+      (cleanup-temp-file output-file))))
+
+;; =============================================================================
+;; COMPILATION FUNCTION TESTS (Basic - detailed tests already exist)
+;; =============================================================================
+
+(test compile-forth-basic-functionality
+  "Test that compile-forth can process basic Forth code"
+  (with-temp-files ((input-file (create-temp-file ": test-word 42 ;"))
+                   (output-file (make-pathname :name "test-forth" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    (finishes (compile-forth input-file output-file))
+    (is-true (probe-file output-file) "Forth compilation should produce output file")))
+
+(test compile-map-basic-functionality
+  "Test that compile-map can process basic TMX map files"
+  (with-temp-files ((input-file (create-temp-file "<?xml version=\"1.0\"?>
+<map version=\"1.0\" orientation=\"orthogonal\" width=\"10\" height=\"10\" tilewidth=\"8\" tileheight=\"8\">
+ <layer name=\"Tile Layer 1\" width=\"10\" height=\"10\">
+  <data encoding=\"csv\">1,1,1,1,1,1,1,1,1,1</data>
+ </layer>
+</map>"))
+                   (output-file (make-pathname :name "test-map" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    (finishes (compile-map input-file))
+    ;; compile-map generates files in Source/Generated/Maps/
+    (let ((expected-output (make-pathname :name "test-map" :type "s"
+                                         :directory '(:relative "Source" "Generated" "Maps"))))
+      (is-true (probe-file expected-output) "Map compilation should produce output file"))))
+
+;; =============================================================================
+;; ERROR HANDLING TESTS
+;; =============================================================================
+
+(test conversion-functions-handle-missing-files
+  "Test that conversion functions handle missing input files gracefully"
+  (let ((nonexistent-file (make-pathname :name "nonexistent" :type "txt" :directory '(:absolute "tmp"))))
+    (signals error (extract-tileset-palette nonexistent-file "/tmp/out.s"))
+    (signals error (labels-to-forth nonexistent-file "/tmp/out.forth"))
+    (signals error (labels-to-mame nonexistent-file "/tmp/out.mame"))))
+
+(test conversion-functions-validate-output-paths
+  "Test that conversion functions validate output file paths"
+  (let ((input-file (create-temp-file "test content"))
+        (invalid-output "/invalid/path/output.txt"))
+    (unwind-protect
+        (progn
+          ;; These should signal errors for invalid output paths
+          (signals error (extract-tileset-palette input-file invalid-output))
+          (signals error (labels-to-forth input-file invalid-output)))
+      (cleanup-temp-file input-file))))
+
+(defun run-conversion-tests ()
+  "Run all conversion function tests and return results"
+  (fiveam:run! 'conversion-tests))
 
 (defun run-interface-tests ()
   "Run all interface tests and return results"
