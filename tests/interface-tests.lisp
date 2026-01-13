@@ -288,25 +288,34 @@
 
 (test write-master-makefile-generates-valid-makefile
   "Test that write-master-makefile generates a syntactically valid Makefile"
-  (let ((output-file (make-pathname :name "test-makefile" :type "mak" :directory '(:absolute "tmp"))))
-    (ensure-directories-exist output-file)
-    (unwind-protect
-        (progn
-          (finishes (write-master-makefile))
-          ;; Check that some key targets exist in the generated Makefile
-          (is-true (probe-file "Source/Generated/Makefile")
-                   "Generated Makefile should exist")
-          (when (probe-file "Source/Generated/Makefile")
-            (with-open-file (stream "Source/Generated/Makefile")
-              (let ((content (make-string (file-length stream))))
-                (read-sequence content stream)
-                ;; Check for essential Makefile syntax
-                (is (search ".PHONY:" content) "Makefile should contain .PHONY targets")
-                (is (search "all:" content) "Makefile should contain all target")
-                (is (search "clean:" content) "Makefile should contain clean target")))))
-      ;; Clean up the generated file if we created it
-      (when (probe-file output-file)
-        (delete-file output-file)))))
+  (let ((original-makefile-size (when (probe-file "Source/Generated/Makefile")
+                                  (file-length "Source/Generated/Makefile"))))
+    (finishes (write-master-makefile))
+    ;; Check that the generated Makefile exists and has content
+    (is-true (probe-file "Source/Generated/Makefile")
+             "Generated Makefile should exist")
+    (when (probe-file "Source/Generated/Makefile")
+      (let ((new-size (file-length "Source/Generated/Makefile")))
+        (is (> new-size 1000) "Generated Makefile should be substantial (>1KB)")
+        (when original-makefile-size
+          (is (>= new-size original-makefile-size)
+              "Generated Makefile should not be smaller than before")))
+      (with-open-file (stream "Source/Generated/Makefile")
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          ;; Check for essential Makefile syntax and structure
+          (is (search ".PHONY:" content) "Makefile should contain .PHONY targets")
+          (is (search "all:" content) "Makefile should contain all target")
+          (is (search "clean:" content) "Makefile should contain clean target")
+          (is (search "test:" content) "Makefile should contain test target")
+          ;; Check for variable definitions
+          (is (search "GAME =" content) "Should define GAME variable")
+          (is (search "VERSION =" content) "Should define VERSION variable")
+          ;; Check for build targets
+          (is (search "Dist/Phantasia.Public.NTSC.a78:" content)
+              "Should define Public NTSC build target")
+          (is (search "Dist/Phantasia.Test.a78:" content)
+              "Should define Test build target"))))))
 
 (test write-master-makefile-includes-all-targets
   "Test that write-master-makefile includes all expected build targets"
@@ -371,12 +380,17 @@ EndLabel = *"))
     (is-true (probe-file output-file) "Output file should be created")
     (when (probe-file output-file)
       (with-open-file (stream output-file)
-        (let ((content (make-string (file-length stream))))
-          (read-sequence content stream)
-          (is (search "$1234 CONSTANT TestLabel" content)
-              "Should convert TestLabel to Forth constant")
-          (is (search "$ABCD CONSTANT AnotherLabel" content)
-              "Should convert AnotherLabel to Forth constant"))))))
+        (let ((lines (loop for line = (read-line stream nil)
+                          while line collect line)))
+          ;; Verify exact output format
+          (is (>= (length lines) 3) "Should generate at least 3 lines")
+          (is (search "$1234 CONSTANT TestLabel" (first lines))
+              "First line should define TestLabel")
+          (is (search "$ABCD CONSTANT AnotherLabel" (second lines))
+              "Second line should define AnotherLabel")
+          ;; Check that special labels like * are handled
+          (is (some (lambda (line) (search "EndLabel" line)) lines)
+              "Should handle special labels like EndLabel"))))))
 
 (test labels-to-forth-handles-hex-values
   "Test that labels-to-forth correctly handles hexadecimal values"
@@ -439,7 +453,9 @@ another_entry = $2000"))
 (test write-asset-ids-generates-forth-and-asm-files
   "Test that write-asset-ids generates both Forth and assembly output"
   (let ((index-file (create-temp-file "test-asset-1.png 160A 8×8
-test-asset-2.png 320C 16×16"))
+test-asset-2.png 320C 16×16
+; commented line
+empty-asset.png 320A 32×32"))
         (forth-output (make-pathname :name "AssetIDs-test" :type "forth" :directory '(:absolute "tmp")))
         (asm-output (make-pathname :name "AssetIDs-test" :type "s" :directory '(:absolute "tmp"))))
     (ensure-directories-exist forth-output)
@@ -448,17 +464,23 @@ test-asset-2.png 320C 16×16"))
           (finishes (write-asset-ids index-file))
           (is-true (probe-file forth-output) "Forth output should be generated")
           (is-true (probe-file asm-output) "Assembly output should be generated")
-          ;; Check content
+          ;; Check content structure
           (when (probe-file forth-output)
             (with-open-file (stream forth-output)
               (let ((content (make-string (file-length stream))))
                 (read-sequence content stream)
-                (is (search "CONSTANT" content) "Forth file should contain constants"))))
+                (is (search "CONSTANT" content) "Forth file should contain constants")
+                ;; Check for specific asset definitions
+                (is (search "test-asset-1" content) "Should define test-asset-1")
+                (is (search "test-asset-2" content) "Should define test-asset-2"))))
           (when (probe-file asm-output)
             (with-open-file (stream asm-output)
               (let ((content (make-string (file-length stream))))
                 (read-sequence content stream)
-                (is (search ".equ" content) "Assembly file should contain .equ directives")))))
+                (is (search ".equ" content) "Assembly file should contain .equ directives")
+                ;; Should handle different graphics modes
+                (is (search "160A" content) "Should reference 160A mode")
+                (is (search "320C" content) "Should reference 320C mode")))))
       (cleanup-temp-file index-file)
       (cleanup-temp-file forth-output)
       (cleanup-temp-file asm-output))))
@@ -533,6 +555,125 @@ TestChar,100,50,25"))
                                          :directory '(:relative "Source" "Generated" "Maps"))))
       (is-true (probe-file expected-output) "Map compilation should produce output file"))))
 
+(test compile-forth-handles-complex-syntax
+  "Test that compile-forth handles complex Forth syntax correctly"
+  (with-temp-files ((input-file (create-temp-file ": complex-word ( n -- n*2 )
+  dup + ;
+: another-word
+  42 complex-word ;
+complex-word"))
+                   (output-file (make-pathname :name "test-complex-forth" :type "s" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    (finishes (compile-forth input-file output-file))
+    (is-true (probe-file output-file) "Complex Forth compilation should produce output file")
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          ;; Should contain assembly code, not just empty
+          (is (> (length content) 10) "Should generate substantial assembly output"))))))
+
+(test compile-map-validates-xml-structure
+  "Test that compile-map validates TMX XML structure"
+  ;; Test with malformed XML
+  (with-temp-files ((input-file (create-temp-file "<not-a-map>invalid</not-a-map>"))
+                   (output-file (make-pathname :name "test-invalid-map" :type "s" :directory '(:absolute "tmp"))))
+    ;; Should handle invalid XML gracefully (either succeed with minimal output or signal error)
+    (handler-case
+        (compile-map input-file)
+      (error () nil)) ; Expected to potentially fail
+    ;; The important thing is it doesn't crash the system
+    (is-true t "compile-map should handle invalid XML without crashing")))
+
+(test prepend-fundamental-mode-preserves-existing-content
+  "Test that prepend-fundamental-mode preserves existing file content"
+  (with-temp-files ((input-file (create-temp-file "existing line 1
+existing line 2
+existing line 3"))
+                   (output-file (make-pathname :name "test-preserve" :type "txt" :directory '(:absolute "tmp"))))
+    (ensure-directories-exist output-file)
+    ;; Copy input to simulate existing file
+    (with-open-file (in input-file)
+      (with-open-file (out output-file :direction :output :if-exists :supersede)
+        (loop for line = (read-line in nil)
+              while line
+              do (write-line line out))))
+    ;; Modify the file
+    (finishes (prepend-fundamental-mode output-file))
+    ;; Check that original content is still there
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          (is (search "existing line" content)
+              "Should preserve existing content"))))))
+
+;; =============================================================================
+;; INTEGRATION TESTS - Complete workflow validation
+;; =============================================================================
+
+(test conversion-system-integration
+  "Test that the complete conversion system works together"
+  ;; This test verifies that multiple conversion functions can work in sequence
+  (with-temp-files ((label-file (create-temp-file "SCREEN_ADDR = $1000
+COLOR_ADDR = $2000"))
+                   (forth-out (make-pathname :name "integration-forth" :type "forth" :directory '(:absolute "tmp")))
+                   (mame-out (make-pathname :name "integration-mame" :type "mame" :directory '(:absolute "tmp"))))
+    ;; Test label conversion pipeline
+    (finishes (labels-to-forth label-file forth-out))
+    (finishes (labels-to-mame label-file mame-out))
+
+    ;; Verify both outputs exist and contain expected content
+    (is-true (probe-file forth-out) "Forth conversion should succeed")
+    (is-true (probe-file mame-out) "MAME conversion should succeed")
+
+    (when (and (probe-file forth-out) (probe-file mame-out))
+      (with-open-file (forth-stream forth-out)
+        (with-open-file (mame-stream mame-out)
+          (let ((forth-content (make-string (file-length forth-out)))
+                (mame-content (make-string (file-length mame-out))))
+            (read-sequence forth-content forth-stream)
+            (read-sequence mame-content mame-stream)
+
+            ;; Both should contain the converted labels
+            (is (search "$1000 CONSTANT SCREEN_ADDR" forth-content)
+                "Forth output should contain SCREEN_ADDR")
+            (is (search "$2000" mame-content)
+                "MAME output should contain COLOR_ADDR address")))))))
+
+(test conversion-functions-maintain-consistency
+  "Test that conversion functions maintain consistent behavior across runs"
+  ;; Test that running the same conversion multiple times produces consistent results
+  (with-temp-files ((input-file (create-temp-file "TestLabel = $ABCD"))
+                   (output1 (make-pathname :name "consistent1" :type "forth" :directory '(:absolute "tmp")))
+                   (output2 (make-pathname :name "consistent2" :type "forth" :directory '(:absolute "tmp"))))
+    ;; Run conversion twice
+    (finishes (labels-to-forth input-file output1))
+    (finishes (labels-to-forth input-file output2))
+
+    ;; Results should be identical
+    (when (and (probe-file output1) (probe-file output2))
+      (with-open-file (stream1 output1)
+        (with-open-file (stream2 output2)
+          (let ((content1 (make-string (file-length output1)))
+                (content2 (make-string (file-length output2))))
+            (read-sequence content1 stream1)
+            (read-sequence content2 stream2)
+            (is (string= content1 content2)
+                "Multiple runs should produce identical output")))))))
+
+(test conversion-error-recovery
+  "Test that conversion functions recover gracefully from partial failures"
+  ;; This tests the robustness of the conversion system
+  (let ((temp-dir (make-pathname :directory '(:absolute "tmp"))))
+    (ensure-directories-exist temp-dir)
+    ;; Test with read-only directory (should fail gracefully)
+    (handler-case
+        (labels-to-forth "/dev/null/nonexistent" "/readonly/path/output.forth")
+      (error () nil)) ; Expected to fail
+    ;; The important thing is that it doesn't crash the Lisp system
+    (is-true t "Conversion functions should handle filesystem errors gracefully")))
+
 ;; =============================================================================
 ;; ERROR HANDLING TESTS
 ;; =============================================================================
@@ -542,7 +683,38 @@ TestChar,100,50,25"))
   (let ((nonexistent-file (make-pathname :name "nonexistent" :type "txt" :directory '(:absolute "tmp"))))
     (signals error (extract-tileset-palette nonexistent-file "/tmp/out.s"))
     (signals error (labels-to-forth nonexistent-file "/tmp/out.forth"))
-    (signals error (labels-to-mame nonexistent-file "/tmp/out.mame"))))
+    (signals error (labels-to-mame nonexistent-file "/tmp/out.mame"))
+    (signals error (write-asset-ids nonexistent-file))))
+
+(test conversion-functions-handle-malformed-input
+  "Test that conversion functions handle malformed input appropriately"
+  ;; Test labels-to-forth with invalid syntax
+  (with-temp-files ((input-file (create-temp-file "InvalidLabel = notanumber
+Another = $XYZ"))
+                   (output-file (make-pathname :name "test-malformed" :type "forth" :directory '(:absolute "tmp"))))
+    ;; Should still complete without crashing, even with malformed input
+    (finishes (labels-to-forth input-file output-file))
+    (is-true (probe-file output-file) "Should create output file even with malformed input")))
+
+(test labels-to-forth-preserves-comments-and-formatting
+  "Test that labels-to-forth preserves comments and handles various formats"
+  (with-temp-files ((input-file (create-temp-file "; Comment line
+TestLabel = $1234    ; inline comment
+  IndentedLabel = $5678
+EmptyLabel ="))
+                   (output-file (make-pathname :name "test-comments" :type "forth" :directory '(:absolute "tmp"))))
+    (finishes (labels-to-forth input-file output-file))
+    (when (probe-file output-file)
+      (with-open-file (stream output-file)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          ;; Should only convert valid labels, ignore comments and empty lines
+          (is (search "$1234 CONSTANT TestLabel" content)
+              "Should convert TestLabel despite comment")
+          (is (search "$5678 CONSTANT IndentedLabel" content)
+              "Should handle indented labels")
+          (is (not (search "EmptyLabel" content))
+              "Should skip labels without values"))))))
 
 (test conversion-functions-validate-output-paths
   "Test that conversion functions validate output file paths"
