@@ -578,7 +578,7 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
   (declare (ignore distortion bits))
-  (multiple-value-bind (value error) 
+  (multiple-value-bind (value error)
       (frequency->pokey (freq<-midi-key midi-note-number))
     #+ () (format *trace-output* "~&For ~a, ~d × ~d then ~d × ~d" (midi->note-name midi-note-number)
                   value (ash (logand #xf0 (apply #'fraction-nybbles (simplify-to-rational error))) -4)
@@ -961,7 +961,7 @@ Gathered text:~{~% • ~a~}"
 (defun pokey-distortion-code (distortion)
   (ecase distortion
     (:10 10) (:2 2) (:12a 12) (:12b 13) (:8 8) (:4a 4) (:4b 5))
-  
+
   (parse-integer (symbol-name distortion) :junk-allowed t))
 
 (defun assigned-song-bank-and-title (assignment)
@@ -1085,6 +1085,9 @@ Music:~:*
     (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
     (ecase *machine*
       (2600 (compile-music-2600 source-out-name in-file-name))
+      (5200 (compile-music-7800 source-out-name in-file-name
+                                (make-keyword (string-upcase sound-chip))
+                                (make-keyword (string-upcase output-coding))))
       (7800 (compile-music-7800 source-out-name in-file-name
                                 (make-keyword (string-upcase sound-chip))
                                 (make-keyword (string-upcase output-coding)))))))
@@ -1100,7 +1103,7 @@ Music:~:*
                       #+ () (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
                       (setf (aref keyboard key) (list time velocity)))
                      ((and key (zerop velocity) (aref keyboard key))
-                      (let ((d (- time (first (aref keyboard key))))) 
+                      (let ((d (- time (first (aref keyboard key)))))
                         #+ () (format *trace-output* "~& end ~a at ~d (duration ~d)" (midi->note-name key) time d)
                         (destructuring-bind (start-time first-velocity)
                             (aref keyboard key)
@@ -1328,7 +1331,7 @@ Music:~:*
             decay-duration
             sustain-duration
             release-duration
-            (floor (* 100 (hokey-note-volume note))))  
+            (floor (* 100 (hokey-note-volume note))))
     (if (< sustain-duration 1)
         (let ((quieter (quieter-note note)))
           (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"

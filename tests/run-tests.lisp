@@ -1,22 +1,16 @@
+#!/usr/bin/env sbcl --script
+
 ;; Comprehensive test runner for Skyline-Tool
 ;; Runs all test suites to ensure functionality
-;; Usage: sbcl --script run-tests.lisp
 
 (require :asdf)
 
 (load (merge-pathnames "../setup.lisp" *load-pathname*))
 
 (ql:quickload :fiveam)
-(ql:quickload :skyline-tool)
-
-;; Load test files with proper path handling
-(let ((test-dir (make-pathname :name nil :type nil :defaults *load-pathname*)))
-  (load (merge-pathnames "action-tests.lisp" test-dir))
-  (load (merge-pathnames "text-transcription-tests.lisp" test-dir))
-  (load (merge-pathnames "animation-preview-tests.lisp" test-dir))
-  (load (merge-pathnames "graphics-tests.lisp" test-dir))
-  (load (merge-pathnames "build-tests.lisp" test-dir))
-  (load (merge-pathnames "interface-tests.lisp" test-dir)))
+;; Load the test ASD file
+(asdf:load-asd (merge-pathnames "../skyline-tool.asd" *load-pathname*) :name :skyline-tool/test)
+(ql:quickload :skyline-tool/test)
 
 (defparameter *test-results* nil)
 
@@ -25,25 +19,46 @@
 (uiop:chdir (uiop:pathname-parent-directory-pathname
               (asdf:system-source-directory :skyline-tool)))
 
-;; Run comprehensive test suite
-(format t "~%Test files loaded successfully.~%")
-(format t "~%Running comprehensive FiveAM test suite...~%")
+;; Run all test suites
+(format t "~%Running action tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/test:action-tests)))
+  (push (cons :action result) *test-results*))
 
-;; Note: FiveAM test execution has compatibility issues in batch mode
-;; All test suites compile and load successfully, demonstrating functional correctness
-;; Individual test functions can be verified by loading and calling them manually
+(format t "~%Running animation preview tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/test:animation-preview-tests)))
+  (push (cons :animation-preview result) *test-results*))
 
-(format t "~%Comprehensive test suites loaded successfully:~%")
-(format t "  ✓ action-tests (character actions)~%")
-(format t "  ✓ graphics-tests (image processing and conversion)~%")
-(format t "  ✓ build-tests (build system validation)~%")
-(format t "  ✓ interface-tests (CLI functionality)~%")
-(format t "  ✓ conversion-tests (Makefile conversion functions)~%")
+(format t "~%Running graphics tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/graphics-test:graphics-tests)))
+  (push (cons :graphics result) *test-results*))
 
-(format t "~%✓ All Lisp tests PASSED (compilation and loading verification)~%")
+(format t "~%Running build regression tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/build-test:build-tests)))
+  (push (cons :build result) *test-results*))
 
-(format t "6502 tests are in Source/Tests/DisplayListFunctionalityTest.s~%")
+(format t "~%Running interface tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/interface-test:interface-tests)))
+  (push (cons :interface result) *test-results*))
 
-;; Final summary
-(format t "~%Test Summary: Comprehensive Lisp testing completed~%")
-(format t "6502 unit tests available in Source/Tests/DisplayListFunctionalityTest.s~%")
+
+(format t "~%Running 5200-specific tests...~%")
+(let ((result (fiveam:run! 'skyline-tool/5200-test:5200-tests)))
+  (push (cons :5200 result) *test-results*))
+
+;; Check results
+(let ((all-passed t))
+  (dolist (result *test-results*)
+    (let ((suite-name (car result))
+          (suite-result (cdr result)))
+      (format t "~%~:(~A~) tests: ~A"
+              suite-name
+              (if suite-result "PASSED" "FAILED"))
+      (unless suite-result
+        (setf all-passed nil))))
+  (format t "~%~%Test Summary: ~A suites run~%"
+          (length *test-results*))
+  (if all-passed
+      (format t "All tests PASSED~%")
+      (progn
+        (format t "Some tests FAILED - see output above~%")
+        (sb-ext:quit :unix-status 1))))

@@ -29,10 +29,15 @@
            #:allocate-assets
            #:atari800-label-file
            #:blob-rip-7800
+           #:blob-rip-7800-320ac
+           #:blob-rip-5200-tile
+           #:blob-rip-5200-pmg
+           #:detect-5200-tile-mode
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
            #:compile-art-7800
+           #:compile-art-5200
            #:compile-code
            #:compile-enemies
            #:compile-font-command
@@ -91,6 +96,10 @@
   '#.(json:decode-json-from-source
       (asdf:system-relative-pathname
        :skyline-tool (make-pathname :directory '(:relative :up) :name "Project" :type "json" ))))
+
+(defun project-root ()
+  "Return the project root directory as a pathname"
+  (asdf:system-relative-pathname :skyline-tool #p"../"))
 
 (defparameter *game-title* (cdr (assoc :*game *project.json*)))
 (defparameter *part-number*  (cdr (assoc :*part-number *project.json*)))

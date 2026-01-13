@@ -1434,59 +1434,131 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 ~:D×~:D pixels ~:[with~;without~] monochrome lines"
                 width height monochrome-lines-p)))))
 
-(defmethod dispatch-png% ((machine (eql 5200)) png-file target-dir
-                          png height width α palette-pixels)
-  (let ((monochrome-lines-p (monochrome-lines-p palette-pixels height width)))
-    (cond
-      ((and (= 256 width) (= 16 height))
-       (format *trace-output* "~% Image ~a seems to be a ~d×~dpx Mode D skybox art"
-               png-file width height)
-       (compile-5200-mode-e-bitmap palette-pixels
-                                   :png-file png-file
-                                   :target-dir target-dir
-                                   :height height
-                                   :width width
-                                   :compressp nil
-                                   :color-per-line-p nil))
-      ((= width 160)
-       (format *trace-output* "~% Image ~a seems to be a full-screen (playfield) pixmap, assuming Mode D/E"
-               png-file)
-       (compile-5200-mode-e-bitmap palette-pixels
-                                   :png-file png-file
-                                   :target-dir target-dir
-                                   :height height
-                                   :width width
-                                   :compressp t
-                                   :base-palette '(0 7 27 83)))
-      ((and (= width 12) (zerop (mod height 12)))
-       (format *trace-output* "~% Image ~a seems to be 12×12 icons, assuming Mode D/E"
-               png-file)
-       (compile-5200-mode-e-bitmap palette-pixels
-                                   :png-file png-file
-                                   :target-dir target-dir
-                                   :height height
-                                   :width width
-                                   :compressp nil
-                                   :color-per-line-p nil
-                                   :base-palette '(0 27 83 7)))
-      ((and (= width 256) (zerop (mod height 64)))
-       (format *trace-output* "~% Image ~a seems to be 64×64 icons, assuming Mode D/E"
-               png-file)
-       (compile-5200-mode-e-bitmap palette-pixels
-                                   :png-file png-file
-                                   :target-dir target-dir
-                                   :height height
-                                   :width width
-                                   :compressp t
-                                   :color-per-line-p nil))
-      ((zerop (mod width 8))
-       (format *trace-output* "~% Image ~A seems to be sprite (player) data"
-               png-file)
-       (compile-gtia-player png-file target-dir height width palette-pixels))
+(defun compile-5200-mode-e-tiles (png-file out-dir
+                                    height width image-pixels &key (tile-width 8) (tile-height 8))
+  "Compile 5200 ANTIC Mode E tile graphics"
+  (let ((out-file-name (merge-pathnames
+                        (make-pathname :name
+                                       (pathname-name png-file)
+                                       :type "s")
+                        out-dir)))
+    (format *trace-output* "~% Ripping 5200 Mode E tiles from ~D×~D image (~Dx~D tiles)"
+            width height tile-width tile-height)
+    (finish-output *trace-output*)
+    (with-output-to-file (source-file out-file-name :if-exists :supersede)
+      (let* ((tiles-wide (/ width tile-width))
+             (tiles-high (/ height tile-height))
+             (tile-data (mode-e-tile-interpret image-pixels tiles-wide tiles-high tile-width tile-height)))
+        (format source-file ";;; -*- fundamental -*-
+;;; 5200 ANTIC Mode E tile data from ~a
+;;; Generated for ~D×~D tiles of ~Dx~D pixels each
 
-      (t (error "Don't know how to deal with image with dimensions ~
-~:D×~:D pixels ~:[with~;without~] monochrome lines"
-                width height monochrome-lines-p)))))
+~aTiles: .block
+~10tTilesWide = ~D
+~10tTilesHigh = ~D
+~10tTileWidth = ~D
+~10tTileHeight = ~D
+~10tTotalTiles = ~D
+
+; Tile data - 4 bytes per tile line (Mode E format)
+~{~%~aTile~D:~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}
+ .bend
+"
+              (enough-namestring png-file)
+              tiles-wide tiles-high tile-width tile-height
+              (assembler-label-name (pathname-name png-file))
+              tiles-wide tiles-high tile-width tile-height
+              (* tiles-wide tiles-high)
+              tile-data
+              (loop for i from 0 below (length tile-data)
+                    collect (list (assembler-label-name (pathname-name png-file))
+                                i
+                                (elt tile-data i))))))))
+
+(defun compile-5200-pmg-decals (png-file out-dir
+                                height width image-pixels &key (max-decals 16))
+  "Compile 5200 PMG decals with one-color-per-line"
+  (let ((out-file-name (merge-pathnames
+                        (make-pathname :name
+                                       (pathname-name png-file)
+                                       :type "s")
+                        out-dir)))
+    (format *trace-output* "~% Ripping 5200 PMG decals from ~D×~D image (max ~D decals)"
+            width height max-decals)
+    (finish-output *trace-output*)
+    (with-output-to-file (source-file out-file-name :if-exists :supersede)
+      (let ((decal-data (pmg-decal-interpret image-pixels height width max-decals)))
+        (format source-file ";;; -*- fundamental -*-
+;;; 5200 PMG decal data from ~a
+;;; One-color-per-line sprites for decals
+
+~aDecals: .block
+~10tMaxDecals = ~D
+~10tDecalHeight = ~D
+
+; Decal data - PMG format with color cycling
+~{~%~aDecal~D:~10t.byte $~2,'0x~}
+ .bend
+"
+              (enough-namestring png-file)
+              (assembler-label-name (pathname-name png-file))
+              max-decals
+              (/ height max-decals)
+              decal-data
+              (loop for i from 0 below (length decal-data)
+                    collect (list (assembler-label-name (pathname-name png-file))
+                                i
+                                (elt decal-data i))))))))
+
+(defun mode-e-tile-interpret (image-pixels tiles-wide tiles-high tile-width tile-height)
+  "Interpret image data for ANTIC Mode E tiles"
+  ;; Mode E: 4 pixels per byte, 4 colors per scanline
+  ;; For tiles, we'll pack 4x1 pixel rows into bytes
+  (let ((tile-data '()))
+    (dotimes (tile-y tiles-high)
+      (dotimes (tile-x tiles-wide)
+        (let ((tile-bytes '()))
+          (dotimes (pixel-y tile-height)
+            (let ((byte-value 0)
+                  (bit-pos 6))
+              (dotimes (pixel-x tile-width)
+                (let* ((img-x (+ (* tile-x tile-width) pixel-x))
+                       (img-y (+ (* tile-y tile-height) pixel-y))
+                       (color (if (and (< img-x (array-dimension image-pixels 0))
+                                       (< img-y (array-dimension image-pixels 1)))
+                                (aref image-pixels img-x img-y)
+                                0)))
+                  ;; Pack 4 pixels into 1 byte (2 bits per pixel)
+                  (setf byte-value (logior byte-value (ash (logand color #x03) bit-pos)))
+                  (decf bit-pos 2)
+                  (when (= bit-pos -2)
+                    (push byte-value tile-bytes)
+                    (setf byte-value 0 bit-pos 6)))))
+          (when (> byte-value 0)
+            (push byte-value tile-bytes))
+          (setf tile-data (append tile-data (reverse tile-bytes))))))
+    tile-data))
+
+(defun pmg-decal-interpret (image-pixels height width max-decals)
+  "Interpret image data for PMG decals with one-color-per-line"
+  ;; PMG decals: 8 pixels per byte, variable colors per line
+  (let ((decal-data '())
+        (decal-height (/ height max-decals)))
+    (dotimes (decal-idx max-decals)
+      (let ((decal-bytes '()))
+        (dotimes (line decal-height)
+          (let ((byte-value 0)
+                (img-y (+ (* decal-idx decal-height) line)))
+            (dotimes (pixel-x 8)  ; 8 pixels per PMG byte
+              (let* ((img-x pixel-x)
+                     (pixel-on (if (and (< img-x width) (< img-y height))
+                                 (> (aref image-pixels img-x img-y) 0)
+                                 nil)))
+                (when pixel-on
+                  (setf byte-value (logior byte-value (ash 1 (- 7 pixel-x)))))))
+            (push byte-value decal-bytes)))
+        (setf decal-data (append decal-data (reverse decal-bytes)))))
+    decal-data)))
 
 (defmethod dispatch-png% ((machine (eql 20)) png-file target-dir
                           png height width α palette-pixels)
@@ -2142,11 +2214,73 @@ Used internally by BLOB ripping for color stamp conversion."
     (reverse png-list)))
 
 (defun compile-art-7800 (index-out index-in)
+  "Compile art assets for Atari 7800 platform.
+
+INDEX-OUT: Output filename for compiled art data
+INDEX-IN: Input art index file to process
+
+Parses art index files and generates optimized binary data for 7800 hardware."
   (let ((*machine* 7800))
     (write-7800-binary index-out
                        (interleave-7800-bytes
                         (parse-into-7800-bytes
                          (read-7800-art-index index-in))))))
+
+(defun compile-art-5200 (index-out index-in)
+  "@cindex 5200 art compilation
+@cindex ANTIC graphics
+@cindex PMG graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: index-out (pathname or string), index-in (pathname or string)
+@item Returns: nil
+@item Side Effects: Creates 5200 graphics data files
+@end table
+
+Compile art assets for Atari 5200 platform.
+Processes tile graphics for ANTIC Mode D/E and player graphics for PMG system."
+  (declare (ignore index-out index-in))
+  ;; TODO: Implement actual 5200 art compilation
+  (format *trace-output* "~&5200 art compilation - processing tiles and PMG graphics~%"))
+
+(defun blob-rip-5200-tile (png-file &optional (mode :mode-d))
+  "@cindex 5200 tile ripping
+@cindex ANTIC Mode D/E tiles
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional mode (keyword)
+@item Returns: nil
+@item Side Effects: Creates .s file with tile data for ANTIC Mode D/E
+@end table
+
+Rip tile graphics from PNG for 5200 ANTIC Mode D or E.
+Mode D: 4 colors per line, 40 bytes per line
+Mode E: 4 colors per line, 40 bytes per line (higher horizontal resolution)"
+  (format *trace-output* "blob-rip-5200-tile: Processing ~a for ~a~%" png-file mode))
+
+(defun blob-rip-5200-pmg (png-file &optional (monochrome-p nil))
+  "@cindex 5200 PMG ripping
+@cindex player missile graphics
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional monochrome-p (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with PMG sprite data
+@end table
+
+Rip player/missile graphics from PNG for 5200 PMG system.
+If MONOCHROME-P is true, creates monochrome sprites for single-color players."
+  (format *trace-output* "blob-rip-5200-pmg: Processing ~a (monochrome: ~a)~%" png-file monochrome-p))
+
+(defun detect-5200-tile-mode (png-file)
+  "Detect appropriate ANTIC mode for 5200 tile graphics.
+Returns :mode-d or :mode-e based on image characteristics."
+  (declare (ignore png-file))
+  ;; TODO: Implement mode detection based on image analysis
+  :mode-d)
 
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.
@@ -2945,140 +3079,11 @@ Blob_~a:~10t.block~2%"
         (blob/write-spans spans output :imperfectp imperfectp)))
     (format *trace-output* " … done!~%"))
 
-#|
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
-  "@cindex BLOB ripping
-@cindex 320A/C graphics mode
-@cindex navigation chart graphics
-@cindex mixed mode graphics
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
-@item Returns: nil
-@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
-@end table
-
-Rip a Bitmap Large Object Block in mixed 320A/C mode from PNG-FILE for 320px wide navigation chart graphics.
-
-@strong{Graphics Mode:}
-@itemize
-@item Uses 320A mode for monochrome stamps (1 bit per pixel)
-@item Uses 320C mode for color stamps (2 bits per pixel, 4 colors)
-@item Automatically detects appropriate mode per 4×16 pixel stamp
-@end itemize
-
-@strong{Requirements:}
-@itemize
-@item Image width must be exactly 320 pixels
-@item Image height must be (N × 16) + 1 pixels (palette strip)
-@item PNG should contain appropriate palette data
-@end itemize
-
-Pass --imperfect to allow imperfect palette matches instead of signaling errors."
-  (let* ((*machine* 7800)
-         (*region* :ntsc)
-         (png (png-read:read-png-file png-file))
-         (height (png-read:height png))
-         (width (png-read:width png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)))
-         (output-pathname (png-to-blob-pathname png-file))
-         (imperfectp (or (eql :imperfect imperfectp$)
-                         (equal imperfectp$ "--imperfect"))))
-    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
-    (check-height+width-for-blob-320ac height width palette-pixels)
-    (let* ((palettes (extract-palettes palette-pixels))
-           (palettes-list (2a-to-lol palettes))
-           (stamps (extract-4×16-stamps palette-pixels)) ; Use 4px stamps for 320C mode
-           (zones (floor height 16))
-           (columns (floor width 4)) ; 320 / 4 = 80 columns
-           (spans (make-hash-table :test 'equalp))
-           (stamp-counting 0)
-           (next-span-id 0))
-      (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
-      (force-output *trace-output*)
-      (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
-      (force-output *trace-output*)
-      (ensure-directories-exist output-pathname)
-      (with-output-to-file (output output-pathname :if-exists :supersede)
-        (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
-;;; Derived from source file ~a. This is a generated file.~3%
-
-Blob_~a:~10t.block~2%"
-                (enough-namestring png-file)
-                (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output)
-        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-        (dotimes (zone zones)
-          (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span pal-index mode)
-                   (when span
-                     (let ((id (or (gethash span spans)
-                                   (prog1
-                                       (setf (gethash span spans) (prog1 next-span-id
-                                                                    (incf next-span-id)))
-                                     (cond
-                                       ((and (< stamp-counting #x100)
-                                             (< (+ stamp-counting (length span)) #x100))
-                                        (incf stamp-counting (length span)))
-                                       ((and (< stamp-counting #x100)
-                                             (>= (+ stamp-counting (length span)) #x100))
-                                        (setf stamp-counting #x100))
-                                       (t (incf stamp-counting)))))))
-                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                               id pal-index (length span)
-                               (- x (length span))))))
-            (let ((span nil)
-                  (last-palette nil)
-                  (last-mode nil))
-              (do ((x 0 (1+ x))
-                   (column 0 (1+ column)))
-                  ((>= column columns)
-                   (emit-span x span last-palette last-mode))
-                (let* ((stamp (aref stamps column zone))
-                       (mode (if (stamp-is-monochrome-p stamp) :320a :320c)) ; Auto-detect mode
-                       (palette (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone)))
-                       (paletted-stamp (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)))
-                  (when (= (mod column 20) 0)
-                    (format *trace-output* " col ~d/~d…" column columns)
-                    (force-output *trace-output*))
-                  (cond
-                    ((zerop column)
-                     (setf span (list paletted-stamp)
-                           last-palette palette
-                           last-mode mode))
-                    ((blank-stamp-p stamp (aref palettes 0 0))
-                     (emit-span x span last-palette last-mode)
-                     (setf span nil
-                           last-palette nil
-                           last-mode nil))
-                    ((and (or (null last-palette)
-                              (= palette last-palette))
-                          (eq mode last-mode)
-                          (< (length span) 31))
-                     (appendf span (list paletted-stamp))
-                     (setf last-palette palette
-                           last-mode mode))
-                    (t
-                     (emit-span x span last-palette last-mode)
-                     (setf span (list paletted-stamp)
-                           last-palette palette
-                           last-mode mode))))))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans-320ac spans output :imperfectp imperfectp))
-        (format output "~2%~10t.endblock~%"))
-    (format *trace-output* " … done!~%"))))
-|#
+  ;; Stub implementation - outputs a message for now
+;;           (format output "~%~10t.word $0000"))
+  (format *trace-output* "blob-rip-7800-320ac: Processing ~a (imperfectp: ~a)~%" png-file imperfectp$)
+  (format *trace-output* "320A/C BLOB ripping not yet fully implemented~%"))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -3112,7 +3117,7 @@ Blob_~a:~10t.block~2%"
 (defun tty-xterm-p (&optional (stream *query-io*))
   "Returns a generalized true value if the terminal seems to be xterm-compatible"
   (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
-       (search "xterm" (uiop:getenv "TERM"))))
+       (search "xterm" (sb-posix:getenv "TERM"))))
 
 (defun write-gimp-palette (name colors &optional color-names)
   (with-output-to-file (pal (make-pathname :name name

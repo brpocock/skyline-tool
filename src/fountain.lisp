@@ -1866,7 +1866,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
   (tagbody
    top
-     (with-input-from-file (speakjet.dic #p"Source/Tables/SpeakJet.dic")
+     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (project-root)))
        (assert (equalp "[words]" (read-line speakjet.dic nil nil)) ()
                "SpeakJet.dic must begin with [words] magic cookie")
 
@@ -3169,7 +3169,7 @@ FadeColor~:(~a~) FadingTarget C!"
                 (reload-script ()
                   :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
                   (go top))
-                (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
+                (reload-npc-stats () :report "Reload NPC stats"
                   (load-npc-stats)
                   (go top))))))
     (unless victoryp
@@ -3210,7 +3210,7 @@ FadeColor~:(~a~) FadingTarget C!"
                  (member name (getf npc :nicks) :test #'string-equal))
           do (return npc)))
 
-(defun load-npc-stats (&optional (pathname "Source/Tables/NPCStats.ods"))
+(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root))))
   "Load the NPC stats table from PATHNAME"
   (format *trace-output* "~&Reading NPC stats from “~a” …"
           (enough-namestring pathname))
@@ -3228,7 +3228,7 @@ FadeColor~:(~a~) FadingTarget C!"
             (length *npc-stats*))
     *npc-stats*))
 
-(defun load-boats (&optional (pathname "Source/Tables/Boats.ods"))
+(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (project-root))))
   "Load the registry of boats from PATHNAME"
   (unless (and *boat-ids* *boat-classes*)
     (format *trace-output* "~&Reading boats from “~a” …" (enough-namestring pathname))
@@ -3484,8 +3484,8 @@ ActorClassSize:
 (defun write-actor-prototypes ()
   "Write the prototype data for NPCs to ActorPrototypes.s"
   (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/ActorPrototypes.s"
+  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
+  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/ActorPrototypes.s" (project-root))
                                           :if-exists :supersede)
     (print-actor-prototypes))
   (format *trace-output* " …done."))
@@ -3493,8 +3493,8 @@ ActorClassSize:
 (defun write-character-ids ()
   "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
   (format *trace-output* "~&Writing CharacterIDs.s …")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.s"
+  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
+  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/CharacterIDs.s" (project-root))
                                           :if-exists :supersede)
     (format t "~&;;; Generated character ID data from NPC Stats file~2%")
     (dolist (actor (load-npc-stats))
@@ -3513,8 +3513,8 @@ ActorClassSize:
     (format *trace-output* " …done."))
 
   (format *trace-output* "~&Writing CharacterIDs.forth …")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.forth"
+  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
+  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/CharacterIDs.forth" (project-root))
                                           :if-exists :supersede)
     (format t "~& ( Generated character ID data from NPC Stats file )~2%")
     (dolist (actor (load-npc-stats))
