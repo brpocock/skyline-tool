@@ -12,7 +12,6 @@
 (defvar *screen-ticker* 0)
 
 ;; Minifont punctuation characters for text processing
-(defparameter +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0")
 
 ;; RLE compression parameters
 (defparameter *rle-fast-mode* 1)

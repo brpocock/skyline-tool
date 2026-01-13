@@ -1214,3 +1214,5 @@ then use $f9 (512kiB) banking."
                   (format t "~&~4,'0x ~a" (parse-integer value) label))
                  (t (format *error-output* "~&Can't understand “~a” in line ~d" line line-number))))))
   (fresh-line *error-output*))
+;; Minifont punctuation characters for text processing
+(defparameter +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0")
