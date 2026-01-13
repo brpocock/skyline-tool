@@ -150,8 +150,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
 (defun current-speech-system ()
   "Determine the appropriate speech system based on the current machine."
   (ecase *machine*
-    (2609 :intellivoice)  ; Intellivision with IntelliVoice
-    (1591 :intellivoice)  ; Alternative Intellivision code
+    (2609 :intellivoice)  ; Intellivision with IntelliVoice (CP1610)
     (2600 :atarivox)      ; Atari 2600 with AtariVox
     (7800 :atarivox)))    ; Atari 7800 with AtariVox
 
