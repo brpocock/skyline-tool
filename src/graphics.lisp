@@ -344,6 +344,69 @@
     (2609 +intv-color-names+)))
 
 
+;;; Error Conditions for Art Conversion
+(define-condition art-conversion-error (error)
+  ((filename :initarg :filename :reader art-conversion-error-filename)
+   (machine :initarg :machine :reader art-conversion-error-machine)
+   (context :initarg :context :reader art-conversion-error-context))
+  (:report (lambda (condition stream)
+             (format stream "Art conversion error for ~A on ~A machine~@[ in ~A~]"
+                     (art-conversion-error-filename condition)
+                     (art-conversion-error-machine condition)
+                     (art-conversion-error-context condition)))))
+
+(define-condition palette-error (art-conversion-error)
+  ((invalid-color :initarg :invalid-color :reader palette-error-invalid-color)
+   (available-colors :initarg :available-colors :reader palette-error-available-colors))
+  (:report (lambda (condition stream)
+             (format stream "Color ~A not in palette for ~A on ~A machine~@[ in ~A~]. ~
+                           Available colors: ~{~A~^, ~}"
+                     (palette-error-invalid-color condition)
+                     (art-conversion-error-filename condition)
+                     (art-conversion-error-machine condition)
+                     (art-conversion-error-context condition)
+                     (palette-error-available-colors condition)))))
+
+(define-condition dimension-error (art-conversion-error)
+  ((invalid-width :initarg :invalid-width :reader dimension-error-invalid-width)
+   (invalid-height :initarg :invalid-height :reader dimension-error-invalid-height)
+   (max-width :initarg :max-width :reader dimension-error-max-width)
+   (max-height :initarg :max-height :reader dimension-error-max-height))
+  (:report (lambda (condition stream)
+             (format stream "Invalid dimensions ~Ax~A for ~A on ~A machine~@[ in ~A~]. ~
+                           Maximum allowed: ~Ax~A"
+                     (dimension-error-invalid-width condition)
+                     (dimension-error-invalid-height condition)
+                     (art-conversion-error-filename condition)
+                     (art-conversion-error-machine condition)
+                     (art-conversion-error-context condition)
+                     (dimension-error-max-width condition)
+                     (dimension-error-max-height condition)))))
+
+(define-condition format-error (art-conversion-error)
+  ((expected-format :initarg :expected-format :reader format-error-expected-format)
+   (actual-format :initarg :actual-format :reader format-error-actual-format))
+  (:report (lambda (condition stream)
+             (format stream "Invalid format ~A for ~A on ~A machine~@[ in ~A~]. ~
+                           Expected: ~A"
+                     (format-error-actual-format condition)
+                     (art-conversion-error-filename condition)
+                     (art-conversion-error-machine condition)
+                     (art-conversion-error-context condition)
+                     (format-error-expected-format condition)))))
+
+(define-condition mode-error (art-conversion-error)
+  ((invalid-mode :initarg :invalid-mode :reader mode-error-invalid-mode)
+   (valid-modes :initarg :valid-modes :reader mode-error-valid-modes))
+  (:report (lambda (condition stream)
+             (format stream "Invalid graphics mode ~A for ~A on ~A machine~@[ in ~A~]. ~
+                           Valid modes: ~{~A~^, ~}"
+                     (mode-error-invalid-mode condition)
+                     (art-conversion-error-filename condition)
+                     (art-conversion-error-machine condition)
+                     (art-conversion-error-context condition)
+                     (mode-error-valid-modes condition)))))
+
 (defun pal-capable-p (machine)
   "Return T if the machine supports PAL video standard"
   (ecase machine
@@ -2360,28 +2423,84 @@ Used internally by BLOB ripping for color stamp conversion."
     (nreverse bytes)))
 
 (defun read-7800-art-index (index-in)
-  (let ((png-list (list)))
+  "Read and validate 7800 art index file, returning list of (mode path width height) tuples.
+
+Signals appropriate errors for invalid formats, dimensions, or modes."
+  (let ((png-list (list))
+        (valid-modes '(:160a :160b :320a :320b :320c :320d)))
     (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
-    (with-input-from-file (index index-in)
-      (loop for line = (read-line index nil)
-            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
-            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
-                                        line)))
-                 (cond
-                   ((emptyp line) nil)
-                   ((char= #\# (char line 0)) nil)
-                   (t (destructuring-bind (png-name mode cell-size)
-                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
-                        (destructuring-bind (width-px height-px)
-                            (split-sequence #\× cell-size :test #'char=)
-                          (push (list (make-keyword mode)
-                                      (make-pathname :defaults index-in
-                                                     :name (subseq png-name 0
-                                                                   (position #\. png-name :from-end t))
-                                                     :type "png")
-                                      (parse-integer width-px)
-                                      (parse-integer height-px))
-                                png-list))))))))
+    (handler-case
+        (with-input-from-file (index index-in)
+          (loop for line-num from 1
+                for line = (read-line index nil)
+                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
+                                            line)))
+                     (cond
+                       ((emptyp line) nil)
+                       ((char= #\# (char line 0)) nil)
+                       (t (handler-case
+                              (destructuring-bind (png-name mode cell-size)
+                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                                (unless (= 3 (length (split-sequence #\Space line :remove-empty-subseqs t)))
+                                  (error 'format-error
+                                         :filename index-in
+                                         :machine 7800
+                                         :context (format nil "line ~D" line-num)
+                                         :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
+                                         :actual-format line))
+                                (let ((mode-keyword (make-keyword mode)))
+                                  (unless (member mode-keyword valid-modes)
+                                    (error 'mode-error
+                                           :filename index-in
+                                           :machine 7800
+                                           :context (format nil "line ~D" line-num)
+                                           :invalid-mode mode-keyword
+                                           :valid-modes valid-modes))
+                                  (destructuring-bind (width-px height-px)
+                                      (split-sequence #\× cell-size :test #'char=)
+                                    (let ((width (parse-integer width-px :junk-allowed nil))
+                                          (height (parse-integer height-px :junk-allowed nil)))
+                                      ;; Validate dimensions based on mode
+                                      (ecase mode-keyword
+                                        ((:160a :160b) (unless (and (<= width 160) (<= height 192))
+                                                         (error 'dimension-error
+                                                                :filename index-in
+                                                                :machine 7800
+                                                                :context (format nil "~A mode, line ~D" mode cell-size)
+                                                                :invalid-width width
+                                                                :invalid-height height
+                                                                :max-width 160
+                                                                :max-height 192)))
+                                        ((:320a :320b :320c :320d) (unless (and (<= width 320) (<= height 192))
+                                                                     (error 'dimension-error
+                                                                            :filename index-in
+                                                                            :machine 7800
+                                                                            :context (format nil "~A mode, line ~D" mode cell-size)
+                                                                            :invalid-width width
+                                                                            :invalid-height height
+                                                                            :max-width 320
+                                                                            :max-height 192))))
+                                      (push (list mode-keyword
+                                                  (make-pathname :defaults index-in
+                                                                 :name (subseq png-name 0
+                                                                               (position #\. png-name :from-end t))
+                                                                 :type "png")
+                                                  width
+                                                  height)
+                                            png-list)))))
+                            (parse-error (e)
+                              (error 'format-error
+                                     :filename index-in
+                                     :machine 7800
+                                     :context (format nil "line ~D" line-num)
+                                     :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
+                                     :actual-format line)))))))
+      (file-error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :machine 7800
+               :context "file access")))
     (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
     (reverse png-list)))
 
@@ -2391,12 +2510,22 @@ Used internally by BLOB ripping for color stamp conversion."
 INDEX-OUT: Output filename for compiled art data
 INDEX-IN: Input art index file to process
 
-Parses art index files and generates optimized binary data for 7800 hardware."
+Parses art index files and generates optimized binary data for 7800 hardware.
+Signals appropriate errors for invalid input files or unsupported configurations."
   (let ((*machine* 7800))
-    (write-7800-binary index-out
-                       (interleave-7800-bytes
-                        (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))))
+    (handler-case
+        (write-7800-binary index-out
+                           (interleave-7800-bytes
+                            (parse-into-7800-bytes
+                             (read-7800-art-index index-in))))
+      (art-conversion-error (e)
+        ;; Re-signal art conversion errors with additional context
+        (error e))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :machine 7800
+               :context "binary generation")))))
 
 (defun compile-art-5200 (index-out index-in)
   "@cindex 5200 art compilation
