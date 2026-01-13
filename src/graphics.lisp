@@ -818,7 +818,9 @@ PNG image in an unsuitable format:
     (unless co
       (warn "Atari Color code ~s is not valid in region ~a, using fallback" (ash (logand byte #xf0) -4) *region*)
       (setf co "Hue0"))  ; Fallback color name
-    (check-type lu (integer 0 15) "Atari Luminance value 0-15")
+    (unless (and (integerp lu) (<= 0 lu 15))
+      (warn "Atari Luminance value ~s is not valid, using fallback" lu)
+      (setf lu 8))  ; Fallback luminance
     (format nil "CoLu(~a, $~x)" co lu)))
 
 (defun atari-colu-run (&rest _)
@@ -3042,7 +3044,8 @@ Blob_~a:~10t.block~2%"
 (defun tty-xterm-p (&optional (stream *query-io*))
   "Returns a generalized true value if the terminal seems to be xterm-compatible"
   (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
-       (search "xterm" (sb-posix:getenv "TERM"))))
+       (search "xterm" (sb-posix:getenv "TERM"))
+       (not (equal "dumb" (sb-posix:getenv "TERM")))))
 
 (defun write-gimp-palette (name colors &optional color-names)
   (with-output-to-file (pal (make-pathname :name name

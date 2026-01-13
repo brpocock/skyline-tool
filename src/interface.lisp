@@ -112,7 +112,7 @@
     (finish-output *query-io*)))
 
 (defun prompt-function ()
-  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
+  (if (and (tty-xterm-p) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
@@ -120,7 +120,7 @@
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
-  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (tty-xterm-p) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)
