@@ -29,6 +29,7 @@
   (run-test-suite "tests/interface-tests.lisp" "SKYLINE-TOOL/INTERFACE-TEST::INTERFACE-TESTS")
 
   ;; Platform-specific tests
+  (run-test-suite "tests/7800-art-tests.lisp" "SKYLINE-TOOL/7800-ART-TEST::7800-ART-SUITE")
   (run-test-suite "tests/7800-tests.lisp" "SKYLINE-TOOL/7800-TEST::7800-TESTS")
   (run-test-suite "tests/5200-tests.lisp" "SKYLINE-TOOL/5200-TEST::5200-TESTS")
   (run-test-suite "tests/lynx-graphics-tests.lisp" "SKYLINE-TOOL/LYNX-GRAPHICS-TEST::LYNX-GRAPHICS-TESTS")

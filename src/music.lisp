@@ -1108,29 +1108,9 @@ Music:~:*
   (let ((*machine* (parse-integer machine-type$)))
     (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
     (ecase *machine*
-      (2600 (compile-music-2600 source-out-name in-file-name))
-      (5200 (compile-music-7800 source-out-name in-file-name
-                                (make-keyword (string-upcase sound-chip))
-                                (make-keyword (string-upcase output-coding))))
       (7800 (compile-music-7800 source-out-name in-file-name
                                 (make-keyword (string-upcase sound-chip))
-                                (make-keyword (string-upcase output-coding))))
-      (2609 (compile-music-2609 source-out-name in-file-name
-                                (make-keyword (string-upcase sound-chip))
-                                (make-keyword (string-upcase output-coding))))
-      (35902 (compile-music-cgb source-out-name in-file-name sound-chip)) ; CGB
-      (20953 (compile-music-dmg source-out-name in-file-name sound-chip)) ; DMG
-      (9918 (compile-music-colecovision source-out-name in-file-name sound-chip)) ; ColecoVision
-      (1000 (compile-music-sg1000 source-out-name in-file-name sound-chip)) ; SG-1000
-      (3010 (compile-music-sms source-out-name in-file-name sound-chip)) ; SMS
-      (837 (compile-music-sgg source-out-name in-file-name sound-chip)) ; SGG
-      (3 (compile-music-nes source-out-name in-file-name sound-chip)) ; NES
-      (6 (compile-music-snes source-out-name in-file-name sound-chip)) ; SNES
-      (7 (compile-music-bbc source-out-name in-file-name sound-chip)) ; BBC
-      (264 (compile-music-c16 source-out-name in-file-name sound-chip)) ; C=16
-      (8 (compile-music-a2 source-out-name in-file-name sound-chip)) ; Apple II
-      (9 (compile-music-a3 source-out-name in-file-name sound-chip)) ; Apple III
-      (10 (compile-music-a2gs source-out-name in-file-name sound-chip)))) ; Apple IIGS)
+                                (make-keyword (string-upcase output-coding)))))))
 
 (defvar *sec/quarter-note* 1/2)
 
