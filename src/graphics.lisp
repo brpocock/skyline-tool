@@ -1389,6 +1389,21 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 
       (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
 
+(defun compile-gram-intv (png-file out-dir height width palette-pixels)
+  "Compile GRAM cards from PNG image for Intellivision.
+  
+Outputs assembly file with DECLE statements for GRAM card data.
+All cards in the source image are output as one file."
+  (declare (ignore height width palette-pixels))
+  (let ((out-file (merge-pathnames
+                   (make-pathname :name
+                                  (pathname-name png-file)
+                                  :type "s")
+                   out-dir)))
+    (ensure-directories-exist (directory-namestring out-file))
+    (with-output-to-file (src-file out-file :if-exists :supersede)
+      (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%~%"
+              png-file))))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
