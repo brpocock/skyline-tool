@@ -2989,10 +2989,11 @@ PlaySong EXECUTE "  song))))
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
-  "Write the speech data for TEXT in text and SpeakJet forms"
+  "Write the speech data for TEXT in text, SpeakJet, and IntelliVoice forms"
   (assert (< (length text) #x100) (text)
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
+<<<<<<< HEAD
   (format t "~% C\" ~a\"" (prepare-dialogue text))
   (when (speech-supported-p)
     (restart-case
@@ -3002,6 +3003,24 @@ PlaySong EXECUTE "  song))))
         :report "Reload the AtariVox (SpeakJet) dictionary"
         (reload-atarivox-dictionary)
         (fountain/write-speech text))))
+=======
+  (restart-case
+      (progn
+        (format t "
+  C\" ~a\"
+  SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
+                (prepare-dialogue text)
+                (convert-for-atarivox text))
+        ;; Include IntelliVoice phonemes for Intellivision
+         (format t "
+  IntelliVoice[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]IntelliVoice"
+                  (convert-for-speech text :intellivoice)))
+    (reload-dictionary ()
+      :report "Reload the speech dictionaries"
+      (reload-atarivox-dictionary)
+      (reload-intellivoice-dictionary)
+      (fountain/write-speech text)))
+>>>>>>> origin/intv
   (format t "~% ( ~s ) do-dialogue"
           text))
 

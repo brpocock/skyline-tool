@@ -1,11 +1,14 @@
 ;;; Phantasia SkylineTool/tests/build-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+<<<<<<< HEAD
 
 (defpackage :skyline-tool/build-test
   (:use :cl :fiveam)
   (:export #:build-tests))
+=======
+>>>>>>> origin/intv
 
-(in-package :skyline-tool/build-test)
+(in-package :skyline-tool/test)
 
 (def-suite build-tests
   :description "Regression tests for build system and compilation issues")

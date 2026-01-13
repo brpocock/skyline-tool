@@ -11,14 +11,6 @@
 
 (defvar *screen-ticker* 0)
 
-;; Minifont punctuation characters for text processing
-(defparameter +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0")
-
-;; RLE compression parameters
-(defparameter *rle-fast-mode* 1)
-(defvar *rle-options* 0)
-(defvar *rle-best-full* most-positive-fixnum)
-
 (defclass grid/tia ()
   ((tiles :reader grid-tiles :initarg :tiles)
    (colors :reader grid-row-colors :initarg :colors)
@@ -907,7 +899,7 @@ The function creates tileset objects with image data, palette information, and t
 compile-tileset, compile-map (for embedded tilesets)
 
 @strong{Output:}
-Tileset object containing image data, tile dimensions, and palette information."
+Tileset object containing image data, tile dimensions, and palette information.
   (let* ((path (etypecase xml-reference
                  (cons (let ((source
                                (assocdr "source"
@@ -1069,7 +1061,7 @@ Tileset object containing image data, tile dimensions, and palette information."
               (length source)
               (length options)
               (reduce #'min (mapcar #'cdr options))
-              (reduce #'max (mapcar #'cdr options)))
+              (reduce #'max (mapcar #'cdr options))))
     (dolist (option options)
       (destructuring-bind (rle . expanded-length) option
         (when (zerop (random 1000))
@@ -1087,18 +1079,22 @@ Tileset object containing image data, tile dimensions, and palette information."
     (when fully
       (reduce #'shorter fully))))
 
+(defparameter *rle-fast-mode* 1)
+
+(defvar *rle-options* 0)
+
+(defvar *rle-best-full* most-positive-fixnum)
 
 (defun rle-compress (source)
   (let ((lparallel:*kernel* (lparallel:make-kernel
                              8 :name "Skyline-Tool RLE Compressor"))
         (*rle-options* 0)
         (*rle-best-full* (1+ (length source))))
-    (format *trace-output* "~& Compressing ~:d byte~:p …" (length source))
+    (format *trace-output* "~& Compressing ~:d bytes..." (length source))
     (finish-output *trace-output*)
     (unwind-protect
          (let ((rle (rle-compress-fully source nil)))
-           (format *trace-output* " into ~:d byte~:p using RLE (-~d%), ~
-after considering ~:d option~:p."
+           (format *trace-output* " into ~:d bytes using RLE (~d% compression), after considering ~:d options."
                    (length rle)
                    (round (- 100 (* 100 (/ (length rle) (length source)))))
                    *rle-options*)
@@ -1301,14 +1297,6 @@ range is 0 - #xffffffff (4,294,967,295)"
     s))
 
 (defun compile-map (pathname)
-<<<<<<< HEAD
-  "Compile Tiled map (TMX) files into binary format for the game engine.
-
-PATHNAME: Path to the TMX map file to compile
-
-Processes TMX XML files and generates optimized binary map data with
-collision information, tile indices, and other game-specific metadata."
-=======
   "Compiles a Tiled Map Editor (TMX) file into binary format for PATHNAME.
 
 @cindex map compilation
@@ -1338,7 +1326,6 @@ The compiled output is stored in the Object/Assets/ directory with appropriate n
 @example
 (compile-map #p\"Source/Maps/Island1/Island1.tmx\")
 @end example"
->>>>>>> origin/intv
   (format *trace-output* "~&Loading tile map from ~a" (enough-namestring pathname))
   (read-map-ids-table)
   (let ((canon-name (format nil "~a.~a"
@@ -1627,12 +1614,34 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
     adjusted-palettes))
 
 (defun extract-tileset-palette (pathname outfile)
-  ;; Temporarily disabled due to compilation issues
-  ;; TODO: Fix color adjustment functions and palette generation
   (ensure-directories-exist outfile)
   (with-output-to-file (output outfile :if-exists :supersede)
-    (format output ";;; Palette ~a~%;;; extracted from ~a~%;;; TODO: Regenerate with proper colors~%"
-            (enough-namestring outfile) (enough-namestring pathname))))
+    (flet ((dump-palettes (series label)
+             (format *trace-output* "~%~10a:" label)
+             (dotimes (p 8)
+               (dotimes (c 4)
+                 (print-wide-pixel (aref series p c) *trace-output*)))
+             (format output "~%~10t;; ~a:~%~12t.byte ~a ; Background"
+                     label
+                     (atari-colu-string (aref series 0 0)))
+             (dotimes (palette-index 8)
+               (format output "~%~12t.byte ~a, ~a, ~a"
+                       (atari-colu-string (aref series palette-index 1))
+                       (atari-colu-string (aref series palette-index 2))
+                       (atari-colu-string (aref series palette-index 3))))))
+      (let* ((tileset (load-tileset pathname)))
+        (format output ";;; Palette ~a~%;;; extracted from ~a"
+                (enough-namestring outfile) (enough-namestring pathname))
+        (dolist (*region* '(:ntsc :pal))
+          (let ((palettes (extract-palettes (tileset-image tileset))))
+            (format *trace-output* "~% ~a:~%" (enough-namestring outfile))
+            (format output "~2%~10t.if TV == ~a" *region*)
+            (dump-palettes palettes "Base")
+            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes) "Dark")
+            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes) "Light")
+            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
+            (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
+            (format output "~%~10t.fi~%")))))))
 
 (defun find-named-object-in-scene (name-object &optional (scene-name *current-scene*))
   (dolist (match (xml-matches "object" (xml-match "objectgroup" (locale-xml scene-name))))

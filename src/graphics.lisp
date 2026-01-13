@@ -328,7 +328,7 @@
                        (:ntsc +vcs-ntsc-palette+)
                        (:pal +vcs-pal-palette+)
                        (:secam +vcs-secam-palette+)))
-               (1591 +intv-palette+)
+               (2609 +intv-palette+)
                (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
@@ -341,7 +341,7 @@
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-    (1591 +intv-color-names+)))
+    (2609 +intv-color-names+)))
 
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"
@@ -1321,6 +1321,76 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             do (loop for y0 from 7 downto 0
                      do (format src-file "~t.byte %~0,8b" 0))))))
 
+(defun compile-tileset-intv (png-file out-dir height width palette-pixels)
+  (let ((out-file (merge-pathnames
+                   (make-pathname :name
+                                  (concatenate 'string "tiles."
+                                               (pathname-name png-file))
+                                  :type "s")
+                   out-dir))
+        (tiles-across (/ width 8))
+        (tiles-down (/ height 8))
+        (machine-palette (machine-palette 2609)))
+    (with-output-to-file (src-file out-file :if-exists :supersede)
+      (format src-file ";;; Intellivision tileset ~A~%;;; Generated from ~A~%~%"
+              (pathname-name png-file) png-file)
+
+      ;; Process each 8x8 tile
+      (loop for tile-y from 0 below tiles-down
+            do (loop for tile-x from 0 below tiles-across
+                     for tile-index = (+ (* tile-y tiles-across) tile-x)
+                     do (let* ((start-x (* tile-x 8))
+                               (start-y (* tile-y 8))
+                               (tile-colors (make-hash-table :test 'equal))
+                               (tile-pixels (make-array '(8 8) :element-type 'list)))
+
+                          ;; Extract pixel data for this tile (RGB tuples)
+                          (loop for y from 0 below 8
+                                do (loop for x from 0 below 8
+                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
+                                         for rgb-color = (when palette-index
+                                                           (nth palette-index machine-palette))
+                                         do (setf (aref tile-pixels x y) rgb-color)
+                                            (when rgb-color
+                                              (incf (gethash rgb-color tile-colors 0)))))
+
+                          ;; Determine fg and bg colors
+                          ;; Most frequent color becomes background, second most frequent becomes foreground
+                          (let* ((color-counts (sort (alexandria:hash-table-alist tile-colors)
+                                                     #'> :key #'cdr))
+                                 (bg-rgb (if color-counts (car (first color-counts)) '(0 0 0)))
+                                 (fg-rgb (if (and color-counts (> (length color-counts) 1))
+                                             (car (second color-counts))
+                                             (if (equal bg-rgb '(0 0 0)) '(255 255 255) bg-rgb))))
+
+                            ;; Find Intellivision palette indices
+                            (let ((intv-bg-color (position bg-rgb machine-palette :test 'equal))
+                                  (intv-fg-color (position fg-rgb machine-palette :test 'equal)))
+
+                              ;; Output tile data comment
+                              (format src-file "~%;;; Tile ~D at (~D,~D): BG=~A, FG=~A~%"
+                                      tile-index tile-x tile-y
+                                      (nth intv-bg-color +intv-color-names+)
+                                      (nth intv-fg-color +intv-color-names+))
+
+                              ;; Output color data (4-bit BG, 4-bit FG in one byte)
+                              (format src-file "    DECLE   $~2,'0X    ; BG=~A, FG=~A~%"
+                                      (logior (ash intv-bg-color 4) intv-fg-color)
+                                      (nth intv-bg-color +intv-color-names+)
+                                      (nth intv-fg-color +intv-color-names+))
+
+                              ;; Output 8 bytes of tile bitmap data
+                              (loop for y from 0 below 8
+                                    for byte = 0
+                                    do (loop for x from 0 below 8
+                                             for pixel-rgb = (aref tile-pixels x y)
+                                             do (when (and pixel-rgb (equal pixel-rgb fg-rgb))
+                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
+                                       (format src-file "    DECLE   $~2,'0X~%" byte))))))
+
+      (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
+
+
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
   (let ((out-file (merge-pathnames
@@ -1355,6 +1425,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 (defun compile-tileset (png-file out-dir height width image-nybbles)
   (case *machine*
     ((64 128) (compile-tileset-64 png-file out-dir height width image-nybbles))
+    (2609 (compile-tileset-intv png-file out-dir height width image-nybbles))
     (otherwise (error "Tile set compiler not set up yet for ~a" (machine-long-name)))))
 
 (defun monochrome-lines-p (palette-pixels height width)
@@ -1592,6 +1663,83 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 
     (t (error "Don't know how to deal with image with dimensions ~:D×~:D pixels"
               width height))))
+
+(defmethod dispatch-png% ((machine (eql 2609)) png-file target-dir
+                          png height width α palette-pixels)
+  (cond
+    ((and (zerop (mod height 8))
+          (zerop (mod width 8))
+          (>= 256 (* (/ height 8) (/ width 8))))
+     (format *trace-output* "~% Image ~A seems to be Intellivision tiles" png-file)
+     (compile-tileset png-file target-dir height width palette-pixels))
+
+    (t (error "Don't know how to deal with Intellivision image with dimensions ~:D×~:D pixels"
+              width height))))
+
+;; Game Boy Color (35902)
+(defmethod dispatch-png% ((machine (eql 35902)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "CGB graphics compilation not yet implemented"))
+
+;; Game Boy (20953)
+(defmethod dispatch-png% ((machine (eql 20953)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "DMG graphics compilation not yet implemented"))
+
+;; ColecoVision (9918)
+(defmethod dispatch-png% ((machine (eql 9918)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "ColecoVision graphics compilation not yet implemented"))
+
+;; SG-1000 (1000)
+(defmethod dispatch-png% ((machine (eql 1000)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "SG-1000 graphics compilation not yet implemented"))
+
+;; Sega Master System (3010)
+(defmethod dispatch-png% ((machine (eql 3010)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "SMS graphics compilation not yet implemented"))
+
+;; Sega Game Gear (837)
+(defmethod dispatch-png% ((machine (eql 837)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "SGG graphics compilation not yet implemented"))
+
+;; NES (3)
+(defmethod dispatch-png% ((machine (eql 3)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "NES graphics compilation not yet implemented"))
+
+;; SNES (6)
+(defmethod dispatch-png% ((machine (eql 6)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "SNES graphics compilation not yet implemented"))
+
+;; BBC Micro (7)
+(defmethod dispatch-png% ((machine (eql 7)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "BBC graphics compilation not yet implemented"))
+
+;; Commodore 16 (264)
+(defmethod dispatch-png% ((machine (eql 264)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "C16 graphics compilation not yet implemented"))
+
+;; Apple II (8)
+(defmethod dispatch-png% ((machine (eql 8)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "Apple II graphics compilation not yet implemented"))
+
+;; Apple III (9)
+(defmethod dispatch-png% ((machine (eql 9)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "Apple III graphics compilation not yet implemented"))
+
+;; Apple IIGS (10)
+(defmethod dispatch-png% ((machine (eql 10)) png-file target-dir
+                          png height width α palette-pixels)
+  (error "Apple IIGS graphics compilation not yet implemented"))
 
 (defun dispatch-png (png-file target-dir)
   (with-simple-restart (retry-png "Retry processing PNG file ~a" png-file)
@@ -2243,6 +2391,46 @@ Processes tile graphics for ANTIC Mode D/E and player graphics for PMG system."
   (declare (ignore index-out index-in))
   ;; TODO: Implement actual 5200 art compilation
   (format *trace-output* "~&5200 art compilation - processing tiles and PMG graphics~%"))
+
+;; Compile art functions for new platforms
+(defun compile-art-cgb (index-out index-in)
+  (error "unimplemented: CGB art compilation not yet implemented"))
+
+(defun compile-art-dmg (index-out index-in)
+  (error "unimplemented: DMG art compilation not yet implemented"))
+
+(defun compile-art-clc (index-out index-in)
+  (error "unimplemented: ColecoVision art compilation not yet implemented"))
+
+(defun compile-art-1000 (index-out index-in)
+  (error "unimplemented: SG-1000 art compilation not yet implemented"))
+
+(defun compile-art-sms (index-out index-in)
+  (error "unimplemented: SMS art compilation not yet implemented"))
+
+(defun compile-art-sgg (index-out index-in)
+  (error "unimplemented: SGG art compilation not yet implemented"))
+
+(defun compile-art-nes (index-out index-in)
+  (error "unimplemented: NES art compilation not yet implemented"))
+
+(defun compile-art-snes (index-out index-in)
+  (error "unimplemented: SNES art compilation not yet implemented"))
+
+(defun compile-art-bbc (index-out index-in)
+  (error "unimplemented: BBC art compilation not yet implemented"))
+
+(defun compile-art-c16 (index-out index-in)
+  (error "unimplemented: C16 art compilation not yet implemented"))
+
+(defun compile-art-a2 (index-out index-in)
+  (error "unimplemented: Apple II art compilation not yet implemented"))
+
+(defun compile-art-a3 (index-out index-in)
+  (error "unimplemented: Apple III art compilation not yet implemented"))
+
+(defun compile-art-2gs (index-out index-in)
+  (error "unimplemented: Apple IIGS art compilation not yet implemented"))
 
 (defun blob-rip-5200-tile (png-file &optional (mode :mode-d))
   "@cindex 5200 tile ripping
@@ -3006,6 +3194,61 @@ Blob_~a:~10t.block~2%"
   (format *trace-output* "blob-rip-7800-320ac: Processing ~a (imperfectp: ~a)~%" png-file imperfectp$)
   (error "unimplemented: blob-rip-7800-320ac is total failure."))
 
+;; Game Boy Color blob ripping functions
+(defun blob-rip-cgb-tile (png-file &optional (mode :normal))
+  (error "unimplemented: CGB tile ripping not yet implemented"))
+
+(defun blob-rip-cgb-sprite (png-file &optional (size :8x8))
+  (error "unimplemented: CGB sprite ripping not yet implemented"))
+
+;; Game Boy blob ripping functions
+(defun blob-rip-dmg-tile (png-file &optional (mode :normal))
+  (error "unimplemented: DMG tile ripping not yet implemented"))
+
+;; ColecoVision blob ripping functions
+(defun blob-rip-clc-tile (png-file &optional (mode :normal))
+  (error "unimplemented: ColecoVision tile ripping not yet implemented"))
+
+;; SG-1000 blob ripping functions
+(defun blob-rip-1000-tile (png-file &optional (mode :normal))
+  (error "unimplemented: SG-1000 tile ripping not yet implemented"))
+
+;; Sega Master System blob ripping functions
+(defun blob-rip-sms-tile (png-file &optional (mode :normal))
+  (error "unimplemented: SMS tile ripping not yet implemented"))
+
+;; Sega Game Gear blob ripping functions
+(defun blob-rip-sgg-tile (png-file &optional (mode :normal))
+  (error "unimplemented: SGG tile ripping not yet implemented"))
+
+;; NES blob ripping functions
+(defun blob-rip-nes-tile (png-file &optional (mode :normal))
+  (error "unimplemented: NES tile ripping not yet implemented"))
+
+;; SNES blob ripping functions
+(defun blob-rip-snes-tile (png-file &optional (mode :normal))
+  (error "unimplemented: SNES tile ripping not yet implemented"))
+
+;; BBC blob ripping functions
+(defun blob-rip-bbc-tile (png-file &optional (mode :normal))
+  (error "unimplemented: BBC tile ripping not yet implemented"))
+
+;; Commodore 16 blob ripping functions
+(defun blob-rip-c16-tile (png-file &optional (mode :normal))
+  (error "unimplemented: C16 tile ripping not yet implemented"))
+
+;; Apple II blob ripping functions
+(defun blob-rip-a2-tile (png-file &optional (mode :normal))
+  (error "unimplemented: Apple II tile ripping not yet implemented"))
+
+;; Apple III blob ripping functions
+(defun blob-rip-a3-tile (png-file &optional (mode :normal))
+  (error "unimplemented: Apple III tile ripping not yet implemented"))
+
+;; Apple IIGS blob ripping functions
+(defun blob-rip-2gs-tile (png-file &optional (mode :normal))
+  (error "unimplemented: Apple IIGS tile ripping not yet implemented"))
+
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
         appending (loop for value below #x10 by 2
@@ -3191,3 +3434,323 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
+;; Platform-specific blob ripping functions (stub implementations)
+(defun blob-rip-cgb-tile (png-file &optional (mode :mode-normal))
+  (error "CGB tile ripping not yet implemented"))
+
+(defun blob-rip-cgb-sprite (png-file &optional (mode :mode-normal))
+  (error "CGB sprite ripping not yet implemented"))
+
+(defun blob-rip-cgb-font (png-file)
+  (error "CGB font ripping not yet implemented"))
+
+(defun blob-rip-dmg-tile (png-file &optional (mode :mode-normal))
+  (error "DMG tile ripping not yet implemented"))
+
+(defun blob-rip-dmg-sprite (png-file &optional (mode :mode-normal))
+  (error "DMG sprite ripping not yet implemented"))
+
+(defun blob-rip-dmg-font (png-file)
+  (error "DMG font ripping not yet implemented"))
+
+(defun blob-rip-nes-tile (png-file &optional (mode :mode-normal))
+  (error "NES tile ripping not yet implemented"))
+
+(defun blob-rip-nes-sprite (png-file &optional (mode :mode-normal))
+  (error "NES sprite ripping not yet implemented"))
+
+(defun blob-rip-nes-font (png-file)
+  (error "NES font ripping not yet implemented"))
+
+(defun blob-rip-snes-tile (png-file &optional (mode :mode-normal))
+  (error "SNES tile ripping not yet implemented"))
+
+(defun blob-rip-snes-sprite (png-file &optional (mode :mode-normal))
+  (error "SNES sprite ripping not yet implemented"))
+
+(defun blob-rip-snes-font (png-file)
+  (error "SNES font ripping not yet implemented"))
+
+(defun blob-rip-colecovision-tile (png-file &optional (mode :mode-normal))
+  (error "ColecoVision tile ripping not yet implemented"))
+
+(defun blob-rip-colecovision-sprite (png-file &optional (mode :mode-normal))
+  (error "ColecoVision sprite ripping not yet implemented"))
+
+(defun blob-rip-colecovision-font (png-file)
+  (error "ColecoVision font ripping not yet implemented"))
+
+(defun blob-rip-sg1000-tile (png-file &optional (mode :mode-normal))
+  (error "SG-1000 tile ripping not yet implemented"))
+
+(defun blob-rip-sg1000-sprite (png-file &optional (mode :mode-normal))
+  (error "SG-1000 sprite ripping not yet implemented"))
+
+(defun blob-rip-sg1000-font (png-file)
+  (error "SG-1000 font ripping not yet implemented"))
+
+(defun blob-rip-sms-tile (png-file &optional (mode :mode-normal))
+  (error "SMS tile ripping not yet implemented"))
+
+(defun blob-rip-sms-sprite (png-file &optional (mode :mode-normal))
+  (error "SMS sprite ripping not yet implemented"))
+
+(defun blob-rip-sms-font (png-file)
+  (error "SMS font ripping not yet implemented"))
+
+(defun blob-rip-sgg-tile (png-file &optional (mode :mode-normal))
+  (error "SGG tile ripping not yet implemented"))
+
+(defun blob-rip-sgg-sprite (png-file &optional (mode :mode-normal))
+  (error "SGG sprite ripping not yet implemented"))
+
+(defun blob-rip-sgg-font (png-file)
+  (error "SGG font ripping not yet implemented"))
+
+(defun blob-rip-c16-tile (png-file &optional (mode :mode-normal))
+  (error "C=16 tile ripping not yet implemented"))
+
+(defun blob-rip-c16-sprite (png-file &optional (mode :mode-normal))
+  (error "C=16 sprite ripping not yet implemented"))
+
+(defun blob-rip-c16-font (png-file)
+  (error "C=16 font ripping not yet implemented"))
+
+(defun blob-rip-a2-tile (png-file &optional (mode :mode-normal))
+  (error "Apple II tile ripping not yet implemented"))
+
+(defun blob-rip-a2-sprite (png-file &optional (mode :mode-normal))
+  (error "Apple II sprite ripping not yet implemented"))
+
+(defun blob-rip-a2-font (png-file)
+  (error "Apple II font ripping not yet implemented"))
+
+(defun blob-rip-a3-tile (png-file &optional (mode :mode-normal))
+  (error "Apple III tile ripping not yet implemented"))
+
+(defun blob-rip-a3-sprite (png-file &optional (mode :mode-normal))
+  (error "Apple III sprite ripping not yet implemented"))
+
+(defun blob-rip-a3-font (png-file)
+  (error "Apple III font ripping not yet implemented"))
+
+(defun blob-rip-a2gs-tile (png-file &optional (mode :mode-normal))
+  (error "Apple IIGS tile ripping not yet implemented"))
+
+(defun blob-rip-a2gs-sprite (png-file &optional (mode :mode-normal))
+  (error "Apple IIGS sprite ripping not yet implemented"))
+
+(defun blob-rip-a2gs-font (png-file)
+  (error "Apple IIGS font ripping not yet implemented"))
+
+(defun blob-rip-bbc-tile (png-file &optional (mode :mode-normal))
+  (error "BBC tile ripping not yet implemented"))
+
+(defun blob-rip-bbc-sprite (png-file &optional (mode :mode-normal))
+  (error "BBC sprite ripping not yet implemented"))
+
+(defun blob-rip-bbc-font (png-file)
+  (error "BBC font ripping not yet implemented"))
+
+;; Platform detection functions
+(defun detect-cgb-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-dmg-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-nes-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-snes-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-colecovision-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-sg1000-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-sms-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-sgg-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-c16-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-a2-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-a3-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-a2gs-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+
+(defun detect-bbc-tile-mode (png-file)
+  (declare (ignore png-file))
+  :mode-normal)
+;; Platform-specific art compilation functions (stub implementations)
+(defun compile-art-cgb (output-file input-file)
+  (error "CGB art compilation not yet implemented"))
+
+(defun compile-art-dmg (output-file input-file)
+  (error "DMG art compilation not yet implemented"))
+
+(defun compile-art-nes (output-file input-file)
+  (error "NES art compilation not yet implemented"))
+
+(defun compile-art-snes (output-file input-file)
+  (error "SNES art compilation not yet implemented"))
+
+(defun compile-art-colecovision (output-file input-file)
+  (error "ColecoVision art compilation not yet implemented"))
+
+(defun compile-art-sg1000 (output-file input-file)
+  (error "SG-1000 art compilation not yet implemented"))
+
+(defun compile-art-sms (output-file input-file)
+  (error "SMS art compilation not yet implemented"))
+
+(defun compile-art-sgg (output-file input-file)
+  (error "SGG art compilation not yet implemented"))
+
+(defun compile-art-c16 (output-file input-file)
+  (error "C=16 art compilation not yet implemented"))
+
+(defun compile-art-a2 (output-file input-file)
+  (error "Apple II art compilation not yet implemented"))
+
+(defun compile-art-a3 (output-file input-file)
+  (error "Apple III art compilation not yet implemented"))
+
+(defun compile-art-a2gs (output-file input-file)
+  (error "Apple IIGS art compilation not yet implemented"))
+
+(defun compile-art-bbc (output-file input-file)
+  (error "BBC art compilation not yet implemented"))
+;; Palette generation functions (stub implementations)
+(defun generate-ntsc-palette (output-file)
+  (error "NTSC palette generation not yet implemented"))
+
+(defun generate-pal-palette (output-file)
+  (error "PAL palette generation not yet implemented"))
+
+(defun generate-secam-palette (output-file)
+  (error "SECAM palette generation not yet implemented"))
+
+;; Platform capability predicates
+(defun speech-supported-p ()
+  "Return true if the current platform supports speech synthesis."
+  (case *machine*
+    ((7800 2600 2609) t)
+    (t nil)))
+
+(defun pal-capable-p (machine)
+  "Return true if the platform supports PAL video."
+  (declare (ignore machine))
+  ;; Most platforms can support PAL
+  t)
+
+(defun secam-capable-p (machine)
+  "Return true if the platform supports SECAM video."
+  (declare (ignore machine))
+  ;; Few platforms support SECAM
+  nil)
+
+;; Machine name lookup function
+(defun machine-long-name (&optional (machine *machine*))
+  "Return the long name for a machine ID."
+  (case machine
+    (2600 "Atari 2600")
+    (5200 "Atari 5200")
+    (7800 "Atari 7800")
+    (200 "Atari Lynx")
+    (3 "Nintendo Entertainment System")
+    (6 "Super Nintendo Entertainment System")
+    (35902 "Nintendo Game Boy Color")
+    (20953 "Nintendo Game Boy")
+    (9918 "ColecoVision")
+    (1000 "Sega Game SG-1000")
+    (3010 "Sega Master System")
+    (837 "Sega Game Gear")
+    (264 "Commodore 16")
+    (8 "Apple II")
+    (9 "Apple III")
+    (10 "Apple IIGS")
+    (7 "BBC Micro")
+    (1591 "Intellivision (RAM-less)")
+    (1601 "Intellivision (with RAM)")
+    (t (format nil "Unknown machine ID ~A" machine))))
+;; Palette generation and saving functions (stub implementations)
+
+(defun generate-ntsc-palette (machine)
+  "Generate NTSC color palette for the given machine ID"
+  (ecase machine
+    (20 (error "NTSC palette for VCS not yet implemented"))
+    (2609 (error "NTSC palette for Intellivision not yet implemented"))
+    (264 (error "NTSC palette for C16 not yet implemented"))
+    (35902 (error "NTSC palette for CGB not yet implemented"))
+    (20953 (error "NTSC palette for DMG not yet implemented"))
+    (9918 (error "NTSC palette for ColecoVision not yet implemented"))
+    (1000 (error "NTSC palette for SG-1000 not yet implemented"))
+    (3010 (error "NTSC palette for SMS not yet implemented"))
+    (837 (error "NTSC palette for SGG not yet implemented"))
+    (3 (error "NTSC palette for NES not yet implemented"))
+    (6 (error "NTSC palette for SNES not yet implemented"))
+    (7 (error "NTSC palette for BBC not yet implemented"))
+    (8 (error "NTSC palette for Apple II not yet implemented"))
+    (9 (error "NTSC palette for Apple III not yet implemented"))
+    (10 (error "NTSC palette for Apple IIGS not yet implemented"))))
+
+(defun generate-pal-palette (machine)
+  "Generate PAL color palette for the given machine ID"
+  (ecase machine
+    (20 (error "PAL palette for VCS not yet implemented"))
+    (2609 (error "PAL palette for Intellivision not yet implemented"))
+    (264 (error "PAL palette for C16 not yet implemented"))
+    (35902 (error "PAL palette for CGB not yet implemented"))
+    (20953 (error "PAL palette for DMG not yet implemented"))
+    (9918 (error "PAL palette for ColecoVision not yet implemented"))
+    (1000 (error "PAL palette for SG-1000 not yet implemented"))
+    (3010 (error "PAL palette for SMS not yet implemented"))
+    (837 (error "PAL palette for SGG not yet implemented"))
+    (3 (error "PAL palette for NES not yet implemented"))
+    (6 (error "PAL palette for SNES not yet implemented"))
+    (7 (error "PAL palette for BBC not yet implemented"))
+    (8 (error "PAL palette for Apple II not yet implemented"))
+    (9 (error "PAL palette for Apple III not yet implemented"))
+    (10 (error "PAL palette for Apple IIGS not yet implemented"))))
+
+(defun generate-secam-palette (machine)
+  "Generate SECAM color palette for the given machine ID"
+  (ecase machine
+    (20 (error "SECAM palette for VCS not yet implemented"))
+    (2609 (error "SECAM palette for Intellivision not yet implemented"))
+    (264 (error "SECAM palette for C16 not yet implemented"))
+    (35902 (error "SECAM palette for CGB not yet implemented"))
+    (20953 (error "SECAM palette for DMG not yet implemented"))
+    (9918 (error "SECAM palette for ColecoVision not yet implemented"))
+    (1000 (error "SECAM palette for SG-1000 not yet implemented"))
+    (3010 (error "SECAM palette for SMS not yet implemented"))
+    (837 (error "SECAM palette for SGG not yet implemented"))
+    (3 (error "SECAM palette for NES not yet implemented"))
+    (6 (error "SECAM palette for SNES not yet implemented"))
+    (7 (error "SECAM palette for BBC not yet implemented"))
+    (8 (error "SECAM palette for Apple II not yet implemented"))
+    (9 (error "SECAM palette for Apple III not yet implemented"))
+    (10 (error "SECAM palette for Apple IIGS not yet implemented"))))

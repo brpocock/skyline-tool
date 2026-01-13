@@ -328,7 +328,7 @@
                        (:ntsc +vcs-ntsc-palette+)
                        (:pal +vcs-pal-palette+)
                        (:secam +vcs-secam-palette+)))
-               (1591 +intv-palette+)
+               (2609 +intv-palette+)
                (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
@@ -341,7 +341,7 @@
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-    (1591 +intv-color-names+)))
+    (2609 +intv-color-names+)))
 
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"

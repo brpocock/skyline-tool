@@ -39,27 +39,48 @@
            #:allocate-assets
            #:atari800-label-file
            #:blob-rip-7800
-<<<<<<< HEAD
+           #:blob-rip-7800-160a
            #:blob-rip-7800-320ac
            #:blob-rip-5200-tile
            #:blob-rip-5200-pmg
            #:detect-5200-tile-mode
-=======
-           #:blob-rip-7800-160a
-           #:blob-rip-7800-320ac
+           #:blob-rip-cgb-tile
+           #:blob-rip-cgb-sprite
+           #:blob-rip-dmg-tile
+           #:blob-rip-clc-tile
+           #:blob-rip-1000-tile
+           #:blob-rip-sms-tile
+           #:blob-rip-sgg-tile
+           #:blob-rip-nes-tile
+           #:blob-rip-snes-tile
+           #:blob-rip-bbc-tile
+           #:blob-rip-c16-tile
+           #:blob-rip-a2-tile
+           #:blob-rip-a3-tile
+           #:blob-rip-2gs-tile
            #:7800-image-to-160a
            #:7800-image-to-320a
            #:7800-image-to-320c
->>>>>>> origin/lynx
+           #:assemble-intv-rom
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
            #:compile-art-7800
-<<<<<<< HEAD
            #:compile-art-5200
-=======
            #:compile-art-lynx
->>>>>>> origin/lynx
+           #:compile-art-cgb
+           #:compile-art-dmg
+           #:compile-art-nes
+           #:compile-art-snes
+           #:compile-art-colecovision
+           #:compile-art-sg1000
+           #:compile-art-sms
+           #:compile-art-sgg
+           #:compile-art-c16
+           #:compile-art-a2
+           #:compile-art-a3
+           #:compile-art-a2gs
+           #:compile-art-bbc
            #:compile-code
            #:compile-enemies
            #:compile-font-command
@@ -113,15 +134,46 @@
            #:run-for-port
            #:run-gui
            #:run-repl
-<<<<<<< HEAD
-=======
            #:machine-long-name
            ;; Global variables (for testing)
            #:*machine*
            #:*game-title*
            #:*project.json*
            #:*invocation*
->>>>>>> origin/lynx
+           ;; Platform-specific compilation functions
+           #:compile-music-cgb #:compile-music-dmg #:compile-music-nes #:compile-music-snes
+           #:compile-music-colecovision #:compile-music-sg1000 #:compile-music-sms #:compile-music-sgg
+           #:compile-music-c16 #:compile-music-a2 #:compile-music-a3 #:compile-music-a2gs #:compile-music-bbc
+           ;; Platform-specific blob ripping functions
+           #:blob-rip-cgb-tile #:blob-rip-cgb-sprite #:blob-rip-cgb-font
+           #:blob-rip-dmg-tile #:blob-rip-dmg-sprite #:blob-rip-dmg-font
+           #:blob-rip-nes-tile #:blob-rip-nes-sprite #:blob-rip-nes-font
+           #:blob-rip-snes-tile #:blob-rip-snes-sprite #:blob-rip-snes-font
+           #:blob-rip-colecovision-tile #:blob-rip-colecovision-sprite #:blob-rip-colecovision-font
+           #:blob-rip-sg1000-tile #:blob-rip-sg1000-sprite #:blob-rip-sg1000-font
+           #:blob-rip-sms-tile #:blob-rip-sms-sprite #:blob-rip-sms-font
+           #:blob-rip-sgg-tile #:blob-rip-sgg-sprite #:blob-rip-sgg-font
+           #:blob-rip-c16-tile #:blob-rip-c16-sprite #:blob-rip-c16-font
+           #:blob-rip-a2-tile #:blob-rip-a2-sprite #:blob-rip-a2-font
+           #:blob-rip-a3-tile #:blob-rip-a3-sprite #:blob-rip-a3-font
+           #:blob-rip-a2gs-tile #:blob-rip-a2gs-sprite #:blob-rip-a2gs-font
+           #:blob-rip-bbc-tile #:blob-rip-bbc-sprite #:blob-rip-bbc-font
+           ;; Platform detection functions
+           #:detect-cgb-tile-mode #:detect-dmg-tile-mode #:detect-nes-tile-mode #:detect-snes-tile-mode
+           #:detect-colecovision-tile-mode #:detect-sg1000-tile-mode #:detect-sms-tile-mode #:detect-sgg-tile-mode
+           #:detect-c16-tile-mode #:detect-a2-tile-mode #:detect-a3-tile-mode #:detect-a2gs-tile-mode #:detect-bbc-tile-mode
+           ;; Speech/phoneme compilation functions
+           #:compile-speech-7800 #:compile-speech-2600 #:compile-speech-2609
+           ;; Forth bytecode compilation functions
+           #:compile-forth-6502 #:compile-forth-z80 #:compile-forth-cp1610
+           ;; Native bytecode emission functions
+           #:emit-6502-bytecode #:emit-6507-bytecode #:emit-6510-bytecode #:emit-8502-bytecode
+           #:emit-65c02-bytecode #:emit-65sc02-bytecode #:emit-cp1610-bytecode
+           #:emit-z80-bytecode #:emit-z80a-bytecode #:emit-huc6280-bytecode
+           ;; Palette generation functions
+           #:generate-ntsc-palette #:generate-pal-palette #:generate-secam-palette
+           ;; Platform capability predicates
+           #:speech-supported-p #:pal-capable-p #:secam-capable-p
            ;; Display list debugging functions (for testing)
            #:decode-header
            #:header->string
@@ -167,6 +219,5 @@
 (defparameter *default-skin-color* nil)
 (defparameter *default-hair-color* nil)
 (defparameter *default-clothes-color* nil)
->>>>>>> origin/lynx
 
 (defvar *region* :ntsc)

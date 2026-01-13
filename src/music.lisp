@@ -364,7 +364,11 @@ Format: NTSC followed by PAL/SECAM frequency values for each AUDF value")
   (:method (output-coding machine-type midi-notes sound-chip)
     (error "No handler for output coding ~s (machine ~s, sound chip ~s); ~
 skipping MIDI music with ~:d track~:p"
-           output-coding machine-type sound-chip (length midi-notes))))
+           output-coding machine-type sound-chip (length midi-notes)))
+
+  ;; Intellivision AY-3-8910 PSG support
+  (:method (output-coding (machine-type (eql 2609)) midi-notes (sound-chip (eql :ay-3-8910)))
+    (midi-to-ay-3-8910 midi-notes output-coding)))
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
   (when freq
@@ -1052,6 +1056,25 @@ Music:~:*
             for notes = (gethash symbol catalog)
             do (write-song-data-to-binary notes object *machine* sound-chip)))))
 
+(defun compile-music-2609 (source-out-name midi-name sound-chip output-coding)
+  "Compile music for Intellivision AY-3-8910 PSG"
+  (let ((*machine* 2609)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table)))
+    (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (format source-out ";;; Music compiled from ~a for Intellivision AY-3-8910 PSG
+;;; do not bother editing (generated file will be overwritten)"
+              midi-name)
+      (import-song-to-catalog :song-file-name midi-name
+                              :sound-chip sound-chip
+                              :output-coding output-coding
+                              :catalog catalog
+                              :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-ay-3-8910 notes source-out)))))
+
 (defun compile-music-2600 (source-out-name in-file-name)
   (let ((catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
@@ -1091,7 +1114,23 @@ Music:~:*
                                 (make-keyword (string-upcase output-coding))))
       (7800 (compile-music-7800 source-out-name in-file-name
                                 (make-keyword (string-upcase sound-chip))
-                                (make-keyword (string-upcase output-coding)))))))
+                                (make-keyword (string-upcase output-coding))))
+      (2609 (compile-music-2609 source-out-name in-file-name
+                                (make-keyword (string-upcase sound-chip))
+                                (make-keyword (string-upcase output-coding))))
+      (35902 (compile-music-cgb source-out-name in-file-name sound-chip)) ; CGB
+      (20953 (compile-music-dmg source-out-name in-file-name sound-chip)) ; DMG
+      (9918 (compile-music-colecovision source-out-name in-file-name sound-chip)) ; ColecoVision
+      (1000 (compile-music-sg1000 source-out-name in-file-name sound-chip)) ; SG-1000
+      (3010 (compile-music-sms source-out-name in-file-name sound-chip)) ; SMS
+      (837 (compile-music-sgg source-out-name in-file-name sound-chip)) ; SGG
+      (3 (compile-music-nes source-out-name in-file-name sound-chip)) ; NES
+      (6 (compile-music-snes source-out-name in-file-name sound-chip)) ; SNES
+      (7 (compile-music-bbc source-out-name in-file-name sound-chip)) ; BBC
+      (264 (compile-music-c16 source-out-name in-file-name sound-chip)) ; C=16
+      (8 (compile-music-a2 source-out-name in-file-name sound-chip)) ; Apple II
+      (9 (compile-music-a3 source-out-name in-file-name sound-chip)) ; Apple III
+      (10 (compile-music-a2gs source-out-name in-file-name sound-chip)))) ; Apple IIGS)
 
 (defvar *sec/quarter-note* 1/2)
 
@@ -1394,6 +1433,92 @@ Music:~:*
                 note-count (* 8 (1+ note-count))))
       (terpri *trace-output*))))
 
+(defun midi-to-ay-3-8910 (midi-notes output-coding)
+  "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision"
+  (let ((frame-rate (ecase output-coding (:ntsc 60) (:pal 50)))
+        (output (list)))
+    (dolist (track midi-notes)
+      (let ((voice-assignments (make-array 3 :initial-element nil)) ; 3 PSG channels
+            (current-time 0))
+        (dolist (event track)
+          (ecase (first event)
+            (:note
+             (destructuring-bind (&key time key duration velocity) (rest event)
+               (let ((psg-channel (find-free-psg-channel voice-assignments time)))
+                 (when psg-channel
+                   (let ((frequency (freq<-midi-key key))
+                         (period (frequency-to-ay-period frequency)))
+                     ;; Store note data: (time channel period-low period-high volume duration)
+                     (push (list time psg-channel (logand period #xff) (ash period -8)
+                                (min 15 (floor (* 15 (/ velocity 127)))) duration)
+                           output)
+                     (setf (aref voice-assignments psg-channel)
+                           (+ time duration)))))))))
+        ;; Sort by time
+        (setf output (sort output #'< :key #'first))))
+    ;; Convert to array format expected by the system
+    (let ((result (make-array (list (length output) 6))))
+      (loop for i from 0
+            for note in output
+            do (destructuring-bind (time channel period-lo period-hi volume duration) note
+                 (setf (aref result i 0) (floor time)) ; time in frames
+                 (setf (aref result i 1) channel)       ; PSG channel (0-2)
+                 (setf (aref result i 2) period-lo)     ; period low byte
+                 (setf (aref result i 3) period-hi)     ; period high byte
+                 (setf (aref result i 4) volume)        ; volume (0-15)
+                 (setf (aref result i 5) duration)))    ; duration in frames
+      (values result nil))))
+
+(defun find-free-psg-channel (voice-assignments current-time)
+  "Find the first available PSG channel"
+  (loop for channel from 0 below 3
+        when (or (null (aref voice-assignments channel))
+                 (< (aref voice-assignments channel) current-time))
+          return channel
+        finally (return nil)))
+
+(defun frequency-to-ay-period (frequency)
+  "Convert frequency in Hz to AY-3-8910 period value"
+  (let ((clock-frequency 2000000)) ; AY-3-8910 clock is 2MHz
+    (max 1 (min #xffff (round (/ clock-frequency (* 16 frequency)))))))
+
+(defun write-song-data-to-ay-3-8910 (notes source-out)
+  "Write AY-3-8910 PSG music data to assembly source"
+  (format source-out "~2%;;; AY-3-8910 PSG music data")
+  (loop for i below (array-dimension notes 0)
+        do (let ((time (aref notes i 0))
+                 (channel (aref notes i 1))
+                 (period-lo (aref notes i 2))
+                 (period-hi (aref notes i 3))
+                 (volume (aref notes i 4))
+                 (duration (aref notes i 5)))
+             (format source-out "~%	.byte ~d, ~d, $~2,'0x, $~2,'0x, ~d, ~d	; Time:~d Ch:~d Vol:~d Dur:~d"
+                     time channel period-lo period-hi volume duration
+                     time channel volume duration))))
+
+(defmethod write-song-data-to-binary (notes object (machine (eql 2609)) (sound-chip (eql :ay-3-8910)))
+  "Write AY-3-8910 binary data for Intellivision"
+  (with-output-to-file (out object :element-type '(unsigned-byte 8)
+                           :if-exists :supersede :if-does-not-exist :create)
+    ;; Write header (number of notes)
+    (let ((num-notes (array-dimension notes 0)))
+      (write-byte (logand num-notes #xff) out)
+      (write-byte (ash num-notes -8) out))
+    ;; Write note data
+    (loop for i below (array-dimension notes 0)
+          do (let ((time (aref notes i 0))
+                   (channel (aref notes i 1))
+                   (period-lo (aref notes i 2))
+                   (period-hi (aref notes i 3))
+                   (volume (aref notes i 4))
+                   (duration (aref notes i 5)))
+               (write-byte time out)
+               (write-byte channel out)
+               (write-byte period-lo out)
+               (write-byte period-hi out)
+               (write-byte volume out)
+               (write-byte duration out)))))
+
 (defun compile-midi (argv0 input format frame-rate
                      &optional (output (make-pathname
                                         :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
@@ -1414,3 +1539,51 @@ Music:~:*
   (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
                                   (make-keyword format) (make-keyword frame-rate))
                      (make-keyword format) output))
+;; Platform-specific music compilation functions (stub implementations)
+(defun compile-music-cgb (output-file input-file &optional chip)
+  (error "CGB music compilation not yet implemented"))
+
+(defun compile-music-dmg (output-file input-file &optional chip)
+  (error "DMG music compilation not yet implemented"))
+
+(defun compile-music-nes (output-file input-file &optional chip)
+  (error "NES music compilation not yet implemented"))
+
+(defun compile-music-snes (output-file input-file &optional chip)
+  (error "SNES music compilation not yet implemented"))
+
+(defun compile-music-colecovision (output-file input-file &optional chip)
+  (error "ColecoVision music compilation not yet implemented"))
+
+(defun compile-music-sg1000 (output-file input-file &optional chip)
+  (error "SG-1000 music compilation not yet implemented"))
+
+(defun compile-music-sms (output-file input-file &optional chip)
+  (error "SMS music compilation not yet implemented"))
+
+(defun compile-music-sgg (output-file input-file &optional chip)
+  (error "SGG music compilation not yet implemented"))
+
+(defun compile-music-c16 (output-file input-file &optional chip)
+  (error "C=16 music compilation not yet implemented"))
+
+(defun compile-music-a2 (output-file input-file &optional chip)
+  (error "Apple II music compilation not yet implemented"))
+
+(defun compile-music-a3 (output-file input-file &optional chip)
+  (error "Apple III music compilation not yet implemented"))
+
+(defun compile-music-a2gs (output-file input-file &optional chip)
+  (error "Apple IIGS music compilation not yet implemented"))
+
+(defun compile-music-bbc (output-file input-file &optional chip)
+  (error "BBC music compilation not yet implemented"))
+;; Speech/phoneme compilation functions (stub implementations)
+(defun compile-speech-7800 (output-file input-file)
+  (error "7800 speech compilation (SpeakJet) not yet implemented"))
+
+(defun compile-speech-2600 (output-file input-file)
+  (error "2600 speech compilation (SpeakJet) not yet implemented"))
+
+(defun compile-speech-2609 (output-file input-file)
+  (error "2609 speech compilation (IntelliVoice) not yet implemented"))
