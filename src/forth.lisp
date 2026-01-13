@@ -4,7 +4,7 @@
 
 (defun read-forth-word ()
   (when *forth-input-stuffing*
-    (return-from read-forth-word (pop *forth-input-stuffing*))) 
+    (return-from read-forth-word (pop *forth-input-stuffing*)))
   (when (member (peek-char nil *standard-input* nil)
                 '(#\Space #\Page #\Tab #\Newline))
     (loop for char = (read-char *standard-input* nil nil)
