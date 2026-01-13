@@ -832,7 +832,7 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
   (ecase *machine*
-    ((2600 5200 7800 2609) t) ; VCS, 5200, 7800 (SpeakJet), Intellivision (IntelliVoice)
+    ((2600 7800 2609) t) ; VCS (AtariVox), 7800 (SpeakJet), Intellivision (IntelliVoice)
     (t nil))) ; All others: false
 
 (defun asset-loaders (asset-objects)
