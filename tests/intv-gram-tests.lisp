@@ -138,20 +138,45 @@
   (with-temp-gram-output (output-path "test-dim-usage.s")
     (let ((test-png (make-pathname :name "test" :type "png"))
           (test-array (make-test-palette-array 16 16)))
-      ;; Should use provided dimensions even if they differ from array
+      ;; Should use provided dimensions if within bounds
       (handler-case
           (skyline-tool::compile-gram-intv test-png *test-gram-dir*
                                           :width 8
                                           :height 8
                                           :palette-pixels test-array)
         (error (e)
-          (fail "Should use provided dimensions: ~A" e)))
+          (fail "Should use provided dimensions within bounds: ~A" e)))
       ;; Should use array dimensions when not provided
       (handler-case
           (skyline-tool::compile-gram-intv test-png *test-gram-dir*
                                           :palette-pixels test-array)
         (error (e)
           (fail "Should use array dimensions: ~A" e))))))
+
+;; Test 5b: Out-of-bounds detection
+(test gram-compiler-out-of-bounds
+  "Test that out-of-bounds dimensions are detected"
+  (with-temp-gram-output (output-path "test-out-of-bounds.s")
+    (let ((test-png (make-pathname :name "test" :type "png"))
+          (test-array (make-test-palette-array 16 16)))
+      ;; Width out of bounds should error
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 24
+                                        :height 16
+                                        :palette-pixels test-array))
+      ;; Height out of bounds should error
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 16
+                                        :height 24
+                                        :palette-pixels test-array))
+      ;; Both out of bounds should error
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 32
+                                        :height 32
+                                        :palette-pixels test-array)))))
 
 ;; Test 6: Flooring division for card counts
 (test gram-compiler-card-count-flooring

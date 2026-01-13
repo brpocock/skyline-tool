@@ -1423,6 +1423,15 @@ All cards in the source image are output as one file."
   (setf height (floor height))
   (assert (plusp width) (width) "Width must be positive, got ~D" width)
   (assert (plusp height) (height) "Height must be positive, got ~D" height)
+  ;; Validate dimensions are within array bounds
+  (assert (<= width (array-dimension palette-pixels 0))
+          (width palette-pixels)
+          "Width ~D exceeds array width ~D"
+          width (array-dimension palette-pixels 0))
+  (assert (<= height (array-dimension palette-pixels 1))
+          (height palette-pixels)
+          "Height ~D exceeds array height ~D"
+          height (array-dimension palette-pixels 1))
   ;; Check if monochrome (only black=0 and white=7 palette indices)
   (let ((colors (image-colours palette-pixels height width)))
     (unless (subsetp colors '(0 7) :test '=)
