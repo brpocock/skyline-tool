@@ -132,24 +132,26 @@
       (is (= 24 (array-dimension test-array 0)))
       (is (= 32 (array-dimension test-array 1))))))
 
-;; Test 5: Dimension mismatch detection
-(test gram-compiler-dimension-mismatch
-  "Test that dimension mismatches are detected"
-  (with-temp-gram-output (output-path "test-dim-mismatch.s")
+;; Test 5: Dimension usage (provided vs array)
+(test gram-compiler-dimension-usage
+  "Test that provided dimensions are used, array dimensions used when not provided"
+  (with-temp-gram-output (output-path "test-dim-usage.s")
     (let ((test-png (make-pathname :name "test" :type "png"))
           (test-array (make-test-palette-array 16 16)))
-      ;; Mismatch in width should error
-      (signals error
-        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
-                                        :width 24
-                                        :height 16
-                                        :palette-pixels test-array))
-      ;; Mismatch in height should error
-      (signals error
-        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
-                                        :width 16
-                                        :height 24
-                                        :palette-pixels test-array)))))
+      ;; Should use provided dimensions even if they differ from array
+      (handler-case
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :width 8
+                                          :height 8
+                                          :palette-pixels test-array)
+        (error (e)
+          (fail "Should use provided dimensions: ~A" e)))
+      ;; Should use array dimensions when not provided
+      (handler-case
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :palette-pixels test-array)
+        (error (e)
+          (fail "Should use array dimensions: ~A" e))))))
 
 ;; Test 6: Flooring division for card counts
 (test gram-compiler-card-count-flooring

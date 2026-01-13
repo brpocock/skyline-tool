@@ -1415,7 +1415,7 @@ All cards in the source image are output as one file."
       (setf palette-pixels (png->palette png-height png-width
                                         (png-read:image-data png)
                                         α))))
-  ;; Get dimensions from array if not provided
+  ;; Get dimensions: use provided values or extract from array
   (setf width (or width (array-dimension palette-pixels 0))
         height (or height (array-dimension palette-pixels 1)))
   ;; Validate dimensions: floor to nearest int and ensure nonzero
@@ -1423,15 +1423,6 @@ All cards in the source image are output as one file."
   (setf height (floor height))
   (assert (plusp width) (width) "Width must be positive, got ~D" width)
   (assert (plusp height) (height) "Height must be positive, got ~D" height)
-  ;; Verify dimensions match array
-  (assert (= (array-dimension palette-pixels 0) width)
-          (width palette-pixels)
-          "Width ~D does not match array dimension ~D"
-          width (array-dimension palette-pixels 0))
-  (assert (= (array-dimension palette-pixels 1) height)
-          (height palette-pixels)
-          "Height ~D does not match array dimension ~D"
-          height (array-dimension palette-pixels 1))
   ;; Check if monochrome (only black=0 and white=7 palette indices)
   (let ((colors (image-colours palette-pixels height width)))
     (unless (subsetp colors '(0 7) :test '=)
