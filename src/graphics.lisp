@@ -1373,7 +1373,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                                       (nth intv-fg-color +intv-color-names+))
 
                               ;; Output color data (4-bit BG, 4-bit FG in one byte)
-                              (format src-file "    DECLE   $~2,'0X    ; BG=~A, FG=~A~%"
+                              (format src-file "    DECLE   $~4,'0X    ; BG=~A, FG=~A~%"
                                       (logior (ash intv-bg-color 4) intv-fg-color)
                                       (nth intv-bg-color +intv-color-names+)
                                       (nth intv-fg-color +intv-color-names+))
@@ -1385,7 +1385,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                                              for pixel-rgb = (aref tile-pixels x y)
                                              do (when (and pixel-rgb (equal pixel-rgb fg-rgb))
                                                   (setf byte (logior byte (ash 1 (- 7 x))))))
-                                       (format src-file "    DECLE   $~2,'0X~%" byte))))))
+                                       (format src-file "    DECLE   $~4,'0X~%" byte))))))
 
       (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
 
@@ -1401,6 +1401,7 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 
 Compiles PNG image into GRAM card data for Intellivision.
 Outputs assembly file with DECLE statements for GRAM card data.
+Each 8×8 pixel GRAM card is stored as 4 16-bit words (packing 2 bytes per word).
 All cards in the source image are output as one file."
   (check-type png-file (or pathname string))
   (check-type out-dir (or pathname string))
@@ -1413,10 +1414,13 @@ All cards in the source image are output as one file."
                    out-dir)))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%~%"
+      (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
               png-file)
-      ;; Output placeholder DECLE statement (will be replaced with actual card data)
-      (format src-file "    DECLE   $00~%"))))
+      ;; Output placeholder DECLE statements (4 per card, will be replaced with actual card data)
+      (format src-file "    DECLE   $0000~%")
+      (format src-file "    DECLE   $0000~%")
+      (format src-file "    DECLE   $0000~%")
+      (format src-file "    DECLE   $0000~%"))))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))

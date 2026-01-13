@@ -47,7 +47,7 @@
 
 ;; Test 2: DECLE format verification
 (test gram-compiler-decle-format
-  "Test that GRAM compiler outputs DECLE statements in correct format"
+  "Test that GRAM compiler outputs DECLE statements in correct 16-bit format"
   (with-temp-gram-output (output-path "test-card.s")
     (let ((input-png (make-pathname :name "test-card" :type "png")))
       ;; Call the GRAM compiler
@@ -57,7 +57,25 @@
         ;; Verify file contains DECLE keyword
         (is-true (search "DECLE" output-content)
                  "Output file should contain DECLE statements")
-        ;; Verify DECLE format (should have spaces before DECLE)
-        (is-true (or (search "    DECLE" output-content)
-                     (search "DECLE" output-content))
-                 "Output file should have properly formatted DECLE statements")))))
+        ;; Verify DECLE format uses 4 hex digits (16-bit format: $0000-$FFFF)
+        ;; Pattern: DECLE followed by $ and exactly 4 hex digits
+        (let ((decle-pos (search "DECLE" output-content)))
+          (is-true decle-pos
+                   "Output file should contain DECLE statements")
+          (let ((after-decle (subseq output-content decle-pos (min (+ decle-pos 30) (length output-content)))))
+            (let ((dollar-pos (position #\$ after-decle)))
+              (is-true dollar-pos
+                       "DECLE statement should include $ prefix")
+              (when dollar-pos
+                (let ((hex-start (+ 1 dollar-pos))
+                      (hex-end (min (+ hex-start 4) (length after-decle))))
+                  (when (>= hex-end hex-start)
+                    (let ((hex-str (subseq after-decle hex-start hex-end)))
+                      ;; Verify exactly 4 hex digits
+                      (is (= 4 (length hex-str))
+                          "DECLE value should have exactly 4 hex digits (16-bit format), found: ~A"
+                          hex-str)
+                      ;; Verify all characters are valid hex digits
+                      (is-true (every (lambda (c) (digit-char-p c 16)) hex-str)
+                               "DECLE value should contain only hex digits: ~A"
+                               hex-str))))))))))))
