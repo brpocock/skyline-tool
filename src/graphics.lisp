@@ -343,93 +343,6 @@
     ((64 128) +c64-names+)
     (2609 +intv-color-names+)))
 
-
-;;; Error Conditions for Art Conversion
-(define-condition art-conversion-error (error)
-  ((filename :initarg :filename :reader art-conversion-error-filename)
-   (machine :initarg :machine :reader art-conversion-error-machine)
-   (context :initarg :context :reader art-conversion-error-context))
-  (:report (lambda (condition stream)
-             (format stream "Art conversion error for ~A on ~A machine~@[ in ~A~]"
-                     (art-conversion-error-filename condition)
-                     (art-conversion-error-machine condition)
-                     (art-conversion-error-context condition)))))
-
-(define-condition palette-error (art-conversion-error)
-  ((invalid-color :initarg :invalid-color :reader palette-error-invalid-color)
-   (available-colors :initarg :available-colors :reader palette-error-available-colors))
-  (:report (lambda (condition stream)
-             (format stream "Color ~A not in palette for ~A on ~A machine~@[ in ~A~]. ~
-                           Available colors: ~{~A~^, ~}"
-                     (palette-error-invalid-color condition)
-                     (art-conversion-error-filename condition)
-                     (art-conversion-error-machine condition)
-                     (art-conversion-error-context condition)
-                     (palette-error-available-colors condition)))))
-
-(define-condition dimension-error (art-conversion-error)
-  ((invalid-width :initarg :invalid-width :reader dimension-error-invalid-width)
-   (invalid-height :initarg :invalid-height :reader dimension-error-invalid-height)
-   (max-width :initarg :max-width :reader dimension-error-max-width)
-   (max-height :initarg :max-height :reader dimension-error-max-height))
-  (:report (lambda (condition stream)
-             (format stream "Invalid dimensions ~Ax~A for ~A on ~A machine~@[ in ~A~]. ~
-                           Maximum allowed: ~Ax~A"
-                     (dimension-error-invalid-width condition)
-                     (dimension-error-invalid-height condition)
-                     (art-conversion-error-filename condition)
-                     (art-conversion-error-machine condition)
-                     (art-conversion-error-context condition)
-                     (dimension-error-max-width condition)
-                     (dimension-error-max-height condition)))))
-
-(define-condition format-error (art-conversion-error)
-  ((expected-format :initarg :expected-format :reader format-error-expected-format)
-   (actual-format :initarg :actual-format :reader format-error-actual-format))
-  (:report (lambda (condition stream)
-             (format stream "Invalid format ~A for ~A on ~A machine~@[ in ~A~]. ~
-                           Expected: ~A"
-                     (format-error-actual-format condition)
-                     (art-conversion-error-filename condition)
-                     (art-conversion-error-machine condition)
-                     (art-conversion-error-context condition)
-                     (format-error-expected-format condition)))))
-
-(define-condition mode-error (art-conversion-error)
-  ((invalid-mode :initarg :invalid-mode :reader mode-error-invalid-mode)
-   (valid-modes :initarg :valid-modes :reader mode-error-valid-modes))
-  (:report (lambda (condition stream)
-             (format stream "Invalid graphics mode ~A for ~A on ~A machine~@[ in ~A~]. ~
-                           Valid modes: ~{~A~^, ~}"
-                     (mode-error-invalid-mode condition)
-                     (art-conversion-error-filename condition)
-                     (art-conversion-error-machine condition)
-                     (art-conversion-error-context condition)
-                     (mode-error-valid-modes condition)))))
-
-(defun pal-capable-p (machine)
-  "Return T if the machine supports PAL video standard"
-  (ecase machine
-    (20 t)     ; VCS supports PAL
-    (2609 t)   ; Intellivision supports PAL
-    (5200 t)   ; Atari 5200 supports PAL
-    (7800 t)   ; Atari 7800 supports PAL
-    (35902 t)  ; Game Boy Color supports PAL
-    (20953 t)  ; DMG Game Boy supports PAL
-    (9918 t)   ; ColecoVision supports PAL
-    (1000 t)   ; SG-1000 supports PAL
-    (3010 t)   ; Master System supports PAL
-    (837 t)    ; Game Gear supports PAL
-    (3 t)      ; NES supports PAL
-    (6 t)      ; SNES supports PAL
-    (7 t)      ; BBC supports PAL
-    (264 t)    ; C=16 supports PAL
-    (8 t)      ; Apple ][ supports PAL
-    (9 t)      ; Apple /// supports PAL
-    (10 t)     ; Apple //gs supports PAL
-    (64 t) ; C=64 supports PAL
-    (128 t) ; C=128 supports PAL
-    (t nil)))  ; Default: false
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"
   (* n n))
@@ -1391,7 +1304,7 @@ of the given width."
 (loop for width in '(16 32 64 128)
       do (dotimes (i #xff)
            (assert (> (/ 16384 width) (tile-cell-vic2-y i width))
-                   () "The TILE-CELL-VIC2-Y function must return a valid value;
+                   nil "The TILE-CELL-VIC2-Y function must return a valid value;
 value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell-vic2-y i width) i width)))
 
 (defun compile-atari-8×8 (png-file target-dir height width)
@@ -1407,76 +1320,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             for i from 0
             do (loop for y0 from 7 downto 0
                      do (format src-file "~t.byte %~0,8b" 0))))))
-
-(defun compile-tileset-intv (png-file out-dir height width palette-pixels)
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name
-                                  (concatenate 'string "tiles."
-                                               (pathname-name png-file))
-                                  :type "s")
-                   out-dir))
-        (tiles-across (/ width 8))
-        (tiles-down (/ height 8))
-        (machine-palette (machine-palette 2609)))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Intellivision tileset ~A~%;;; Generated from ~A~%~%"
-              (pathname-name png-file) png-file)
-
-      ;; Process each 8x8 tile
-      (loop for tile-y from 0 below tiles-down
-            do (loop for tile-x from 0 below tiles-across
-                     for tile-index = (+ (* tile-y tiles-across) tile-x)
-                     do (let* ((start-x (* tile-x 8))
-                               (start-y (* tile-y 8))
-                               (tile-colors (make-hash-table :test 'equal))
-                               (tile-pixels (make-array '(8 8) :element-type 'list)))
-
-                          ;; Extract pixel data for this tile (RGB tuples)
-                          (loop for y from 0 below 8
-                                do (loop for x from 0 below 8
-                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
-                                         for rgb-color = (when palette-index
-                                                           (nth palette-index machine-palette))
-                                         do (setf (aref tile-pixels x y) rgb-color)
-                                            (when rgb-color
-                                              (incf (gethash rgb-color tile-colors 0)))))
-
-                          ;; Determine fg and bg colors
-                          ;; Most frequent color becomes background, second most frequent becomes foreground
-                          (let* ((color-counts (sort (alexandria:hash-table-alist tile-colors)
-                                                     #'> :key #'cdr))
-                                 (bg-rgb (if color-counts (car (first color-counts)) '(0 0 0)))
-                                 (fg-rgb (if (and color-counts (> (length color-counts) 1))
-                                             (car (second color-counts))
-                                             (if (equal bg-rgb '(0 0 0)) '(255 255 255) bg-rgb))))
-
-                            ;; Find Intellivision palette indices
-                            (let ((intv-bg-color (position bg-rgb machine-palette :test 'equal))
-                                  (intv-fg-color (position fg-rgb machine-palette :test 'equal)))
-
-                              ;; Output tile data comment
-                              (format src-file "~%;;; Tile ~D at (~D,~D): BG=~A, FG=~A~%"
-                                      tile-index tile-x tile-y
-                                      (nth intv-bg-color +intv-color-names+)
-                                      (nth intv-fg-color +intv-color-names+))
-
-                              ;; Output color data (4-bit BG, 4-bit FG in one byte)
-                              (format src-file "    DECLE   $~2,'0X    ; BG=~A, FG=~A~%"
-                                      (logior (ash intv-bg-color 4) intv-fg-color)
-                                      (nth intv-bg-color +intv-color-names+)
-                                      (nth intv-fg-color +intv-color-names+))
-
-                              ;; Output 8 bytes of tile bitmap data
-                              (loop for y from 0 below 8
-                                    for byte = 0
-                                    do (loop for x from 0 below 8
-                                             for pixel-rgb = (aref tile-pixels x y)
-                                             do (when (and pixel-rgb (equal pixel-rgb fg-rgb))
-                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
-                                       (format src-file "    DECLE   $~2,'0X~%" byte))))))
-
-      (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
-
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
@@ -1512,7 +1355,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 (defun compile-tileset (png-file out-dir height width image-nybbles)
   (case *machine*
     ((64 128) (compile-tileset-64 png-file out-dir height width image-nybbles))
-    (2609 (compile-tileset-intv png-file out-dir height width image-nybbles))
     (otherwise (error "Tile set compiler not set up yet for ~a" (machine-long-name)))))
 
 (defun monochrome-lines-p (palette-pixels height width)
@@ -1592,131 +1434,59 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 ~:D×~:D pixels ~:[with~;without~] monochrome lines"
                 width height monochrome-lines-p)))))
 
-(defun compile-5200-mode-e-tiles (png-file out-dir
-                                    height width image-pixels &key (tile-width 8) (tile-height 8))
-  "Compile 5200 ANTIC Mode E tile graphics"
-  (let ((out-file-name (merge-pathnames
-                        (make-pathname :name
-                                       (pathname-name png-file)
-                                       :type "s")
-                        out-dir)))
-    (format *trace-output* "~% Ripping 5200 Mode E tiles from ~D×~D image (~Dx~D tiles)"
-            width height tile-width tile-height)
-    (finish-output *trace-output*)
-    (with-output-to-file (source-file out-file-name :if-exists :supersede)
-      (let* ((tiles-wide (/ width tile-width))
-             (tiles-high (/ height tile-height))
-             (tile-data (mode-e-tile-interpret image-pixels tiles-wide tiles-high tile-width tile-height)))
-        (format source-file ";;; -*- fundamental -*-
-;;; 5200 ANTIC Mode E tile data from ~a
-;;; Generated for ~D×~D tiles of ~Dx~D pixels each
+(defmethod dispatch-png% ((machine (eql 5200)) png-file target-dir
+                          png height width α palette-pixels)
+  (let ((monochrome-lines-p (monochrome-lines-p palette-pixels height width)))
+    (cond
+      ((and (= 256 width) (= 16 height))
+       (format *trace-output* "~% Image ~a seems to be a ~d×~dpx Mode D skybox art"
+               png-file width height)
+       (compile-5200-mode-e-bitmap palette-pixels
+                                   :png-file png-file
+                                   :target-dir target-dir
+                                   :height height
+                                   :width width
+                                   :compressp nil
+                                   :color-per-line-p nil))
+      ((= width 160)
+       (format *trace-output* "~% Image ~a seems to be a full-screen (playfield) pixmap, assuming Mode D/E"
+               png-file)
+       (compile-5200-mode-e-bitmap palette-pixels
+                                   :png-file png-file
+                                   :target-dir target-dir
+                                   :height height
+                                   :width width
+                                   :compressp t
+                                   :base-palette '(0 7 27 83)))
+      ((and (= width 12) (zerop (mod height 12)))
+       (format *trace-output* "~% Image ~a seems to be 12×12 icons, assuming Mode D/E"
+               png-file)
+       (compile-5200-mode-e-bitmap palette-pixels
+                                   :png-file png-file
+                                   :target-dir target-dir
+                                   :height height
+                                   :width width
+                                   :compressp nil
+                                   :color-per-line-p nil
+                                   :base-palette '(0 27 83 7)))
+      ((and (= width 256) (zerop (mod height 64)))
+       (format *trace-output* "~% Image ~a seems to be 64×64 icons, assuming Mode D/E"
+               png-file)
+       (compile-5200-mode-e-bitmap palette-pixels
+                                   :png-file png-file
+                                   :target-dir target-dir
+                                   :height height
+                                   :width width
+                                   :compressp t
+                                   :color-per-line-p nil))
+      ((zerop (mod width 8))
+       (format *trace-output* "~% Image ~A seems to be sprite (player) data"
+               png-file)
+       (compile-gtia-player png-file target-dir height width palette-pixels))
 
-~aTiles: .block
-~10tTilesWide = ~D
-~10tTilesHigh = ~D
-~10tTileWidth = ~D
-~10tTileHeight = ~D
-~10tTotalTiles = ~D
-
-; Tile data - 4 bytes per tile line (Mode E format)
-~{~%~aTile~D:~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}
- .bend
-"
-              (enough-namestring png-file)
-              tiles-wide tiles-high tile-width tile-height
-              (assembler-label-name (pathname-name png-file))
-              tiles-wide tiles-high tile-width tile-height
-              (* tiles-wide tiles-high)
-              tile-data
-              (loop for i from 0 below (length tile-data)
-                    collect (list (assembler-label-name (pathname-name png-file))
-                                i
-                                (elt tile-data i))))))))
-
-(defun compile-5200-pmg-decals (png-file out-dir
-                                height width image-pixels &key (max-decals 16))
-  "Compile 5200 PMG decals with one-color-per-line"
-  (let ((out-file-name (merge-pathnames
-                        (make-pathname :name
-                                       (pathname-name png-file)
-                                       :type "s")
-                        out-dir)))
-    (format *trace-output* "~% Ripping 5200 PMG decals from ~D×~D image (max ~D decals)"
-            width height max-decals)
-    (finish-output *trace-output*)
-    (with-output-to-file (source-file out-file-name :if-exists :supersede)
-      (let ((decal-data (pmg-decal-interpret image-pixels height width max-decals)))
-        (format source-file ";;; -*- fundamental -*-
-;;; 5200 PMG decal data from ~a
-;;; One-color-per-line sprites for decals
-
-~aDecals: .block
-~10tMaxDecals = ~D
-~10tDecalHeight = ~D
-
-; Decal data - PMG format with color cycling
-~{~%~aDecal~D:~10t.byte $~2,'0x~}
- .bend
-"
-              (enough-namestring png-file)
-              (assembler-label-name (pathname-name png-file))
-              max-decals
-              (/ height max-decals)
-              decal-data
-              (loop for i from 0 below (length decal-data)
-                    collect (list (assembler-label-name (pathname-name png-file))
-                                i
-                                (elt decal-data i))))))))
-
-(defun mode-e-tile-interpret (image-pixels tiles-wide tiles-high tile-width tile-height)
-  "Interpret image data for ANTIC Mode E tiles"
-  ;; Mode E: 4 pixels per byte, 4 colors per scanline
-  ;; For tiles, we'll pack 4x1 pixel rows into bytes
-  (let ((tile-data '()))
-    (dotimes (tile-y tiles-high)
-      (dotimes (tile-x tiles-wide)
-        (let ((tile-bytes '()))
-          (dotimes (pixel-y tile-height)
-            (let ((byte-value 0)
-                  (bit-pos 6))
-              (dotimes (pixel-x tile-width)
-                (let* ((img-x (+ (* tile-x tile-width) pixel-x))
-                       (img-y (+ (* tile-y tile-height) pixel-y))
-                       (color (if (and (< img-x (array-dimension image-pixels 0))
-                                       (< img-y (array-dimension image-pixels 1)))
-                                (aref image-pixels img-x img-y)
-                                0)))
-                  ;; Pack 4 pixels into 1 byte (2 bits per pixel)
-                  (setf byte-value (logior byte-value (ash (logand color #x03) bit-pos)))
-                  (decf bit-pos 2)
-                  (when (= bit-pos -2)
-                    (push byte-value tile-bytes)
-                    (setf byte-value 0 bit-pos 6)))))
-          (when (> byte-value 0)
-            (push byte-value tile-bytes))
-          (setf tile-data (append tile-data (reverse tile-bytes))))))
-    tile-data))
-
-(defun pmg-decal-interpret (image-pixels height width max-decals)
-  "Interpret image data for PMG decals with one-color-per-line"
-  ;; PMG decals: 8 pixels per byte, variable colors per line
-  (let ((decal-data '())
-        (decal-height (/ height max-decals)))
-    (dotimes (decal-idx max-decals)
-      (let ((decal-bytes '()))
-        (dotimes (line decal-height)
-          (let ((byte-value 0)
-                (img-y (+ (* decal-idx decal-height) line)))
-            (dotimes (pixel-x 8)  ; 8 pixels per PMG byte
-              (let* ((img-x pixel-x)
-                     (pixel-on (if (and (< img-x width) (< img-y height))
-                                 (> (aref image-pixels img-x img-y) 0)
-                                 nil)))
-                (when pixel-on
-                  (setf byte-value (logior byte-value (ash 1 (- 7 pixel-x)))))))
-            (push byte-value decal-bytes)))
-        (setf decal-data (append decal-data (reverse decal-bytes)))))
-    decal-data)))
+      (t (error "Don't know how to deal with image with dimensions ~
+~:D×~:D pixels ~:[with~;without~] monochrome lines"
+                width height monochrome-lines-p)))))
 
 (defmethod dispatch-png% ((machine (eql 20)) png-file target-dir
                           png height width α palette-pixels)
@@ -1726,34 +1496,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                (monochrome-image-p palette-pixels)))
   (format *trace-output* "~% Image ~A seems to be a VIC-20 8×8 font" png-file)
   (compile-font-8×8 png-file target-dir height width palette-pixels))
-
-;; (defmethod dispatch-png% ((machine (eql 9000)) png-file target-dir
-;;                           png height width α palette-pixels)
-;;   (cond
-;;     ;; Lynx sprites: up to 160×102, 16 colors max
-;;     ((and (<= width 160) (<= height 102))
-;;      (format *trace-output* "~% Image ~A seems to be a Lynx sprite" png-file)
-;;      (compile-lynx-sprite png-file target-dir))
-
-;;     ;; Lynx backgrounds: exactly 160×102
-;;     ((and (= width 160) (= height 102))
-;;      (format *trace-output* "~% Image ~A seems to be a Lynx background" png-file)
-;;      (compile-lynx-blob png-file target-dir))
-
-;;     ;; Lynx tilesets: multiples of 8×8, up to 160×102
-;;     ((and (zerop (mod width 8)) (zerop (mod height 8))
-;;           (<= width 160) (<= height 102))
-;;      (format *trace-output* "~% Image ~A seems to be a Lynx tileset" png-file)
-;;      (compile-lynx-tileset png-file target-dir))
-
-;;     (t
-;;      (error 'dimension-error
-;;             :filename png-file
-;;             :machine 9000
-;;             :invalid-width width
-;;             :invalid-height height
-;;             :max-width 160
-;;             :max-height 102))))
 
 (defmethod dispatch-png% ((machine (eql 64)) png-file target-dir
                           png height width α palette-pixels)
@@ -1778,83 +1520,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
 
     (t (error "Don't know how to deal with image with dimensions ~:D×~:D pixels"
               width height))))
-
-(defmethod dispatch-png% ((machine (eql 2609)) png-file target-dir
-                          png height width α palette-pixels)
-  (cond
-    ((and (zerop (mod height 8))
-          (zerop (mod width 8))
-          (>= 256 (* (/ height 8) (/ width 8))))
-     (format *trace-output* "~% Image ~A seems to be Intellivision tiles" png-file)
-     (compile-tileset png-file target-dir height width palette-pixels))
-
-    (t (error "Don't know how to deal with Intellivision image with dimensions ~:D×~:D pixels"
-              width height))))
-
-;; Game Boy Color (35902)
-(defmethod dispatch-png% ((machine (eql 35902)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "CGB graphics compilation not yet implemented"))
-
-;; Game Boy (20953)
-(defmethod dispatch-png% ((machine (eql 20953)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "DMG graphics compilation not yet implemented"))
-
-;; ColecoVision (9918)
-(defmethod dispatch-png% ((machine (eql 9918)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "ColecoVision graphics compilation not yet implemented"))
-
-;; SG-1000 (1000)
-(defmethod dispatch-png% ((machine (eql 1000)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "SG-1000 graphics compilation not yet implemented"))
-
-;; Sega Master System (3010)
-(defmethod dispatch-png% ((machine (eql 3010)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "SMS graphics compilation not yet implemented"))
-
-;; Sega Game Gear (837)
-(defmethod dispatch-png% ((machine (eql 837)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "SGG graphics compilation not yet implemented"))
-
-;; NES (3)
-(defmethod dispatch-png% ((machine (eql 3)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "NES graphics compilation not yet implemented"))
-
-;; SNES (6)
-(defmethod dispatch-png% ((machine (eql 6)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "SNES graphics compilation not yet implemented"))
-
-;; BBC Micro (7)
-(defmethod dispatch-png% ((machine (eql 7)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "BBC graphics compilation not yet implemented"))
-
-;; Commodore 16 (264)
-(defmethod dispatch-png% ((machine (eql 264)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "C16 graphics compilation not yet implemented"))
-
-;; Apple II (8)
-(defmethod dispatch-png% ((machine (eql 8)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "Apple II graphics compilation not yet implemented"))
-
-;; Apple III (9)
-(defmethod dispatch-png% ((machine (eql 9)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "Apple III graphics compilation not yet implemented"))
-
-;; Apple IIGS (10)
-(defmethod dispatch-png% ((machine (eql 10)) png-file target-dir
-                          png height width α palette-pixels)
-  (error "Apple IIGS graphics compilation not yet implemented"))
 
 (defun dispatch-png (png-file target-dir)
   (with-simple-restart (retry-png "Retry processing PNG file ~a" png-file)
@@ -2451,457 +2116,37 @@ Used internally by BLOB ripping for color stamp conversion."
     (nreverse bytes)))
 
 (defun read-7800-art-index (index-in)
-  "Read and validate 7800 art index file, returning list of (mode path width height) tuples.
-
-Signals appropriate errors for invalid formats, dimensions, or modes."
-  (let ((png-list (list))
-        (valid-modes '(:160a :160b :320a :320b :320c :320d)))
+  (let ((png-list (list)))
     (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
-    (handler-case
-        (with-input-from-file (index index-in)
-          (loop for line-num from 1
-                for line = (read-line index nil)
-                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
-                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
-                                            line)))
-                     (cond
-                       ((emptyp line) nil)
-                       ((char= #\# (char line 0)) nil)
-                       (t (handler-case
-                              (destructuring-bind (png-name mode cell-size)
-                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
-                                (unless (= 3 (length (split-sequence #\Space line :remove-empty-subseqs t)))
-                                  (error 'format-error
-                                         :filename index-in
-                                         :machine 7800
-                                         :context (format nil "line ~D" line-num)
-                                         :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
-                                         :actual-format line))
-                                (let ((mode-keyword (make-keyword mode)))
-                                  (unless (member mode-keyword valid-modes)
-                                    (error 'mode-error
-                                           :filename index-in
-                                           :machine 7800
-                                           :context (format nil "line ~D" line-num)
-                                           :invalid-mode mode-keyword
-                                           :valid-modes valid-modes))
-                                  (destructuring-bind (width-px height-px)
-                                      (split-sequence #\× cell-size :test #'char=)
-                                    (let ((width (parse-integer width-px :junk-allowed nil))
-                                          (height (parse-integer height-px :junk-allowed nil)))
-                                      ;; Validate dimensions based on mode
-                                      (ecase mode-keyword
-                                        ((:160a :160b) (unless (and (<= width 160) (<= height 192))
-                                                         (error 'dimension-error
-                                                                :filename index-in
-                                                                :machine 7800
-                                                                :context (format nil "~A mode, line ~D" mode cell-size)
-                                                                :invalid-width width
-                                                                :invalid-height height
-                                                                :max-width 160
-                                                                :max-height 192)))
-                                        ((:320a :320b :320c :320d) (unless (and (<= width 320) (<= height 192))
-                                                                     (error 'dimension-error
-                                                                            :filename index-in
-                                                                            :machine 7800
-                                                                            :context (format nil "~A mode, line ~D" mode cell-size)
-                                                                            :invalid-width width
-                                                                            :invalid-height height
-                                                                            :max-width 320
-                                                                            :max-height 192))))
-                                      (push (list mode-keyword
-                                                  (make-pathname :defaults index-in
-                                                                 :name (subseq png-name 0
-                                                                               (position #\. png-name :from-end t))
-                                                                 :type "png")
-                                                  width
-                                                  height)
-                                            png-list)))))
-                            (parse-error (e)
-                              (error 'format-error
-                                     :filename index-in
-                                     :machine 7800
-                                     :context (format nil "line ~D" line-num)
-                                     :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
-                                     :actual-format line)))))))
-      (file-error (e)
-        (error 'art-conversion-error
-               :filename index-in
-               :machine 7800
-               :context "file access")))
+    (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
+                                        line)))
+                 (cond
+                   ((emptyp line) nil)
+                   ((char= #\# (char line 0)) nil)
+                   (t (destructuring-bind (png-name mode cell-size)
+                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                        (destructuring-bind (width-px height-px)
+                            (split-sequence #\× cell-size :test #'char=)
+                          (push (list (make-keyword mode)
+                                      (make-pathname :defaults index-in
+                                                     :name (subseq png-name 0
+                                                                   (position #\. png-name :from-end t))
+                                                     :type "png")
+                                      (parse-integer width-px)
+                                      (parse-integer height-px))
+                                png-list))))))))
     (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
     (reverse png-list)))
 
 (defun compile-art-7800 (index-out index-in)
-  "Compile art assets for Atari 7800 platform.
-
-INDEX-OUT: Output filename for compiled art data
-INDEX-IN: Input art index file to process
-
-Parses art index files and generates optimized binary data for 7800 hardware.
-Signals appropriate errors for invalid input files or unsupported configurations."
   (let ((*machine* 7800))
-    (handler-case
-        (write-7800-binary index-out
-                           (interleave-7800-bytes
-                            (parse-into-7800-bytes
-                             (read-7800-art-index index-in))))
-      (art-conversion-error (e)
-        ;; Re-signal art conversion errors with additional context
-        (error e))
-      (error (e)
-        (error 'art-conversion-error
-               :filename index-in
-               :machine 7800
-               :context "binary generation")))))
-
-(defun compile-art-5200 (index-out index-in)
-  "@cindex 5200 art compilation
-@cindex ANTIC graphics
-@cindex PMG graphics
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: index-out (pathname or string), index-in (pathname or string)
-@item Returns: nil
-@item Side Effects: Creates 5200 graphics data files
-@end table
-
-Compile art assets for Atari 5200 platform.
-Processes tile graphics for ANTIC Mode D/E and player graphics for PMG system."
-  (declare (ignore index-out index-in))
-  ;; TODO: Implement actual 5200 art compilation
-  (format *trace-output* "~&5200 art compilation - processing tiles and PMG graphics~%"))
-
-;; Compile art functions for new platforms
-(defun compile-art-cgb (index-out index-in)
-  (error "unimplemented: CGB art compilation not yet implemented"))
-
-(defun compile-art-dmg (index-out index-in)
-  (error "unimplemented: DMG art compilation not yet implemented"))
-
-(defun compile-art-clc (index-out index-in)
-  (error "unimplemented: ColecoVision art compilation not yet implemented"))
-
-(defun compile-art-1000 (index-out index-in)
-  (error "unimplemented: SG-1000 art compilation not yet implemented"))
-
-(defun compile-art-sms (index-out index-in)
-  (error "unimplemented: SMS art compilation not yet implemented"))
-
-(defun compile-art-sgg (index-out index-in)
-  (error "unimplemented: SGG art compilation not yet implemented"))
-
-(defun compile-art-nes (index-out index-in)
-  (error "unimplemented: NES art compilation not yet implemented"))
-
-(defun read-lynx-art-index (index-in)
-  "Read and validate Lynx art index file, returning list of (mode path width height) tuples.
-
-Signals appropriate errors for invalid formats, dimensions, or modes."
-  (let ((png-list (list))
-        (valid-modes '(:sprite :background :tileset)))
-    (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
-    (handler-case
-        (with-input-from-file (index index-in)
-          (loop for line-num from 1
-                for line = (read-line index nil)
-                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
-                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
-                                            line)))
-                     (cond
-                       ((emptyp line) nil)
-                       ((char= #\# (char line 0)) nil)
-                       (t (handler-case
-                              (destructuring-bind (png-name mode cell-size)
-                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
-                                (unless (= 3 (length (split-sequence #\Space line :remove-empty-subseqs t)))
-                                  (error 'format-error
-                                         :filename index-in
-                                         :machine 9000
-                                         :context (format nil "line ~D" line-num)
-                                         :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
-                                         :actual-format line))
-                                (let ((mode-keyword (make-keyword mode)))
-                                  (unless (member mode-keyword valid-modes)
-                                    (error 'mode-error
-                                           :filename index-in
-                                           :machine 9000
-                                           :context (format nil "line ~D" line-num)
-                                           :invalid-mode mode-keyword
-                                           :valid-modes valid-modes))
-                                  (destructuring-bind (width-px height-px)
-                                      (split-sequence #\× cell-size :test #'char=)
-                                    (let ((width (parse-integer width-px :junk-allowed nil))
-                                          (height (parse-integer height-px :junk-allowed nil)))
-                                      ;; Validate dimensions based on mode and Lynx hardware limits
-                                      (ecase mode-keyword
-                                        (:sprite (unless (and (<= width 160) (<= height 102))
-                                                   (error 'dimension-error
-                                                          :filename index-in
-                                                          :machine 9000
-                                                          :context (format nil "~A mode, line ~D" mode cell-size)
-                                                          :invalid-width width
-                                                          :invalid-height height
-                                                          :max-width 160
-                                                          :max-height 102)))
-                                        (:background (unless (and (= width 160) (= height 102))
-                                                        (error 'dimension-error
-                                                               :filename index-in
-                                                               :machine 9000
-                                                               :context (format nil "~A mode, line ~D" mode cell-size)
-                                                               :invalid-width width
-                                                               :invalid-height height
-                                                               :max-width 160
-                                                               :max-height 102)))
-                                        (:tileset (unless (and (<= width 160) (<= height 102))
-                                                    (error 'dimension-error
-                                                           :filename index-in
-                                                           :machine 9000
-                                                           :context (format nil "~A mode, line ~D" mode cell-size)
-                                                           :invalid-width width
-                                                           :invalid-height height
-                                                           :max-width 160
-                                                           :max-height 102))))
-                                      (push (list png-name mode-keyword width height) png-list)))))
-                            (error (e)
-                              (error 'art-conversion-error
-                                     :filename index-in
-                                     :message (format nil "Line ~D: ~A" line-num e)))))))
-          (nreverse png-list))
-      (error (e)
-        (error 'art-conversion-error
-               :filename index-in
-               :message (format nil "Failed to read Lynx art index: ~A" e))))))
-
-(defun parse-into-lynx-bytes (art-index)
-  "Parse Lynx art index into byte data suitable for Lynx hardware.
-
-ART-INDEX: List of (png-name mode-keyword width height) tuples
-Returns: List of bytes representing the compiled graphics data"
-  (let ((bytes (list)))
-    (dolist (art-item art-index)
-      (destructuring-bind (png-name mode width-px height-px) art-item
-        (format *trace-output* "~&~A: parsing in mode ~A (start at $~2,'0x)… "
-                png-name mode (length bytes))
-        (let* ((png (png-read:read-png-file png-name))
-               (height (png-read:height png))
-               (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
-                                             (png-read:transparency png)))
-               (palette (grab-lynx-palette palette-pixels)))
-          (appendf bytes
-                   (parse-lynx-object mode palette-pixels :width width-px :height height-px
-                                      :palette palette)))
-        (format *trace-output* " … Done. (ends at $~2,'0x)" (1- (length bytes)))))
-    (nreverse bytes)))
-
-(defun parse-lynx-object (mode palette-pixels &key width height palette)
-  "Parse palette pixels into Lynx-specific graphics format.
-
-MODE: :sprite, :background, or :tileset
-PALETTE-PIXELS: 2D array of palette indices
-WIDTH/HEIGHT: Dimensions in pixels
-PALETTE: Lynx palette data
-
-Returns: List of bytes in Lynx format"
-  (ecase mode
-    (:sprite (parse-lynx-sprite palette-pixels width height palette))
-    (:background (parse-lynx-background palette-pixels width height palette))
-    (:tileset (parse-lynx-tileset palette-pixels width height palette))))
-
-(defun parse-lynx-sprite (palette-pixels width height palette)
-  "Convert palette pixels to Lynx sprite format.
-Lynx sprites are stored as 4-bit pixels with palette indices."
-  (let ((bytes (list)))
-    ;; Lynx sprite header (width, height)
-    (push (logand width #xff) bytes)
-    (push (ash width -8) bytes)
-    (push (logand height #xff) bytes)
-    (push (ash height -8) bytes)
-    ;; Sprite data: 4 bits per pixel, packed
-    (loop for y from 0 below height
-          do (loop for x from 0 below width by 2
-                   do (let ((pixel1 (aref palette-pixels y x))
-                            (pixel2 (if (< (1+ x) width)
-                                       (aref palette-pixels y (1+ x))
-                                       0)))
-                        (push (logior (logand pixel1 #x0f)
-                                      (ash (logand pixel2 #x0f) 4))
-                              bytes))))
-    (nreverse bytes)))
-
-(defun parse-lynx-background (palette-pixels width height palette)
-  "Convert palette pixels to Lynx background format.
-Lynx backgrounds are full screen 160×102 with 4-bit pixels."
-  (let ((bytes (list)))
-    ;; Background data: 4 bits per pixel, packed
-    (loop for y from 0 below height
-          do (loop for x from 0 below width by 2
-                   do (let ((pixel1 (aref palette-pixels y x))
-                            (pixel2 (aref palette-pixels y (1+ x))))
-                        (push (logior (logand pixel1 #x0f)
-                                      (ash (logand pixel2 #x0f) 4))
-                              bytes))))
-    (nreverse bytes)))
-
-(defun parse-lynx-tileset (palette-pixels width height palette)
-  "Convert palette pixels to Lynx tileset format.
-Similar to sprites but organized as tiles."
-  ;; For now, treat tileset same as sprites
-  (parse-lynx-sprite palette-pixels width height palette))
-
-(defun grab-lynx-palette (palette-pixels)
-  "Extract palette from Lynx graphics data.
-Lynx uses 12-bit RGB colors (4096 colors total)."
-  ;; Lynx palette is 12-bit: RRRRGGGGBBBB
-  ;; For now, return a simple identity palette
-  (loop for i from 0 below 16
-        collect (list i i i))) ; Simple RGB values
-
-(defun interleave-lynx-bytes (byte-lists)
-  "Interleave multiple byte lists for Lynx format.
-Lynx uses linear byte ordering."
-  (apply #'append (nreverse byte-lists)))
-
-(defun write-lynx-binary (filename bytes)
-  "Write Lynx binary data to file."
-  (format *trace-output* "~&Writing ~A bytes to ~A" (length bytes) filename)
-  (with-open-file (out filename :direction :output :element-type '(unsigned-byte 8)
-                       :if-exists :supersede)
-    (dolist (byte bytes)
-      (write-byte byte out))))
-
-(defun compile-lynx-tileset (png-file out-dir)
-  "Compile Lynx tileset from PNG file.
-
-PNG-FILE: Input PNG file path
-OUT-DIR: Output directory for compiled tileset
-
-Generates Lynx-compatible tileset data from PNG input."
-  (let ((*machine* 9000))
-    (compile-png-generic png-file out-dir :mode :tileset)))
-
-(defun compile-lynx-sprite (png-file out-dir)
-  "Compile Lynx sprite from PNG file.
-
-PNG-FILE: Input PNG file path
-OUT-DIR: Output directory for compiled sprite
-
-Generates Lynx-compatible sprite data from PNG input."
-  (let ((*machine* 9000))
-    (compile-png-generic png-file out-dir :mode :sprite)))
-
-(defun compile-lynx-blob (png-file out-dir)
-  "Compile Lynx blob/background from PNG file.
-
-PNG-FILE: Input PNG file path
-OUT-DIR: Output directory for compiled blob
-
-Generates Lynx-compatible background/blob data from PNG input."
-  (let ((*machine* 9000))
-    (compile-png-generic png-file out-dir :mode :background)))
-
-(defun compile-png-generic (png-file out-dir &key mode)
-  "Generic PNG compilation for Lynx platform.
-
-PNG-FILE: Input PNG file path
-OUT-DIR: Output directory
-MODE: :sprite, :background, or :tileset"
-  (let* ((png (png-read:read-png-file png-file))
-         (height (png-read:height png))
-         (width (png-read:width png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)
-                                       (png-read:transparency png)))
-         (palette (grab-lynx-palette palette-pixels))
-         (bytes (parse-lynx-object mode palette-pixels
-                                   :width width :height height
-                                   :palette palette))
-         (out-file (make-pathname :directory out-dir
-                                  :name (pathname-name png-file)
-                                  :type "bin")))
-    (write-lynx-binary out-file bytes)
-    out-file))
-
-(defun compile-art-lynx (index-out index-in)
-  "Compile art assets for Atari Lynx platform.
-
-INDEX-OUT: Output filename for compiled art data
-INDEX-IN: Input art index file to process
-
-Parses art index files and generates optimized binary data for Lynx hardware.
-Signals appropriate errors for invalid input files or unsupported configurations."
-  (let ((*machine* 9000))
-    (handler-case
-        (write-lynx-binary index-out
-                           (interleave-lynx-bytes
-                            (parse-into-lynx-bytes
-                             (read-lynx-art-index index-in))))
-      (art-conversion-error (e)
-        ;; Re-signal art conversion errors with additional context
-        (error e))
-      (error (e)
-        (error 'art-conversion-error
-               :filename index-in
-               :message (format nil "Failed to compile Lynx art: ~A" e))))))
-
-(defun compile-art-snes (index-out index-in)
-  (error "unimplemented: SNES art compilation not yet implemented"))
-
-(defun compile-art-bbc (index-out index-in)
-  (error "unimplemented: BBC art compilation not yet implemented"))
-
-(defun compile-art-c16 (index-out index-in)
-  (error "unimplemented: C16 art compilation not yet implemented"))
-
-(defun compile-art-a2 (index-out index-in)
-  (error "unimplemented: Apple II art compilation not yet implemented"))
-
-(defun compile-art-a3 (index-out index-in)
-  (error "unimplemented: Apple III art compilation not yet implemented"))
-
-(defun compile-art-2gs (index-out index-in)
-  (error "unimplemented: Apple IIGS art compilation not yet implemented"))
-
-(defun blob-rip-5200-tile (png-file &optional (mode :mode-d))
-  "@cindex 5200 tile ripping
-@cindex ANTIC Mode D/E tiles
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: png-file (pathname or string), &optional mode (keyword)
-@item Returns: nil
-@item Side Effects: Creates .s file with tile data for ANTIC Mode D/E
-@end table
-
-Rip tile graphics from PNG for 5200 ANTIC Mode D or E.
-Mode D: 4 colors per line, 40 bytes per line
-Mode E: 4 colors per line, 40 bytes per line (higher horizontal resolution)"
-  (format *trace-output* "blob-rip-5200-tile: Processing ~a for ~a~%" png-file mode))
-
-(defun blob-rip-5200-pmg (png-file &optional (monochrome-p nil))
-  "@cindex 5200 PMG ripping
-@cindex player missile graphics
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: png-file (pathname or string), &optional monochrome-p (boolean)
-@item Returns: nil
-@item Side Effects: Creates .s file with PMG sprite data
-@end table
-
-Rip player/missile graphics from PNG for 5200 PMG system.
-If MONOCHROME-P is true, creates monochrome sprites for single-color players."
-  (format *trace-output* "blob-rip-5200-pmg: Processing ~a (monochrome: ~a)~%" png-file monochrome-p))
-
-(defun detect-5200-tile-mode (png-file)
-  "Detect appropriate ANTIC mode for 5200 tile graphics.
-Returns :mode-d or :mode-e based on image characteristics."
-  (declare (ignore png-file))
-  ;; TODO: Implement mode detection based on image analysis
-  :mode-d)
+    (write-7800-binary index-out
+                       (interleave-7800-bytes
+                        (parse-into-7800-bytes
+                         (read-7800-art-index index-in))))))
 
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.
@@ -3621,66 +2866,217 @@ Blob_~a:~10t.block~2%"
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
         (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%")))
+    (format *trace-output* " … done!~%"))
+    (let* ((palettes (extract-palettes palette-pixels))
+           (palettes-list (2a-to-lol palettes))
+           (stamps (extract-4×16-stamps palette-pixels))
+           (zones (floor height 16))
+           (columns (floor width 4))
+           (spans (make-hash-table :test 'equalp))
+           (stamp-counting 0)
+           (next-span-id 0))
+      (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
+      (ensure-directories-exist output-pathname)
+      (with-output-to-file (output output-pathname :if-exists :supersede)
+        (format output ";;; Bitmap Large Object Block for Atari 7800
+;;; Derived from source file ~a. This is a generated file.~3%
+
+Blob_~a:~10t.block~2%"
+                (enough-namestring png-file)
+                (assembler-label-name (pathname-name png-file)))
+        (write-blob-palettes png output)
+        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+        (dotimes (zone zones)
+          (format output "~2&Zone~d:" zone)
+          (flet ((emit-span (x span pal-index)
+                   (when span
+                     (let ((id (or (gethash span spans)
+                                   (prog1
+                                       (setf (gethash span spans) (prog1 next-span-id
+                                                                    (incf next-span-id)))
+                                     (cond
+                                       ((and (< stamp-counting #x100)
+                                             (< (+ stamp-counting (length span)) #x100))
+                                        (incf stamp-counting (length span)))
+                                       ((and (< stamp-counting #x100)
+                                             (>= (+ stamp-counting (length span)) #x100))
+                                        (setf stamp-counting #x100))
+                                       (t (incf stamp-counting)))))))
+                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                               id pal-index (length span)
+                               (- x (* 4 (length span))))))))
+            (loop with span = nil
+                  with last-palette = nil
+                  for x from 0 by 4
+                  for column from 0 below columns
+                  for stamp = (aref stamps column zone)
+                  for palette = (or (when (and last-palette
+                                               (tile-fits-palette-p
+                                                stamp
+                                                (elt palettes-list last-palette)))
+                                      last-palette)
+                                    (best-palette stamp palettes
+                                                  :allow-imperfect-p imperfectp
+                                                  :x column :y zone))
+                  for paletted-stamp = (limit-region-to-palette
+                                        stamp (elt palettes-list palette)
+                                        :allow-imperfect-p imperfectp)
+                  do
+                     (cond
+                       ((zerop column)
+                        (setf span (list paletted-stamp)
+                              last-palette palette))
+                       ((blank-stamp-p stamp (aref palettes 0 0))
+                        (emit-span x span last-palette)
+                        (setf span nil
+                              last-palette nil))
+                       ((and (or (null last-palette)
+                                 (= palette last-palette))
+                             (< (length span) 31))
+                        (appendf span (list paletted-stamp))
+                        (setf last-palette palette))
+                       (t
+                        (emit-span x span last-palette)
+                        (setf span (list paletted-stamp)
+                              last-palette palette)))
+                  finally
+                     (emit-span x span last-palette)))
+          (format output "~%~10t.word $0000"))
+        (blob/write-spans spans output :imperfectp imperfectp)))
+    (format *trace-output* " … done!~%"))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
-  (format *trace-output* "blob-rip-7800-320ac: Processing ~a (imperfectp: ~a)~%" png-file imperfectp$)
-  (error "unimplemented: blob-rip-7800-320ac is total failure."))
+  "@cindex BLOB ripping
+@cindex 320A/C graphics mode
+@cindex navigation chart graphics
+@cindex mixed mode graphics
 
-;; Game Boy Color blob ripping functions
-(defun blob-rip-cgb-tile (png-file &optional (mode :normal))
-  (error "unimplemented: CGB tile ripping not yet implemented"))
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
+@end table
 
-(defun blob-rip-cgb-sprite (png-file &optional (size :8x8))
-  (error "unimplemented: CGB sprite ripping not yet implemented"))
+Rip a Bitmap Large Object Block in mixed 320A/C mode from PNG-FILE for 320px wide navigation chart graphics.
 
-;; Game Boy blob ripping functions
-(defun blob-rip-dmg-tile (png-file &optional (mode :normal))
-  (error "unimplemented: DMG tile ripping not yet implemented"))
+@strong{Graphics Mode:}
+@itemize
+@item Uses 320A mode for monochrome stamps (1 bit per pixel)
+@item Uses 320C mode for color stamps (2 bits per pixel, 4 colors)
+@item Automatically detects appropriate mode per 4×16 pixel stamp
+@end itemize
 
-;; ColecoVision blob ripping functions
-(defun blob-rip-clc-tile (png-file &optional (mode :normal))
-  (error "unimplemented: ColecoVision tile ripping not yet implemented"))
+@strong{Requirements:}
+@itemize
+@item Image width must be exactly 320 pixels
+@item Image height must be (N × 16) + 1 pixels (palette strip)
+@item PNG should contain appropriate palette data
+@end itemize
 
-;; SG-1000 blob ripping functions
-(defun blob-rip-1000-tile (png-file &optional (mode :normal))
-  (error "unimplemented: SG-1000 tile ripping not yet implemented"))
+Pass --imperfect to allow imperfect palette matches instead of signaling errors."
+  (let* ((*machine* 7800)
+         (*region* :ntsc)
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)))
+         (output-pathname (png-to-blob-pathname png-file))
+         (imperfectp (or (eql :imperfect imperfectp$)
+                         (equal imperfectp$ "--imperfect"))))
+    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
+    (check-height+width-for-blob-320ac height width palette-pixels)
+    (let* ((palettes (extract-palettes palette-pixels))
+           (palettes-list (2a-to-lol palettes))
+           (stamps (extract-4×16-stamps palette-pixels)) ; Use 4px stamps for 320C mode
+           (zones (floor height 16))
+           (columns (floor width 4)) ; 320 / 4 = 80 columns
+           (spans (make-hash-table :test 'equalp))
+           (stamp-counting 0)
+           (next-span-id 0))
+      (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
+      (force-output *trace-output*)
+      (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
+      (force-output *trace-output*)
+      (ensure-directories-exist output-pathname)
+      (with-output-to-file (output output-pathname :if-exists :supersede)
+        (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
+;;; Derived from source file ~a. This is a generated file.~3%
 
-;; Sega Master System blob ripping functions
-(defun blob-rip-sms-tile (png-file &optional (mode :normal))
-  (error "unimplemented: SMS tile ripping not yet implemented"))
-
-;; Sega Game Gear blob ripping functions
-(defun blob-rip-sgg-tile (png-file &optional (mode :normal))
-  (error "unimplemented: SGG tile ripping not yet implemented"))
-
-;; NES blob ripping functions
-(defun blob-rip-nes-tile (png-file &optional (mode :normal))
-  (error "unimplemented: NES tile ripping not yet implemented"))
-
-;; SNES blob ripping functions
-(defun blob-rip-snes-tile (png-file &optional (mode :normal))
-  (error "unimplemented: SNES tile ripping not yet implemented"))
-
-;; BBC blob ripping functions
-(defun blob-rip-bbc-tile (png-file &optional (mode :normal))
-  (error "unimplemented: BBC tile ripping not yet implemented"))
-
-;; Commodore 16 blob ripping functions
-(defun blob-rip-c16-tile (png-file &optional (mode :normal))
-  (error "unimplemented: C16 tile ripping not yet implemented"))
-
-;; Apple II blob ripping functions
-(defun blob-rip-a2-tile (png-file &optional (mode :normal))
-  (error "unimplemented: Apple II tile ripping not yet implemented"))
-
-;; Apple III blob ripping functions
-(defun blob-rip-a3-tile (png-file &optional (mode :normal))
-  (error "unimplemented: Apple III tile ripping not yet implemented"))
-
-;; Apple IIGS blob ripping functions
-(defun blob-rip-2gs-tile (png-file &optional (mode :normal))
-  (error "unimplemented: Apple IIGS tile ripping not yet implemented"))
+Blob_~a:~10t.block~2%"
+                (enough-namestring png-file)
+                (assembler-label-name (pathname-name png-file)))
+        (write-blob-palettes png output)
+        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+        (dotimes (zone zones)
+          (format output "~2&Zone~d:" zone)
+          (flet ((emit-span (x span pal-index mode)
+                   (when span
+                     (let ((id (or (gethash span spans)
+                                   (prog1
+                                       (setf (gethash span spans) (prog1 next-span-id
+                                                                    (incf next-span-id)))
+                                     (cond
+                                       ((and (< stamp-counting #x100)
+                                             (< (+ stamp-counting (length span)) #x100))
+                                        (incf stamp-counting (length span)))
+                                       ((and (< stamp-counting #x100)
+                                             (>= (+ stamp-counting (length span)) #x100))
+                                        (setf stamp-counting #x100))
+                                       (t (incf stamp-counting)))))))
+                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                               id pal-index (length span)
+                               (- x (length span))))))
+            (loop with span = nil
+                  with last-palette = nil
+                  with last-mode = nil
+                  for x from 0 by 1
+                  for column from 0 below columns
+                  for stamp = (aref stamps column zone)
+                  for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
+                  for palette = (or (when (and last-palette
+                                               (tile-fits-palette-p
+                                                stamp
+                                                (elt palettes-list last-palette)))
+                                      last-palette)
+                                    (best-palette stamp palettes
+                                                  :allow-imperfect-p imperfectp
+                                                  :x column :y zone))
+                  for paletted-stamp = (limit-region-to-palette
+                                        stamp (elt palettes-list palette)
+                                        :allow-imperfect-p imperfectp)
+                  do (when (= (mod column 20) 0)
+                       (format *trace-output* " col ~d/~d…" column columns)
+                       (force-output *trace-output*))
+                     (cond
+                       ((zerop column)
+                        (setf span (list paletted-stamp)
+                              last-palette palette
+                              last-mode mode))
+                       ((blank-stamp-p stamp (aref palettes 0 0))
+                        (emit-span x span last-palette last-mode)
+                        (setf span nil
+                              last-palette nil
+                              last-mode nil))
+                       ((and (or (null last-palette)
+                                 (= palette last-palette))
+                             (eq mode last-mode)
+                             (< (length span) 31))
+                        (appendf span (list paletted-stamp))
+                        (setf last-palette palette
+                              last-mode mode))
+                       (t
+                        (emit-span x span last-palette last-mode)
+                        (setf span (list paletted-stamp)
+                              last-palette palette
+                              last-mode mode)))
+                  finally
+                     (emit-span x span last-palette last-mode)))
+          (format output "~%~10t.word $0000"))
+        (blob/write-spans-320ac spans output :imperfectp imperfectp))
+        (format output "~2%~10t.endblock~%"))
+    (format *trace-output* " … done!~%"))))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -3867,328 +3263,103 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
-;; Platform-specific blob ripping functions (stub implementations)
-(defun blob-rip-cgb-tile (png-file &optional (mode :mode-normal))
-  (error "CGB tile ripping not yet implemented"))
 
-(defun blob-rip-cgb-sprite (png-file &optional (mode :mode-normal))
-  (error "CGB sprite ripping not yet implemented"))
+;; Lynx graphics compilation functions
+
+(defun compile-art-lynx (index-out index-in)
+  "Compile art assets for Atari Lynx platform."
+  (let ((*machine* 9000))
+    (handler-case
+        (write-lynx-binary index-out
+                           (interleave-lynx-bytes
+                            (parse-into-lynx-bytes
+                             (read-lynx-art-index index-in))))
+      (art-conversion-error (e) (error e))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :message (format nil "Failed to compile Lynx art: ~A" e))))))
+
+(defun read-lynx-art-index (index-in)
+  "Read and validate Lynx art index file."
+  (let ((png-list (list))
+        (valid-modes '(:sprite :background :tileset)))
+    (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
+    (handler-case
+        (with-input-from-file (index index-in)
+          (loop for line-num from 1
+                for line = (read-line index nil)
+                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+                do (let ((line (string-trim '(#\Space #\Tab #\Newline #\Return #\Page) line)))
+                     (cond
+                       ((emptyp line) nil)
+                       ((char= #\# (char line 0)) nil)
+                       (t (handler-case
+                              (destructuring-bind (png-name mode cell-size)
+                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                                (unless (= 3 (length (split-sequence #\Space line :remove-empty-subseqs t)))
+                                  (error 'format-error
+                                         :filename index-in
+                                         :machine 9000
+                                         :context (format nil "line ~D" line-num)
+                                         :expected-format "PNG-NAME MODE WIDTH×HEIGHT"
+                                         :actual-format line))
+                                (let ((mode-keyword (make-keyword mode)))
+                                  (unless (member mode-keyword valid-modes)
+                                    (error 'mode-error
+                                           :filename index-in
+                                           :machine 9000
+                                           :context (format nil "line ~D" line-num)
+                                           :invalid-mode mode-keyword
+                                           :valid-modes valid-modes))
+                                  (destructuring-bind (width-px height-px)
+                                      (split-sequence #\× cell-size :test #'char=)
+                                    (let ((width (parse-integer width-px :junk-allowed nil))
+                                          (height (parse-integer height-px :junk-allowed nil)))
+                                      (ecase mode-keyword
+                                        (:sprite (unless (and (<= width 160) (<= height 102))
+                                                   (error 'dimension-error
+                                                          :filename index-in
+                                                          :machine 9000
+                                                          :context (format nil "~A mode, line ~D" mode cell-size)
+                                                          :invalid-width width
+                                                          :invalid-height height
+                                                          :max-width 160
+                                                          :max-height 102)))
+                                        (:background (unless (and (= width 160) (= height 102))
+                                                        (error 'dimension-error
+                                                               :filename index-in
+                                                               :machine 9000
+                                                               :context (format nil "~A mode, line ~D" mode cell-size)
+                                                               :invalid-width width
+                                                               :invalid-height height
+                                                               :max-width 160
+                                                               :max-height 102)))
+                                        (:tileset (unless (and (<= width 160) (<= height 102))
+                                                    (error 'dimension-error
+                                                           :filename index-in
+                                                           :machine 9000
+                                                           :context (format nil "~A mode, line ~D" mode cell-size)
+                                                           :invalid-width width
+                                                           :invalid-height height
+                                                           :max-width 160
+                                                           :max-height 102))))
+                                      (push (list png-name mode-keyword width height) png-list)))))
+                            (error (e)
+                              (error 'art-conversion-error
+                                     :filename index-in
+                                     :message (format nil "Line ~D: ~A" line-num e)))))))
+          (nreverse png-list))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :message (format nil "Failed to read Lynx art index: ~A" e))))))
+
+;; Stub implementations for Lynx functions
+(defun parse-into-lynx-bytes (art-index) (declare (ignore art-index)) nil)
+(defun interleave-lynx-bytes (byte-lists) (declare (ignore byte-lists)) nil)
+(defun write-lynx-binary (filename bytes) (declare (ignore filename bytes)) nil)
+(defun compile-lynx-tileset (png-file out-dir) (declare (ignore png-file out-dir)) nil)
+(defun compile-lynx-sprite (png-file out-dir) (declare (ignore png-file out-dir)) nil)
+(defun compile-lynx-blob (png-file out-dir) (declare (ignore png-file out-dir)) nil)
 
-(defun blob-rip-cgb-font (png-file)
-  (error "CGB font ripping not yet implemented"))
-
-(defun blob-rip-dmg-tile (png-file &optional (mode :mode-normal))
-  (error "DMG tile ripping not yet implemented"))
-
-(defun blob-rip-dmg-sprite (png-file &optional (mode :mode-normal))
-  (error "DMG sprite ripping not yet implemented"))
-
-(defun blob-rip-dmg-font (png-file)
-  (error "DMG font ripping not yet implemented"))
-
-(defun blob-rip-nes-tile (png-file &optional (mode :mode-normal))
-  (error "NES tile ripping not yet implemented"))
-
-(defun blob-rip-nes-sprite (png-file &optional (mode :mode-normal))
-  (error "NES sprite ripping not yet implemented"))
-
-(defun blob-rip-nes-font (png-file)
-  (error "NES font ripping not yet implemented"))
-
-(defun blob-rip-snes-tile (png-file &optional (mode :mode-normal))
-  (error "SNES tile ripping not yet implemented"))
-
-(defun blob-rip-snes-sprite (png-file &optional (mode :mode-normal))
-  (error "SNES sprite ripping not yet implemented"))
-
-(defun blob-rip-snes-font (png-file)
-  (error "SNES font ripping not yet implemented"))
-
-(defun blob-rip-colecovision-tile (png-file &optional (mode :mode-normal))
-  (error "ColecoVision tile ripping not yet implemented"))
-
-(defun blob-rip-colecovision-sprite (png-file &optional (mode :mode-normal))
-  (error "ColecoVision sprite ripping not yet implemented"))
-
-(defun blob-rip-colecovision-font (png-file)
-  (error "ColecoVision font ripping not yet implemented"))
-
-(defun blob-rip-sg1000-tile (png-file &optional (mode :mode-normal))
-  (error "SG-1000 tile ripping not yet implemented"))
-
-(defun blob-rip-sg1000-sprite (png-file &optional (mode :mode-normal))
-  (error "SG-1000 sprite ripping not yet implemented"))
-
-(defun blob-rip-sg1000-font (png-file)
-  (error "SG-1000 font ripping not yet implemented"))
-
-(defun blob-rip-sms-tile (png-file &optional (mode :mode-normal))
-  (error "SMS tile ripping not yet implemented"))
-
-(defun blob-rip-sms-sprite (png-file &optional (mode :mode-normal))
-  (error "SMS sprite ripping not yet implemented"))
-
-(defun blob-rip-sms-font (png-file)
-  (error "SMS font ripping not yet implemented"))
-
-(defun blob-rip-sgg-tile (png-file &optional (mode :mode-normal))
-  (error "SGG tile ripping not yet implemented"))
-
-(defun blob-rip-sgg-sprite (png-file &optional (mode :mode-normal))
-  (error "SGG sprite ripping not yet implemented"))
-
-(defun blob-rip-sgg-font (png-file)
-  (error "SGG font ripping not yet implemented"))
-
-(defun blob-rip-c16-tile (png-file &optional (mode :mode-normal))
-  (error "C=16 tile ripping not yet implemented"))
-
-(defun blob-rip-c16-sprite (png-file &optional (mode :mode-normal))
-  (error "C=16 sprite ripping not yet implemented"))
-
-(defun blob-rip-c16-font (png-file)
-  (error "C=16 font ripping not yet implemented"))
-
-(defun blob-rip-a2-tile (png-file &optional (mode :mode-normal))
-  (error "Apple II tile ripping not yet implemented"))
-
-(defun blob-rip-a2-sprite (png-file &optional (mode :mode-normal))
-  (error "Apple II sprite ripping not yet implemented"))
-
-(defun blob-rip-a2-font (png-file)
-  (error "Apple II font ripping not yet implemented"))
-
-(defun blob-rip-a3-tile (png-file &optional (mode :mode-normal))
-  (error "Apple III tile ripping not yet implemented"))
-
-(defun blob-rip-a3-sprite (png-file &optional (mode :mode-normal))
-  (error "Apple III sprite ripping not yet implemented"))
-
-(defun blob-rip-a3-font (png-file)
-  (error "Apple III font ripping not yet implemented"))
-
-(defun blob-rip-a2gs-tile (png-file &optional (mode :mode-normal))
-  (error "Apple IIGS tile ripping not yet implemented"))
-
-(defun blob-rip-a2gs-sprite (png-file &optional (mode :mode-normal))
-  (error "Apple IIGS sprite ripping not yet implemented"))
-
-(defun blob-rip-a2gs-font (png-file)
-  (error "Apple IIGS font ripping not yet implemented"))
-
-(defun blob-rip-bbc-tile (png-file &optional (mode :mode-normal))
-  (error "BBC tile ripping not yet implemented"))
-
-(defun blob-rip-bbc-sprite (png-file &optional (mode :mode-normal))
-  (error "BBC sprite ripping not yet implemented"))
-
-(defun blob-rip-bbc-font (png-file)
-  (error "BBC font ripping not yet implemented"))
-
-;; Platform detection functions
-(defun detect-cgb-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-dmg-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-nes-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-snes-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-colecovision-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-sg1000-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-sms-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-sgg-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-c16-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-a2-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-a3-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-a2gs-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-
-(defun detect-bbc-tile-mode (png-file)
-  (declare (ignore png-file))
-  :mode-normal)
-;; Platform-specific art compilation functions (stub implementations)
-(defun compile-art-cgb (output-file input-file)
-  (error "CGB art compilation not yet implemented"))
-
-(defun compile-art-dmg (output-file input-file)
-  (error "DMG art compilation not yet implemented"))
-
-(defun compile-art-nes (output-file input-file)
-  (error "NES art compilation not yet implemented"))
-
-(defun compile-art-snes (output-file input-file)
-  (error "SNES art compilation not yet implemented"))
-
-(defun compile-art-colecovision (output-file input-file)
-  (error "ColecoVision art compilation not yet implemented"))
-
-(defun compile-art-sg1000 (output-file input-file)
-  (error "SG-1000 art compilation not yet implemented"))
-
-(defun compile-art-sms (output-file input-file)
-  (error "SMS art compilation not yet implemented"))
-
-(defun compile-art-sgg (output-file input-file)
-  (error "SGG art compilation not yet implemented"))
-
-(defun compile-art-c16 (output-file input-file)
-  (error "C=16 art compilation not yet implemented"))
-
-(defun compile-art-a2 (output-file input-file)
-  (error "Apple II art compilation not yet implemented"))
-
-(defun compile-art-a3 (output-file input-file)
-  (error "Apple III art compilation not yet implemented"))
-
-(defun compile-art-a2gs (output-file input-file)
-  (error "Apple IIGS art compilation not yet implemented"))
-
-(defun compile-art-bbc (output-file input-file)
-  (error "BBC art compilation not yet implemented"))
-;; Palette generation functions (stub implementations)
-(defun generate-ntsc-palette (output-file)
-  (error "NTSC palette generation not yet implemented"))
-
-(defun generate-pal-palette (output-file)
-  (error "PAL palette generation not yet implemented"))
-
-(defun generate-secam-palette (output-file)
-  (error "SECAM palette generation not yet implemented"))
-
-;; Platform capability predicates
-(defun speech-supported-p ()
-  "Return true if the current platform supports speech synthesis."
-  (case *machine*
-    ((7800 2600 2609) t)
-    (t nil)))
-
-
-(defun secam-capable-p (machine)
-  "Return true if the platform supports SECAM video."
-  (declare (ignore machine))
-  ;; Few platforms support SECAM
-  nil)
-
-;; Machine name lookup function
-(defun machine-long-name (&optional (machine *machine*))
-  "Return the long name for a machine ID."
-  (case machine
-    (2600 "Atari 2600")
-    (5200 "Atari 5200")
-    (7800 "Atari 7800")
-    (200 "Atari Lynx")
-    (3 "Nintendo Entertainment System")
-    (6 "Super Nintendo Entertainment System")
-    (35902 "Nintendo Game Boy Color")
-    (20953 "Nintendo Game Boy")
-    (9918 "ColecoVision")
-    (1000 "Sega Game SG-1000")
-    (3010 "Sega Master System")
-    (837 "Sega Game Gear")
-    (264 "Commodore 16")
-    (8 "Apple II")
-    (9 "Apple III")
-    (10 "Apple IIGS")
-    (7 "BBC Micro")
-    (1591 "Intellivision (RAM-less)")
-    (1601 "Intellivision (with RAM)")
-    (t (format nil "Unknown machine ID ~A" machine))))
-;; Palette generation and saving functions (stub implementations)
-
-(defun generate-ntsc-palette (machine)
-  "Generate NTSC color palette for the given machine ID"
-  (ecase machine
-    (20 (error "NTSC palette for VCS not yet implemented"))
-    (2609 (error "NTSC palette for Intellivision not yet implemented"))
-    (264 (error "NTSC palette for C16 not yet implemented"))
-    (35902 (error "NTSC palette for CGB not yet implemented"))
-    (20953 (error "NTSC palette for DMG not yet implemented"))
-    (9918 (error "NTSC palette for ColecoVision not yet implemented"))
-    (1000 (error "NTSC palette for SG-1000 not yet implemented"))
-    (3010 (error "NTSC palette for SMS not yet implemented"))
-    (837 (error "NTSC palette for SGG not yet implemented"))
-    (3 (error "NTSC palette for NES not yet implemented"))
-    (6 (error "NTSC palette for SNES not yet implemented"))
-    (7 (error "NTSC palette for BBC not yet implemented"))
-    (8 (error "NTSC palette for Apple II not yet implemented"))
-    (9 (error "NTSC palette for Apple III not yet implemented"))
-    (10 (error "NTSC palette for Apple IIGS not yet implemented"))))
-
-(defun generate-pal-palette (machine)
-  "Generate PAL color palette for the given machine ID"
-  (ecase machine
-    (20 (error "PAL palette for VCS not yet implemented"))
-    (2609 (error "PAL palette for Intellivision not yet implemented"))
-    (264 (error "PAL palette for C16 not yet implemented"))
-    (35902 (error "PAL palette for CGB not yet implemented"))
-    (20953 (error "PAL palette for DMG not yet implemented"))
-    (9918 (error "PAL palette for ColecoVision not yet implemented"))
-    (1000 (error "PAL palette for SG-1000 not yet implemented"))
-    (3010 (error "PAL palette for SMS not yet implemented"))
-    (837 (error "PAL palette for SGG not yet implemented"))
-    (3 (error "PAL palette for NES not yet implemented"))
-    (6 (error "PAL palette for SNES not yet implemented"))
-    (7 (error "PAL palette for BBC not yet implemented"))
-    (8 (error "PAL palette for Apple II not yet implemented"))
-    (9 (error "PAL palette for Apple III not yet implemented"))
-    (10 (error "PAL palette for Apple IIGS not yet implemented"))))
-
-(defun generate-secam-palette (machine)
-  "Generate SECAM color palette for the given machine ID"
-  (ecase machine
-    (20 (error "SECAM palette for VCS not yet implemented"))
-    (2609 (error "SECAM palette for Intellivision not yet implemented"))
-    (264 (error "SECAM palette for C16 not yet implemented"))
-    (35902 (error "SECAM palette for CGB not yet implemented"))
-    (20953 (error "SECAM palette for DMG not yet implemented"))
-    (9918 (error "SECAM palette for ColecoVision not yet implemented"))
-    (1000 (error "SECAM palette for SG-1000 not yet implemented"))
-    (3010 (error "SECAM palette for SMS not yet implemented"))
-    (837 (error "SECAM palette for SGG not yet implemented"))
-    (3 (error "SECAM palette for NES not yet implemented"))
-    (6 (error "SECAM palette for SNES not yet implemented"))
-    (7 (error "SECAM palette for BBC not yet implemented"))
-    (8 (error "SECAM palette for Apple II not yet implemented"))
-    (9 (error "SECAM palette for Apple III not yet implemented"))
-    (10 (error "SECAM palette for Apple IIGS not yet implemented"))))
-;; Platform capability predicates
-
-(defun speech-supported-p (machine)
-  "Return T if the machine supports speech synthesis"
-  (ecase machine
-    (20 t)     ; VCS (SpeakJet)
-    (2609 t)   ; Intellivision (IntelliVoice)
-    (5200 t)   ; Atari 5200 (SpeakJet)
-    (7800 t)   ; Atari 7800 (SpeakJet)
-    (t nil)))  ; All others: false
