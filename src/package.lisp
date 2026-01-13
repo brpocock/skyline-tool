@@ -94,6 +94,9 @@
            #:compile-lynx-tileset
            #:compile-lynx-sprite
            #:compile-lynx-blob
+           #:compile-art-intv
+           #:compile-intv-tileset
+           #:compile-intv-sprite
            #:dispatch-png
            #:dispatch-png%
            #:collect-strings

@@ -3363,3 +3363,28 @@ Columns: ~d
 (defun compile-lynx-sprite (png-file out-dir) (declare (ignore png-file out-dir)) nil)
 (defun compile-lynx-blob (png-file out-dir) (declare (ignore png-file out-dir)) nil)
 
+
+;; Intellivision graphics compilation functions
+
+(defun compile-art-intv (index-out index-in)
+  "Compile art assets for Intellivision platform."
+  (let ((*machine* 2609))
+    (handler-case
+        (write-intv-binary index-out
+                           (interleave-intv-bytes
+                            (parse-into-intv-bytes
+                             (read-intv-art-index index-in))))
+      (art-conversion-error (e) (error e))
+      (error (e)
+        (error 'art-conversion-error
+               :filename index-in
+               :message (format nil "Failed to compile Intellivision art: ~A" e))))))
+
+;; Stub implementations for Intellivision functions
+(defun read-intv-art-index (index-in) (declare (ignore index-in)) nil)
+(defun parse-into-intv-bytes (art-index) (declare (ignore art-index)) nil)
+(defun interleave-intv-bytes (byte-lists) (declare (ignore byte-lists)) nil)
+(defun write-intv-binary (filename bytes) (declare (ignore filename bytes)) nil)
+(defun compile-intv-tileset (png-file out-dir) (declare (ignore png-file out-dir)) nil)
+(defun compile-intv-sprite (png-file out-dir) (declare (ignore png-file out-dir)) nil)
+
