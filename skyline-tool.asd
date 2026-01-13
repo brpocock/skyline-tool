@@ -91,7 +91,8 @@
   :version "0.9.0"
   :depends-on (:skyline-tool :fiveam)
   :components ((:module "tests"
-                :components ((:file "action-tests")
+                :components ((:file "display-list-tests")
+                             (:file "action-tests")
                              (:file "text-transcription-tests")
                              (:file "animation-preview-tests")
                              (:file "graphics-tests")
