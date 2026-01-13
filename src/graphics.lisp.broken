@@ -2,28 +2,14 @@
 
 (defvar *tileset*)
 
-(define-constant +lynx-palette+
-    (loop for r from 0 below #x10
-          append
-          (loop for g from 0 below #x10
-                append
-                (loop for b from 0 below #x10
-                      collect (list (* r #x10) (* g #x10) (* b #x10)))))
-  :test 'equalp)
 
-(define-constant +c64-names+
-    '(black white red cyan
-      purple green blue yellow
-      orange brown pink gray1
-      gray2 light-green light-blue gray3)
-  :test 'equalp)
+(defvar *tileset*)
 
-(defun tty-xterm-p (&optional (stream *query-io*))
-  "Returns a generalized true value if the terminal seems to be xterm-compatible"
-  (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
-       (search "xterm" (uiop:getenv "TERM"))
-       (not (equal "dumb" (uiop:getenv "TERM")))))
-
+                          :element-type '(unsigned-byte 8))))
+    (loop for x from left to right
+          do (loop for y from top to bottom
+                   do (setf (aref copy (- x left) (- y top)) (aref original x y))))
+    copy))
 
 (defun mob->mono-bits (mob)
   (mapcar #'code-char
