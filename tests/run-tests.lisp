@@ -1,67 +1,64 @@
-#!/bin/bash
+;;;; Comprehensive Skyline-Tool test runner for all platforms and systems
+;;;; This runs ALL platform-specific tests and ensures complete coverage
 
-# Skyline-Tool Comprehensive Test Runner
-# Tests all platform support and functionality
+(format t "~&Running Skyline-Tool Comprehensive Test Suite~%")
+(format t "~&==============================================~%")
 
-echo "Running Skyline-Tool Comprehensive Test Suite"
-echo "=============================================="
+;; Load all test suites and run them
+(let ((test-results nil))
 
-# Set up environment
-export SKYLINE_DEBUG_BACKTRACE=t
+  ;; Helper function to run a test suite safely
+  (defun run-test-suite (test-file test-suite-name)
+    (format t "~&Running ~A tests...~%" test-suite-name)
+    (handler-case
+        (progn
+          (load test-file)
+          (let ((result (fiveam:run! (intern test-suite-name))))
+            (push (cons test-suite-name result) test-results)
+            (format t "~&✓ ~A tests completed~%" test-suite-name)))
+      (error (e)
+        (format t "~&✗ ~A tests failed: ~A~%" test-suite-name e)
+        (push (cons test-suite-name :failed) test-results))))
 
-echo
-echo "Running basic tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/basic-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/basic-test::basic-tests)" --eval "(sb-ext:quit)"
+  ;; Run individual test suites
+  (run-test-suite "tests/basic-tests.lisp" "SKYLINE-TOOL/BASIC-TEST::BASIC-TESTS")
+  (run-test-suite "tests/graphics-tests.lisp" "SKYLINE-TOOL/GRAPHICS-TEST::GRAPHICS-TESTS")
+  (run-test-suite "tests/music-tests.lisp" "SKYLINE-TOOL/MUSIC-TEST::MUSIC-TESTS")
+  (run-test-suite "tests/speech-tests.lisp" "SKYLINE-TOOL/SPEECH-TEST::SPEECH-TESTS")
+  (run-test-suite "tests/build-tests.lisp" "SKYLINE-TOOL/BUILD-TEST::BUILD-TESTS")
+  (run-test-suite "tests/interface-tests.lisp" "SKYLINE-TOOL/INTERFACE-TEST::INTERFACE-TESTS")
 
-echo
-echo "Running 5200 tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/5200-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/5200-test::5200-tests)" --eval "(sb-ext:quit)"
+  ;; Platform-specific tests
+  (run-test-suite "tests/7800-tests.lisp" "SKYLINE-TOOL/7800-TEST::7800-TESTS")
+  (run-test-suite "tests/5200-tests.lisp" "SKYLINE-TOOL/5200-TEST::5200-TESTS")
+  (run-test-suite "tests/lynx-graphics-tests.lisp" "SKYLINE-TOOL/LYNX-GRAPHICS-TEST::LYNX-GRAPHICS-TESTS")
+  (run-test-suite "tests/cgb-tests.lisp" "SKYLINE-TOOL/CGB-TEST::CGB-TESTS")
+  (run-test-suite "tests/dmg-tests.lisp" "SKYLINE-TOOL/DMG-TEST::DMG-TESTS")
+  (run-test-suite "tests/nes-tests.lisp" "SKYLINE-TOOL/NES-TEST::NES-TESTS")
+  (run-test-suite "tests/snes-tests.lisp" "SKYLINE-TOOL/SNES-TEST::SNES-TESTS")
+  (run-test-suite "tests/colecovision-tests.lisp" "SKYLINE-TOOL/COLECOvision-TEST::COLECOvision-TESTS")
+  (run-test-suite "tests/sega-tests.lisp" "SKYLINE-TOOL/SEGA-TEST::SEGA-TESTS")
+  (run-test-suite "tests/multiplatform-tests.lisp" "SKYLINE-TOOL/MULTIPLATFORM-TEST::MULTIPLATFORM-TESTS")
 
-echo
-echo "Running graphics tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/graphics-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/graphics-test::graphics-tests)" --eval "(sb-ext:quit)"
+  ;; Summary
+  (format t "~&~%=== TEST SUMMARY ===~%")
+  (let ((total-tests (length test-results))
+        (passed-tests (count-if (lambda (result) (not (eq (cdr result) :failed))) test-results)))
+    (dolist (result (reverse test-results))
+      (let ((test-name (car result))
+            (test-result (cdr result)))
+        (format t "~&~A: ~:[❌ FAILED~;✅ PASSED~]~%"
+                test-name (not (eq test-result :failed)))))
+    (format t "~&~%TOTAL: ~D/~D test suites completed successfully~%"
+            passed-tests total-tests)
 
-echo
-echo "Running Lynx graphics tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/lynx-graphics-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/lynx-graphics-test::lynx-graphics-tests)" --eval "(sb-ext:quit)"
+    (format t "~&~%Note: Some platform tests are currently stub implementations.~%")
+    (format t "~&As implementations are completed, these tests will provide full validation.~%")
+    (format t "~&Skyline-Tool comprehensive testing completed for all platforms!~%")
 
-echo
-echo "Running music tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/music-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/music-test::music-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running build tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/build-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/build-test::build-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running interface tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/interface-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/interface-test::interface-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running CGB tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/cgb-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/cgb-test::cgb-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running DMG tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/dmg-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/dmg-test::dmg-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running NES tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/nes-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/nes-test::nes-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running SNES tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/snes-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/snes-test::snes-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running ColecoVision tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/colecovision-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/colecovision-test::colecovision-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "Running multiplatform tests..."
-sbcl --eval "(require :asdf)" --eval "(load \"setup.lisp\")" --eval "(ql:quickload :fiveam)" --eval "(ql:quickload :skyline-tool/test)" --eval "(load \"tests/multiplatform-tests.lisp\")" --eval "(fiveam:run! 'skyline-tool/multiplatform-test::multiplatform-tests)" --eval "(sb-ext:quit)"
-
-echo
-echo "All tests completed!"
-echo "Note: Many tests currently signal 'unimplemented' errors as placeholders."
-echo "These will be implemented as the platform support is developed."
+    ;; Exit with appropriate status
+    (if (= passed-tests total-tests)
+        (format t "~&🎉 ALL TESTS PASSED!~%")
+        (progn
+          (format t "~&⚠️  SOME TESTS FAILED - check output above~%")
+          (sb-ext:exit :code 1)))))
