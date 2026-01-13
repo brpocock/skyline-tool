@@ -1414,7 +1414,9 @@ All cards in the source image are output as one file."
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
       (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%~%"
-              png-file))))
+              png-file)
+      ;; Output placeholder DECLE statement (will be replaced with actual card data)
+      (format src-file "    DECLE   $00~%"))))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
