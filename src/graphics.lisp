@@ -2945,6 +2945,7 @@ Blob_~a:~10t.block~2%"
         (blob/write-spans spans output :imperfectp imperfectp)))
     (format *trace-output* " … done!~%"))
 
+#|
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
 @cindex 320A/C graphics mode
@@ -3028,55 +3029,56 @@ Blob_~a:~10t.block~2%"
                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
                                id pal-index (length span)
                                (- x (length span))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  with last-mode = nil
-                  for x from 0 by 1
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
-                  for palette = (or (when (and last-palette
+            (let ((span nil)
+                  (last-palette nil)
+                  (last-mode nil))
+              (do ((x 0 (1+ x))
+                   (column 0 (1+ column)))
+                  ((>= column columns)
+                   (emit-span x span last-palette last-mode))
+                (let* ((stamp (aref stamps column zone))
+                       (mode (if (stamp-is-monochrome-p stamp) :320a :320c)) ; Auto-detect mode
+                       (palette (or (when (and last-palette
                                                (tile-fits-palette-p
                                                 stamp
                                                 (elt palettes-list last-palette)))
                                       last-palette)
                                     (best-palette stamp palettes
                                                   :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
+                                                  :x column :y zone)))
+                       (paletted-stamp (limit-region-to-palette
                                         stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do (when (= (mod column 20) 0)
-                       (format *trace-output* " col ~d/~d…" column columns)
-                       (force-output *trace-output*))
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette last-mode)
-                        (setf span nil
-                              last-palette nil
-                              last-mode nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (eq mode last-mode)
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette
-                              last-mode mode))
-                       (t
-                        (emit-span x span last-palette last-mode)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode)))
-                  finally
-                     (emit-span x span last-palette last-mode)))
+                                        :allow-imperfect-p imperfectp)))
+                  (when (= (mod column 20) 0)
+                    (format *trace-output* " col ~d/~d…" column columns)
+                    (force-output *trace-output*))
+                  (cond
+                    ((zerop column)
+                     (setf span (list paletted-stamp)
+                           last-palette palette
+                           last-mode mode))
+                    ((blank-stamp-p stamp (aref palettes 0 0))
+                     (emit-span x span last-palette last-mode)
+                     (setf span nil
+                           last-palette nil
+                           last-mode nil))
+                    ((and (or (null last-palette)
+                              (= palette last-palette))
+                          (eq mode last-mode)
+                          (< (length span) 31))
+                     (appendf span (list paletted-stamp))
+                     (setf last-palette palette
+                           last-mode mode))
+                    (t
+                     (emit-span x span last-palette last-mode)
+                     (setf span (list paletted-stamp)
+                           last-palette palette
+                           last-mode mode))))))
           (format output "~%~10t.word $0000"))
         (blob/write-spans-320ac spans output :imperfectp imperfectp))
         (format output "~2%~10t.endblock~%"))
     (format *trace-output* " … done!~%"))))
+|#
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
