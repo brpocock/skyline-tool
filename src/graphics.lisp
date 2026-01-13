@@ -1418,9 +1418,9 @@ All cards in the source image are output as one file."
          (array-height (array-dimension palette-pixels 1))
          (width (floor (or width array-width)))
          (height (floor (or height array-height))))
-    ;; Validate dimensions: ensure nonzero
-    (assert (plusp width) (width) "Width must be positive, got ~D" width)
-    (assert (plusp height) (height) "Height must be positive, got ~D" height)
+    ;; Validate dimensions: ensure at least one 8×8 card
+    (assert (>= width 8) (width) "Width must be at least 8 (for at least one card), got ~D" width)
+    (assert (>= height 8) (height) "Height must be at least 8 (for at least one card), got ~D" height)
     ;; Validate dimensions are within array bounds
     (assert (<= width array-width)
             (width palette-pixels)

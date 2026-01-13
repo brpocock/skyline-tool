@@ -89,7 +89,7 @@
         (setf (aref array x y) default-color)))
     array))
 
-;; Test 3: Dimension validation - flooring and nonzero
+;; Test 3: Dimension validation - flooring and minimum card size
 (test gram-compiler-dimension-validation
   "Test that dimensions are properly validated and floored"
   (with-temp-gram-output (output-path "test-dim-validation.s")
@@ -103,6 +103,17 @@
                                           :palette-pixels test-array)
         (error (e)
           (fail "Should accept floored non-integer dimensions: ~A" e)))
+      ;; Test with dimensions less than 8 (should error - need at least one card)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :height 7
+                                        :width 8
+                                        :palette-pixels (make-test-palette-array 16 16)))
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :height 8
+                                        :width 7
+                                        :palette-pixels (make-test-palette-array 16 16)))
       ;; Test with zero dimensions (should error)
       (signals error
         (skyline-tool::compile-gram-intv test-png *test-gram-dir*
