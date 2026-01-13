@@ -421,22 +421,23 @@ skipping MIDI music with ~:d track~:p"
                                           table))))
 
   (defun midi->note-name (note)
-    (if note
-        (multiple-value-bind (octave letter) (floor (- note 9) 12)
-          (format nil "~a ~d" (elt '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯") letter)
-                  octave))
-        "Ø"))
+    (if (and note (<= 0 note 127))
+        (multiple-value-bind (octave letter) (floor note 12)
+          (format nil "~a~d" (elt '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B") letter)
+                  (- octave 1)))
+        (error "Invalid MIDI note number: ~a" note)))
 
   (defun note->midi-note-number (octave note-name)
-    (+ 9
+    (+ 12
        (* 12 octave)
-       (or (position note-name '("A" "A#" "B" "C" "C#" "D" "D#" "E" "F" "F#" "G" "G#")
+       (or (position note-name '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B")
                      :test #'string-equal)
-           (position note-name '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯")
+           (position note-name '("C" "Db" "D" "Eb" "E" "F" "Gb" "G" "Ab" "A" "Bb" "B")
                      :test #'string-equal)
-           (let ((index (position note-name '( "A♭" "A" "B♭" "B" "C" "D♭" "D" "E♭" "E" "F" "G♭" "G")
-                                  :test #'string-equal)))
-             (return-from note->midi-note-number (+ 8 (* 12 octave) index))))))
+           (position note-name '("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B")
+                     :test #'string-equal)
+           (position note-name '("C" "D♭" "D" "E♭" "E" "F" "G♭" "G" "A♭" "A" "B♭" "B")
+                     :test #'string-equal))))
 
   (assert (= 60 (note->midi-note-number 4 "C")) ()
           "Note->MIDI-Note-Number is not tuned correctly")
@@ -578,7 +579,7 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
   (declare (ignore distortion bits))
-  (multiple-value-bind (value error) 
+  (multiple-value-bind (value error)
       (frequency->pokey (freq<-midi-key midi-note-number))
     #+ () (format *trace-output* "~&For ~a, ~d × ~d then ~d × ~d" (midi->note-name midi-note-number)
                   value (ash (logand #xf0 (apply #'fraction-nybbles (simplify-to-rational error))) -4)
@@ -961,7 +962,7 @@ Gathered text:~{~% • ~a~}"
 (defun pokey-distortion-code (distortion)
   (ecase distortion
     (:10 10) (:2 2) (:12a 12) (:12b 13) (:8 8) (:4a 4) (:4b 5))
-  
+
   (parse-integer (symbol-name distortion) :junk-allowed t))
 
 (defun assigned-song-bank-and-title (assignment)
@@ -1100,7 +1101,7 @@ Music:~:*
                       #+ () (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
                       (setf (aref keyboard key) (list time velocity)))
                      ((and key (zerop velocity) (aref keyboard key))
-                      (let ((d (- time (first (aref keyboard key))))) 
+                      (let ((d (- time (first (aref keyboard key)))))
                         #+ () (format *trace-output* "~& end ~a at ~d (duration ~d)" (midi->note-name key) time d)
                         (destructuring-bind (start-time first-velocity)
                             (aref keyboard key)
@@ -1328,7 +1329,7 @@ Music:~:*
             decay-duration
             sustain-duration
             release-duration
-            (floor (* 100 (hokey-note-volume note))))  
+            (floor (* 100 (hokey-note-volume note))))
     (if (< sustain-duration 1)
         (let ((quieter (quieter-note note)))
           (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"

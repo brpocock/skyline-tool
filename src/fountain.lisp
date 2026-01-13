@@ -2993,16 +2993,15 @@ PlaySong EXECUTE "  song))))
   (assert (< (length text) #x100) (text)
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
-  (restart-case
-      (format t "
-  C\" ~a\"
-  SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-              (prepare-dialogue text)
-              (convert-for-atarivox text))
-    (reload-dictionary ()
-      :report "Reload the AtariVox (SpeakJet) dictionary"
-      (reload-atarivox-dictionary)
-      (fountain/write-speech text)))
+  (format t "~% C\" ~a\"" (prepare-dialogue text))
+  (when (speech-supported-p)
+    (restart-case
+        (format t "~% SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
+                (convert-for-atarivox text))
+      (reload-dictionary ()
+        :report "Reload the AtariVox (SpeakJet) dictionary"
+        (reload-atarivox-dictionary)
+        (fountain/write-speech text))))
   (format t "~% ( ~s ) do-dialogue"
           text))
 
@@ -3382,17 +3381,27 @@ FadeColor~:(~a~) FadingTarget C!"
                                          (#\F :female)
                                          (otherwise :nonbinary)))))))
 
+(defun speech-supported-p ()
+  "Return true if the current platform supports speech synthesis."
+  (member *machine* '(2600 7800 2609))) ; also Vectrex
+
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
   (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))
   (format nil "~10t.byte CoLu(COL~a, $f)" (string-upcase (pascal-case (or (getf actor :speech-color) "Gray")))))

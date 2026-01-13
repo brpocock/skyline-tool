@@ -310,7 +310,7 @@
 (defun double-up (list)
   "Duplicate every entry in the list"
   (loop for item in list
-        appending (list item item)))
+        append (list item item)))
 
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
@@ -442,7 +442,7 @@ PNG image in an unsuitable format:
 (defun mob->mono-bits (mob)
   (mapcar #'code-char
           (loop for y from 0 to 20
-                appending
+                append
                 (loop for col from 0 to 2
                       for col-offset = (* 8 col)
                       collecting
@@ -456,7 +456,7 @@ PNG image in an unsuitable format:
 (defun mob->multi-bits (mob)
   (mapcar #'code-char
           (loop for y from 0 to 20
-                appending
+                append
                 (loop for col from 0 to 2
                       for col-offset = (* 8 col)
                       collecting
@@ -1520,6 +1520,148 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
     (t (error "Don't know how to deal with image with dimensions ~:D×~:D pixels"
               width height))))
 
+(defmethod dispatch-png% ((machine (eql 200)) png-file target-dir
+                          png height width α palette-pixels)
+  (cond
+    ;; Lynx tiles: 8x8 pixel tiles, arranged in grids
+    ((and (zerop (mod height 8))
+          (zerop (mod width 8))
+          (>= (* (truncate height 8) (truncate width 8)) 1))
+     (format t "~&Image ~A seems to be a Lynx tileset~%" png-file)
+     (compile-lynx-tileset png-file target-dir height width palette-pixels))
+
+    ;; Lynx sprites: various sizes, typically small
+    ((and (<= height 64) (<= width 64)
+          (or (and (zerop (mod height 8)) (zerop (mod width 8)))
+              (and (zerop (mod height 16)) (zerop (mod width 16)))))
+     (format t "~&Image ~A seems to be a Lynx sprite~%" png-file)
+     (compile-lynx-sprite png-file target-dir height width palette-pixels))
+
+    ;; Lynx blobs: irregular shapes, logos, etc.
+    (t
+     (format t "~&Image ~A seems to be a Lynx blob~%" png-file)
+     (compile-lynx-blob png-file target-dir height width palette-pixels))))
+
+(defun compile-lynx-tileset (png-file target-dir height width palette-pixels)
+  "Compile a tileset for the Atari Lynx. Tiles are 8x8 pixels, 4-bit color."
+  (let* ((tiles-across (truncate width 8))
+         (tiles-down (truncate height 8))
+         (total-tiles (* tiles-across tiles-down))
+         (output-file (merge-pathnames
+                       (make-pathname :name (pathname-name png-file)
+                                      :type "s")
+                       target-dir)))
+    (format *trace-output* "~%  Tileset: ~Dx~D tiles (~D total)" tiles-across tiles-down total-tiles)
+    ;; Collect all tile data
+    (let ((tile-data
+           (loop for tile-y from 0 below tiles-down
+                 append (loop for tile-x from 0 below tiles-across
+                              append (loop for y from 0 below 8
+                                           append (loop for x from 0 below 8
+                                                        for pixel-x = (+ (* tile-x 8) x)
+                                                        for pixel-y = (+ (* tile-y 8) y)
+                                                        for pixel = (aref palette-pixels pixel-x pixel-y)
+                                                        collect (logand pixel #x0F))))))) ; 4-bit color
+      ;; Pack nibbles into bytes (2 pixels per byte)
+      (let ((byte-data
+             (loop for (nibble1 nibble2) on tile-data by #'cddr
+                   collect (+ nibble1 (* (or nibble2 0) 16)))))
+        ;; Compress the data
+        (let ((compressed-data (zx7-compress (make-array (length byte-data)
+                                                        :element-type '(unsigned-byte 8)
+                                                        :initial-contents byte-data))))
+          (with-output-to-file (out output-file :if-exists :supersede)
+            (format out ";;; ~A tileset data (compressed)~%;;; Generated from ~A~%;;; ~Dx~D tiles (~D total), compressed from ~:D to ~:D bytes~%~%"
+                    (pathname-name png-file) png-file tiles-across tiles-down total-tiles
+                    (length byte-data) (length compressed-data))
+            (format out "~ACompressedTileset:~%" (pathname-name png-file))
+            (loop for byte across compressed-data
+                  for i from 0
+                  do (when (zerop (mod i 16))
+                       (format out "~%  .byte "))
+                     (format out "$~X" byte)
+                     (when (and (< i (1- (length compressed-data)))
+                                (not (zerop (mod (1+ i) 16))))
+                       (format out ", ")))
+            (format out "~%"))))))
+
+(defun compile-lynx-sprite (png-file target-dir height width palette-pixels)
+  "Compile a sprite for the Atari Lynx. 4-bit color, various sizes."
+  (let ((output-file (merge-pathnames
+                      (make-pathname :name (pathname-name png-file)
+                                     :type "s")
+                      target-dir)))
+    (format *trace-output* "~%  Sprite: ~Dx~D pixels" width height)
+    ;; Collect all sprite data
+    (let ((sprite-data
+           (loop for y from 0 below height
+                 append (loop for x from 0 below width
+                              for pixel = (aref palette-pixels x y)
+                              collect (logand pixel #x0F)))))
+      ;; Pack nibbles into bytes (2 pixels per byte)
+      (let ((byte-data
+             (loop for (nibble1 nibble2) on sprite-data by #'cddr
+                   collect (+ nibble1 (* (or nibble2 0) 16)))))
+        ;; Compress the data
+        (let ((compressed-data (zx7-compress (make-array (length byte-data)
+                                                        :element-type '(unsigned-byte 8)
+                                                        :initial-contents byte-data))))
+          (with-output-to-file (out output-file :if-exists :supersede)
+            (format out ";;; ~A sprite data (compressed)~%;;; Generated from ~A~%;;; Dimensions: ~Dx~D, compressed from ~:D to ~:D bytes~%~%"
+                    (pathname-name png-file) png-file width height
+                    (length byte-data) (length compressed-data))
+            (format out "SpriteWidth = ~D~%SpriteHeight = ~D~%~%" width height)
+            (format out "~ACompressedSprite:~%" (pathname-name png-file))
+            (loop for byte across compressed-data
+                  for i from 0
+                  do (when (zerop (mod i 16))
+                       (format out "~%  .byte "))
+                     (format out "$~X" byte)
+                     (when (and (< i (1- (length compressed-data)))
+                                (not (zerop (mod (1+ i) 16))))
+                       (format out ", ")))
+            (format out "~%"))))))
+
+(defun compile-lynx-blob (png-file target-dir height width palette-pixels)
+  "Compile a blob (irregular graphic) for the Atari Lynx. 4-bit color."
+  (let* ((subdir (merge-pathnames (make-pathname :directory (list :relative "Blob.Lynx"))
+                                  target-dir))
+         (output-file (merge-pathnames
+                       (make-pathname :name (pathname-name png-file)
+                                      :type "s")
+                       subdir)))
+    (ensure-directories-exist output-file)
+    (format t "~&  Blob: ~Dx~D pixels" width height)
+    ;; Collect all blob data
+    (let ((blob-data
+           (loop for y from 0 below height
+                 append (loop for x from 0 below width
+                              for pixel = (aref palette-pixels x y)
+                              collect (logand pixel #x0F)))))
+      ;; Pack nibbles into bytes (2 pixels per byte)
+      (let ((byte-data
+             (loop for (nibble1 nibble2) on blob-data by #'cddr
+                   collect (+ nibble1 (* (or nibble2 0) 16)))))
+        ;; Compress the data
+        (let ((compressed-data (zx7-compress (make-array (length byte-data)
+                                                        :element-type '(unsigned-byte 8)
+                                                        :initial-contents byte-data))))
+          (with-output-to-file (out output-file :if-exists :supersede)
+            (format out ";;; ~A blob data (compressed)~%;;; Generated from ~A~%;;; Dimensions: ~Dx~D, compressed from ~:D to ~:D bytes~%~%"
+                    (pathname-name png-file) png-file width height
+                    (length byte-data) (length compressed-data))
+            (format out "BlobWidth = ~D~%BlobHeight = ~D~%~%" width height)
+            (format out "~ACompressedBlob:~%" (pathname-name png-file))
+            (loop for byte across compressed-data
+                  for i from 0
+                  do (when (zerop (mod i 16))
+                       (format out "~%  .byte "))
+                     (format out "$~X" byte)
+                     (when (and (< i (1- (length compressed-data)))
+                                (not (zerop (mod (1+ i) 16))))
+                       (format out ", ")))
+            (format out "~%"))))))))
+
 (defun dispatch-png (png-file target-dir)
   (with-simple-restart (retry-png "Retry processing PNG file ~a" png-file)
     (format *trace-output* "~%Reading PNG image ~a…" png-file)
@@ -2152,6 +2294,20 @@ Used internally by BLOB ripping for color stamp conversion."
                         (parse-into-7800-bytes
                          (read-7800-art-index index-in))))))
 
+(defun compile-art-lynx (index-out index-in)
+  "Compiles art assets for the Atari Lynx Suzy graphics system.
+   Reads .art metadata files and processes referenced PNG images using Lynx formats."
+  (let ((*machine* 200))
+    ;; For now, delegate to PNG processing by reading the .art file and dispatching the PNG
+    (with-open-file (art-file index-in)
+      (let* ((line (read-line art-file))
+             (parts (split-sequence #\Space line))
+             (png-name (first parts)))
+        (when png-name
+          (let ((png-path (merge-pathnames png-name
+                                           (make-pathname :directory (pathname-directory index-in)))))
+            (dispatch-png png-path (make-pathname :directory (pathname-directory index-out)))))))))
+
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.
 
@@ -2752,8 +2908,8 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
         (blob-rip-7800-320ac png-file imperfectp$)
         (blob-rip-7800-160a png-file imperfectp$))))
 
-(defun blob-rip-7800-160a (png-file &optional (imperfectp$ nil))
-  "@cindex BLOB ripping
+  (defun blob-rip-7800-160a (png-file &optional (imperfectp$ nil))
+    "@cindex BLOB ripping
 @cindex 160A graphics mode
 @cindex sprite graphics
 
@@ -2781,173 +2937,99 @@ Rip a Bitmap Large Object Block in 160A mode from PNG-FILE for standard sprite g
 @item General purpose graphics (non-320px wide)
 @end itemize
 
+@strong{Maria Graphics Modes Reference:}
+For detailed information about the six Maria drawing modes (320A/B/C/D and 160A/B), see @ref{Asset Formats Graphics Organization, , Graphics Memory Organization} in the Asset Formats chapter of the Developer's Guide.
+
 Pass --imperfect to allow imperfect palette matches instead of signaling errors."
-  (let* ((*machine* 7800)
-         (*region* :ntsc)
-         (png (png-read:read-png-file png-file))
-         (height (png-read:height png))
-         (width (png-read:width png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)))
-         (output-pathname (png-to-blob-pathname png-file))
-         (imperfectp (or (eql :imperfect imperfectp$)
-                         (equal imperfectp$ "--imperfect"))))
-    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
-    (check-height+width-for-blob height width palette-pixels)
-    (let* ((palettes (extract-palettes palette-pixels))
-           (palettes-list (2a-to-lol palettes))
-           (stamps (extract-4×16-stamps palette-pixels))
-           (zones (floor height 16))
-           (columns (floor width 4))
-           (spans (make-hash-table :test 'equalp))
-           (stamp-counting 0)
-           (next-span-id 0))
-      (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-      (ensure-directories-exist output-pathname)
-      (with-output-to-file (output output-pathname :if-exists :supersede)
-        (format output ";;; Bitmap Large Object Block for Atari 7800
+    (let* ((*machine* 7800)
+           (*region* :ntsc)
+           (png (png-read:read-png-file png-file))
+           (height (png-read:height png))
+           (width (png-read:width png))
+           (palette-pixels (png->palette height width
+                                         (png-read:image-data png)))
+           (output-pathname (png-to-blob-pathname png-file))
+           (imperfectp (or (eql :imperfect imperfectp$)
+                           (equal imperfectp$ "--imperfect"))))
+      (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
+      (check-height+width-for-blob height width palette-pixels)
+      (let* ((palettes (extract-palettes palette-pixels))
+             (palettes-list (2a-to-lol palettes))
+             (stamps (extract-4×16-stamps palette-pixels))
+             (zones (floor height 16))
+             (columns (floor width 4))
+             (spans (make-hash-table :test 'equalp))
+             (stamp-counting 0)
+             (next-span-id 0))
+        (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
+        (ensure-directories-exist output-pathname)
+        (with-output-to-file (output output-pathname :if-exists :supersede)
+          (format output ";;; Bitmap Large Object Block for Atari 7800
 ;;; Derived from source file ~a. This is a generated file.~3%
 
 Blob_~a:~10t.block~2%"
-                (enough-namestring png-file)
-                (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output)
-        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-        (dotimes (zone zones)
-          (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span pal-index)
-                   (when span
-                     (let ((id (or (gethash span spans)
-                                   (prog1
-                                       (setf (gethash span spans) (prog1 next-span-id
-                                                                    (incf next-span-id)))
-                                     (cond
-                                       ((and (< stamp-counting #x100)
-                                             (< (+ stamp-counting (length span)) #x100))
-                                        (incf stamp-counting (length span)))
-                                       ((and (< stamp-counting #x100)
-                                             (>= (+ stamp-counting (length span)) #x100))
-                                        (setf stamp-counting #x100))
-                                       (t (incf stamp-counting)))))))
-                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                               id pal-index (length span)
-                               (- x (* 4 (length span))))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  for x from 0 by 4
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for palette = (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette)
-                        (setf span nil
-                              last-palette nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette))
-                       (t
-                        (emit-span x span last-palette)
-                        (setf span (list paletted-stamp)
-                              last-palette palette)))
-                  finally
-                     (emit-span x span last-palette)))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%"))
-  (let* ((palettes (extract-palettes palette-pixels))
-         (palettes-list (2a-to-lol palettes))
-         (stamps (extract-4×16-stamps palette-pixels))
-         (zones (floor height 16))
-         (columns (floor width 4))
-         (spans (make-hash-table :test 'equalp))
-         (stamp-counting 0)
-         (next-span-id 0))
-    (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-    (ensure-directories-exist output-pathname)
-    (with-output-to-file (output output-pathname :if-exists :supersede)
-      (format output ";;; Bitmap Large Object Block for Atari 7800
-;;; Derived from source file ~a. This is a generated file.~3%
-
-Blob_~a:~10t.block~2%"
-              (enough-namestring png-file)
-              (assembler-label-name (pathname-name png-file)))
-      (write-blob-palettes png output)
-      (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-      (dotimes (zone zones)
-        (format output "~2&Zone~d:" zone)
-        (flet ((emit-span (x span pal-index)
-                 (when span
-                   (let ((id (or (gethash span spans)
-                                 (prog1
-                                     (setf (gethash span spans) (prog1 next-span-id
-                                                                  (incf next-span-id)))
-                                   (cond
-                                     ((and (< stamp-counting #x100)
-                                           (< (+ stamp-counting (length span)) #x100))
-                                      (incf stamp-counting (length span)))
-                                     ((and (< stamp-counting #x100)
-                                           (>= (+ stamp-counting (length span)) #x100))
-                                      (setf stamp-counting #x100))
-                                     (t (incf stamp-counting)))))))
-                     (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                             id pal-index (length span)
-                             (- x (* 4 (length span))))))))
-          (loop with span = nil
-                with last-palette = nil
-                for x from 0 by 4
-                for column from 0 below columns
-                for stamp = (aref stamps column zone)
-                for palette = (or (when (and last-palette
-                                             (tile-fits-palette-p
-                                              stamp
-                                              (elt palettes-list last-palette)))
-                                    last-palette)
-                                  (best-palette stamp palettes
-                                                :allow-imperfect-p imperfectp
-                                                :x column :y zone))
-                for paletted-stamp = (limit-region-to-palette
-                                      stamp (elt palettes-list palette)
-                                      :allow-imperfect-p imperfectp)
-                do
-                   (cond
-                     ((zerop column)
-                      (setf span (list paletted-stamp)
-                            last-palette palette))
-                     ((blank-stamp-p stamp (aref palettes 0 0))
-                      (emit-span x span last-palette)
-                      (setf span nil
-                            last-palette nil))
-                     ((and (or (null last-palette)
-                               (= palette last-palette))
-                           (< (length span) 31))
-                      (appendf span (list paletted-stamp))
-                      (setf last-palette palette))
-                     (t
-                      (emit-span x span last-palette)
-                      (setf span (list paletted-stamp)
-                            last-palette palette)))
-                finally
-                   (emit-span x span last-palette)))
-        (format output "~%~10t.word $0000"))
-      (blob/write-spans spans output :imperfectp imperfectp)))
-  (format *trace-output* " … done!~%"))
+                  (enough-namestring png-file)
+                  (assembler-label-name (pathname-name png-file)))
+          (write-blob-palettes png output)
+          (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+          (dotimes (zone zones)
+            (format output "~2&Zone~d:" zone)
+            (flet ((emit-span (x span pal-index)
+                     (when span
+                       (let ((id (or (gethash span spans)
+                                     (prog1
+                                         (setf (gethash span spans) (prog1 next-span-id
+                                                                      (incf next-span-id)))
+                                       (cond
+                                         ((and (< stamp-counting #x100)
+                                               (< (+ stamp-counting (length span)) #x100))
+                                          (incf stamp-counting (length span)))
+                                         ((and (< stamp-counting #x100)
+                                               (>= (+ stamp-counting (length span)) #x100))
+                                          (setf stamp-counting #x100))
+                                         (t (incf stamp-counting)))))))
+                         (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                                 id pal-index (length span)
+                                 (- x (* 4 (length span))))))))
+              (loop with span = nil
+                    with last-palette = nil
+                    for x from 0 by 4
+                    for column from 0 below columns
+                    for stamp = (aref stamps column zone)
+                    for palette = (or (when (and last-palette
+                                                 (tile-fits-palette-p
+                                                  stamp
+                                                  (elt palettes-list last-palette)))
+                                        last-palette)
+                                      (best-palette stamp palettes
+                                                    :allow-imperfect-p imperfectp
+                                                    :x column :y zone))
+                    for paletted-stamp = (limit-region-to-palette
+                                          stamp (elt palettes-list palette)
+                                          :allow-imperfect-p imperfectp)
+                    do
+                       (cond
+                         ((zerop column)
+                          (setf span (list paletted-stamp)
+                                last-palette palette))
+                         ((blank-stamp-p stamp (aref palettes 0 0))
+                          (emit-span x span last-palette)
+                          (setf span nil
+                                last-palette nil))
+                         ((and (or (null last-palette)
+                                   (= palette last-palette))
+                               (< (length span) 31))
+                          (appendf span (list paletted-stamp))
+                          (setf last-palette palette))
+                         (t
+                          (emit-span x span last-palette)
+                          (setf span (list paletted-stamp)
+                                last-palette palette)))
+                    finally
+                       (emit-span x span last-palette)))
+            (format output "~%~10t.word $0000"))
+          (blob/write-spans spans output :imperfectp imperfectp)))
+      (format *trace-output* " … done!~%"))))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
@@ -3032,55 +3114,55 @@ Blob_~a:~10t.block~2%"
                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
                                id last-palette (length span)
                                (- x (length span)))))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  with last-mode = nil
-                  for x from 0 by 1
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
-                  for palette = (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do (when (= (mod column 20) 0)
-                       (format *trace-output* " col ~d/~d…" column columns)
-                       (force-output *trace-output*))
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette last-mode)
-                        (setf span nil
-                              last-palette nil
-                              last-mode nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (eq mode last-mode)
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette
-                              last-mode mode))
-                       (t
-                        (emit-span x span last-palette last-mode)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode)))
-                  finally
-                     (emit-span x span last-palette last-mode)))
-          (format output "~%~10t.word $0000"))
+        (loop with span = nil
+              with last-palette = nil
+              with last-mode = nil
+              for x from 0 by 1
+              for column from 0 below columns
+              for stamp = (aref stamps column zone)
+              for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
+              for palette = (or (when (and last-palette
+                                           (tile-fits-palette-p
+                                            stamp
+                                            (elt palettes-list last-palette)))
+                                  last-palette)
+                                (best-palette stamp palettes
+                                              :allow-imperfect-p imperfectp
+                                              :x column :y zone))
+              for paletted-stamp = (limit-region-to-palette
+                                    stamp (elt palettes-list palette)
+                                    :allow-imperfect-p imperfectp)
+              do (when (= (mod column 20) 0)
+                   (format *trace-output* " col ~d/~d…" column columns)
+                   (force-output *trace-output*))
+                 (cond
+                   ((zerop column)
+                    (setf span (list paletted-stamp)
+                          last-palette palette
+                          last-mode mode))
+                   ((blank-stamp-p stamp (aref palettes 0 0))
+                    (emit-span x span last-palette last-mode)
+                    (setf span nil
+                          last-palette nil
+                          last-mode nil))
+                   ((and (or (null last-palette)
+                             (= palette last-palette))
+                         (eq mode last-mode)
+                         (< (length span) 31))
+                    (appendf span (list paletted-stamp))
+                    (setf last-palette palette
+                          last-mode mode))
+                   (t
+                    (emit-span x span last-palette last-mode)
+                    (setf span (list paletted-stamp)
+                          last-palette palette
+                          last-mode mode)))
+              finally
+                 (emit-span x span last-palette last-mode))
+        (format output "~%~10t.word $0000")
         (blob/write-spans-320ac spans output :imperfectp imperfectp)
-        (format output "~2%~10t.endblock~%")))
-    (format *trace-output* " … done!~%"))
+        (format output "~2%~10t.bend~%"))))
+  (format *trace-output* " … done!~%"))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

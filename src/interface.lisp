@@ -232,16 +232,27 @@
 
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (string-equal (or (sb-ext:posix-getenv "RESTARTS") "") "NIL")
+  (when (or (string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
+            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
-[31;1mAn error of type ~:(~a~) was signalled and RESTARTS=NIL,
-ending immediately.[0m
+[31;1mAn error of type ~:(~a~) was signalled~a, ending immediately.[0m
 ~a
 "
             (class-name (class-of condition))
+            (cond ((string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+                   " (SKYLINE_DEBUG_BACKTRACE=t)")
+                  ((string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
+                   " (RESTARTS=NIL)")
+                  (t ""))
             condition)
+    ;; Show backtrace if requested
+    (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+      (format *error-output* "~&Backtrace:~%")
+      (sb-debug:backtrace)
+      (format *error-output* "~&"))
     (finish-output *error-output*)
     (sb-ext:exit :code 2))
   (let ((restarts (compute-restarts))
@@ -322,10 +333,16 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                               *debugger-hook*)))
-        (restart-case
-            (unwind-protect
-                 (progn ,@body)
-              (force-output *trace-output*))
+        (if (or (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+                (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
+            ;; When debug backtrace is requested, don't provide restarts - let errors go to debugger
+            (handler-bind ((error #'friendly-tty-debugger))
+              ,@body))
+            ;; Otherwise, provide the normal restart functionality
+            (restart-case
+                (unwind-protect
+                     (progn ,@body)
+                  (force-output *trace-output*))
           (do-over ()
             :report "Try again, from the top"
             (go do-over))
@@ -394,8 +411,8 @@ Supply a list of verb(s) to see detailed documentation"
  Skyline-Tool
  ————————————
 
-Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com); 
-Copyright © 2024-2025 Interworldly Adventuring, LLC.
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -486,11 +503,11 @@ See COPYING for details
   (command (append '("port") subcommand)))
 
 (defun command (argv)
-  (format *trace-output* "~&Skyline tool (© 2025) invoked:
+    (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
-          argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-  (finish-output *trace-output*)
+            argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+  (format t "~&Running for game “~a” for ~a" *game-title* (or (ignore-errors (machine-long-name)) "unknown platform"))
+  (finish-output)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)

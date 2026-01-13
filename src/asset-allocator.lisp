@@ -405,22 +405,43 @@
     (t (error "Don't know how to find a generated path from ~a" path))))
 
 (defun write-blob-generation (pathname)
-  (format t "~%
+  (let ((blob-name (pathname-name pathname)))
+    (ecase *machine*
+      (200 ; Lynx
+       (format t "~%
+Source/Generated/Assets/Blob.Lynx/~a.s: Source/Blobs/Lynx/~a.png \\
+~10tbin/skyline-tool
+	mkdir -p Source/Generated/Assets
+	bin/skyline-tool --port Lynx dispatch-png $< Source/Generated/Assets"
+               blob-name blob-name))
+      (7800 ; Atari 7800
+       (format t "~%
 Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/Assets
 	bin/skyline-tool blob-rip-7800 $<"
-          (pathname-name pathname)
-          (pathname-name pathname)))
+               blob-name blob-name))
+      ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200) ; Other supported machines without blob support
+       (error "Blob generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-art-generation (pathname)
-  (format t "~%
-Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%~10t~a \\~}~%~10tbin/skyline-tool
+  (let ((art-name (pathname-name pathname)))
+    (ecase *machine*
+      (200 ; Lynx
+       (format t "~%
+Object/Assets/Art.~a.o: Source/Art/~a.art~%	bin/skyline-tool
+	mkdir -p Object/Assets
+	bin/skyline-tool compile-art-lynx $@ $<"
+               art-name art-name))
+      (7800 ; Atari 7800
+       (format t "~%
+Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%	~a \\~}~%	bin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-7800 $@ $<"
-          (pathname-name pathname)
-          (pathname-name pathname)
-          (mapcar (compose #'enough-namestring #'second)
-                  (read-7800-art-index pathname))))
+               art-name art-name
+               (mapcar (compose #'enough-namestring #'second)
+                       (read-7800-art-index pathname))))
+      ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200) ; Other supported machines without art support
+       (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-tsx-generation (pathname)
   (if (and (search "Decals" (pathname-name pathname))
@@ -700,7 +721,9 @@ file ~a.s in bank $~(~2,'0x~)~
 	bin/skyline-tool compile-forth ~:*Source/Generated/Assets/Script.~{~a~^.~}.forth $@"
                name))
       ((equal kind "Blobs")
-       (format nil "bin/skyline-tool blob-rip-7800 $<"))
+       (if (eql *machine* 200)
+           (format nil "bin/skyline-tool --port Lynx dispatch-png $< Object/Assets")
+           (format nil "bin/skyline-tool blob-rip-7800 $<")))
       (t (error "Asset kind ~a not known" kind)))))
 
 (defun write-asset-compilation/music (asset-indicator)
@@ -754,17 +777,23 @@ file ~a.s in bank $~(~2,'0x~)~
         ((map-asset-p asset-indicator)
          (write-asset-compilation/map asset-indicator))
         ((blob-asset-p asset-indicator)
-         (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a)" asset-indicator))
+         (ecase *machine*
+           (200 ; Lynx platform
+            (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
+            (write-asset-compilation/blob-lynx asset-indicator))
+           ((1 2 8 16 20 64 88 128 222 223 264 1591 1601 2600 3010 5200 7800) ; Other machines - ignore blobs for now
+            (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)" asset-indicator *machine*))))
         ((script-asset-p asset-indicator)
          (format t "~%
-~a: ~a \\
-~10tSource/Tables/SpeakJet.dic Source/Generated/Labels.Public.NTSC.forth Source/Generated/Classes.forth \\
+~a: ~a~@[ \\~%~10t~a~] \\
+~10tSource/Generated/Labels.Public.NTSC.forth Source/Generated/Classes.forth \\
 ~10tSource/Assets.index bin/skyline-tool
 	# FIXME: #1237 NTSC is not actually right for everyone
 	mkdir -p Object/Assets
 	~a"
                  (asset->object-name asset-indicator)
                  (asset->source-name asset-indicator)
+                 (when (speech-supported-p) "Source/Tables/SpeakJet.dic")
                  (asset-compilation-line asset-indicator)))
         (t
          (cerror "Continue with generic code" "Unexpected asset kind in indicator: ~a" asset-indicator)
@@ -775,9 +804,13 @@ file ~a.s in bank $~(~2,'0x~)~
 	~a"
                  (asset->object-name asset-indicator)
                  (asset->source-name asset-indicator)
-                 (when (script-asset-p asset-indicator)
+                 (when (and (script-asset-p asset-indicator) (speech-supported-p))
                    "Source/Tables/SpeakJet.dic")
                  (asset-compilation-line asset-indicator)))))
+
+(defun speech-supported-p ()
+  "Return true if the current platform supports speech synthesis."
+  (not (eql *machine* 200))) ; Lynx (200) does not support speech
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
@@ -1106,7 +1139,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                  (directory (make-pathname :directory (list :relative "Source" "Blobs")
                                            :name :wild
                                            :type "xcf"))))
-    (write-blob-generation blob)))
+    (when (or (not (eql *machine* 200)) ; Not Lynx, process all
+              (search "Lynx/" (namestring blob))) ; Lynx, only process Lynx/ blobs
+      (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
   (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art")
@@ -1142,10 +1177,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 (defun write-master-makefile ()
   "Write  out   Source/Generated/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
-  (let ((*machine* 7800))
-    (ensure-directories-exist #p"Source/Generated/")
-    (format *trace-output* "~&Writing master Makefile content …")
-    (with-output-to-file (*standard-output* #p"Source/Generated/Makefile" :if-exists :supersede)
+  (ensure-directories-exist #p"Source/Generated/")
+  (format *trace-output* "~&Writing master Makefile content … *machine*=~a" *machine*)
+  (with-output-to-file (*standard-output* #p"Source/Generated/Makefile" :if-exists :supersede)
       (write-makefile-header)
       (write-makefile-for-bare-assets)
       (write-makefile-for-tilesets)
@@ -1173,7 +1207,7 @@ mentioned in the top-level Makefile."
                                         :build build :video video))
                   (t (write-asset-bank-makefile *bank*
                                                 :build build :video video))))))))
-      (format *trace-output* " … done writing master Makefile.~%"))))
+      (format *trace-output* " … done writing master Makefile.~%")))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"
@@ -1558,5 +1592,16 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
                     err (length err))
             (return-from assemble-file-for-size 8192))
           (parse-integer (aref size 0) :radix 16))))))
+
+(defun write-asset-compilation/blob-lynx (asset-indicator)
+  "Generate makefile rules for Lynx BLOB assets (PNG graphics)"
+  (let ((source-name (asset->source-name asset-indicator))
+        (object-name (asset->object-name asset-indicator)))
+    (format t "~%
+~a: ~a \\
+~10tbin/skyline-tool
+	mkdir -p Object/Assets
+	bin/skyline-tool --port Lynx dispatch-png $< Object/Assets"
+            object-name source-name)))
 
 
