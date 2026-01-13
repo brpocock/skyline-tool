@@ -11,14 +11,6 @@
 
 (defvar *screen-ticker* 0)
 
-;; Minifont punctuation characters for text processing
-(defparameter +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0")
-
-;; RLE compression parameters
-(defparameter *rle-fast-mode* 1)
-(defvar *rle-options* 0)
-(defvar *rle-best-full* most-positive-fixnum)
-
 (defclass grid/tia ()
   ((tiles :reader grid-tiles :initarg :tiles)
    (colors :reader grid-row-colors :initarg :colors)
@@ -907,7 +899,7 @@ The function creates tileset objects with image data, palette information, and t
 compile-tileset, compile-map (for embedded tilesets)
 
 @strong{Output:}
-Tileset object containing image data, tile dimensions, and palette information."
+Tileset object containing image data, tile dimensions, and palette information.
   (let* ((path (etypecase xml-reference
                  (cons (let ((source
                                (assocdr "source"
@@ -1069,7 +1061,7 @@ Tileset object containing image data, tile dimensions, and palette information."
               (length source)
               (length options)
               (reduce #'min (mapcar #'cdr options))
-              (reduce #'max (mapcar #'cdr options)))
+              (reduce #'max (mapcar #'cdr options))))
     (dolist (option options)
       (destructuring-bind (rle . expanded-length) option
         (when (zerop (random 1000))
@@ -1087,18 +1079,22 @@ Tileset object containing image data, tile dimensions, and palette information."
     (when fully
       (reduce #'shorter fully))))
 
+(defparameter *rle-fast-mode* 1)
+
+(defvar *rle-options* 0)
+
+(defvar *rle-best-full* most-positive-fixnum)
 
 (defun rle-compress (source)
   (let ((lparallel:*kernel* (lparallel:make-kernel
                              8 :name "Skyline-Tool RLE Compressor"))
         (*rle-options* 0)
         (*rle-best-full* (1+ (length source))))
-    (format *trace-output* "~& Compressing ~:d byte~:p …" (length source))
+    (format *trace-output* "~& Compressing ~:d bytes..." (length source))
     (finish-output *trace-output*)
     (unwind-protect
          (let ((rle (rle-compress-fully source nil)))
-           (format *trace-output* " into ~:d byte~:p using RLE (-~d%), ~
-after considering ~:d option~:p."
+           (format *trace-output* " into ~:d bytes using RLE (~d% compression), after considering ~:d options."
                    (length rle)
                    (round (- 100 (* 100 (/ (length rle) (length source)))))
                    *rle-options*)

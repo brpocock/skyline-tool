@@ -29,6 +29,7 @@
            #:allocate-assets
            #:atari800-label-file
            #:blob-rip-7800
+           #:assemble-intv-rom
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
@@ -72,7 +73,18 @@
            #:write-master-makefile
            #:run-for-port
            #:run-gui
-           #:run-repl))
+           #:run-repl
+           ;; Display list debugging functions (for testing)
+           #:decode-header
+           #:header->string
+           #:string->hex
+           #:decode-dll-entry
+           #:decode-dll-hex
+           #:decode-display-list
+           #:decode-dll-deeply
+           #:detect-active-dll
+           #:dl-contains-entry-p
+           #:dll-can-reach-dl-entry-p))
 
 (in-package :skyline-tool)
 

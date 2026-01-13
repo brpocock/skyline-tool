@@ -1,8 +1,7 @@
-(defpackage :skyline-tool/build-test
-  (:use :cl :fiveam)
-  (:export #:build-tests))
+;;; Phantasia SkylineTool/tests/build-tests.lisp
+;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
-(in-package :skyline-tool/build-test)
+(in-package :skyline-tool/test)
 
 (def-suite build-tests
   :description "Regression tests for build system and compilation issues")
@@ -71,7 +70,7 @@
     (is-true system "skyline-tool system should be defined")
     (is (stringp (asdf:system-description system))
         "system should have a description")
-    (is (asdf:system-components system)
+    (is (not (null (asdf:component-children system)))
         "system should have components")))
 
 ;; Test that all defined packages can be found

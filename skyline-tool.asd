@@ -82,7 +82,9 @@
                  (:file "threed")
                  (:file "asset-allocator")
                  (:file "atarivox")
-                 (:file "interface")))))
+                 (:file "interface")
+                 ;; (:file "maps") ;; Temporarily disabled due to compilation issues
+                 ))
 
 ;; Separate test system
 (asdf:defsystem :skyline-tool/test
@@ -96,4 +98,6 @@
                              (:file "animation-preview-tests")
                              (:file "graphics-tests")
                              (:file "build-tests")
-                             (:file "interface-tests")))))
+                             (:file "interface-tests")
+                             (:file "makefile-functions-tests")
+                             (:file "music-tests")))))

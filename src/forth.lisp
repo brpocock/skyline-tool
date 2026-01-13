@@ -93,6 +93,41 @@
                (return tag))
         else do (appendf string (cons word nil))))
 
+(defun forth/discard-speech ()
+  "Silently discard speech commands that aren't relevant for the current platform."
+  (loop for word = (read-forth-word)
+        ;; Skip all words until we find the closing bracket
+        if (or (equal word "]SpeakJet") (equal word "]IntelliVoice"))
+          do (return-from forth/discard-speech)))
+
+(defun forth/intellivoice-quote ()
+  (loop for word = (read-forth-word)
+        with string = (list)
+        if (equal word "]IntelliVoice")
+          do (let ((tag (format nil "~a_IV" (dialogue-hash (reduce (curry #'concatenate 'string) string)))))
+               (format t "
+~10t.section BankData
+~10t.weak
+~12t~a~:*_DefinedP := false
+~10t.endweak
+~10t.if ! ~a~:*_DefinedP
+~12t~a~:*_DefinedP := true
+~a: ~{~%~12t.byte ~a~^, ~30t~a~^, ~50t~a~^~}
+~10t.fi
+~10t.send
+
+~10t.byte ForthPushWord, <~a, >~:*~a
+"
+                       tag
+                       (mapcar (lambda (byte)
+                                 (if (position #\$ byte)
+                                     byte
+                                     (format nil "IntelliVoice.~a" byte)))
+                               string)
+                       tag)
+               (return tag))
+        else do (appendf string (cons word nil))))
+
 (defun forth/include (&optional (name (read-forth-word)))
   (let* ((script-pathname (merge-pathnames (parse-namestring name)
                                            (make-pathname
@@ -189,7 +224,8 @@
                     (".\"" nil forth/trace)
                     ("(" nil forth/comment-parens)
                     ("C\"" nil forth/c-quote)
-                    ("SpeakJet[" nil forth/speakjet-quote)))
+                    ;; Platform-specific speech commands will be added dynamically
+                    )
       (destructuring-bind (word runtime &optional compile-time) sdef
         (setf (gethash word dict) (list runtime compile-time (list :source :system)))))
     (with-input-from-file (*standard-input* *forth-bootstrap-pathname*)
@@ -197,6 +233,22 @@
         (format *trace-output* "~% ( reading Forth bootstrap ~a ) "
                 (enough-namestring *forth-bootstrap-pathname*))
         (compile-forth-script :dictionary dict)))
+
+    ;; Add platform-specific speech commands after bootstrap
+    (ecase *machine*
+      (7800 ;; Atari 7800 uses SpeakJet
+       (setf (gethash "SpeakJet[" dict)
+             (list nil 'forth/speakjet-quote (list :source :system)))
+       ;; Discard IntelliVoice commands silently
+       (setf (gethash "IntelliVoice[" dict)
+             (list nil 'forth/discard-speech (list :source :system))))
+      (2609 ;; Intellivision uses IntelliVoice
+       (setf (gethash "IntelliVoice[" dict)
+             (list nil 'forth/intellivoice-quote (list :source :system)))
+       ;; Discard SpeakJet commands silently
+       (setf (gethash "SpeakJet[" dict)
+             (list nil 'forth/discard-speech (list :source :system)))))
+
     (format *trace-output* " ( bootstrap complete )~2%")
     dict))
 
