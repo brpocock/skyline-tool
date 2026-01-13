@@ -1432,10 +1432,10 @@ All cards in the source image are output as one file."
             height array-height)
     ;; Check if monochrome (only black=0 and white=7 palette indices)
     (let ((colors (image-colours palette-pixels height width)))
-    (unless (subsetp colors '(0 7) :test '=)
-      (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
-            png-file colors)))
-  (let ((out-file (merge-pathnames
+      (unless (subsetp colors '(0 7) :test '=)
+        (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
+              png-file colors))
+      (let ((out-file (merge-pathnames
                    (make-pathname :name
                                   (pathname-name png-file)
                                   :type "s")
