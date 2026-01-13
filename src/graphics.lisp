@@ -1391,7 +1391,7 @@ of the given width."
 (loop for width in '(16 32 64 128)
       do (dotimes (i #xff)
            (assert (> (/ 16384 width) (tile-cell-vic2-y i width))
-                   nil "The TILE-CELL-VIC2-Y function must return a valid value;
+                   () "The TILE-CELL-VIC2-Y function must return a valid value;
 value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell-vic2-y i width) i width)))
 
 (defun compile-atari-8×8 (png-file target-dir height width)
@@ -1727,33 +1727,33 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
   (format *trace-output* "~% Image ~A seems to be a VIC-20 8×8 font" png-file)
   (compile-font-8×8 png-file target-dir height width palette-pixels))
 
-(defmethod dispatch-png% ((machine (eql 9000)) png-file target-dir
-                          png height width α palette-pixels)
-  (cond
-    ;; Lynx sprites: up to 160×102, 16 colors max
-    ((and (<= width 160) (<= height 102))
-     (format *trace-output* "~% Image ~A seems to be a Lynx sprite" png-file)
-     (compile-lynx-sprite png-file target-dir))
+;; (defmethod dispatch-png% ((machine (eql 9000)) png-file target-dir
+;;                           png height width α palette-pixels)
+;;   (cond
+;;     ;; Lynx sprites: up to 160×102, 16 colors max
+;;     ((and (<= width 160) (<= height 102))
+;;      (format *trace-output* "~% Image ~A seems to be a Lynx sprite" png-file)
+;;      (compile-lynx-sprite png-file target-dir))
 
-    ;; Lynx backgrounds: exactly 160×102
-    ((and (= width 160) (= height 102))
-     (format *trace-output* "~% Image ~A seems to be a Lynx background" png-file)
-     (compile-lynx-blob png-file target-dir))
+;;     ;; Lynx backgrounds: exactly 160×102
+;;     ((and (= width 160) (= height 102))
+;;      (format *trace-output* "~% Image ~A seems to be a Lynx background" png-file)
+;;      (compile-lynx-blob png-file target-dir))
 
-    ;; Lynx tilesets: multiples of 8×8, up to 160×102
-    ((and (zerop (mod width 8)) (zerop (mod height 8))
-          (<= width 160) (<= height 102))
-     (format *trace-output* "~% Image ~A seems to be a Lynx tileset" png-file)
-     (compile-lynx-tileset png-file target-dir))
+;;     ;; Lynx tilesets: multiples of 8×8, up to 160×102
+;;     ((and (zerop (mod width 8)) (zerop (mod height 8))
+;;           (<= width 160) (<= height 102))
+;;      (format *trace-output* "~% Image ~A seems to be a Lynx tileset" png-file)
+;;      (compile-lynx-tileset png-file target-dir))
 
-    (t
-     (error 'dimension-error
-            :filename png-file
-            :machine 9000
-            :invalid-width width
-            :invalid-height height
-            :max-width 160
-            :max-height 102))))
+;;     (t
+;;      (error 'dimension-error
+;;             :filename png-file
+;;             :machine 9000
+;;             :invalid-width width
+;;             :invalid-height height
+;;             :max-width 160
+;;             :max-height 102))))
 
 (defmethod dispatch-png% ((machine (eql 64)) png-file target-dir
                           png height width α palette-pixels)
@@ -4192,13 +4192,3 @@ Columns: ~d
     (5200 t)   ; Atari 5200 (SpeakJet)
     (7800 t)   ; Atari 7800 (SpeakJet)
     (t nil)))  ; All others: false
-
-    (837 nil)  ; SGG does not support SECAM
-    (3 nil)    ; NES does not support SECAM
-    (6 nil)    ; SNES does not support SECAM
-    (7 nil)    ; BBC does not support SECAM
-    (264 nil)  ; C16 does not support SECAM
-    (8 nil)    ; Apple II does not support SECAM
-    (9 nil)    ; Apple III does not support SECAM
-    (10 nil)   ; Apple IIGS does not support SECAM
-    (t nil)))  ; Default: false
