@@ -105,7 +105,7 @@
 
 COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
   (ecase *machine*
-    (7800 (string= command-start "SpeakJet["))
+    ((2600 7800) (string= command-start "SpeakJet["))
     (2609 (string= command-start "IntelliVoice["))
     ;; For other platforms, no speech commands are supported
     (t nil)))

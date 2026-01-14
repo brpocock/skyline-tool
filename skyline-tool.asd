@@ -103,8 +103,6 @@
                              (:file "compiler-tests" :depends-on ("package"))
                              (:file "speech-filter-test" :depends-on ("package"))
                              (:file "multiplatform-tests" :depends-on ("package"))
-                             (:file "speech-filter-test" :depends-on ("package"))
-                             (:file "text-transcription-tests" :depends-on ("package"))
                              (:file "tileset-tests" :depends-on ("package"))
                              (:file "intv-gram-tests" :depends-on ("package"))
                              (:file "7800-tests" :depends-on ("package"))

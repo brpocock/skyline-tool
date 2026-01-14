@@ -1339,11 +1339,11 @@ All cards in the source image are output as one file."
   (check-type png-file (or pathname string))
   (check-type out-dir (or pathname string))
   (let* ((palette-pixels (or palette-pixels
-                              (let* ((png (png-read:read-png-file png-file))
-                                     (png-height (png-read:height png))
-                                     (png-width (png-read:width png))
-                                     (α (png-read:transparency png)))
-                                (png->palette png-height png-width
+                             (let* ((png (png-read:read-png-file png-file))
+                                    (png-height (png-read:height png))
+                                    (png-width (png-read:width png))
+                                    (α (png-read:transparency png)))
+                               (png->palette png-height png-width
                                              (png-read:image-data png)
                                              α))))
          (array-width (array-dimension palette-pixels 0))
@@ -1368,41 +1368,41 @@ All cards in the source image are output as one file."
         (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
               png-file colors))
       (let ((out-file (merge-pathnames
-                   (make-pathname :name
-                                  (pathname-name png-file)
-                                  :type "s")
-                   out-dir))
-        (cards-across (floor (/ width 8)))
-        (cards-down (floor (/ height 8))))
-    (ensure-directories-exist (directory-namestring out-file))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
-              png-file)
-      ;; Process each 8×8 card
-      (loop for card-y from 0 below cards-down
-            do (loop for card-x from 0 below cards-across
-                     for card-index = (+ (* card-y cards-across) card-x)
-                     do (let ((start-x (* card-x 8))
-                              (start-y (* card-y 8))
-                              (card-bytes '()))
-                          ;; Extract 8 bytes (one per row)
-                          (loop for y from 0 below 8
-                                for byte = 0
-                                do (loop for x from 0 below 8
-                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
-                                         ;; White (palette index 7) = bit 1, black (0) or other = bit 0
-                                         do (when (= palette-index 7)
-                                              (setf byte (logior byte (ash 1 (- 7 x))))))
-                                   (push byte card-bytes))
-                          ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per card)
-                          ;; Big-endian: most significant byte first
-                          (let ((bytes-list (reverse card-bytes)))
-                            (loop for i from 0 below 4
-                                  for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
-                                  for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
-                                  for word = (logior (ash byte-first 8) byte-second)
-                                  do (format src-file "    DECLE   $~4,'0X~%" word))))))))
-      (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))
+                       (make-pathname :name
+                                      (pathname-name png-file)
+                                      :type "s")
+                       out-dir))
+            (cards-across (floor (/ width 8)))
+            (cards-down (floor (/ height 8))))
+        (ensure-directories-exist (directory-namestring out-file))
+        (with-output-to-file (src-file out-file :if-exists :supersede)
+          (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
+                  png-file)
+          ;; Process each 8×8 card
+          (loop for card-y from 0 below cards-down
+                do (loop for card-x from 0 below cards-across
+                         for card-index = (+ (* card-y cards-across) card-x)
+                         do (let ((start-x (* card-x 8))
+                                  (start-y (* card-y 8))
+                                  (card-bytes '()))
+                              ;; Extract 8 bytes (one per row)
+                              (loop for y from 0 below 8
+                                    for byte = 0
+                                    do (loop for x from 0 below 8
+                                             for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
+                                             ;; White (palette index 7) = bit 1, black (0) or other = bit 0
+                                             do (when (= palette-index 7)
+                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
+                                       (push byte card-bytes))
+                              ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per card)
+                              ;; Big-endian: most significant byte first
+                              (let ((bytes-list (reverse card-bytes)))
+                                (loop for i from 0 below 4
+                                      for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
+                                      for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
+                                      for word = (logior (ash byte-first 8) byte-second)
+                                      do (format src-file "    DECLE   $~4,'0X~%" word))))))
+          (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))))
 
 ;; Missing Intellivision functions that are exported
 (defun compile-art-intv (input-file output-file)

@@ -35,7 +35,6 @@
         :collect-assets 'collect-assets
         :compile-critters 'compile-critters
         :compile-art-7800 'compile-art-7800
-        :compile-art-5200 'compile-art-5200
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
@@ -113,7 +112,7 @@
     (finish-output *query-io*)))
 
 (defun prompt-function ()
-  (if (and (tty-xterm-p) #+mcclim (x11-p) #-mcclim nil)
+  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
@@ -121,7 +120,7 @@
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
-  (if (and (tty-xterm-p) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)
@@ -413,7 +412,6 @@ Supply a list of verb(s) to see detailed documentation"
  ————————————
 
 Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright © 2024-2025 Interworldly Adventuring, LLC.
 Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
@@ -507,9 +505,9 @@ See COPYING for details
 (defun command (argv)
     (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
-            argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format t "~&Running for game “~a” for ~a" *game-title* (or (ignore-errors (machine-long-name)) "unknown platform"))
-  (finish-output)
+          argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+  (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)

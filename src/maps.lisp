@@ -11,13 +11,6 @@
 
 (defvar *screen-ticker* 0)
 
-;; Minifont punctuation characters for text processing
-
-;; RLE compression parameters
-(defparameter *rle-fast-mode* 1)
-(defvar *rle-options* 0)
-(defvar *rle-best-full* most-positive-fixnum)
-
 (defclass grid/tia ()
   ((tiles :reader grid-tiles :initarg :tiles)
    (colors :reader grid-row-colors :initarg :colors)
@@ -1064,27 +1057,34 @@ Tileset object containing image data, tile dimensions, and palette information."
         (options (only-best-options (rle-compress-segment source)))
         (fully (list)))
     (when (< 1 (length options))
+      #+ (or)
       (format t "~& For source length ~:d, there are ~:d options with expanded-length from ~:d to ~:d bytes"
               (length source)
               (length options)
               (reduce #'min (mapcar #'cdr options))
               (reduce #'max (mapcar #'cdr options)))
-    (dolist (option options)
-      (destructuring-bind (rle . expanded-length) option
-        (when (zerop (random 1000))
-          (format *trace-output* "~&(RLE compressor: ~:d segment options considered)" *rle-options*))
-        (cond
-          ((and (not recursive-p) (> (length rle) *rle-best-full*))
-           ;; no op, drop that option
-           )
-          ((= expanded-length total-length)
-           (push rle fully))
-          (t
-           (let ((rest (rle-compress-fully (subseq source expanded-length) t)))
-             (when rest
-               (push (concatenate 'vector rle rest) fully)))))))
-    (when fully
-      (reduce #'shorter fully)))))
+      (dolist (option options)
+        (destructuring-bind (rle . expanded-length) option
+          (when (zerop (random 1000))
+            (format *trace-output* "~&(RLE compressor: ~:d segment options considered)" *rle-options*))
+          (cond
+            ((and (not recursive-p) (> (length rle) *rle-best-full*))
+             ;; no op, drop that option
+             )
+            ((= expanded-length total-length)
+             (push rle fully))
+            (t
+             (let ((rest (rle-compress-fully (subseq source expanded-length) t)))
+               (when rest
+                 (push (concatenate 'vector rle rest) fully)))))))
+      (when fully
+        (reduce #'shorter fully)))))
+
+(defparameter *rle-fast-mode* 1)
+
+(defvar *rle-options* 0)
+
+(defvar *rle-best-full* most-positive-fixnum)
 
 (defun rle-compress (source)
   (let ((lparallel:*kernel* (lparallel:make-kernel
@@ -1622,12 +1622,34 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
     adjusted-palettes))
 
 (defun extract-tileset-palette (pathname outfile)
-  ;; Temporarily disabled due to compilation issues
-  ;; TODO: Fix color adjustment functions and palette generation
   (ensure-directories-exist outfile)
   (with-output-to-file (output outfile :if-exists :supersede)
-    (format output ";;; Palette ~a~%;;; extracted from ~a~%;;; TODO: Regenerate with proper colors~%"
-            (enough-namestring outfile) (enough-namestring pathname))))
+    (flet ((dump-palettes (series label)
+             (format *trace-output* "~%~10a:" label)
+             (dotimes (p 8)
+               (dotimes (c 4)
+                 (print-wide-pixel (aref series p c) *trace-output*)))
+             (format output "~%~10t;; ~a:~%~12t.byte ~a ; Background"
+                     label
+                     (atari-colu-string (aref series 0 0)))
+             (dotimes (palette-index 8)
+               (format output "~%~12t.byte ~a, ~a, ~a"
+                       (atari-colu-string (aref series palette-index 1))
+                       (atari-colu-string (aref series palette-index 2))
+                       (atari-colu-string (aref series palette-index 3))))))
+      (let* ((tileset (load-tileset pathname)))
+        (format output ";;; Palette ~a~%;;; extracted from ~a"
+                (enough-namestring outfile) (enough-namestring pathname))
+        (dolist (*region* '(:ntsc :pal))
+          (let ((palettes (extract-palettes (tileset-image tileset))))
+            (format *trace-output* "~% ~a:~%" (enough-namestring outfile))
+            (format output "~2%~10t.if TV == ~a" *region*)
+            (dump-palettes palettes "Base")
+            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes) "Dark")
+            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes) "Light")
+            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
+            (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
+            (format output "~%~10t.fi~%")))))))
 
 (defun find-named-object-in-scene (name-object &optional (scene-name *current-scene*))
   (dolist (match (xml-matches "object" (xml-match "objectgroup" (locale-xml scene-name))))
