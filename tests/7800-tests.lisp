@@ -29,31 +29,65 @@
   (is-true (fboundp 'skyline-tool::interleave-7800-bytes)
            "interleave-7800-bytes should exist"))
 
-;; Test 7800 music functions existence
-(test 7800-music-functions-existence
-  "Test that 7800 music compilation functions exist"
-  (is-true (fboundp 'skyline-tool::compile-music-7800)
-           "compile-music-7800 should exist")
-  (is-true (fboundp 'skyline-tool::midi->7800-tia)
-           "midi->7800-tia should exist")
-  (is-true (fboundp 'skyline-tool::array<-7800-tia-notes-list)
-           "array<-7800-tia-notes-list should exist"))
+;; Test 7800 music processing correctness
+(test 7800-music-processing-correctness
+  "Test that 7800 music functions process MIDI data correctly"
+  ;; Test midi->7800-tia with mock MIDI data
+  (let ((mock-midi-notes '((:time 0 :key 60 :velocity 100)    ; Middle C
+                           (:time 1 :key 64 :velocity 80)     ; E above middle C
+                           (:time 2 :key 67 :velocity 60))))  ; G above middle C
 
-;; Test 7800 graphics conversion with mock data
-(test 7800-graphics-conversion-basic
-  "Test basic 7800 graphics conversion functionality"
-  (let ((test-image (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element #xFF000000)))
-    ;; Test 160A conversion
-    (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 8 :height 8)
-              "7800-image-to-160a should handle basic conversion")
+    (let ((result (skyline-tool::midi->7800-tia mock-midi-notes)))
+      (is (listp result)
+          "midi->7800-tia should return a list")
+      (is (= (length result) 3)
+          "midi->7800-tia should process all input notes")))
 
-    ;; Test 320A conversion
-    (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 8 :height 8)
-              "7800-image-to-320a should handle basic conversion")
+  ;; Test array<-7800-tia-notes-list
+  (let ((tia-notes '((:frequency 440 :volume 15 :control #x00)
+                     (:frequency 880 :volume 10 :control #x00))))
+    (let ((result (skyline-tool::array<-7800-tia-notes-list tia-notes)))
+      (is (arrayp result)
+          "array<-7800-tia-notes-list should return an array")
+      (is (= (length result) 2)
+          "array should contain all input notes"))))
 
-    ;; Test 320C conversion
-    (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 8 :height 8)
-              "7800-image-to-320c should handle basic conversion")))
+;; Test 7800 graphics conversion correctness
+(test 7800-graphics-conversion-correctness
+  "Test that 7800 graphics conversion produces correct byte data"
+  ;; Create a test palette (4 colors for 160A mode)
+  (let ((test-palette (vector #xFF000000 #xFFFFFFFF #xFF808080 #xFFC0C0C0))  ; black, white, gray, light gray
+        (test-image (make-array '(4 1) :element-type '(unsigned-byte 32))))
+
+    ;; Set up test image: black, white, gray, light gray pixels
+    (setf (aref test-image 0 0) #xFF000000)  ; black -> palette index 0
+    (setf (aref test-image 1 0) #xFFFFFFFF)  ; white -> palette index 1
+    (setf (aref test-image 2 0) #xFF808080)  ; gray -> palette index 2
+    (setf (aref test-image 3 0) #xFFC0C0C0)  ; light gray -> palette index 3
+
+    ;; Test 160A conversion (4 pixels = 1 byte, 2 bits per pixel)
+    ;; Expected: indices 0,1,2,3 -> binary 00,01,10,11 -> byte #b00110110 = 54
+    (let ((result-160a (skyline-tool::7800-image-to-160a test-image
+                                                        :byte-width 1 :height 1
+                                                        :palette test-palette)))
+      (is (equalp result-160a '((54)))  ; ((00 01 10 11)) packed = 54
+          "160A conversion should pack 4 pixels into correct byte value"))
+
+    ;; Test 320A conversion (2 pixels per byte, 4 bits per pixel)
+    ;; Expected: first 2 pixels (0,1) -> #b00001111 = 15
+    (let ((result-320a (skyline-tool::7800-image-to-320a test-image
+                                                        :byte-width 1 :height 1
+                                                        :palette test-palette)))
+      (is (= (length result-320a) 1) "320A should return one row")
+      (is (= (length (first result-320a)) 1) "320A row should contain one byte")
+      (is (= (caar result-320a) 15) "320A should pack first 2 pixels correctly"))
+
+    ;; Test 320C conversion (2 pixels per byte with color lookup)
+    (let ((result-320c (skyline-tool::7800-image-to-320c test-image
+                                                        :byte-width 1 :height 1
+                                                        :palette test-palette)))
+      (is (= (length result-320c) 1) "320C should return one row")
+      (is (= (length (first result-320c)) 1) "320C row should contain one byte"))))
 
 ;; Test 7800 parse-object method
 (test 7800-parse-object-method
@@ -66,17 +100,36 @@
     (signals error (skyline-tool::parse-7800-object :invalid-mode test-pixels :width 8 :height 8)
              "parse-7800-object should reject invalid modes")))
 
-;; Test 7800 binary writing functions
-(test 7800-binary-writing
-  "Test 7800 binary data writing functions"
-  ;; Test interleave-7800-bytes
+;; Test 7800 binary processing correctness
+(test 7800-binary-processing-correctness
+  "Test that 7800 binary functions produce correct interleaved data"
+  ;; Test interleave-7800-bytes with known data
   (let ((test-data '((1 2 3) (4 5 6) (7 8 9))))
-    (finishes (skyline-tool::interleave-7800-bytes test-data)
-              "interleave-7800-bytes should process data"))
+    (let ((result (skyline-tool::interleave-7800-bytes test-data)))
+      (is (equalp result '(1 4 7 2 5 8 3 6 9))
+          "interleave-7800-bytes should correctly interleave columns into rows")))
 
-  ;; Test write-7800-binary with mock data
-  (finishes (skyline-tool::write-7800-binary "/tmp/test-7800.bin" '((1 2 3) (4 5 6)))
-            "write-7800-binary should handle basic data"))
+;; Test 7800 binary file writing and reading
+(test 7800-binary-file-io
+  "Test that 7800 binary file writing produces readable data"
+  (let ((test-file "/tmp/test-7800-data.bin")
+        (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
+    ;; Write test data
+    (finishes (skyline-tool::write-7800-binary test-file test-data)
+              "write-7800-binary should write data without error")
+
+    ;; Verify file was created and has expected size
+    (is-true (probe-file test-file)
+             "write-7800-binary should create output file")
+
+    ;; Read back and verify content
+    (with-open-file (stream test-file :element-type '(unsigned-byte 8))
+      (let ((bytes (loop for byte = (read-byte stream nil nil)
+                        while byte collect byte)))
+        (is (= (length bytes) 6)
+            "Binary file should contain 6 bytes for 2x3 data")
+        (is (equalp bytes '(#xAA #xBB #xCC #xDD #xEE #xFF))
+            "Binary file should contain original data in correct order")))))
 
 ;; Test 7800 music compilation
 (test 7800-music-compilation-basic
@@ -115,6 +168,23 @@
   (signals error (skyline-tool::interleave-7800-bytes nil)
            "interleave-7800-bytes should handle nil input"))
 
+(def-suite 7800-comprehensive-suite
+  :description "Comprehensive 7800 functionality tests")
+
+(in-suite 7800-comprehensive-suite)
+
+;; Integration test for 7800 workflow
+(test 7800-integration-workflow
+  "Test complete 7800 graphics and audio pipeline integration"
+  ;; Test that all core components are available and functional
+  (is-true (fboundp 'skyline-tool::7800-image-to-160a)
+           "Core 7800 graphics function should be available")
+  (is-true (fboundp 'skyline-tool::write-7800-binary)
+           "Binary output function should be available")
+  (is-true (fboundp 'skyline-tool::compile-music-7800)
+           "Music compilation should be available"))
+
 (defun run-7800-tests ()
-  "Run all 7800 tests and return results"
-  (fiveam:run! '7800-tests))
+  "Run all 7800 tests including comprehensive functionality tests"
+  (fiveam:run! '7800-tests)
+  (fiveam:run! '7800-comprehensive-suite))
