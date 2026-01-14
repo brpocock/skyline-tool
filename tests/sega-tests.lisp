@@ -20,8 +20,6 @@
 ;; Test Sega machine code validation
 (test sega-machine-codes
   "Test Sega platform machine code validation"
-  (is (= 1000 1000) "SG-1000 machine code should be 1000")
-  (is (= 3010 3010) "Master System machine code should be 3010")
 
   ;; Test machine name functions with proper global state
   (let ((skyline-tool::*machine* 1000))

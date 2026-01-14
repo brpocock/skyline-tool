@@ -315,6 +315,9 @@
   (is-true (fboundp 'skyline-tool::compile-speech-2609)
            "compile-speech-2609 should exist")
 
+  ;; Assembly function
+  (is-true (fboundp 'skyline-tool::assemble-intv-rom)
+           "assemble-intv-rom should exist"))
 
 ;; Test Intellivision function error handling
 (test intv-function-error-handling
@@ -360,12 +363,11 @@
 (test intv-integration-workflow
   "Test Intellivision integration workflow components"
   ;; Test that all core components are in place
-  (is (= 2609 2609) "Intellivision machine code should be correct")
   (is-true (member 2609 skyline-tool::*valid-machines*)
            "Intellivision should be in valid machines")
 
   ;; Test dispatch system recognizes Intellivision
-  (is-true t "Intellivision dispatch system is configured")
+  ;; TODO: Add proper dispatch system testing
 
   ;; Test palette system is ready
   (is-true (and (boundp 'skyline-tool::+intv-palette+)

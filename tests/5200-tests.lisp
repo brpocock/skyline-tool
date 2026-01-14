@@ -71,14 +71,13 @@
   (finishes (ensure-directories-exist "/tmp/5200-test/")
             "Directory creation should work")
   ;; Note: Actual dispatch testing would require PNG files, so we just test setup
-  (is-true t "5200 PNG dispatch framework is in place"))
+  ;; TODO: Add proper dispatch testing when PNG test files are available
 
 ;; Test 5200 platform constants
 (test 5200-platform-constants
   "Test that 5200 platform constants are properly defined"
   (is-true (member 5200 skyline-tool::*valid-machines*)
-           "5200 should be in valid machines list")
-  (is (= 5200 5200) "5200 machine code should be correct"))
+           "5200 should be in valid machines list"))
 
 ;; Test 5200 error conditions
 (test 5200-error-conditions
