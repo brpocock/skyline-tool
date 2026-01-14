@@ -338,12 +338,10 @@
 
 (defun machine-colors ()
   "Get the names of the colors for *MACHINE*"
-  (if (null *machine*)
-      nil
-      (ecase *machine*
-        (20 (subseq +c64-names+ 0 7))
-        ((64 128) +c64-names+)
-        (2609 +intv-color-names+))))
+  (ecase *machine*
+    (20 (subseq +c64-names+ 0 7))
+    ((64 128) +c64-names+)
+    (2609 +intv-color-names+)))
 
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"
@@ -3544,3 +3542,18 @@ treating non-black/non-white pixels as black"
 (defun assemble-intv-rom (source-files output-file)
   "Assemble Intellivision ROM"
   (error "Intellivision ROM assembly not yet implemented"))
+;; 5200 graphics functions - stubs for now
+(defun blob-rip-5200-tile (png-file &optional (imperfectp$ nil))
+  "Extract tile graphics from 5200 PNG file"
+  (declare (ignore png-file imperfectp$))
+  (error "5200 tile blob ripping not yet implemented"))
+
+(defun blob-rip-5200-pmg (png-file &optional (imperfectp$ nil))
+  "Extract PMG graphics from 5200 PNG file"
+  (declare (ignore png-file imperfectp$))
+  (error "5200 PMG blob ripping not yet implemented"))
+
+(defun detect-5200-tile-mode (png-file)
+  "Detect tile mode for 5200 graphics"
+  (declare (ignore png-file))
+  (error "5200 tile mode detection not yet implemented"))
