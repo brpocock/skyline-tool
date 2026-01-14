@@ -195,15 +195,15 @@
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
-(defparameter *game-title* (cdr (assoc :*game *project.json*)))
-(defparameter *part-number*  (cdr (assoc :*part-number *project.json*)))
-(defparameter *studio* (cdr (assoc :*studio *project.json*)))
-(defparameter *publisher* (cdr (assoc :*publisher *project.json*)))
-(defparameter *machine* (cdr (assoc :*machine *project.json*)))
-(defparameter *sound* (cdr (assoc :*sound *project.json*)))
-(defparameter *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*))))
-(defparameter *default-skin-color* (cdr (assoc :*default-skin-color *project.json*)))
-(defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))
-(defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+(defparameter *game-title* (if *project.json* (cdr (assoc :*game *project.json*)) "Phantasia"))
+(defparameter *part-number*  (if *project.json* (cdr (assoc :*part-number *project.json*)) "X"))
+(defparameter *studio* (if *project.json* (cdr (assoc :*studio *project.json*)) "Interworldly Adventuring, LLC"))
+(defparameter *publisher* (if *project.json* (cdr (assoc :*publisher *project.json*)) "AtariAge"))
+(defparameter *machine* (if *project.json* (cdr (assoc :*machine *project.json*)) 7800)) ; Default to 7800 for testing
+(defparameter *sound* (if *project.json* (cdr (assoc :*sound *project.json*)) nil))
+(defparameter *common-palette* (if *project.json* (mapcar #'intern (cdr (assoc :*common-palette *project.json*))) nil))
+(defparameter *default-skin-color* (if *project.json* (cdr (assoc :*default-skin-color *project.json*)) "peach"))
+(defparameter *default-hair-color* (if *project.json* (cdr (assoc :*default-hair-color *project.json*)) "black"))
+(defparameter *default-clothes-color* (if *project.json* (cdr (assoc :*default-clothes-color *project.json*)) "blue"))
 
 (defvar *region* :ntsc)

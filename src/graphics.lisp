@@ -338,10 +338,12 @@
 
 (defun machine-colors ()
   "Get the names of the colors for *MACHINE*"
-  (ecase *machine*
-    (20 (subseq +c64-names+ 0 7))
-    ((64 128) +c64-names+)
-    (2609 +intv-color-names+)))
+  (if (null *machine*)
+      nil
+      (ecase (or *machine* 7800)
+        (20 (subseq +c64-names+ 0 7))
+        ((64 128) +c64-names+)
+        (2609 +intv-color-names+))))
 
 (defun square (n)
   "Returns the square of n ∀ (square n) = n × n"
@@ -1414,15 +1416,19 @@ All cards in the source image are output as one file."
   (error "Intellivision tileset compilation not yet implemented"))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision sprite (MOB data)\n\nIn Intellivision terminology, sprites are called MOBs (Moving Object Blocks).\nThis function compiles sprite graphics into MOB data format, similar to GRAM\ncompilation but for sprites that can be positioned anywhere on screen."
+  "Compile Intellivision sprite (MOB data)
+
+In Intellivision terminology, sprites are called MOBs (Moving Object Blocks).
+This function compiles sprite graphics into MOB data format, similar to GRAM
+compilation but for sprites that can be positioned anywhere on screen."
   (check-type png-file (or pathname string))
   (check-type out-dir (or pathname string))
   (let* ((palette-pixels (or palette-pixels
-                              (let* ((png (png-read:read-png-file png-file))
-                                     (png-height (png-read:height png))
-                                     (png-width (png-read:width png))
-                                     (α (png-read:transparency png)))
-                                (png->palette png-height png-width
+                             (let* ((png (png-read:read-png-file png-file))
+                                    (png-height (png-read:height png))
+                                    (png-width (png-read:width png))
+                                    (α (png-read:transparency png)))
+                               (png->palette png-height png-width
                                              (png-read:image-data png)
                                              α))))
          (array-width (array-dimension palette-pixels 0))
@@ -1474,7 +1480,7 @@ All cards in the source image are output as one file."
                                              ;; White (palette index 7) = bit 1, black (0) or other = bit 0
                                              do (when (= palette-index 7)
                                                   (setf byte (logior byte (ash 1 (- 7 x))))))
-                                    (push byte sprite-bytes))
+                                       (push byte sprite-bytes))
                               ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per sprite)
                               ;; Big-endian: most significant byte first
                               (let ((bytes-list (reverse sprite-bytes)))
@@ -3459,15 +3465,19 @@ Columns: ~d
   (error "Intellivision tileset compilation not yet implemented"))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision sprite (MOB data)\n\nIn Intellivision terminology, sprites are called MOBs (Moving Object Blocks).\nThis function compiles sprite graphics into MOB data format, similar to GRAM\ncompilation but for sprites that can be positioned anywhere on screen."
+  "Compile Intellivision sprite (MOB data)
+
+In Intellivision terminology, sprites are called MOBs (Moving Object Blocks).
+This function compiles sprite graphics into MOB data format, similar to GRAM
+compilation but for sprites that can be positioned anywhere on screen."
   (check-type png-file (or pathname string))
-  (check-type out-dir (or pathname string))
+  (check-type output-dir (or pathname string))
   (let* ((palette-pixels (or palette-pixels
-                              (let* ((png (png-read:read-png-file png-file))
-                                     (png-height (png-read:height png))
-                                     (png-width (png-read:width png))
-                                     (α (png-read:transparency png)))
-                                (png->palette png-height png-width
+                             (let* ((png (png-read:read-png-file png-file))
+                                    (png-height (png-read:height png))
+                                    (png-width (png-read:width png))
+                                    (α (png-read:transparency png)))
+                               (png->palette png-height png-width
                                              (png-read:image-data png)
                                              α))))
          (array-width (array-dimension palette-pixels 0))
@@ -3480,16 +3490,17 @@ Columns: ~d
     ;; Validate dimensions are within array bounds
     (assert (<= width array-width)
             (width palette-pixels)
-            "Width ~D exceeds array width ~D"
+            "Can't extract sprite(s): width ~d requested exceeds image width ~d"
             width array-width)
     (assert (<= height array-height)
             (height palette-pixels)
-            "Height ~D exceeds array height ~D"
+            "Can't extract sprite(s): height ~d requested exceeds image height ~d"
             height array-height)
     ;; Check if monochrome (only black=0 and white=7 palette indices)
     (let ((colors (image-colors palette-pixels height width)))
       (unless (subsetp colors '(0 7) :test '=)
-        (warn "Sprite image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
+        (warn "Sprite image ~A is not black-and-white (found colors: ~{~D~^, ~});
+treating non-black/non-white pixels as black"
               png-file colors))
       (let ((out-file (merge-pathnames
                        (make-pathname :name
@@ -3519,7 +3530,7 @@ Columns: ~d
                                              ;; White (palette index 7) = bit 1, black (0) or other = bit 0
                                              do (when (= palette-index 7)
                                                   (setf byte (logior byte (ash 1 (- 7 x))))))
-                                    (push byte sprite-bytes))
+                                       (push byte sprite-bytes))
                               ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per sprite)
                               ;; Big-endian: most significant byte first
                               (let ((bytes-list (reverse sprite-bytes)))

@@ -332,8 +332,7 @@
   (signals error (skyline-tool::compile-music-2609 "/tmp/test.s" "/nonexistent.mid" :ay-3-8910)
            "compile-music-2609 should signal error for missing MIDI file")
   (signals error (skyline-tool::compile-speech-2609 "/tmp/test.s" "/nonexistent.txt")
-           "compile-speech-2609 should signal error (not implemented)")
-
+           "compile-speech-2609 should signal error (not implemented)"))
 
 ;; Test Intellivision dispatch functionality
 (test intv-dispatch-functionality

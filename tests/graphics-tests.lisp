@@ -389,8 +389,8 @@
   (signals error
     (skyline-tool:blob-rip-7800 "/nonexistent/file.png"))
 
-  ;; blob-rip-7800-320ac should handle missing files gracefully (stub implementation)
-  (is-true (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")))
+  ;; blob-rip-7800-320ac should signal error for missing files
+  (signals error (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")))
 
 ;; Test function signatures and basic properties
 (test graphics-converter-properties

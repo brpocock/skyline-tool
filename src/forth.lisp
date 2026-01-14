@@ -104,7 +104,7 @@
   "Return true if the speech command type is supported on the current platform.
 
 COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
-  (ecase *machine*
+  (ecase (or *machine* 7800)
     ((2600 7800) (string= command-start "SpeakJet["))
     (2609 (string= command-start "IntelliVoice["))
     ;; For other platforms, no speech commands are supported

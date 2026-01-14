@@ -1,14 +1,9 @@
 ;; Comprehensive Skyline-Tool Converter Test Runner
 ;; Tests all converter functionality suites
 
-;; Load ASDF and setup
-(require :asdf)
-
-;; Load setup script (sets up Quicklisp and loads ASDF system)
-(load "SkylineTool/setup.lisp")
-
-;; Ensure ASDF can find the system
-(asdf:load-asd "SkylineTool/skyline-tool.asd")
+;; Make sure *MACHINE* is set for the test system
+(setf skyline-tool:*machine* (or skyline-tool:*machine* 7800))
+(format t "~&Starting Skyline-Tool test suite with *MACHINE* = ~A...~%" skyline-tool:*machine*)
 
 ;; Run tests via ASDF test-op
 (asdf:test-system :skyline-tool/test)
