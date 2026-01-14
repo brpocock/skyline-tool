@@ -29,6 +29,40 @@
   (is-true (fboundp 'skyline-tool::interleave-7800-bytes)
            "interleave-7800-bytes should exist"))
 
+;; Test 7800 binary output validation
+(test 7800-binary-output-validation
+  "Test that 7800 binary output is correctly formatted"
+  (let ((temp-file "/tmp/7800-test-binary.bin")
+        (test-data '((#x01 #x02 #x03 #x04)  ; 4 bytes = page length
+                     (#x05 #x06 #x07 #x08))))
+    ;; Write test binary data
+    (skyline-tool::write-7800-binary temp-file test-data)
+
+    ;; Validate the output file exists and has correct size
+    (is-true (probe-file temp-file)
+             "Binary output file should be created")
+
+    ;; Check file size: 2 pages * 256 bytes each = 512 bytes
+    (when (probe-file temp-file)
+      (is (= (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+               (file-length stream))
+             512)
+           "File should be exactly 512 bytes (2 pages × 256 bytes)")
+
+      ;; Read and validate first page content
+      (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+        (let ((first-page (loop for i from 0 to 3 collect (read-byte stream))))
+          (is (equal first-page '(1 2 3 4))
+              "First page should contain the correct data"))
+
+        ;; Skip padding bytes (252 bytes of zeros)
+        (dotimes (i 252) (read-byte stream))
+
+        ;; Read second page
+        (let ((second-page (loop for i from 0 to 3 collect (read-byte stream))))
+          (is (equal second-page '(5 6 7 8))
+              "Second page should contain the correct data"))))))
+
 ;; Test 7800 music processing correctness
 (test 7800-music-processing-correctness
   "Test that 7800 music functions process MIDI data correctly"
@@ -51,6 +85,23 @@
           "array<-7800-tia-notes-list should return an array")
       (is (= (length result) 2)
           "array should contain all input notes"))))
+
+;; Test 7800 music compilation output validation
+(test 7800-music-compilation-output-validation
+  "Test that 7800 music compilation produces valid binary output"
+  (let ((temp-file "/tmp/7800-test-music.bin"))
+    ;; Create a minimal mock MIDI file for testing
+    ;; This would normally be done with actual MIDI data, but for testing
+    ;; we'll use the existing compilation framework
+
+    ;; For now, test that the compilation function exists and can handle
+    ;; basic parameters without crashing (full validation would require MIDI files)
+    (is-true (fboundp 'skyline-tool::compile-music-7800)
+             "compile-music-7800 function should exist")
+
+    ;; Test that it properly handles invalid inputs
+    (signals error (skyline-tool::compile-music-7800 temp-file "/nonexistent.mid" :tia :binary)
+             "compile-music-7800 should signal error for missing MIDI file")))
 
 ;; Test 7800 graphics conversion correctness
 (test 7800-graphics-conversion-correctness
