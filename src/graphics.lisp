@@ -1405,11 +1405,16 @@ All cards in the source image are output as one file."
                                   for word = (logior (ash byte-first 8) byte-second)
                                   do (format src-file "    DECLE   $~4,'0X~%" word)))))))
         (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
-
-;; Missing Intellivision functions that are exported
+;; General Intellivision art compilation functions
 (defun compile-art-intv (input-file output-file)
-  "Compile Intellivision art assets"
-  (error "Intellivision art compilation not yet implemented"))
+  "Compile Intellivision art assets from index file.
+
+This function reads an art index file and compiles all Intellivision
+graphics assets (GRAM cards and MOB sprites) into the appropriate formats.
+Currently not implemented - use compile-intv-tileset for GRAM cards or
+compile-intv-sprite for MOB sprites instead."
+  (error "Intellivision art compilation from index file not yet implemented. Use compile-intv-tileset for GRAM cards or compile-intv-sprite for sprites"))
+
 
 (defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision tileset (GRAM cards)\n\nIn Intellivision terminology, tiles are called 'cards' and tile sets\nare stored in GRAM (Graphics RAM). This function compiles tile sets\ninto GRAM card data."
@@ -3382,11 +3387,6 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
-
-;; Missing Intellivision functions that are exported
-(defun compile-art-intv (input-file output-file)
-  "Compile Intellivision art assets"
-  (error "Intellivision art compilation not yet implemented"))
 
 (defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision tileset (GRAM cards)\n\nIn Intellivision terminology, tiles are called 'cards' and tile sets\nare stored in GRAM (Graphics RAM). This function compiles tile sets\ninto GRAM card data."
