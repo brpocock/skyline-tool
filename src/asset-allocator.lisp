@@ -385,10 +385,34 @@
     (when (and match (plusp (array-dimension match 0)))
       (aref match 0))))
 
+(defun machine-directory-name ()
+  "Return the directory name for the current machine platform"
+  (when *machine*
+    (ecase *machine*
+      (1 "1000")      ; Oric-1
+      (2 "Apple2")    ; Apple ][
+      (8 "NES")       ; NES
+      (16 "TG16")     ; TG-16
+      (20 "C16")      ; VIC-20
+      (64 "C64")      ; C=64
+      (88 "SNES")     ; SNES
+      (128 "CBM")     ; C=128
+      (200 "Lynx")    ; Lynx
+      (222 "AppleIIGS") ; Apple //gs
+      (223 "BBC")     ; BBC
+      (264 "C16")     ; Plus/4
+      (2609 "Intv")   ; Intellivision
+      (1601 "Sega")   ; Genesis/MegaDrive
+      (2600 "1000")   ; VCS (use 1000 for now)
+      (3010 "SMS")    ; Master System
+      (5200 "5200")   ; SuperSystem
+      (7800 "7800")))) ; ProSystem
+
 (defun include-paths-for-current-bank (&key cwd testp)
   (let* ((bank (if (= *bank* *last-bank*)
                    "LastBank"
                    (format nil "Bank~(~2,'0x~)" *bank*)))
+         (machine-dir (machine-directory-name))
          (includes (list (list :relative "Source")
                          (list :relative "Source" "Common")
                          (list :relative "Source" "Routines")
@@ -398,8 +422,17 @@
                          (list :relative "Object" "Assets")
                          (list :relative "Source" "Generated")
                          (list :relative "Source" "Generated" "Assets"))))
+    ;; Add platform-specific directories
+    (when machine-dir
+      (appendf includes (list (list :relative "Source" machine-dir)))
+      ;; also include subdirectories
+      (appendf includes (list (list :relative "Source" machine-dir "Common")
+                               (list :relative "Source" machine-dir "Platform")
+                               (list :relative "Source" machine-dir "Routines"))))
     (when cwd (appendf includes (list (pathname-directory cwd))))
     (when testp (appendf includes (list (list :relative "Source" "Tests"))))
+    ;; also include platform tests when testing
+      (appendf includes (list (list :relative "Source" machine-dir "Tests")))
     (when (probe-file (make-pathname :directory (list :relative "Source" "Banks" bank)
                                      :name bank :type "s"))
       (appendf includes (list (list :relative "Source" "Banks" bank))))
@@ -433,27 +466,22 @@ Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
        (error "Blob generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-art-generation (pathname)
-  (let* ((relative-path (subseq (enough-namestring pathname #p"Source/") 7))
-         (art-name (pathname-name pathname)))
+  (let ((art-name (pathname-name pathname)))
     (ecase *machine*
       (200 ; Lynx
        (format t "~%
-Object/Assets/Art.~a.o: Source/~a~%	bin/skyline-tool
+Object/Assets/Art.~a.o: Source/Art/~a.art~%	bin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-lynx $@ $<"
-               art-name relative-path))
+               art-name art-name))
       (7800 ; Atari 7800
-       (let ((png-paths (mapcar (lambda (png-entry)
-                                  (let ((mode (first png-entry))
-                                        (png-path (second png-entry)))
-                                    (format nil "../~a/~a.png"
-                                            (subseq relative-path 0 (position #\/ relative-path :from-end t))
-                                            (pathname-name png-path))))
-                                (read-7800-art-index pathname))))
-         (format t "~%Object/Assets/Art.~a.o: Source/~a" art-name relative-path)
-         (dolist (png-path png-paths)
-           (format t " \\~%	~a" png-path))
-         (format t "~%	bin/skyline-tool~%	mkdir -p Object/Assets~%	bin/skyline-tool compile-art-7800 $@ $<~%")))
+       (format t "~%
+Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%	~a \\~}~%	bin/skyline-tool
+	mkdir -p Object/Assets
+	bin/skyline-tool compile-art-7800 $@ $<"
+               art-name art-name
+               (mapcar (compose #'enough-namestring #'second)
+                       (read-7800-art-index pathname))))
       ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without art support
        (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
@@ -642,8 +670,7 @@ file ~a.s in bank $~(~2,'0x~)~
                                 :type nil
                                 :directory (pathname-directory
                                             wild-pathname)))
-           when (and (null (pathname-name subdir))
-                     (null (pathname-type subdir)))
+           when (cl-fad:directory-pathname-p subdir)
              collect (recursive-directory
                       (make-pathname :name :wild
                                      :type (pathname-type
@@ -1187,9 +1214,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
       (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
-  (dolist (art (recursive-directory (make-pathname :directory (list :relative "Source" "Art")
-                                                    :name :wild
-                                                    :type "art")))
+  (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art")
+                                         :name :wild
+                                         :type "art")))
     (write-art-generation art)))
 
 (defun write-makefile-for-tilesets ()
