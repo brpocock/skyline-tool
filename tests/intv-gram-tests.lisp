@@ -323,8 +323,10 @@
   ;; Graphics functions should signal errors for missing implementations
   (signals error (skyline-tool::compile-art-intv "/nonexistent.in" "/tmp/test.out")
            "compile-art-intv should signal error (not implemented)")
-  (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png" "/tmp/test.out")
-           "compile-intv-sprite should signal error (not implemented)")
+  ;; Sprite function is now implemented, so test with proper machine setting
+  (let ((skyline-tool::*machine* 2609))
+    (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png" "/tmp/test.out")
+             "compile-intv-sprite should signal error for nonexistent file"))
 
   ;; Music functions
   (signals error (skyline-tool::compile-music-2609 "/tmp/test.s" "/nonexistent.mid" :ay-3-8910)
