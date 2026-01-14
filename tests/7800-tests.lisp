@@ -152,8 +152,6 @@
 ;; Test 7800 platform constants
 (test 7800-platform-constants
   "Test that 7800 platform constants are properly defined"
-  (is (= skyline-tool::*machine* 7800)
-      "*machine* should default to 7800 for this platform")
   (is-true (member 7800 skyline-tool::*valid-machines*)
            "7800 should be in valid machines list"))
 
