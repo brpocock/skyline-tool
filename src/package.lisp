@@ -217,6 +217,8 @@
 (defvar *default-skin-color* nil)
 (defvar *default-hair-color* nil)
 (defvar *default-clothes-color* nil)
+(defvar *valid-machines* '(1 2 8 16 20 64 88 128 200 222 223 264 2609 1601 2600 3010 5200 7800))
+(defvar *valid-regions* '(:ntsc :pal :secam))
 
 ;; Set the variables from project.json if it was loaded
 (when *project.json*
