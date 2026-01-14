@@ -1376,7 +1376,9 @@ All cards in the source image are output as one file."
         (cards-down (floor (/ height 8))))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
+      (format src-file ";;; GRAM cards compiled from ~A
+;;; Generated for Intellivision
+;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
               png-file)
       ;; Process each 8×8 card
       (loop for card-y from 0 below cards-down
@@ -1401,8 +1403,8 @@ All cards in the source image are output as one file."
                                   for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
                                   for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
                                   for word = (logior (ash byte-first 8) byte-second)
-                                  do (format src-file "    DECLE   $~4,'0X~%" word))))))))
-      (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))
+                                  do (format src-file "    DECLE   $~4,'0X~%" word)))))))
+        (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
 
 ;; Missing Intellivision functions that are exported
 (defun compile-art-intv (input-file output-file)
@@ -1410,8 +1412,8 @@ All cards in the source image are output as one file."
   (error "Intellivision art compilation not yet implemented"))
 
 (defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision tileset"
-  (error "Intellivision tileset compilation not yet implemented"))
+  "Compile Intellivision tileset (GRAM cards)\n\nIn Intellivision terminology, tiles are called 'cards' and tile sets\nare stored in GRAM (Graphics RAM). This function compiles tile sets\ninto GRAM card data."
+  (compile-gram-intv png-file output-dir :height height :width width :palette-pixels palette-pixels)))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision sprite"
@@ -3387,8 +3389,8 @@ Columns: ~d
   (error "Intellivision art compilation not yet implemented"))
 
 (defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision tileset"
-  (error "Intellivision tileset compilation not yet implemented"))
+  "Compile Intellivision tileset (GRAM cards)\n\nIn Intellivision terminology, tiles are called 'cards' and tile sets\nare stored in GRAM (Graphics RAM). This function compiles tile sets\ninto GRAM card data."
+  (compile-gram-intv png-file output-dir :height height :width width :palette-pixels palette-pixels)))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision sprite"
