@@ -315,9 +315,6 @@
   (is-true (fboundp 'skyline-tool::compile-speech-2609)
            "compile-speech-2609 should exist")
 
-  ;; Assembly function
-  (is-true (fboundp 'skyline-tool::assemble-intv-rom)
-           "assemble-intv-rom should exist"))
 
 ;; Test Intellivision function error handling
 (test intv-function-error-handling
@@ -336,9 +333,6 @@
   (signals error (skyline-tool::compile-speech-2609 "/tmp/test.s" "/nonexistent.txt")
            "compile-speech-2609 should signal error (not implemented)")
 
-  ;; Assembly function
-  (signals error (skyline-tool::assemble-intv-rom nil "/tmp/test.bin")
-           "assemble-intv-rom should signal error (not implemented)"))
 
 ;; Test Intellivision dispatch functionality
 (test intv-dispatch-functionality

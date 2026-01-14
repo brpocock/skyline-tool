@@ -61,7 +61,6 @@
            #:7800-image-to-160a
            #:7800-image-to-320a
            #:7800-image-to-320c
-           #:assemble-intv-rom
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences

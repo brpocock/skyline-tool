@@ -1424,9 +1424,6 @@ compile-intv-sprite for MOB sprites instead."
   "Compile Intellivision sprite"
   (error "Intellivision sprite compilation not yet implemented"))
 
-(defun assemble-intv-rom (source-files output-file)
-  "Assemble Intellivision ROM"
-  (error "Intellivision ROM assembly not yet implemented"))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
@@ -3396,6 +3393,3 @@ Columns: ~d
   "Compile Intellivision sprite"
   (error "Intellivision sprite compilation not yet implemented"))
 
-(defun assemble-intv-rom (source-files output-file)
-  "Assemble Intellivision ROM"
-  (error "Intellivision ROM assembly not yet implemented"))
