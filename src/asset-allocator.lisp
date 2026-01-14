@@ -451,39 +451,41 @@
     (t (error "Don't know how to find a generated path from ~a" path))))
 
 (defun write-blob-generation (pathname)
-  (let ((blob-name (pathname-name pathname)))
+  (let ((blob-name (pathname-name pathname))
+        (blob-path (enough-namestring pathname)))
     (ecase *machine*
       (200 ; Lynx
        (format t "~%
-Source/Generated/Assets/Blob.Lynx/~a.s: Source/Blobs/Lynx/~a.png \\
+Source/Generated/Assets/Blob.Lynx/~a.s: ~a \\
 ~10tbin/skyline-tool
 	mkdir -p Source/Generated/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Source/Generated/Assets"
-               blob-name blob-name))
+               blob-name blob-path))
       (7800 ; Atari 7800
        (format t "~%
-Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
+Source/Generated/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/Assets
 	bin/skyline-tool blob-rip-7800 $<"
-               blob-name blob-name))
+               blob-name blob-path))
       ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without blob support
        (error "Blob generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-art-generation (pathname)
-  (let ((art-name (pathname-name pathname)))
+  (let ((art-name (pathname-name pathname))
+        (art-path (enough-namestring pathname)))
     (ecase *machine*
       (200 ; Lynx
        (format t "~%
-Object/Assets/Art.~a.o: Source/Art/~a.art~%	bin/skyline-tool
+Object/Assets/Art.~a.o: ~a~%	bin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-lynx $@ $<"
-               art-name art-name))
+               art-name art-path))
       (7800 ; Atari 7800
        (format t "~%
-Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%	~a \\~}~%	bin/skyline-tool
+Object/Assets/Art.~a.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-7800 $@ $<"
-               art-name art-name
+               art-name art-path
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))))
       ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without art support
@@ -1210,17 +1212,17 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 
 (defun write-makefile-for-blobs ()
   (dolist (blob (remove-duplicates
-                 (directory (make-pathname :directory (list :relative "Source" "Blobs")
-                                           :name :wild
-                                           :type "xcf"))))
+                 (recursive-directory (make-pathname :directory (list :relative "Source" "Blobs")
+                                                     :name :wild
+                                                     :type "xcf"))))
     (when (or (not (eql *machine* 200)) ; Not Lynx, process all
               (search "Lynx/" (namestring blob))) ; Lynx, only process Lynx/ blobs
       (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
-  (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art")
-                                         :name :wild
-                                         :type "art")))
+  (dolist (art (recursive-directory (make-pathname :directory (list :relative "Source" "Art")
+                                                    :name :wild
+                                                    :type "art")))
     (write-art-generation art)))
 
 (defun write-makefile-for-tilesets ()
@@ -1251,7 +1253,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 (defun write-master-makefile ()
   "Write  out   Source/Generated/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
-  (ecase *machine*  ; Default to 7800 for testing
+  (ecase *machine*
     (7800
      (ensure-directories-exist #p"Source/Generated/")
      (format *trace-output* "~&Writing master Makefile content …")
