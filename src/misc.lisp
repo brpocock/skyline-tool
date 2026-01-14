@@ -351,7 +351,7 @@
          (otherwise (error "Can't encode ~s in ATARI minimalist coding" char))))))
 
 (defun char->font (char)
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     ((20 64 128) (char->petscii-font char))
     (2 (char->ascii-font char))
     (2600 (values (char->min-font char) nil))))
@@ -881,7 +881,7 @@ inventory_end = *
 
 
 (defun machine-short-name ()
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (1 "Oric-1")
     (2 "Apple ][")
     (8 "NES")
@@ -902,7 +902,7 @@ inventory_end = *
     (7800 "ProSystem")))
 
 (defun machine-long-name ()
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (1 "Oric-1")
     (2 "Apple ][ (][plus, //c, //e)")
     (8 "Nintendo Entertainment System")

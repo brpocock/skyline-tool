@@ -340,7 +340,7 @@
   "Get the names of the colors for *MACHINE*"
   (if (null *machine*)
       nil
-      (ecase (or *machine* 7800)
+      (ecase *machine*
         (20 (subseq +c64-names+ 0 7))
         ((64 128) +c64-names+)
         (2609 +intv-color-names+))))

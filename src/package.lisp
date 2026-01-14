@@ -195,15 +195,40 @@
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
-(defparameter *game-title* (if *project.json* (cdr (assoc :*game *project.json*)) "Phantasia"))
-(defparameter *part-number*  (if *project.json* (cdr (assoc :*part-number *project.json*)) "X"))
-(defparameter *studio* (if *project.json* (cdr (assoc :*studio *project.json*)) "Interworldly Adventuring, LLC"))
-(defparameter *publisher* (if *project.json* (cdr (assoc :*publisher *project.json*)) "AtariAge"))
-(defparameter *machine* (if *project.json* (cdr (assoc :*machine *project.json*)) 7800)) ; Default to 7800 for testing
-(defparameter *sound* (if *project.json* (cdr (assoc :*sound *project.json*)) nil))
-(defparameter *common-palette* (if *project.json* (mapcar #'intern (cdr (assoc :*common-palette *project.json*))) nil))
-(defparameter *default-skin-color* (if *project.json* (cdr (assoc :*default-skin-color *project.json*)) "peach"))
-(defparameter *default-hair-color* (if *project.json* (cdr (assoc :*default-hair-color *project.json*)) "black"))
-(defparameter *default-clothes-color* (if *project.json* (cdr (assoc :*default-clothes-color *project.json*)) "blue"))
+;; Try to load project.json during package initialization if PLATFORM is set
+(let* ((platform (sb-ext:posix-getenv "PLATFORM")))
+  (when platform
+    (let ((project-json-path (merge-pathnames (format nil "Project.~A.json" platform) (project-root))))
+      (if (probe-file project-json-path)
+          (handler-case
+              (setf *project.json* (with-open-file (stream project-json-path)
+                                     (json:decode-json stream)))
+            (error (e)
+              (error "Could not load project.json ~A: ~A" project-json-path e)))
+          (error "Project JSON file not found: ~A" project-json-path)))))
+
+(defvar *game-title* nil)
+(defvar *part-number* nil)
+(defvar *studio* nil)
+(defvar *publisher* nil)
+(defvar *machine* nil)
+(defvar *sound* nil)
+(defvar *common-palette* nil)
+(defvar *default-skin-color* nil)
+(defvar *default-hair-color* nil)
+(defvar *default-clothes-color* nil)
+
+;; Set the variables from project.json if it was loaded
+(when *project.json*
+  (setf *game-title* (cdr (assoc :*game *project.json*))
+        *part-number* (cdr (assoc :*part-number *project.json*))
+        *studio* (cdr (assoc :*studio *project.json*))
+        *publisher* (cdr (assoc :*publisher *project.json*))
+        *machine* (cdr (assoc :*machine *project.json*))
+        *sound* (cdr (assoc :*sound *project.json*))
+        *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
+        *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
+        *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
+        *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*))))
 
 (defvar *region* :ntsc)

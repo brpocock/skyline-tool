@@ -1105,7 +1105,7 @@ Music:~:*
                       &optional (sound-chip "TIA")
                                 (output-coding "NTSC"))
   (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (2600 (compile-music-2600 source-out-name in-file-name))
     (5200 (compile-music-7800 source-out-name in-file-name
                               (make-keyword (string-upcase sound-chip))

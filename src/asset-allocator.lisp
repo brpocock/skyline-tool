@@ -135,27 +135,27 @@
 
 (defgeneric asset-loader-size (kind record-count)
   (:method ((kind (eql :overhead)) record-count)
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (7800 12)
       ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
        (error "~A asset loader overhead size not yet implemented" *machine*))))
   (:method ((kind (eql :song)) record-count)
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (7800 256) ; FIXME #124
       ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
        (error "~A song asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :script)) record-count)
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (7800 (+ 128 (* (1+ record-count) 4)))
       ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
        (error "~A script asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :blob)) record-count)
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (7800 (+ 284 1 (* record-count 3)))
       ((35902 20953 9918 1000 3010 837 3 6 7 264 8 9 10) ; New platforms - placeholder sizes
        (error "~A blob asset loader size not yet implemented" *machine*))))
   (:method ((kind (eql :map)) record-count)
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (7800 (+
              #|LoadMap|# 1024 #| approx XXX |#
              #| end of table |# 1
@@ -190,7 +190,7 @@
 
 (defun size-of-banks ()
   "Size of each ROM bank in bytes."
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (2600 #x1000)
     (7800 #x4000)))
 
@@ -369,7 +369,7 @@
 
 (defun number-of-banks (build video)
   (declare (ignore video))
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (7800 (cond
             ((equal build "Demo") 64)
             ((equal build "Test") 64)
@@ -388,7 +388,7 @@
 (defun machine-directory-name ()
   "Return the directory name for the current machine platform"
   (when *machine*
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (1 "Oric-1")      ; Oric-1
       (2 "A2")    ; Apple ][
       (23 "A2e")  ; Apple //e
@@ -452,7 +452,7 @@
 
 (defun write-blob-generation (pathname)
   (let ((blob-name (pathname-name pathname)))
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (200 ; Lynx
        (format t "~%
 Source/Generated/Assets/Blob.Lynx/~a.s: Source/Blobs/Lynx/~a.png \\
@@ -471,7 +471,7 @@ Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
 
 (defun write-art-generation (pathname)
   (let ((art-name (pathname-name pathname)))
-    (ecase (or *machine* 7800)
+    (ecase *machine*
       (200 ; Lynx
        (format t "~%
 Object/Assets/Art.~a.o: Source/Art/~a.art~%	bin/skyline-tool
@@ -707,7 +707,7 @@ file ~a.s in bank $~(~2,'0x~)~
                            :type type))))))
 
 (defun asset->object-name (asset-indicator &key (video *region*))
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (7800 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
             (cond ((equal kind "Songs")
                    (assert (not (null video)))
@@ -835,7 +835,7 @@ file ~a.s in bank $~(~2,'0x~)~
         ((map-asset-p asset-indicator)
          (write-asset-compilation/map asset-indicator))
         ((blob-asset-p asset-indicator)
-         (ecase (or *machine* 7800)
+         (ecase *machine*
            (200 ; Lynx platform
             (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
             (write-asset-compilation/blob-lynx asset-indicator))
@@ -868,7 +868,7 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     ((2600 7800 2609) t) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
     (t nil))) ; All others: false
 
@@ -1032,7 +1032,7 @@ Dist/~:*~a.Test.bin: \\~
 
 (defun write-makefile-top-line (&key video build)
   "Writes the top lines for the Makefile"
-  (ecase (or *machine* 7800)
+  (ecase *machine*
     (7800 (format t "~%
 Dist/~a.~a.~a.a78: ~0@* Dist/~a.~a.~a.bin
 	cp $^ $@
@@ -1251,7 +1251,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 (defun write-master-makefile ()
   "Write  out   Source/Generated/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
-  (ecase (or *machine* 7800)  ; Default to 7800 for testing
+  (ecase *machine*  ; Default to 7800 for testing
     (7800
      (ensure-directories-exist #p"Source/Generated/")
      (format *trace-output* "~&Writing master Makefile content …")
