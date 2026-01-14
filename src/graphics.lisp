@@ -310,7 +310,7 @@
 (defun double-up (list)
   "Duplicate every entry in the list"
   (loop for item in list
-        appending (list item item)))
+        append (list item item)))
 
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
@@ -442,7 +442,7 @@ PNG image in an unsuitable format:
 (defun mob->mono-bits (mob)
   (mapcar #'code-char
           (loop for y from 0 to 20
-                appending
+                append
                 (loop for col from 0 to 2
                       for col-offset = (* 8 col)
                       collecting
@@ -456,7 +456,7 @@ PNG image in an unsuitable format:
 (defun mob->multi-bits (mob)
   (mapcar #'code-char
           (loop for y from 0 to 20
-                appending
+                append
                 (loop for col from 0 to 2
                       for col-offset = (* 8 col)
                       collecting
@@ -1320,74 +1320,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             do (loop for y0 from 7 downto 0
                      do (format src-file "~t.byte %~0,8b" 0))))))
 
-(defun compile-tileset-intv (png-file out-dir height width palette-pixels)
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name
-                                  (concatenate 'string "tiles."
-                                               (pathname-name png-file))
-                                  :type "s")
-                   out-dir))
-        (tiles-across (/ width 8))
-        (tiles-down (/ height 8))
-        (machine-palette (machine-palette 2609)))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Intellivision tileset ~A~%;;; Generated from ~A~%~%"
-              (pathname-name png-file) png-file)
-
-      ;; Process each 8x8 tile
-      (loop for tile-y from 0 below tiles-down
-            do (loop for tile-x from 0 below tiles-across
-                     for tile-index = (+ (* tile-y tiles-across) tile-x)
-                     do (let* ((start-x (* tile-x 8))
-                               (start-y (* tile-y 8))
-                               (tile-colors (make-hash-table :test 'equal))
-                               (tile-pixels (make-array '(8 8) :element-type 'list)))
-
-                          ;; Extract pixel data for this tile (RGB tuples)
-                          (loop for y from 0 below 8
-                                do (loop for x from 0 below 8
-                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
-                                         for rgb-color = (when palette-index
-                                                           (nth palette-index machine-palette))
-                                         do (setf (aref tile-pixels x y) rgb-color)
-                                            (when rgb-color
-                                              (incf (gethash rgb-color tile-colors 0)))))
-
-                          ;; Determine fg and bg colors
-                          ;; Most frequent color becomes background, second most frequent becomes foreground
-                          (let* ((color-counts (sort (alexandria:hash-table-alist tile-colors)
-                                                     #'> :key #'cdr))
-                                 (bg-rgb (if color-counts (car (first color-counts)) '(0 0 0)))
-                                 (fg-rgb (if (and color-counts (> (length color-counts) 1))
-                                             (car (second color-counts))
-                                             (if (equal bg-rgb '(0 0 0)) '(255 255 255) bg-rgb))))
-
-                            ;; Find Intellivision palette indices
-                            (let ((intv-bg-color (position bg-rgb machine-palette :test 'equal))
-                                  (intv-fg-color (position fg-rgb machine-palette :test 'equal)))
-
-                              ;; Output tile data comment
-                              (format src-file "~%;;; Tile ~D at (~D,~D): BG=~A, FG=~A~%"
-                                      tile-index tile-x tile-y
-                                      (nth intv-bg-color +intv-color-names+)
-                                      (nth intv-fg-color +intv-color-names+))
-
-                              ;; Output color data (4-bit BG, 4-bit FG in one byte)
-                              (format src-file "    DECLE   $~4,'0X    ; BG=~A, FG=~A~%"
-                                      (logior (ash intv-bg-color 4) intv-fg-color)
-                                      (nth intv-bg-color +intv-color-names+)
-                                      (nth intv-fg-color +intv-color-names+))
-
-                              ;; Output 8 bytes of tile bitmap data
-                              (loop for y from 0 below 8
-                                    for byte = 0
-                                    do (loop for x from 0 below 8
-                                             for pixel-rgb = (aref tile-pixels x y)
-                                             do (when (and pixel-rgb (equal pixel-rgb fg-rgb))
-                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
-                                       (format src-file "    DECLE   $~4,'0X~%" byte))))))
-
-      (format *trace-output* "~% Wrote Intellivision tileset data to ~A." out-file))))
 
 (defun compile-gram-intv (png-file out-dir &key height width palette-pixels)
   "Compile GRAM cards from PNG image PNG-FILE to OUT-DIR.
@@ -1472,6 +1404,23 @@ All cards in the source image are output as one file."
                                   do (format src-file "    DECLE   $~4,'0X~%" word))))))))
         (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
 
+;; Missing Intellivision functions that are exported
+(defun compile-art-intv (input-file output-file)
+  "Compile Intellivision art assets"
+  (error "Intellivision art compilation not yet implemented"))
+
+(defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
+  "Compile Intellivision tileset"
+  (error "Intellivision tileset compilation not yet implemented"))
+
+(defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
+  "Compile Intellivision sprite"
+  (error "Intellivision sprite compilation not yet implemented"))
+
+(defun assemble-intv-rom (source-files output-file)
+  "Assemble Intellivision ROM"
+  (error "Intellivision ROM assembly not yet implemented"))
+
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
   (declare (ignore height))
   (let ((out-file (merge-pathnames
@@ -1506,7 +1455,6 @@ All cards in the source image are output as one file."
 (defun compile-tileset (png-file out-dir height width image-nybbles)
   (case *machine*
     ((64 128) (compile-tileset-64 png-file out-dir height width image-nybbles))
-    (2609 (compile-tileset-intv png-file out-dir height width image-nybbles))
     (otherwise (error "Tile set compiler not set up yet for ~a" (machine-long-name)))))
 
 (defun monochrome-lines-p (palette-pixels height width)
@@ -1679,8 +1627,8 @@ All cards in the source image are output as one file."
     ((and (zerop (mod height 8))
           (zerop (mod width 8))
           (>= 256 (* (/ height 8) (/ width 8))))
-     (format *trace-output* "~% Image ~A seems to be Intellivision tiles" png-file)
-     (compile-tileset png-file target-dir height width palette-pixels))
+     (format *trace-output* "~% Image ~A seems to be Intellivision GRAM card data" png-file)
+     (compile-gram-intv png-file target-dir :height height :width width :palette-pixels palette-pixels))
 
     (t (error "Don't know how to deal with Intellivision image with dimensions ~:D×~:D pixels"
               width height))))

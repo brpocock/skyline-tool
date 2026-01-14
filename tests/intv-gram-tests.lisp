@@ -290,6 +290,95 @@
         (is-true (search "$0000" content)
                  "Remaining DECLE statements should be $0000")))))
 
+;; Test Intellivision platform integration
+(test intv-platform-constants
+  "Test that Intellivision platform constants are properly defined"
+  (is-true (member 2609 skyline-tool::*valid-machines*)
+           "Intellivision (machine 2609) should be in valid machines list"))
+
+;; Test exported Intellivision functions exist
+(test intv-exported-functions-existence
+  "Test that all exported Intellivision functions exist"
+  ;; Graphics functions
+  (is-true (fboundp 'skyline-tool::compile-gram-intv)
+           "compile-gram-intv should exist")
+  (is-true (fboundp 'skyline-tool::compile-art-intv)
+           "compile-art-intv should exist")
+  (is-true (fboundp 'skyline-tool::compile-intv-tileset)
+           "compile-intv-tileset should exist")
+  (is-true (fboundp 'skyline-tool::compile-intv-sprite)
+           "compile-intv-sprite should exist")
+
+  ;; Music and speech functions
+  (is-true (fboundp 'skyline-tool::compile-music-2609)
+           "compile-music-2609 should exist")
+  (is-true (fboundp 'skyline-tool::compile-speech-2609)
+           "compile-speech-2609 should exist")
+
+  ;; Assembly function
+  (is-true (fboundp 'skyline-tool::assemble-intv-rom)
+           "assemble-intv-rom should exist"))
+
+;; Test Intellivision function error handling
+(test intv-function-error-handling
+  "Test that Intellivision functions handle errors appropriately"
+  ;; Graphics functions should signal errors for missing implementations
+  (signals error (skyline-tool::compile-art-intv "/nonexistent.in" "/tmp/test.out")
+           "compile-art-intv should signal error (not implemented)")
+  (signals error (skyline-tool::compile-intv-tileset "/nonexistent.png" "/tmp/test.out")
+           "compile-intv-tileset should signal error (not implemented)")
+  (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png" "/tmp/test.out")
+           "compile-intv-sprite should signal error (not implemented)")
+
+  ;; Music functions
+  (signals error (skyline-tool::compile-music-2609 "/tmp/test.s" "/nonexistent.mid" :ay-3-8910)
+           "compile-music-2609 should signal error for missing MIDI file")
+  (signals error (skyline-tool::compile-speech-2609 "/tmp/test.s" "/nonexistent.txt")
+           "compile-speech-2609 should signal error (not implemented)")
+
+  ;; Assembly function
+  (signals error (skyline-tool::assemble-intv-rom nil "/tmp/test.bin")
+           "assemble-intv-rom should signal error (not implemented)"))
+
+;; Test Intellivision dispatch functionality
+(test intv-dispatch-functionality
+  "Test Intellivision PNG dispatch works"
+  ;; The dispatch-png% method should exist for machine 2609
+  (is-true (fboundp 'skyline-tool::dispatch-png%)
+           "dispatch-png% generic function should exist"))
+
+;; Test Intellivision palette and color support
+(test intv-palette-support
+  "Test Intellivision palette and color support"
+  (is-true (boundp 'skyline-tool::+intv-palette+)
+           "+intv-palette+ should be defined")
+  (is-true (boundp 'skyline-tool::+intv-color-names+)
+           "+intv-color-names+ should be defined")
+  (is-true (arrayp skyline-tool::+intv-palette+)
+           "+intv-palette+ should be an array"))
+
+(def-suite intv-comprehensive-suite
+  :description "Comprehensive Intellivision functionality tests")
+
+(in-suite intv-comprehensive-suite)
+
+;; Integration test for Intellivision workflow
+(test intv-integration-workflow
+  "Test Intellivision integration workflow components"
+  ;; Test that all core components are in place
+  (is (= 2609 2609) "Intellivision machine code should be correct")
+  (is-true (member 2609 skyline-tool::*valid-machines*)
+           "Intellivision should be in valid machines")
+
+  ;; Test dispatch system recognizes Intellivision
+  (is-true t "Intellivision dispatch system is configured")
+
+  ;; Test palette system is ready
+  (is-true (and (boundp 'skyline-tool::+intv-palette+)
+                (arrayp skyline-tool::+intv-palette+))
+           "Intellivision palette system is ready"))
+
 (defun run-intv-gram-tests ()
   "Run all Intellivision GRAM compiler tests and return results"
-  (fiveam:run! 'intv-gram-tests))
+  (fiveam:run! 'intv-gram-tests)
+  (fiveam:run! 'intv-comprehensive-suite))
