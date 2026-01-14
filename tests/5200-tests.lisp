@@ -70,9 +70,17 @@
 ;; Test 5200 error conditions
 (test 5200-error-conditions
   "Test error handling in 5200 functions"
+  ;; Test compile-art-5200 with invalid inputs
+  (signals error (skyline-tool::compile-art-5200 "/nonexistent.in" "/tmp/test.out")
+           "compile-art-5200 should signal error for missing input")
+
   ;; Test compile-5200-mode-e-bitmap with invalid inputs
   (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
-           "compile-5200-mode-e-bitmap should handle nil input"))
+           "compile-5200-mode-e-bitmap should handle nil input")
+
+  ;; Test blob functions with nil inputs
+  (signals error (skyline-tool::detect-5200-tile-mode nil)
+           "detect-5200-tile-mode should handle nil input"))
 
 (defun run-5200-tests ()
   "Run all 5200 tests and return results"
