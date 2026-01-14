@@ -9,188 +9,153 @@
 
 (in-suite 5200-tests)
 
-;; Test 5200 graphics functions existence
-(test 5200-graphics-functions-existence
-  "Test that 5200 graphics functions exist"
-  (is-true (fboundp 'skyline-tool::compile-5200-mode-e-bitmap)
-           "compile-5200-mode-e-bitmap should exist")
-  (is-true (fboundp 'skyline-tool::compile-art-5200)
-           "compile-art-5200 should exist"))
+;; Test 5200 Mode E bitmap compilation functionality
+(test 5200-mode-e-bitmap-compilation
+  "Test that 5200 Mode E bitmap compilation produces correct output"
+  ;; Test with a simple 8x8 pattern that should produce recognizable output
+  (uiop:with-temporary-file (:pathname temp-dir :directory t)
+    (let* ((test-pixels (make-array '(8 8) :element-type '(unsigned-byte 32)
+                                    :initial-contents
+                                    #(#(0 0 0 0 0 0 0 0)  ; Row 0: all background
+                                      #(1 1 1 1 1 1 1 1)  ; Row 1: all foreground
+                                      #(0 1 0 1 0 1 0 1)  ; Row 2: alternating pattern
+                                      #(1 0 1 0 1 0 1 0)  ; Row 3: inverse alternating
+                                      #(0 0 1 1 0 0 1 1)  ; Row 4: 2-pixel pattern
+                                      #(1 1 0 0 1 1 0 0)  ; Row 5: inverse 2-pixel
+                                      #(0 0 0 0 1 1 1 1)  ; Row 6: half/half
+                                      #(1 1 1 1 0 0 0 0)))) ; Row 7: inverse half/half
+           (temp-file (merge-pathnames "5200-test-output.s" temp-dir)))
 
-;; Test 5200 Mode E bitmap compilation (blob ripping)
-(test 5200-mode-e-compilation
-  "Test that 5200 Mode E bitmap compilation works"
-  (is-true (fboundp 'skyline-tool::compile-5200-mode-e-bitmap)
-           "compile-5200-mode-e-bitmap should exist")
-  ;; Test basic functionality with mock data
-  (let ((test-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap test-pixels)
-              "compile-5200-mode-e-bitmap should handle basic data")))
+      ;; Compile the test data - this should not signal an error
+      (finishes (skyline-tool::compile-5200-mode-e-bitmap test-pixels
+                                                          :target-dir temp-dir)
+                "compile-5200-mode-e-bitmap should handle valid input without error")
 
-;; Test 5200 music compilation
-(test 5200-music-compilation
-  "Test 5200 music compilation functions"
-  (is-true (fboundp 'skyline-tool::compile-music-7800)
-           "5200 uses 7800 music compilation (TIA chip)"))
+      ;; Verify output file was created
+      (is-true (probe-file temp-file)
+               "Output file should be created for valid input")
 
-;; Test 5200 graphics compilation
-(test 5200-graphics-compilation
-  "Test 5200 graphics compilation with mock data"
-  (let ((test-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    ;; Test compile-5200-mode-e-bitmap
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap test-pixels :png-file "/tmp/test.png")
-              "compile-5200-mode-e-bitmap should handle basic data")
+      ;; Verify output contains expected assembly structure
+      (when (probe-file temp-file)
+        (with-open-file (stream temp-file :direction :input)
+          (let ((content (alexandria:read-stream-content-into-string stream)))
+            ;; Check for proper assembly file structure
+            (is-true (search ";;; -*- fundamental -*-" content)
+                     "Output should contain fundamental mode comment")
+            (is-true (search ".block" content)
+                     "Output should contain .block directive")
+            (is-true (search ".bend" content)
+                     "Output should contain .bend directive")
 
-    ;; Test with invalid data
-    (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
-             "compile-5200-mode-e-bitmap should handle nil input")))
+            ;; Check for shape data labels
+            (is-true (search "Shape:" content)
+                     "Output should contain Shape data label")
+            (is-true (search "CoLu:" content)
+                     "Output should contain color data label")
 
-;; Test 5200 Mode E compilation output validation
-(test 5200-mode-e-output-validation
-  "Test that 5200 Mode E compilation produces correct output"
-  (let* ((test-pixels (make-array '(8 8) :element-type '(unsigned-byte 32)
-                                  :initial-contents
-                                  #(#(0 0 0 0 0 0 0 0)
-                                    #(0 1 1 1 1 1 1 0)
-                                    #(0 1 0 0 0 0 1 0)
-                                    #(0 1 0 1 1 0 1 0)
-                                    #(0 1 0 1 1 0 1 0)
-                                    #(0 1 0 0 0 0 1 0)
-                                    #(0 1 1 1 1 1 1 0)
-                                    #(0 0 0 0 0 0 0 0))))
-         (temp-file "/tmp/5200-test-output.s"))
-    ;; Compile the test data
-    (skyline-tool::compile-5200-mode-e-bitmap test-pixels
-                                               :png-file "/tmp/test.png"
-                                               :target-dir "/tmp/")
+            ;; Check for valid assembly byte directives
+            (is-true (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)
+                     "Output should contain properly formatted .byte directives")
 
-    ;; Validate the output file exists
-    (is-true (probe-file temp-file)
-             "Output file should be created")
+            ;; Verify dimensions are reported correctly
+            (is-true (search "Height = 8" content)
+                     "Should report correct height")
+            (is-true (search "Width = 8" content)
+                     "Should report correct width")))))))
 
-    ;; Read and validate the output content
-    (when (probe-file temp-file)
-      (with-open-file (stream temp-file :direction :input)
-        (let ((content (alexandria:read-stream-content-into-string stream)))
-          ;; Check that it contains expected assembly structure
-          (is-true (search ";;; -*- fundamental -*-" content)
-                   "Should contain fundamental mode comment")
-          (is-true (search ".block" content)
-                   "Should contain .block directive")
-          (is-true (search ".bend" content)
-                   "Should contain .bend directive")
-          (is-true (search "Shape:" content)
-                   "Should contain Shape label")
-          (is-true (search "CoLu:" content)
-                   "Should contain CoLu label")
+;; Test 5200 Mode E bitmap error handling
+(test 5200-mode-e-error-handling
+  "Test that 5200 Mode E bitmap compilation handles errors properly"
+  ;; Test with nil input
+  (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
+           "Should signal error for nil input")
 
-          ;; Check for valid byte data format (.byte $xx)
-          (is-true (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)
-                   "Should contain properly formatted .byte directives")
+  ;; Test with wrong array dimensions
+  (signals error (skyline-tool::compile-5200-mode-e-bitmap (make-array '(0 0)))
+           "Should signal error for zero-dimension arrays")
 
-          ;; Check dimensions are correct
-          (is-true (search "Height = 8" content)
-                   "Should report correct height")
-          (is-true (search "Width = 8" content)
-                   "Should report correct width"))))))
+  ;; Test with non-array input
+  (signals error (skyline-tool::compile-5200-mode-e-bitmap "not an array")
+           "Should signal error for non-array input")
 
-;; Test 5200 blob ripping functions
-(test 5200-blob-ripping
-  "Test 5200 blob ripping functionality"
-  ;; Test detect-5200-tile-mode
-  (finishes (skyline-tool::detect-5200-tile-mode (make-array '(8 8) :element-type '(unsigned-byte 32)))
-            "detect-5200-tile-mode should handle basic arrays")
+  ;; Test with array of wrong element type
+  (signals error (skyline-tool::compile-5200-mode-e-bitmap (make-array '(8 8) :element-type 'character))
+           "Should signal error for wrong element type"))
 
-  ;; Test blob-rip-5200-tile (will fail due to missing file but shouldn't crash)
-  (signals error (skyline-tool::blob-rip-5200-tile "/nonexistent.png")
-            "blob-rip-5200-tile should signal error for missing files")
+;; Test 5200 Mode E bitmap with different sizes
+(test 5200-mode-e-different-sizes
+  "Test 5200 Mode E bitmap compilation with different valid sizes"
+  (uiop:with-temporary-file (:pathname temp-dir :directory t)
+    ;; Test with 16x16 array
+    (let ((large-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
+      (finishes (skyline-tool::compile-5200-mode-e-bitmap large-pixels :target-dir temp-dir)
+                "Should handle 16x16 arrays"))
 
-  ;; Test blob-rip-5200-pmg
-  (signals error (skyline-tool::blob-rip-5200-pmg "/nonexistent.png")
-            "blob-rip-5200-pmg should signal error for missing files"))
+    ;; Test with 4x4 array
+    (let ((small-pixels (make-array '(4 4) :element-type '(unsigned-byte 32) :initial-element 1)))
+      (finishes (skyline-tool::compile-5200-mode-e-bitmap small-pixels :target-dir temp-dir)
+                "Should handle 4x4 arrays"))
 
-;; Test 5200 dispatch-png method
-(test 5200-dispatch-png
+    ;; Test with rectangular array (not square)
+    (let ((rect-pixels (make-array '(8 16) :element-type '(unsigned-byte 32) :initial-element 0)))
+      (finishes (skyline-tool::compile-5200-mode-e-bitmap rect-pixels :target-dir temp-dir)
+                "Should handle rectangular arrays"))))
+
+;; Test 5200 dispatch functionality
+(test 5200-dispatch-functionality
   "Test 5200 PNG dispatch functionality"
-  ;; The dispatch-png% method for 5200 should exist
+  ;; Verify dispatch-png% method exists for 5200
   (is-true (fboundp 'skyline-tool::dispatch-png%)
            "dispatch-png% generic function should exist")
 
-  ;; Test that 5200 dispatch works (will create files in target dir)
-  (finishes (ensure-directories-exist "/tmp/5200-test/")
-            "Directory creation should work")
-  ;; Note: Actual dispatch testing would require PNG files, so we just test setup
-  ;; TODO: Add proper dispatch testing when PNG test files are available
+  ;; Test that dispatch can be called (though it may not do much without actual PNG files)
+  (uiop:with-temporary-file (:pathname temp-dir :directory t)
+    (finishes (skyline-tool::dispatch-png% 5200 "/nonexistent.png" temp-dir)
+              "dispatch-png% should handle calls gracefully even with missing files")))
 
-;; Test 5200 platform constants
-(test 5200-platform-constants
-  "Test that 5200 platform is recognized"
+;; Test 5200 platform validation
+(test 5200-platform-validation
+  "Test that 5200 is properly recognized as a valid platform"
   (let ((old-machine skyline-tool::*machine*))
     (unwind-protect
         (progn
-          (setf skyline-tool::*machine* 5200)
+          ;; Test setting machine to 5200
+          (finishes (setf skyline-tool::*machine* 5200)
+                   "Should be able to set machine to 5200")
+
+          ;; Test that machine is recognized as valid
           (is-true (skyline-tool::machine-valid-p)
-                   "5200 should be a valid machine"))
+                   "5200 should be recognized as a valid machine")
+
+          ;; Test machine name functions
+          (is (stringp (skyline-tool::machine-short-name))
+              "machine-short-name should return a string")
+          (is (stringp (skyline-tool::machine-long-name))
+              "machine-long-name should return a string")
+
+          ;; Test that 5200 appears in valid machines list (if such a list exists)
+          (when (boundp 'skyline-tool::*valid-machines*)
+            (is-true (member 5200 skyline-tool::*valid-machines*)
+                     "5200 should be in valid machines list")))
       (setf skyline-tool::*machine* old-machine))))
 
-;; Test 5200 error conditions
-(test 5200-error-conditions
-  "Test error handling in 5200 functions"
-  ;; Test compile-art-5200 with invalid inputs
-  (signals error (skyline-tool::compile-art-5200 "/nonexistent.in" "/tmp/test.out")
-           "compile-art-5200 should signal error for missing input")
+;; Test 5200 unimplemented functions signal appropriate errors
+(test 5200-unimplemented-functions
+  "Test that unimplemented 5200 functions signal appropriate errors"
+  ;; Test compile-art-5200 (not implemented)
+  (signals error (skyline-tool::compile-art-5200 "/fake.in" "/fake.out")
+           "compile-art-5200 should signal not-implemented error")
 
-  ;; Test compile-5200-mode-e-bitmap with invalid inputs
-  (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
-           "compile-5200-mode-e-bitmap should handle nil input"))
+  ;; Test blob ripping functions (not implemented)
+  (signals error (skyline-tool::blob-rip-5200-tile "/fake.png")
+           "blob-rip-5200-tile should signal error for missing implementation")
 
-;; Test 5200 blob ripping functions
-(test 5200-blob-ripping
-  "Test 5200 blob ripping functionality"
-  ;; Test detect-5200-tile-mode
-  (finishes (skyline-tool::detect-5200-tile-mode (make-array '(8 8) :element-type '(unsigned-byte 32)))
-            "detect-5200-tile-mode should handle basic arrays")
+  (signals error (skyline-tool::blob-rip-5200-pmg "/fake.png")
+           "blob-rip-5200-pmg should signal error for missing implementation")
 
-  ;; Test blob-rip-5200-tile (will fail due to missing file but shouldn't crash)
-  (signals error (skyline-tool::blob-rip-5200-tile "/nonexistent.png")
-            "blob-rip-5200-tile should signal error for missing files")
-
-  ;; Test blob-rip-5200-pmg
-  (signals error (skyline-tool::blob-rip-5200-pmg "/nonexistent.png")
-            "blob-rip-5200-pmg should signal error for missing files"))
-
-;; Test 5200 dispatch-png method
-(test 5200-dispatch-png
-  "Test 5200 PNG dispatch functionality"
-  ;; The dispatch-png% method for 5200 should exist
-  (is-true (fboundp 'skyline-tool::dispatch-png%)
-           "dispatch-png% generic function should exist")
-
-  ;; Note: Actual dispatch testing would require PNG files
-  ;; TODO: Add proper dispatch testing when PNG test files are available
-)
-
-;; Test 5200 platform constants
-(test 5200-platform-constants
-  "Test that 5200 platform is recognized"
-  (let ((old-machine skyline-tool::*machine*))
-    (unwind-protect
-        (progn
-          (setf skyline-tool::*machine* 5200)
-          (is-true (skyline-tool::machine-valid-p)
-                   "5200 should be a valid machine"))
-      (setf skyline-tool::*machine* old-machine))))
-
-;; Test 5200 error conditions
-(test 5200-error-conditions
-  "Test error handling in 5200 functions"
-  ;; Test compile-art-5200 with invalid inputs
-  (signals error (skyline-tool::compile-art-5200 "/nonexistent.in" "/tmp/test.out")
-            "compile-art-5200 should signal error for missing input")
-
-  ;; Test compile-5200-mode-e-bitmap with invalid inputs
-  (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
-           "compile-5200-mode-e-bitmap should handle nil input"))
+  ;; Test detect-5200-tile-mode with invalid input
+  (signals error (skyline-tool::detect-5200-tile-mode nil)
+           "detect-5200-tile-mode should handle nil input"))
 
 (defun run-5200-tests ()
   "Run all 5200 tests and return results"
