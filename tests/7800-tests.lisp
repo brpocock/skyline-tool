@@ -32,11 +32,11 @@
 ;; Test 7800 binary output validation
 (test 7800-binary-output-validation
   "Test that 7800 binary output is correctly formatted"
-  (let ((temp-file "Object/7800/tmp7800.dat")
-        (test-data '((#x01 #x02 #x03 #x04)  ; 4 bytes = page length
-                     (#x05 #x06 #x07 #x08))))
-    ;; Write test binary data
-    (skyline-tool::write-7800-binary temp-file test-data)
+  (uiop:with-temporary-file (:pathname temp-file :type "o")
+    (let ((test-data '((#x01 #x02 #x03 #x04)  ; 4 bytes = page length
+                       (#x05 #x06 #x07 #x08))))
+      ;; Write test binary data
+      (skyline-tool::write-7800-binary temp-file test-data)
 
     ;; Validate the output file exists and has correct size
     (is-true (probe-file temp-file)
@@ -58,10 +58,10 @@
         ;; Skip padding bytes (252 bytes of zeros)
         (dotimes (i 252) (read-byte stream))
 
-        ;; Read second page
-        (let ((second-page (loop for i from 0 to 3 collect (read-byte stream))))
-          (is (equal second-page '(5 6 7 8))
-              "Second page should contain the correct data"))))))
+          ;; Read second page
+          (let ((second-page (loop for i from 0 to 3 collect (read-byte stream))))
+            (is (equal second-page '(5 6 7 8))
+                "Second page should contain the correct data")))))))
 
 ;; Test 7800 music processing correctness
 (test 7800-music-processing-correctness

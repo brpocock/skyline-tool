@@ -53,8 +53,8 @@
 (test colecovision-tile-mode-detection
   "Test ColecoVision tile mode detection"
   ;; Test with mock data
-  (finishes (skyline-tool::detect-colecovision-tile-mode (make-array '(8 8) :element-type '(unsigned-byte 32)))
-            "detect-colecovision-tile-mode should handle basic arrays")
+  (is-true (skyline-tool::detect-colecovision-tile-mode (make-array '(8 8) :element-type '(unsigned-byte 32)))
+           "detect-colecovision-tile-mode should return truthy value for valid input")
 
   ;; Test with nil input
   (signals error (skyline-tool::detect-colecovision-tile-mode nil)

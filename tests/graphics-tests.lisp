@@ -184,7 +184,7 @@
 ;; Test blob dimension validation
 (test check-height+width-for-blob-valid
   "Test valid blob dimensions"
-  (finishes (check-height+width-for-blob 49 160 (make-test-png-data 160 49))))
+  (is-true (check-height+width-for-blob 49 160 (make-test-png-data 160 49))))
 
 (test check-height+width-for-blob-invalid-width
   "Test invalid blob width"
@@ -197,7 +197,7 @@
 ;; Test 320AC dimension validation
 (test check-height+width-for-blob-320ac-valid
   "Test valid 320AC blob dimensions"
-  (finishes (check-height+width-for-blob-320ac 49 320 (make-test-png-data 320 49))))
+  (is-true (check-height+width-for-blob-320ac 49 320 (make-test-png-data 320 49))))
 
 (test check-height+width-for-blob-320ac-invalid-width
   "Test invalid 320AC blob width"
@@ -247,7 +247,7 @@
   "Test that blob dimension validation works correctly"
   (let ((test-pixels (make-array '(160 49) :element-type '(unsigned-byte 8) :initial-element 0)))
     ;; Test valid 160x49 dimensions (49 = 16*3 + 1)
-    (finishes (check-height+width-for-blob 49 160 test-pixels))
+    (is-true (check-height+width-for-blob 49 160 test-pixels))
 
     ;; Test invalid width (not divisible by 4)
     (signals error (check-height+width-for-blob 49 162 test-pixels))
@@ -260,7 +260,7 @@
   "Test that 320AC blob dimension validation works correctly"
   (let ((test-pixels (make-array '(320 49) :element-type '(unsigned-byte 8) :initial-element 0)))
     ;; Test valid 320x49 dimensions
-    (finishes (check-height+width-for-blob-320ac 49 320 test-pixels))
+    (is-true (check-height+width-for-blob-320ac 49 320 test-pixels))
 
     ;; Test invalid width (not 320)
     (signals error (check-height+width-for-blob-320ac 49 160 test-pixels))
@@ -390,7 +390,7 @@
     (skyline-tool:blob-rip-7800 "/nonexistent/file.png"))
 
   ;; blob-rip-7800-320ac should handle missing files gracefully (stub implementation)
-  (finishes (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")))
+  (is-true (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")))
 
 ;; Test function signatures and basic properties
 (test graphics-converter-properties
@@ -410,28 +410,19 @@
 ;; Test that converters can be called without immediate crashes
 (test graphics-converter-basic-calls
   "Test that graphics converters can be called without immediate crashes"
-  ;; These calls should not crash the system, even if they signal errors
-  (finishes
-    (handler-case
-        (skyline-tool:compile-map "/nonexistent/file.tmx")
-      (error () :expected-error))
-    "compile-map call should not crash")
+  ;; These calls should signal appropriate errors for invalid inputs
+  (signals error (skyline-tool:compile-map "/nonexistent/file.tmx")
+           "compile-map should signal error for missing file")
 
-  (finishes
-    (handler-case
-        (skyline-tool:compile-art-7800 "/nonexistent/input.txt" "/tmp/output.s")
-      (error () :expected-error))
-    "compile-art-7800 call should not crash")
+  (signals error (skyline-tool:compile-art-7800 "/nonexistent/input.txt" "/tmp/output.s")
+           "compile-art-7800 should signal error for missing input")
 
-  (finishes
-    (handler-case
-        (skyline-tool:blob-rip-7800 "/nonexistent/file.png")
-      (error () :expected-error))
-    "blob-rip-7800 call should not crash")
+  (signals error (skyline-tool:blob-rip-7800 "/nonexistent/file.png")
+           "blob-rip-7800 should signal error for missing file")
 
-  (finishes
-    (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")
-    "blob-rip-7800-320ac call should not crash"))
+  ;; blob-rip-7800-320ac should handle missing files gracefully (returns truthy)
+  (is-true (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")
+           "blob-rip-7800-320ac should handle missing files gracefully"))
 
 ;; Integration test for 320A/C BLOB generation (catches compilation failures)
 (test blob-rip-7800-320ac-integration-test

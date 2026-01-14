@@ -25,10 +25,10 @@
                                     #(1 1 1 1 0 0 0 0)))) ; Row 7: inverse half/half
          (temp-file "Object/5200/tmp5200.s"))
 
-    ;; Compile the test data - this should not signal an error
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap test-pixels
-                                                        :target-dir "Object/5200/")
-              "compile-5200-mode-e-bitmap should handle valid input without error")
+    ;; Compile the test data - this should return a truthy value indicating success
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap test-pixels
+                                                       :target-dir "Object/5200/")
+             "compile-5200-mode-e-bitmap should return truthy value for valid input")
 
     ;; Verify output file was created
     (is-true (probe-file temp-file)
@@ -86,18 +86,18 @@
   "Test 5200 Mode E bitmap compilation with different valid sizes"
   ;; Test with 16x16 array
   (let ((large-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap large-pixels :target-dir "Object/5200/")
-              "Should handle 16x16 arrays"))
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels :target-dir "Object/5200/")
+             "Should handle 16x16 arrays and return truthy value"))
 
   ;; Test with 4x4 array
   (let ((small-pixels (make-array '(4 4) :element-type '(unsigned-byte 32) :initial-element 1)))
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap small-pixels :target-dir "Object/5200/")
-              "Should handle 4x4 arrays"))
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels :target-dir "Object/5200/")
+             "Should handle 4x4 arrays and return truthy value"))
 
   ;; Test with rectangular array (not square)
   (let ((rect-pixels (make-array '(8 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (finishes (skyline-tool::compile-5200-mode-e-bitmap rect-pixels :target-dir "Object/5200/")
-              "Should handle rectangular arrays")))
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap rect-pixels :target-dir "Object/5200/")
+             "Should handle rectangular arrays and return truthy value")))
 
 ;; Test 5200 dispatch functionality
 (test 5200-dispatch-functionality
@@ -107,8 +107,9 @@
            "dispatch-png% generic function should exist")
 
   ;; Test that dispatch can be called (though it may not do much without actual PNG files)
-  (finishes (skyline-tool::dispatch-png% 5200 "Object/5200/tmpfoo.png" "Object/5200/")
-            "dispatch-png% should handle calls gracefully even with missing files"))
+  (is (skyline-tool::dispatch-png% 5200 "Object/5200/tmpfoo.png" "Object/5200/")
+      nil
+      "dispatch-png% should return nil for missing files"))
 
 ;; Test 5200 platform validation
 (test 5200-platform-validation
@@ -116,10 +117,6 @@
   (let ((old-machine skyline-tool::*machine*))
     (unwind-protect
         (progn
-          ;; Test setting machine to 5200
-          (finishes (setf skyline-tool::*machine* 5200)
-                   "Should be able to set machine to 5200")
-
           ;; Test that machine is recognized as valid
           (is-true (skyline-tool::machine-valid-p)
                    "5200 should be recognized as a valid machine")

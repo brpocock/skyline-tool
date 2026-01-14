@@ -44,9 +44,9 @@
     ;; Test that extract-palettes function exists and works
     (is-true (fboundp 'skyline-tool::extract-palettes)
              "extract-palettes function should exist")
-    ;; The function should return palette data without error
-    (finishes (skyline-tool::extract-palettes test-image)
-              "extract-palettes should process image data without error")))
+    ;; The function should return palette data
+    (is-true (arrayp (skyline-tool::extract-palettes test-image))
+             "extract-palettes should return an array")))
 
 ;; Test Atari color conversion
 (test atari-color-conversion
@@ -54,10 +54,10 @@
   (is-true (fboundp 'skyline-tool::atari-colu-string)
            "atari-colu-string function should exist")
   ;; Test basic color conversion
-  (finishes (skyline-tool::atari-colu-string 0)
-            "atari-colu-string should handle black color")
-  (finishes (skyline-tool::atari-colu-string 15)
-            "atari-colu-string should handle white color"))
+  (is (stringp (skyline-tool::atari-colu-string 0))
+      "atari-colu-string should return a string for black color")
+  (is (stringp (skyline-tool::atari-colu-string 15))
+      "atari-colu-string should return a string for white color"))
 
 ;; Test palette adjustment functions
 (test palette-adjustment-functions
@@ -77,18 +77,18 @@
   (is-true (fboundp 'skyline-tool::adjust-palettes)
            "adjust-palettes should exist")
   (let ((test-palettes (make-array '(8 4) :initial-element 8))) ; Simple test palette
-    (finishes (skyline-tool::adjust-palettes #'skyline-tool::darken-color-in-palette test-palettes)
-              "adjust-palettes should work with darken function")
-    (finishes (skyline-tool::adjust-palettes #'skyline-tool::lighten-color-in-palette test-palettes)
-              "adjust-palettes should work with lighten function")))
+    (is (arrayp (skyline-tool::adjust-palettes #'skyline-tool::darken-color-in-palette test-palettes))
+        "adjust-palettes should return an array when using darken function")
+    (is (arrayp (skyline-tool::adjust-palettes #'skyline-tool::lighten-color-in-palette test-palettes))
+        "adjust-palettes should return an array when using lighten function")))
 
 ;; Test print-wide-pixel function
 (test print-wide-pixel-function
   "Test print-wide-pixel output function"
   (is-true (fboundp 'skyline-tool::print-wide-pixel)
            "print-wide-pixel should exist")
-  (finishes (skyline-tool::print-wide-pixel 8 *standard-output*)
-            "print-wide-pixel should handle basic color values"))
+  (is (null (skyline-tool::print-wide-pixel 8 *standard-output*))
+      "print-wide-pixel should return nil after printing"))
 
 ;; Test tileset loading (mock test)
 (test tileset-loading-mock
@@ -145,8 +145,8 @@
   (signals error (skyline-tool::extract-palettes nil)
            "extract-palettes should handle nil input")
   ;; Should handle empty arrays
-  (finishes (skyline-tool::extract-palettes (make-array '(0 0)))
-            "extract-palettes should handle empty arrays"))
+  (is (arrayp (skyline-tool::extract-palettes (make-array '(0 0))))
+      "extract-palettes should return an array even for empty input"))
 
 (defun run-tileset-tests ()
   "Run all tileset tests and return results"

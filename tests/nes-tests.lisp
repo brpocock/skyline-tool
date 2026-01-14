@@ -44,8 +44,8 @@
                                                      (255 128 128) (128 255 128) (128 128 255)
                                                      (255 255 128) (255 128 255) (128 255 255)
                                                      (192 192 192) (128 128 128)))))
-    (finishes (skyline-tool::monochrome-lines-p test-palette 16 3)
-              "monochrome-lines-p should handle palette data")))
+    (is-false (skyline-tool::monochrome-lines-p test-palette 16 3)
+               "monochrome-lines-p should return false for multi-color palette")))
 
 ;; Test NES platform in dispatch system
 (test nes-platform-dispatch
