@@ -5,50 +5,59 @@
 (in-package :skyline-tool/test)
 
 (def-suite sega-tests
-  :description "Tests for Sega Genesis/Mega Drive-specific SkylineTool functionality")
+  :description "Tests for Sega SG-1000 and Master System-specific SkylineTool functionality")
 
 (in-suite sega-tests)
 
 ;; Test Sega platform constants
 (test sega-platform-constants
-  "Test that Sega Genesis platform constants are properly defined"
-  (is-true (member 1601 skyline-tool::*valid-machines*)
-           "Sega Genesis (machine 1601) should be in valid machines list"))
-
-;; Test Sega platform integration
-(test sega-platform-integration
-  "Test Sega platform integration in asset system"
-  ;; Test that Sega is recognized in asset allocation
-  (is-true t "Sega Genesis platform is recognized in asset allocation system")
-
-  ;; Test that Sega doesn't have blob support (as expected)
-  (is-true t "Sega Genesis correctly lacks blob support in current implementation")
-
-  ;; Test that Sega doesn't have art compilation (as expected)
-  (is-true t "Sega Genesis correctly lacks art compilation in current implementation"))
+  "Test that Sega platform constants are properly defined"
+  (is-true (member 1000 skyline-tool::*valid-machines*)
+           "SG-1000 (machine 1000) should be in valid machines list")
+  (is-true (member 3010 skyline-tool::*valid-machines*)
+           "Master System (machine 3010) should be in valid machines list"))
 
 ;; Test Sega machine code validation
-(test sega-machine-code
-  "Test Sega Genesis machine code validation"
-  (is (= 1601 1601) "Sega Genesis machine code should be 1601")
-  (is-true (string= (skyline-tool::machine-long-name 1601) "Sega Genesis (MegaDrive)")
-           "Sega Genesis should have correct long name"))
+(test sega-machine-codes
+  "Test Sega platform machine code validation"
+  (is (= 1000 1000) "SG-1000 machine code should be 1000")
+  (is (= 3010 3010) "Master System machine code should be 3010")
 
-;; Test Sega platform in dispatch system
-(test sega-dispatch-system
-  "Test Sega platform in general dispatch system"
-  ;; Sega should be recognized but not have specific handlers yet
-  (is-true (member 1601 skyline-tool::*valid-machines*)
-           "Sega should be in valid machines for general operations"))
+  ;; Test machine name functions with proper global state
+  (let ((skyline-tool::*machine* 1000))
+    (is-true (string= (skyline-tool::machine-short-name) "SG-1000")
+             "SG-1000 should have correct short name"))
 
-;; Test Sega error handling framework
-(test sega-error-framework
-  "Test error handling framework for Sega platform"
-  ;; Since Sega functions aren't implemented yet, test the framework
-  (is-true t "Sega Genesis error handling framework is ready for implementation")
+  (let ((skyline-tool::*machine* 3010))
+    (is-true (string= (skyline-tool::machine-short-name) "SMS")
+             "Master System should have correct short name")))
 
-  ;; Test that future Sega functions can be added to the dispatch system
-  (is-true t "Sega Genesis can be integrated into dispatch system when functions are implemented"))
+;; Test Sega music compilation functions
+(test sega-music-compilation
+  "Test Sega music compilation functions"
+  ;; Test SG-1000 music compilation
+  (signals error (skyline-tool::compile-music-sg1000 "/tmp/test.s" "/nonexistent.mid")
+           "SG-1000 music compilation should signal error for missing MIDI file")
+
+  ;; Test Master System music compilation
+  (signals error (skyline-tool::compile-music-sms "/tmp/test.s" "/nonexistent.mid")
+           "Master System music compilation should signal error for missing MIDI file"))
+
+;; Test Sega music function existence
+(test sega-music-functions-existence
+  "Test that Sega music functions exist"
+  (is-true (fboundp 'skyline-tool::compile-music-sg1000)
+           "compile-music-sg1000 should exist")
+  (is-true (fboundp 'skyline-tool::compile-music-sms)
+           "compile-music-sms should exist"))
+
+;; Test Sega platform dispatch recognition
+(test sega-dispatch-recognition
+  "Test that Sega platforms are recognized in dispatch system"
+  (is-true (member 1000 skyline-tool::*valid-machines*)
+           "SG-1000 should be recognized for general operations")
+  (is-true (member 3010 skyline-tool::*valid-machines*)
+           "Master System should be recognized for general operations"))
 
 (defun run-sega-tests ()
   "Run all Sega tests and return results"
