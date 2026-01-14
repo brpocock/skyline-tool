@@ -166,7 +166,7 @@
            #:detect-colecovision-tile-mode #:detect-sg1000-tile-mode #:detect-sms-tile-mode #:detect-sgg-tile-mode
            #:detect-c16-tile-mode #:detect-a2-tile-mode #:detect-a3-tile-mode #:detect-a2gs-tile-mode #:detect-bbc-tile-mode
            ;; Speech/phoneme compilation functions
-           #:compile-speech-7800 #:compile-speech-2600 #:compile-speech-2609
+           #:compile-speech-7800 #:compile-speech-2600 #:compile-speech-2609 #:speech-command-supported-p
            ;; Forth bytecode compilation functions
            #:compile-forth-6502 #:compile-forth-z80 #:compile-forth-cp1610
            ;; Native bytecode emission functions

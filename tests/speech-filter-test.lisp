@@ -17,38 +17,32 @@
   "Test that platform variable is accessible"
   (is-true (boundp 'skyline-tool::*machine*)))
 
-;; Test speech command registration logic
-(test speech-command-registration
-  "Test the logic for registering platform-specific speech commands"
-  ;; Test 7800 platform (should have SpeakJet, discard IntelliVoice)
+;; Test speech filtering logic by platform
+(test speech-filtering-by-platform
+  "Test that speech commands are filtered correctly based on platform"
+  ;; Test 7800 platform filtering
   (let ((skyline-tool::*machine* 7800))
-    (let ((dict (make-hash-table :test 'equal)))
-      (ecase skyline-tool::*machine*
-        (7800
-         (setf (gethash "SpeakJet[" dict) 'forth/speakjet-quote)
-         (setf (gethash "IntelliVoice[" dict) 'forth/discard-speech))
-         (is (eq (gethash "SpeakJet[" dict) 'forth/speakjet-quote))
-         (is (eq (gethash "IntelliVoice[" dict) 'forth/discard-speech)))
-        (2609
-         (setf (gethash "IntelliVoice[" dict) 'forth/intellivoice-quote)
-         (setf (gethash "SpeakJet[" dict) 'forth/discard-speech)
-         (is (eq (gethash "IntelliVoice[" dict) 'forth/intellivoice-quote))
-         (is (eq (gethash "SpeakJet[" dict) 'forth/discard-speech))))))
+    ;; For 7800, SpeakJet commands should be kept, IntelliVoice should be discarded
+    (is-true (skyline-tool::speech-command-supported-p "SpeakJet[")
+             "7800 should support SpeakJet speech commands")
+    (is-false (skyline-tool::speech-command-supported-p "IntelliVoice[")
+             "7800 should not support IntelliVoice speech commands"))
 
-  ;; Test 2609 platform (should have IntelliVoice, discard SpeakJet)
+  ;; Test Intellivision platform filtering
   (let ((skyline-tool::*machine* 2609))
-    (let ((dict (make-hash-table :test 'equal)))
-      (ecase skyline-tool::*machine*
-        (7800
-         (setf (gethash "SpeakJet[" dict) 'forth/speakjet-quote)
-         (setf (gethash "IntelliVoice[" dict) 'forth/discard-speech))
-         (is (eq (gethash "SpeakJet[" dict) 'forth/speakjet-quote))
-         (is (eq (gethash "IntelliVoice[" dict) 'forth/discard-speech)))
-        (2609
-         (setf (gethash "IntelliVoice[" dict) 'forth/intellivoice-quote)
-         (setf (gethash "SpeakJet[" dict) 'forth/discard-speech)
-         (is (eq (gethash "IntelliVoice[" dict) 'forth/intellivoice-quote))
-         (is (eq (gethash "SpeakJet[" dict) 'forth/discard-speech)))))))
+    ;; For Intellivision, IntelliVoice commands should be kept, SpeakJet should be discarded
+    (is-true (skyline-tool::speech-command-supported-p "IntelliVoice[")
+             "Intellivision should support IntelliVoice speech commands")
+    (is-false (skyline-tool::speech-command-supported-p "SpeakJet[")
+             "Intellivision should not support SpeakJet speech commands")))
+
+;; Test speech command filtering function exists
+(test speech-command-filtering-function
+  "Test that speech command filtering function exists"
+  (is-true (fboundp 'skyline-tool::speech-command-supported-p)
+           "speech-command-supported-p function should exist")
+  (is-true (functionp (symbol-function 'skyline-tool::speech-command-supported-p))
+           "speech-command-supported-p should be a function"))
 
 ;; Test discard speech function behavior
 (test discard-speech-function

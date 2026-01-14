@@ -100,6 +100,16 @@
         if (or (equal word "]SpeakJet") (equal word "]IntelliVoice"))
           do (return-from forth/discard-speech)))
 
+(defun speech-command-supported-p (command-start)
+  "Return true if the speech command type is supported on the current platform.
+
+COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
+  (ecase *machine*
+    (7800 (string= command-start "SpeakJet["))
+    (2609 (string= command-start "IntelliVoice["))
+    ;; For other platforms, no speech commands are supported
+    (t nil)))
+
 (defun forth/intellivoice-quote ()
   (loop for word = (read-forth-word)
         with string = (list)
