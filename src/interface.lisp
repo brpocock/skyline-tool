@@ -484,21 +484,24 @@ See COPYING for details
     (launcher)))
 
 (defun run-for-port (port-label &rest subcommand)
-  (setf *project.json*
-        (json:decode-json-from-source
-         (asdf:system-relative-pathname
-          :skyline-tool (make-pathname :directory '(:relative :up)
-                                       :name (format nil "Project.~a" port-label) :type "json" )))
-        *game-title* (cdr (assoc :*game *project.json*))
-        *part-number*  (cdr (assoc :*part-number *project.json*))
-        *studio* (cdr (assoc :*studio *project.json*))
-        *publisher* (cdr (assoc :*publisher *project.json*))
-        *machine* (cdr (assoc :*machine *project.json*))
-        *sound* (cdr (assoc :*sound *project.json*))
-        *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
-        *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
-        *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
-        *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+  (format *trace-output* "~&Loading project for port: ~a" port-label)
+  (let ((pathname (asdf:system-relative-pathname
+                   :skyline-tool (make-pathname :directory '(:relative :up)
+                                                :name (format nil "Project.~a" port-label) :type "json" ))))
+    (format *trace-output* "~&Project file: ~a" pathname)
+    (setf *project.json* (json:decode-json-from-source pathname))
+    (format *trace-output* "~&Loaded project.json keys: ~a" (mapcar #'car *project.json*))
+    (setf *game-title* (cdr (assoc :*game *project.json*))
+          *part-number*  (cdr (assoc :*part-number *project.json*))
+          *studio* (cdr (assoc :*studio *project.json*))
+          *publisher* (cdr (assoc :*publisher *project.json*))
+          *machine* (cdr (assoc :*machine *project.json*))
+          *sound* (cdr (assoc :*sound *project.json*))
+          *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
+          *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
+          *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
+          *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+    (format *trace-output* "~&Set *MACHINE* to: ~a" *machine*))
   (format *trace-output* "~&Running for port: ~a" port-label)
   (command (append '("port") subcommand)))
 
@@ -506,7 +509,7 @@ See COPYING for details
     (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (if *machine* (machine-long-name) "Unknown Machine"))
   (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
@@ -521,8 +524,12 @@ See COPYING for details
             (print-useful-help)
             (bye))))
       (destructuring-bind (self verb &rest invocation) argv
+        (format *trace-output* "~&Parsed command: self=~s, verb=~s, invocation=~s" self verb invocation)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
+                   ;; Set *MACHINE* for commands that require it
+                   (when (eq fun 'write-master-makefile)
+                     (setf *machine* 7800))
                    (apply fun (remove-if (curry #'string= self)
                                          invocation))
                    (fresh-line)))

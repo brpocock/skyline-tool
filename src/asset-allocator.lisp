@@ -433,22 +433,27 @@ Source/Generated/Assets/Blob.~a.s: Source/Blobs/~a.png\\~%~10tbin/skyline-tool
        (error "Blob generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-art-generation (pathname)
-  (let ((art-name (pathname-name pathname)))
+  (let* ((relative-path (subseq (enough-namestring pathname #p"Source/") 7))
+         (art-name (pathname-name pathname)))
     (ecase *machine*
       (200 ; Lynx
        (format t "~%
-Object/Assets/Art.~a.o: Source/Art/~a.art~%	bin/skyline-tool
+Object/Assets/Art.~a.o: Source/~a~%	bin/skyline-tool
 	mkdir -p Object/Assets
 	bin/skyline-tool compile-art-lynx $@ $<"
-               art-name art-name))
+               art-name relative-path))
       (7800 ; Atari 7800
-       (format t "~%
-Object/Assets/Art.~a.o: Source/Art/~a.art \\~{~%	~a \\~}~%	bin/skyline-tool
-	mkdir -p Object/Assets
-	bin/skyline-tool compile-art-7800 $@ $<"
-               art-name art-name
-               (mapcar (compose #'enough-namestring #'second)
-                       (read-7800-art-index pathname))))
+       (let ((png-paths (mapcar (lambda (png-entry)
+                                  (let ((mode (first png-entry))
+                                        (png-path (second png-entry)))
+                                    (format nil "../~a/~a.png"
+                                            (subseq relative-path 0 (position #\/ relative-path :from-end t))
+                                            (pathname-name png-path))))
+                                (read-7800-art-index pathname))))
+         (format t "~%Object/Assets/Art.~a.o: Source/~a" art-name relative-path)
+         (dolist (png-path png-paths)
+           (format t " \\~%	~a" png-path))
+         (format t "~%	bin/skyline-tool~%	mkdir -p Object/Assets~%	bin/skyline-tool compile-art-7800 $@ $<~%")))
       ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without art support
        (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
@@ -637,7 +642,8 @@ file ~a.s in bank $~(~2,'0x~)~
                                 :type nil
                                 :directory (pathname-directory
                                             wild-pathname)))
-           when (cl-fad:directory-pathname-p subdir)
+           when (and (null (pathname-name subdir))
+                     (null (pathname-type subdir)))
              collect (recursive-directory
                       (make-pathname :name :wild
                                      :type (pathname-type
@@ -1181,9 +1187,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
       (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
-  (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art")
-                                         :name :wild
-                                         :type "art")))
+  (dolist (art (recursive-directory (make-pathname :directory (list :relative "Source" "Art")
+                                                    :name :wild
+                                                    :type "art")))
     (write-art-generation art)))
 
 (defun write-makefile-for-tilesets ()
