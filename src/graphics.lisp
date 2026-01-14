@@ -1320,8 +1320,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             do (loop for y0 from 7 downto 0
                      do (format src-file "~t.byte %~0,8b" 0))))))
 
-<<<<<<< HEAD
-=======
 (defun compile-tileset-intv (png-file out-dir height width palette-pixels)
   (let ((out-file (merge-pathnames
                    (make-pathname :name
@@ -3434,4 +3432,3 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
->>>>>>> origin/intv

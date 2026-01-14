@@ -1215,4 +1215,4 @@ then use $f9 (512kiB) banking."
                  (t (format *error-output* "~&Can't understand “~a” in line ~d" line line-number))))))
   (fresh-line *error-output*))
 ;; Minifont punctuation characters for text processing
-(defparameter +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0")
+(define-constant +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0" :test #'string=)

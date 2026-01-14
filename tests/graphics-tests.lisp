@@ -1,22 +1,5 @@
 ;;; Phantasia SkylineTool/tests/graphics-tests.lisp
-<<<<<<< HEAD
-<<<<<<< HEAD
-;;;; Copyright © 2026 Interworldly Adventuring, LLC
-=======
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
->>>>>>> origin/lynx
-
-(defpackage :skyline-tool/graphics-test
-  (:use :cl :fiveam)
-  (:import-from :skyline-tool
-                #:compile-map
-                #:compile-art-7800
-                #:blob-rip-7800
-                #:blob-rip-7800-320ac)
-  (:export #:graphics-tests))
-=======
-;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
->>>>>>> origin/intv
 
 ;; Use the test package defined by the test runner
 (in-package :skyline-tool/test)
@@ -38,14 +21,14 @@
   (is-true (fboundp 'skyline-tool:blob-rip-7800-320ac)
            "blob-rip-7800-320ac should be available"))
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 ;; Test error handling for converters
 (test graphics-converter-error-handling
   "Test that graphics converters handle errors appropriately"
   ;; compile-map should signal error for missing files
-=======
-=======
+  (signals error (skyline-tool:compile-map "/nonexistent/file.tmx"))
+  ;; compile-art-7800 should signal error for missing files
+  (signals error (skyline-tool:compile-art-7800 "/nonexistent/file.png" "/tmp/test.o")))
+
 ;; Define missing functions for testing
 (defun stamp-is-monochrome-p (stamp)
   "Check if a stamp contains only monochrome values (0, 1)."
@@ -175,7 +158,6 @@
     ;; Simplified implementation
     list))
 
->>>>>>> origin/intv
 (defun make-test-png-data (width height)
   "Create mock PNG data for testing."
   (let ((pixels (make-array (list width height) :initial-element 0)))
@@ -396,7 +378,6 @@
   ;; Verify the function can be inspected (catches compilation issues)
   (is (functionp (symbol-function 'blob-rip-7800-320ac)))
   ;; Test that calling with invalid args produces expected errors, not syntax errors
->>>>>>> origin/lynx
   (signals error
     (skyline-tool:compile-map "/nonexistent/file.tmx"))
 
@@ -404,7 +385,6 @@
   (signals error
     (skyline-tool:compile-art-7800 "/nonexistent/input.txt" "/tmp/output.s"))
 
-<<<<<<< HEAD
   ;; blob-rip-7800 should signal error for missing files
   (signals error
     (skyline-tool:blob-rip-7800 "/nonexistent/file.png"))
@@ -452,7 +432,7 @@
   (finishes
     (skyline-tool:blob-rip-7800-320ac "/nonexistent/file.png")
     "blob-rip-7800-320ac call should not crash"))
-=======
+
 ;; Integration test for 320A/C BLOB generation (catches compilation failures)
 (test blob-rip-7800-320ac-integration-test
   "Integration test that would catch 320A/C compilation failures"
@@ -465,7 +445,6 @@
   (signals error (blob-rip-7800-320ac "/nonexistent.png")))
   ;; If this test passes, the function compiled successfully and basic error handling works
 
-<<<<<<< HEAD
 ;; Test PNG dispatch functionality
 (test dispatch-png-existence
   "Test that dispatch-png function exists and is callable"
@@ -485,6 +464,17 @@
   (is-true (fboundp 'compile-tileset) "compile-tileset should exist")
   (is-true (fboundp 'compile-font-command) "compile-font-command should exist")
   (is-true (fboundp 'compile-art-7800) "compile-art-7800 should exist"))
+
+;; Test BLOB dimension validation
+(test blob-dimension-validation
+  "Test BLOB dimension validation functions"
+  ;; Test valid dimensions
+  (is-true (check-height+width-for-blob 16 16 (make-array '(16 16) :initial-element 0)))
+  (is-true (check-height+width-for-blob 32 32 (make-array '(32 32) :initial-element 0)))
+
+  ;; Test invalid dimensions
+  (is-false (check-height+width-for-blob 15 16 (make-array '(15 16) :initial-element 0))) ; Height not multiple of 8
+  (is-false (check-height+width-for-blob 16 15 (make-array '(16 15) :initial-element 0)))) ; Width not multiple of 8
 
 ;; Test PNG dispatch logic for different image sizes
 (test dispatch-png-logic-test
@@ -575,7 +565,6 @@
   ;; Test ZX7 compression usage in Lynx functions
   ;; This is more of an integration test
   (is-true (fboundp 'zx7-compress) "ZX7 compression should be available"))
-=======
 ;; Test BLOB dimension validation
 (test blob-dimension-validation
   "Test BLOB dimension validation functions"
@@ -723,9 +712,7 @@
   (is (fboundp 'check-height+width-for-blob))
   (is (fboundp 'check-height+width-for-blob-320ac))
   (is (fboundp 'png-to-blob-pathname)))
->>>>>>> origin/intv
 
 (defun run-graphics-tests ()
   "Run all graphics tests and return results"
   (fiveam:run! 'graphics-tests))
->>>>>>> origin/lynx

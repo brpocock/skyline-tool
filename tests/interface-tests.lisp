@@ -1,6 +1,5 @@
 ;;; Phantasia SkylineTool/tests/interface-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
-<<<<<<< HEAD
 
 (defpackage :skyline-tool/interface-test
   (:use :cl :fiveam)
@@ -12,8 +11,6 @@
                 #:compile-script
                 #:compile-tileset)
   (:export #:interface-tests))
-=======
->>>>>>> origin/intv
 
 (in-package :skyline-tool/test)
 
@@ -85,15 +82,9 @@
   (let* ((invocation (symbol-value (find-symbol "*INVOCATION*" :skyline-tool)))
          (expected-commands '(:allocate-assets :blob-rip-7800 :compile-art-7800 :compile-forth
                              :compile-map :compile-script :compile-tileset :extract-tileset-palette
-<<<<<<< HEAD
-<<<<<<< HEAD
                              :labels-to-forth :labels-to-mame :patch-7800gd
-=======
                              :labels-to-forth :labels-to-mame :patch-7800gd :prepend-fundamental-mode
->>>>>>> origin/lynx
-=======
                              :labels-to-forth :labels-to-mame :patch-7800gd :prepend-fundamental-mode
->>>>>>> origin/intv
                              :push-7800gd :write-actor-prototypes :write-asset-ids :write-character-ids
                              :write-gimp-palettes :write-master-makefile :help :--help :-h)))
     (dolist (cmd expected-commands)
@@ -240,21 +231,15 @@
 ;; Test that interface functions have proper documentation
 (test interface-function-documentation
   "Test that interface functions have docstrings"
-<<<<<<< HEAD
-<<<<<<< HEAD
   (let ((functions-to-check '(blob-rip-7800 compile-script
                             allocate-assets compile-forth labels-to-forth
                             labels-to-mame write-actor-prototypes
-=======
   (let ((functions-to-check '(blob-rip-7800 compile-art-7800 compile-map compile-script compile-tileset
                             allocate-assets compile-forth extract-tileset-palette labels-to-forth
                             labels-to-mame prepend-fundamental-mode write-actor-prototypes
->>>>>>> origin/lynx
-=======
   (let ((functions-to-check '(blob-rip-7800 compile-art-7800 compile-map compile-script compile-tileset
                             allocate-assets compile-forth extract-tileset-palette labels-to-forth
                             labels-to-mame prepend-fundamental-mode write-actor-prototypes
->>>>>>> origin/intv
                             write-asset-ids write-character-ids write-gimp-palettes write-master-makefile)))
     (dolist (func-name functions-to-check)
       (let ((func (find-symbol (string-upcase (string func-name)) :skyline-tool)))

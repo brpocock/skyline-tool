@@ -1,5 +1,4 @@
 ;;; Phantasia SkylineTool/tests/music-tests.lisp
-<<<<<<< HEAD
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 (defpackage :skyline-tool/music-test
@@ -144,7 +143,6 @@
   (is-true (fboundp 'collect-midi-texts) "MIDI text collection should exist")
   (is-true (fboundp 'midi-track-notes-count) "Track note counting should exist")
   (is-true (fboundp 'midi-tracks-with-music) "Music track detection should exist"))
-=======
 ;;;; Copyright © 2025 Interworldly Adventuring, LLC
 
 (in-package :skyline-tool/test)
@@ -344,13 +342,10 @@
   (let ((result (skyline-tool::intellivoice-speak "HELLO")))
     (is-true (listp result) "Should return a list of phonemes")
     (is-true (> (length result) 0) "Should return non-empty phoneme list")))
->>>>>>> origin/intv
 
 (defun run-music-tests ()
   "Run all music tests and return results"
   (fiveam:run! 'music-tests))
-<<<<<<< HEAD
-=======
 
 (defun run-intv-asset-tests ()
   "Run all Intv asset converter tests and return results"
@@ -364,4 +359,3 @@
   "Run all IntelliVoice-related tests"
   (fiveam:run! 'intellivoice-phonemes)
   (fiveam:run! 'intellivoice-speech-synthesis))
->>>>>>> origin/intv

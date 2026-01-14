@@ -413,11 +413,8 @@ Supply a list of verb(s) to see detailed documentation"
  ————————————
 
 Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-<<<<<<< HEAD
 Copyright © 2024-2025 Interworldly Adventuring, LLC.
-=======
 Copyright © 2024-2026 Interworldly Adventuring, LLC.
->>>>>>> origin/lynx
 
 Some Rights Reserved. See COPYING for details.
 

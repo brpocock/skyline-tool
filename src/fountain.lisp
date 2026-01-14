@@ -2993,7 +2993,6 @@ PlaySong EXECUTE "  song))))
   (assert (< (length text) #x100) (text)
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
-<<<<<<< HEAD
   (format t "~% C\" ~a\"" (prepare-dialogue text))
   (when (speech-supported-p)
     (restart-case
@@ -3003,7 +3002,6 @@ PlaySong EXECUTE "  song))))
         :report "Reload the AtariVox (SpeakJet) dictionary"
         (reload-atarivox-dictionary)
         (fountain/write-speech text))))
-=======
   (restart-case
       (progn
         (format t "
@@ -3020,7 +3018,6 @@ PlaySong EXECUTE "  song))))
       (reload-atarivox-dictionary)
       (reload-intellivoice-dictionary)
       (fountain/write-speech text)))
->>>>>>> origin/intv
   (format t "~% ( ~s ) do-dialogue"
           text))
 
