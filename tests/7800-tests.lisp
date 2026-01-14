@@ -32,36 +32,36 @@
 ;; Test 7800 binary output validation
 (test 7800-binary-output-validation
   "Test that 7800 binary output is correctly formatted"
-  (uiop:with-temporary-file (:pathname temp-file :type "bin")
-    (let ((test-data '((#x01 #x02 #x03 #x04)  ; 4 bytes = page length
-                       (#x05 #x06 #x07 #x08))))
-      ;; Write test binary data
-      (skyline-tool::write-7800-binary temp-file test-data)
+  (let ((temp-file "Object/7800/tmp7800.dat")
+        (test-data '((#x01 #x02 #x03 #x04)  ; 4 bytes = page length
+                     (#x05 #x06 #x07 #x08))))
+    ;; Write test binary data
+    (skyline-tool::write-7800-binary temp-file test-data)
 
-      ;; Validate the output file exists and has correct size
-      (is-true (probe-file temp-file)
-               "Binary output file should be created")
+    ;; Validate the output file exists and has correct size
+    (is-true (probe-file temp-file)
+             "Binary output file should be created")
 
-      ;; Check file size: 2 pages * 256 bytes each = 512 bytes
-      (when (probe-file temp-file)
-        (is (= (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
-                 (file-length stream))
-               512)
-             "File should be exactly 512 bytes (2 pages × 256 bytes)")
+    ;; Check file size: 2 pages * 256 bytes each = 512 bytes
+    (when (probe-file temp-file)
+      (is (= (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+               (file-length stream))
+             512)
+           "File should be exactly 512 bytes (2 pages × 256 bytes)")
 
-        ;; Read and validate first page content
-        (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
-          (let ((first-page (loop for i from 0 to 3 collect (read-byte stream))))
-            (is (equal first-page '(1 2 3 4))
-                "First page should contain the correct data"))
+      ;; Read and validate first page content
+      (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+        (let ((first-page (loop for i from 0 to 3 collect (read-byte stream))))
+          (is (equal first-page '(1 2 3 4))
+              "First page should contain the correct data"))
 
-          ;; Skip padding bytes (252 bytes of zeros)
-          (dotimes (i 252) (read-byte stream))
+        ;; Skip padding bytes (252 bytes of zeros)
+        (dotimes (i 252) (read-byte stream))
 
-          ;; Read second page
-          (let ((second-page (loop for i from 0 to 3 collect (read-byte stream))))
-            (is (equal second-page '(5 6 7 8))
-                "Second page should contain the correct data")))))))
+        ;; Read second page
+        (let ((second-page (loop for i from 0 to 3 collect (read-byte stream))))
+          (is (equal second-page '(5 6 7 8))
+              "Second page should contain the correct data"))))))
 
 ;; Test 7800 music processing correctness
 (test 7800-music-processing-correctness
