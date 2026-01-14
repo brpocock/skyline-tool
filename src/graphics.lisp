@@ -1402,7 +1402,7 @@ All cards in the source image are output as one file."
                                   for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
                                   for word = (logior (ash byte-first 8) byte-second)
                                   do (format src-file "    DECLE   $~4,'0X~%" word))))))))
-        (format *trace-output* "~% Wrote GRAM card data to ~A." out-file)))))
+      (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))
 
 ;; Missing Intellivision functions that are exported
 (defun compile-art-intv (input-file output-file)

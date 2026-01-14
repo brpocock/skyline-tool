@@ -93,8 +93,10 @@
 (test 7800-parse-object-method
   "Test 7800 object parsing"
   (let ((test-pixels (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (finishes (skyline-tool::parse-7800-object :160a test-pixels :width 8 :height 8)
-              "parse-7800-object should handle 160A mode")
+    ;; Test 160A mode returns proper data structure
+    (let ((result (skyline-tool::parse-7800-object :160a test-pixels :width 8 :height 8)))
+      (is (listp result) "parse-7800-object :160a should return a list")
+      (is (> (length result) 0) "parse-7800-object should return non-empty result"))
 
     ;; Test with invalid mode should signal error
     (signals error (skyline-tool::parse-7800-object :invalid-mode test-pixels :width 8 :height 8)
@@ -115,8 +117,7 @@
   (let ((test-file "/tmp/test-7800-data.bin")
         (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
     ;; Write test data
-    (finishes (skyline-tool::write-7800-binary test-file test-data)
-              "write-7800-binary should write data without error")
+    (skyline-tool::write-7800-binary test-file test-data)
 
     ;; Verify file was created and has expected size
     (is-true (probe-file test-file)
@@ -135,12 +136,14 @@
 (test 7800-music-compilation-basic
   "Test basic 7800 music compilation functionality"
   ;; Test array<-7800-tia-notes-list
-  (finishes (skyline-tool::array<-7800-tia-notes-list '((60 100 480) (62 100 480)) :ntsc)
-            "array<-7800-tia-notes-list should process note data")
+  (let ((result (skyline-tool::array<-7800-tia-notes-list '((60 100 480) (62 100 480)) :ntsc)))
+    (is (vectorp result) "array<-7800-tia-notes-list should return a vector")
+    (is (= (length result) 2) "vector should contain both input notes"))
 
   ;; Test midi->7800-tia with mock data
-  (finishes (skyline-tool::midi->7800-tia '((60 100 480)) :ntsc)
-            "midi->7800-tia should process MIDI-like data")
+  (let ((result (skyline-tool::midi->7800-tia '((60 100 480)) :ntsc)))
+    (is (arrayp result) "midi->7800-tia should return an array")
+    (is (= (length result) 2) "array should have 2 voices (TIA channels)"))
 
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
   (signals error (skyline-tool::compile-music-7800 "/tmp/test.s" "/nonexistent.mid" :tia)
