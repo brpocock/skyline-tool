@@ -600,8 +600,8 @@ INPUT & OUTPUT pathnames can be given."
   (let ((ods-path (merge-pathnames "Source/Tables/EquipmentIndex.ods" (project-root))))
     (format *trace-output* "~&Reading equipment attributes from ~a…" (enough-namestring ods-path))
     (finish-output *trace-output*)
-    (let ((sheet (read-ods-into-lists ods-path)))
-      (let* ((equipment-stats (remove-if-not (lambda (record)
+    (let* ((sheet (read-ods-into-lists ods-path))
+           (equipment-stats (remove-if-not (lambda (record)
                                              (loop for (key value) on record
                                                    by #'cddr
                                                    unless (str:blankp value)
