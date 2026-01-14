@@ -3380,3 +3380,20 @@ Columns: ~d
                           (+ 3 rel)
                           (- i 12)))
     (t nil)))
+
+;; Missing Intellivision functions that are exported
+(defun compile-art-intv (input-file output-file)
+  "Compile Intellivision art assets"
+  (error "Intellivision art compilation not yet implemented"))
+
+(defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
+  "Compile Intellivision tileset"
+  (error "Intellivision tileset compilation not yet implemented"))
+
+(defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
+  "Compile Intellivision sprite"
+  (error "Intellivision sprite compilation not yet implemented"))
+
+(defun assemble-intv-rom (source-files output-file)
+  "Assemble Intellivision ROM"
+  (error "Intellivision ROM assembly not yet implemented"))
