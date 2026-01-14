@@ -304,8 +304,6 @@
            "compile-gram-intv should exist")
   (is-true (fboundp 'skyline-tool::compile-art-intv)
            "compile-art-intv should exist")
-  (is-true (fboundp 'skyline-tool::compile-intv-tileset)
-           "compile-intv-tileset should exist")
   (is-true (fboundp 'skyline-tool::compile-intv-sprite)
            "compile-intv-sprite should exist")
 
@@ -325,8 +323,6 @@
   ;; Graphics functions should signal errors for missing implementations
   (signals error (skyline-tool::compile-art-intv "/nonexistent.in" "/tmp/test.out")
            "compile-art-intv should signal error (not implemented)")
-  (signals error (skyline-tool::compile-intv-tileset "/nonexistent.png" "/tmp/test.out")
-           "compile-intv-tileset should signal error (not implemented)")
   (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png" "/tmp/test.out")
            "compile-intv-sprite should signal error (not implemented)")
 
