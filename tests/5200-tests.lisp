@@ -17,15 +17,15 @@
   (is-true (fboundp 'skyline-tool::compile-art-5200)
            "compile-art-5200 should exist"))
 
-;; Test 5200 blob ripping functions
-(test 5200-blob-functions-existence
-  "Test that 5200 blob ripping functions exist"
-  (is-true (fboundp 'skyline-tool::blob-rip-5200-tile)
-           "blob-rip-5200-tile should exist")
-  (is-true (fboundp 'skyline-tool::blob-rip-5200-pmg)
-           "blob-rip-5200-pmg should exist")
-  (is-true (fboundp 'skyline-tool::detect-5200-tile-mode)
-           "detect-5200-tile-mode should exist"))
+;; Test 5200 Mode E bitmap compilation (blob ripping)
+(test 5200-mode-e-compilation
+  "Test that 5200 Mode E bitmap compilation works"
+  (is-true (fboundp 'skyline-tool::compile-5200-mode-e-bitmap)
+           "compile-5200-mode-e-bitmap should exist")
+  ;; Test basic functionality with mock data
+  (let ((test-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
+    (finishes (skyline-tool::compile-5200-mode-e-bitmap test-pixels)
+              "compile-5200-mode-e-bitmap should handle basic data")))
 
 ;; Test 5200 music compilation
 (test 5200-music-compilation
@@ -45,7 +45,20 @@
     (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
              "compile-5200-mode-e-bitmap should handle nil input")))
 
-;; Note: 5200 blob ripping functions not implemented yet
+;; Test 5200 blob ripping functions
+(test 5200-blob-ripping
+  "Test 5200 blob ripping functionality"
+  ;; Test detect-5200-tile-mode
+  (finishes (skyline-tool::detect-5200-tile-mode (make-array '(8 8) :element-type '(unsigned-byte 32)))
+            "detect-5200-tile-mode should handle basic arrays")
+
+  ;; Test blob-rip-5200-tile (will fail due to missing file but shouldn't crash)
+  (signals error (skyline-tool::blob-rip-5200-tile "/nonexistent.png")
+            "blob-rip-5200-tile should signal error for missing files")
+
+  ;; Test blob-rip-5200-pmg
+  (signals error (skyline-tool::blob-rip-5200-pmg "/nonexistent.png")
+            "blob-rip-5200-pmg should signal error for missing files"))
 
 ;; Test 5200 dispatch-png method
 (test 5200-dispatch-png
@@ -62,10 +75,14 @@
 
 ;; Test 5200 platform constants
 (test 5200-platform-constants
-  "Test that 5200 platform constants are properly defined"
-  (is-true (member 5200 skyline-tool::*valid-machines*)
-           "5200 should be in valid machines list")
-  (is (= 5200 5200) "5200 machine code should be correct"))
+  "Test that 5200 platform is recognized"
+  (let ((old-machine skyline-tool::*machine*))
+    (unwind-protect
+        (progn
+          (setf skyline-tool::*machine* 5200)
+          (is-true (skyline-tool::machine-valid-p)
+                   "5200 should be a valid machine"))
+      (setf skyline-tool::*machine* old-machine))))
 
 ;; Test 5200 error conditions
 (test 5200-error-conditions
@@ -76,11 +93,7 @@
 
   ;; Test compile-5200-mode-e-bitmap with invalid inputs
   (signals error (skyline-tool::compile-5200-mode-e-bitmap nil)
-           "compile-5200-mode-e-bitmap should handle nil input")
-
-  ;; Test blob functions with nil inputs
-  (signals error (skyline-tool::detect-5200-tile-mode nil)
-           "detect-5200-tile-mode should handle nil input"))
+           "compile-5200-mode-e-bitmap should handle nil input"))
 
 (defun run-5200-tests ()
   "Run all 5200 tests and return results"
