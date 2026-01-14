@@ -191,10 +191,7 @@
 
 (in-package :skyline-tool)
 
-(defvar *project.json*
-  '#.(json:decode-json-from-source
-      (asdf:system-relative-pathname
-       :skyline-tool (make-pathname :directory '(:relative :up) :name "Project" :type "json" ))))
+(defvar *project.json* nil)
 
 (defun project-root ()
   "Return the project root directory as a pathname"
