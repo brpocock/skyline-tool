@@ -926,18 +926,6 @@ inventory_end = *
   (assert (and (machine-short-name) (machine-long-name))
           (*machine*)))
 
-;; 5200 hardware constants
-(defconstant +5200-gtia-base+ #xc000)
-(defconstant +5200-pokey-base+ #xe800)
-(defconstant +5200-antic-base+ #xd400)
-(defconstant +5200-ram-start+ #x0000)
-(defconstant +5200-ram-end+ #x3fff)
-(defconstant +5200-cart-start+ #x4000)
-(defconstant +5200-cart-end+ #xbfff)
-(defconstant +5200-max-pmg-players+ 5)
-(defconstant +5200-antic-mode-d+e-colors+ 4)
-
-
 
 
 (defun truthy (s)
