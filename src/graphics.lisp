@@ -1421,8 +1421,76 @@ compile-intv-sprite for MOB sprites instead."
   (compile-gram-intv png-file output-dir :height height :width width :palette-pixels palette-pixels)))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision sprite"
-  (error "Intellivision sprite compilation not yet implemented"))
+  "Compile Intellivision sprite (MOB data)\n\nIn Intellivision terminology, sprites are called MOBs (Moving Object Blocks).\nThis function compiles sprite graphics into MOB data format, similar to GRAM\ncompilation but for sprites that can be positioned anywhere on screen."
+  (check-type png-file (or pathname string))
+  (check-type out-dir (or pathname string))
+  (let* ((palette-pixels (or palette-pixels
+                              (let* ((png (png-read:read-png-file png-file))
+                                     (png-height (png-read:height png))
+                                     (png-width (png-read:width png))
+                                     (α (png-read:transparency png)))
+                                (png->palette png-height png-width
+                                             (png-read:image-data png)
+                                             α))))
+         (array-width (array-dimension palette-pixels 0))
+         (array-height (array-dimension palette-pixels 1))
+         (width (floor (or width array-width)))
+         (height (floor (or height array-height))))
+    ;; Validate dimensions: ensure at least one 8×8 sprite
+    (assert (>= width 8) (width) "Width must be at least 8 (for at least one sprite), got ~D" width)
+    (assert (>= height 8) (height) "Height must be at least 8 (for at least one sprite), got ~D" height)
+    ;; Validate dimensions are within array bounds
+    (assert (<= width array-width)
+            (width palette-pixels)
+            "Width ~D exceeds array width ~D"
+            width array-width)
+    (assert (<= height array-height)
+            (height palette-pixels)
+            "Height ~D exceeds array height ~D"
+            height array-height)
+    ;; Check if monochrome (only black=0 and white=7 palette indices)
+    (let ((colors (image-colours palette-pixels height width)))
+      (unless (subsetp colors '(0 7) :test '=)
+        (warn "Sprite image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
+              png-file colors))
+      (let ((out-file (merge-pathnames
+                       (make-pathname :name
+                                      (pathname-name png-file)
+                                      :type "s")
+                       out-dir))
+            (sprites-across (floor (/ width 8)))
+            (sprites-down (floor (/ height 8))))
+        (ensure-directories-exist (directory-namestring out-file))
+        (with-output-to-file (src-file out-file :if-exists :supersede)
+          (format src-file ";;; MOB sprites compiled from ~A
+;;; Generated for Intellivision
+;;; Each sprite: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
+                  png-file)
+          ;; Process each 8×8 sprite
+          (loop for sprite-y from 0 below sprites-down
+                do (loop for sprite-x from 0 below sprites-across
+                         for sprite-index = (+ (* sprite-y sprites-across) sprite-x)
+                         do (let ((start-x (* sprite-x 8))
+                                  (start-y (* sprite-y 8))
+                                  (sprite-bytes '()))
+                              ;; Extract 8 bytes (one per row)
+                              (loop for y from 0 below 8
+                                    for byte = 0
+                                    do (loop for x from 0 below 8
+                                             for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
+                                             ;; White (palette index 7) = bit 1, black (0) or other = bit 0
+                                             do (when (= palette-index 7)
+                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
+                                    (push byte sprite-bytes))
+                              ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per sprite)
+                              ;; Big-endian: most significant byte first
+                              (let ((bytes-list (reverse sprite-bytes)))
+                                (loop for i from 0 below 4
+                                      for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
+                                      for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
+                                      for word = (logior (ash byte-first 8) byte-second)
+                                      do (format src-file "    DECLE   $~4,'0X~%" word)))))))
+        (format *trace-output* "~% Wrote MOB sprite data to ~A." out-file))))
 
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
@@ -3390,6 +3458,5 @@ Columns: ~d
   (compile-gram-intv png-file output-dir :height height :width width :palette-pixels palette-pixels)))
 
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision sprite"
-  (error "Intellivision sprite compilation not yet implemented"))
+  "Compile Intellivision sprite (MOB data)\n\nIn Intellivision terminology, sprites are called MOBs (Moving Object Blocks).\nThis function compiles sprite graphics into MOB data format, similar to GRAM\ncompilation but for sprites that can be positioned anywhere on screen."
 
