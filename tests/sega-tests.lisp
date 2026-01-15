@@ -34,11 +34,15 @@
 (test sega-music-compilation
   "Test Sega music compilation functions"
   ;; Test SG-1000 music compilation
-  (signals error (skyline-tool::compile-music-sg1000 "/tmp/test.s" "/nonexistent.mid")
+  (signals error (skyline-tool::compile-music-sg1000
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   "/nonexistent.mid")
            "SG-1000 music compilation should signal error for missing MIDI file")
 
   ;; Test Master System music compilation
-  (signals error (skyline-tool::compile-music-sms "/tmp/test.s" "/nonexistent.mid")
+  (signals error (skyline-tool::compile-music-sms
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   "/nonexistent.mid")
            "Master System music compilation should signal error for missing MIDI file"))
 
 ;; Test Sega music function existence

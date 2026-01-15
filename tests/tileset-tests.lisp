@@ -18,9 +18,13 @@
 ;; Test extract-tileset-palette with invalid input
 (test extract-tileset-palette-invalid-input
   "Test extract-tileset-palette handles invalid input gracefully"
-  (signals error (skyline-tool:extract-tileset-palette "/nonexistent/file.tsx" "/tmp/test.out"))
-  (signals error (skyline-tool:extract-tileset-palette nil "/tmp/test.out"))
-  (signals error (skyline-tool:extract-tileset-palette "/tmp/test.tsx" nil)))
+  (signals error (skyline-tool:extract-tileset-palette "/nonexistent/file.tsx"
+                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))))
+  (signals error (skyline-tool:extract-tileset-palette nil
+                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))))
+  (signals error (skyline-tool:extract-tileset-palette
+                   (format nil "Object/~a/test-~x.tsx" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   nil)))
 
 ;; Create a mock tileset structure for testing
 (defun create-mock-tileset (width height)

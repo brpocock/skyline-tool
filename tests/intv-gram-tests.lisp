@@ -321,17 +321,23 @@
 (test intv-function-error-handling
   "Test that Intellivision functions handle errors appropriately"
   ;; Graphics functions should signal errors for missing implementations
-  (signals error (skyline-tool::compile-art-intv "/nonexistent.in" "/tmp/test.out")
+  (signals error (skyline-tool::compile-art-intv "/nonexistent.in"
+                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
            "compile-art-intv should signal error (not implemented)")
   ;; Sprite function is now implemented, so test with proper machine setting
   (let ((skyline-tool::*machine* 2609))
-    (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png" "/tmp/test.out")
+    (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png"
+                     (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
              "compile-intv-sprite should signal error for nonexistent file"))
 
   ;; Music functions
-  (signals error (skyline-tool::compile-music-2609 "/tmp/test.s" "/nonexistent.mid" :ay-3-8910)
+  (signals error (skyline-tool::compile-music-2609
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   "/nonexistent.mid" :ay-3-8910)
            "compile-music-2609 should signal error for missing MIDI file")
-  (signals error (skyline-tool::compile-speech-2609 "/tmp/test.s" "/nonexistent.txt")
+  (signals error (skyline-tool::compile-speech-2609
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   "/nonexistent.txt")
            "compile-speech-2609 should signal error (not implemented)"))
 
 ;; Test Intellivision dispatch functionality

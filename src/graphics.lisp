@@ -340,9 +340,9 @@
   "Get the names of the colors for *MACHINE*"
   (if (null *machine*)
       nil
-      (ecase *machine*
-        (20 (subseq +c64-names+ 0 7))
-        ((64 128) +c64-names+)
+  (ecase *machine*
+    (20 (subseq +c64-names+ 0 7))
+    ((64 128) +c64-names+)
         (2609 +intv-color-names+))))
 
 (defun square (n)
@@ -1369,15 +1369,15 @@ All cards in the source image are output as one file."
       (unless (subsetp colors '(0 7) :test '=)
         (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
               png-file colors))
-      (let ((out-file (merge-pathnames
-                       (make-pathname :name
+  (let ((out-file (merge-pathnames
+                   (make-pathname :name
                                       (pathname-name png-file)
-                                      :type "s")
-                       out-dir))
+                                  :type "s")
+                   out-dir))
             (cards-across (floor (/ width 8)))
             (cards-down (floor (/ height 8))))
         (ensure-directories-exist (directory-namestring out-file))
-        (with-output-to-file (src-file out-file :if-exists :supersede)
+    (with-output-to-file (src-file out-file :if-exists :supersede)
           (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
                   png-file)
           ;; Process each 8×8 card
@@ -1388,10 +1388,10 @@ All cards in the source image are output as one file."
                                   (start-y (* card-y 8))
                                   (card-bytes '()))
                               ;; Extract 8 bytes (one per row)
-                              (loop for y from 0 below 8
+                          (loop for y from 0 below 8
                                     for byte = 0
-                                    do (loop for x from 0 below 8
-                                             for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
+                                do (loop for x from 0 below 8
+                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
                                              ;; White (palette index 7) = bit 1, black (0) or other = bit 0
                                              do (when (= palette-index 7)
                                                   (setf byte (logior byte (ash 1 (- 7 x))))))
@@ -2309,11 +2309,44 @@ Used internally by BLOB ripping for color stamp conversion."
 (defun read-7800-art-index (index-in)
   (let ((png-list (list)))
     (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
+        (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
+                                            line)))
+                     (cond
+                       ((emptyp line) nil)
+                       ((char= #\# (char line 0)) nil)
+                   (t (destructuring-bind (png-name mode cell-size)
+                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                                  (destructuring-bind (width-px height-px)
+                                      (split-sequence #\× cell-size :test #'char=)
+                          (push (list (make-keyword mode)
+                                                  (make-pathname :defaults index-in
+                                                                 :name (subseq png-name 0
+                                                                               (position #\. png-name :from-end t))
+                                                                 :type "png")
+                                      (parse-integer width-px)
+                                      (parse-integer height-px))
+                                png-list))))))))
+    (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
+    (reverse png-list)))
+
+(defun compile-art-7800 (index-out index-in)
+  (let ((*machine* 7800))
+        (write-7800-binary index-out
+                           (interleave-7800-bytes
+                            (parse-into-7800-bytes
+                         (read-7800-art-index index-in))))))
+
+(defun read-nes-art-index (index-in)
+  "Read NES art index file and return list of (png-name mode width-px height-px)"
+  (let ((png-list (list)))
+    (format *trace-output* "~&~A: reading NES art index …" (enough-namestring index-in))
     (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
             while (and line (plusp (length line)) (not (char= #\; (char line 0))))
-            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
-                                        line)))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page) line)))
                  (cond
                    ((emptyp line) nil)
                    ((char= #\# (char line 0)) nil)
@@ -2332,12 +2365,110 @@ Used internally by BLOB ripping for color stamp conversion."
     (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
     (reverse png-list)))
 
-(defun compile-art-7800 (index-out index-in)
-  (let ((*machine* 7800))
-    (write-7800-binary index-out
-                       (interleave-7800-bytes
-                        (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))))
+(defun parse-into-nes-chr-data (art-index)
+  "Parse PNG files into NES CHR ROM data (8x8 tiles with 2-bit color)"
+  (let ((chr-data (list)))
+    (dolist (art-item art-index)
+      (destructuring-bind (mode png-name width-px height-px) art-item
+        (format *trace-output* "~&~A: parsing NES CHR data in mode ~A … "
+                png-name mode)
+        (let* ((png (png-read:read-png-file png-name))
+               (height (png-read:height png))
+               (width (png-read:width png))
+               (palette-pixels (png->palette height width
+                                             (png-read:image-data png)
+                                             (png-read:transparency png)))
+               (palette (grab-nes-palette mode palette-pixels)))
+          ;; NES CHR ROM format: 8x8 tiles, 2 bits per pixel
+          (let ((tile-data (parse-nes-chr-tiles palette-pixels width-px height-px palette)))
+            (setf chr-data (append chr-data tile-data))))
+        (format *trace-output* " done.")))
+    chr-data))
+
+(defun extract-palette-from-bottom (palette-pixels)
+  "Extract palette colors from the bottom row of the image"
+  (let* ((height (array-dimension palette-pixels 0))
+         (width (array-dimension palette-pixels 1))
+         (last-row (1- height))
+         (palette-colors (list)))
+    ;; Extract colors from the bottom row
+    (dotimes (x width)
+      (let ((color (aref palette-pixels last-row x)))
+        (unless (member color palette-colors :test #'equal)
+          (push color palette-colors))))
+    (reverse palette-colors)))
+
+(defun grab-nes-palette (mode palette-pixels)
+  "Extract NES palette from the bottom of the image"
+  ;; NES expects 4 palettes, each with 4 colors (background + 3 sprite colors)
+  ;; The palette key at the bottom shows groups of 3 colors, with background repeated
+  (let* ((height (array-dimension palette-pixels 0))
+         (width (array-dimension palette-pixels 1))
+         (last-row (1- height))
+         (palette-groups (list)))
+    ;; Extract palette groups from the bottom row
+    ;; Each group of 3 colors becomes 4 colors (background repeated)
+    (dotimes (x width)
+      (let ((color (aref palette-pixels last-row x)))
+        (unless (member color palette-groups :test #'equal)
+          (push color palette-groups))))
+    ;; NES needs 4 palettes, each with 4 colors
+    ;; For simplicity, create 4 palettes using the available colors
+    (let ((available-colors (reverse palette-groups)))
+      (if (>= (length available-colors) 4)
+          ;; Use first 4 colors as palette entries
+          (list (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
+                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
+                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
+                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors)))
+          ;; Pad with duplicates if fewer than 4 colors
+          (let ((padded-colors (append available-colors
+                                      (make-list (- 4 (length available-colors))
+                                               :initial-element (or (first available-colors) 0)))))
+            (make-list 4 :initial-element padded-colors))))))
+
+(defun parse-nes-chr-tiles (palette-pixels width-px height-px palette)
+  "Convert palette pixels to NES CHR ROM format (8x8 tiles, 2 bits per pixel)"
+  (let ((tiles (list))
+        (tile-width (/ width-px 8))
+        (tile-height (/ height-px 8)))
+    ;; Create color index mapping (palette position -> NES color index 0-3)
+    (let ((color-map (make-hash-table :test #'equal)))
+      (dotimes (i (length palette))
+        (setf (gethash (nth i palette) color-map) i))
+      ;; Process each 8x8 tile
+      (dotimes (ty tile-height)
+        (dotimes (tx tile-width)
+          (let ((tile-bytes (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0)))
+            ;; Convert 8x8 pixels to 16 bytes (2 bitplanes)
+            (dotimes (y 8)
+              (dotimes (x 8)
+                (let* ((px (+ (* tx 8) x))
+                       (py (+ (* ty 8) y))
+                       (palette-color (if (and (< px width-px) (< py height-px))
+                                        (aref palette-pixels py px)
+                                        (first palette)))  ; default to first palette color
+                       (color-index (gethash palette-color color-map 0))  ; map to 0-3
+                       (bit0 (if (logbitp 0 color-index) 1 0))
+                       (bit1 (if (logbitp 1 color-index) 1 0)))
+                  ;; Set bits in the two bitplanes (LSB first for NES)
+                  (when (= bit0 1)
+                    (setf (aref tile-bytes y)
+                          (logior (aref tile-bytes y) (ash 1 (- 7 x)))))
+                  (when (= bit1 1)
+                    (setf (aref tile-bytes (+ y 8))
+                          (logior (aref tile-bytes (+ y 8)) (ash 1 (- 7 x))))))))
+            (push tile-bytes tiles)))))
+    (nreverse tiles)))
+
+(defun write-nes-chr-rom (index-out chr-data)
+  "Write NES CHR ROM data to binary file"
+  (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
+                           :if-exists :supersede)
+    (dolist (tile chr-data)
+      (dotimes (i 16)
+        (write-byte (aref tile i) out))))
+  (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 16) index-out))
 
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.
@@ -3542,17 +3673,286 @@ treating non-black/non-white pixels as black"
   "Compile art assets for Atari 5200 platform"
   (error "Atari 5200 art compilation not yet implemented"))
 
+(defun read-colecovision-art-index (index-in)
+  "Read ColecoVision art index file and return list of (png-name mode width-px height-px)"
+  (let ((png-list (list)))
+    (format *trace-output* "~&~A: reading ColecoVision art index …" (enough-namestring index-in))
+    (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page) line)))
+                 (cond
+                   ((emptyp line) nil)
+                   ((char= #\# (char line 0)) nil)
+                   (t (destructuring-bind (png-name mode cell-size)
+                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                        (destructuring-bind (width-px height-px)
+                            (split-sequence #\× cell-size :test #'char=)
+                          (push (list (make-keyword mode)
+                                      (make-pathname :defaults index-in
+                                                     :name (subseq png-name 0
+                                                                   (position #\. png-name :from-end t))
+                                                     :type "png")
+                                      (parse-integer width-px)
+                                      (parse-integer height-px))
+                                png-list))))))))
+    (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
+    (reverse png-list)))
+
+(defun parse-into-colecovision-chr-data (art-index)
+  "Parse PNG files into ColecoVision CHR data (8x8 tiles)"
+  (let ((chr-data (list)))
+    (dolist (art-item art-index)
+      (destructuring-bind (mode png-name width-px height-px) art-item
+        (format *trace-output* "~&~A: parsing ColecoVision CHR data … "
+                png-name)
+        (let* ((png (png-read:read-png-file png-name))
+               (height (png-read:height png))
+               (width (png-read:width png))
+               (palette-pixels (png->palette height width
+                                             (png-read:image-data png)
+                                             (png-read:transparency png))))
+          ;; ColecoVision CHR format: similar to NES but monochrome or limited colors
+          (let ((tile-data (parse-colecovision-chr-tiles palette-pixels width-px height-px)))
+            (setf chr-data (append chr-data tile-data))))
+        (format *trace-output* " done.")))
+    chr-data))
+
+(defun parse-colecovision-chr-tiles (palette-pixels width-px height-px)
+  "Convert palette pixels to ColecoVision CHR ROM format (8x8 tiles)"
+  (let ((tiles (list))
+        (tile-width (/ width-px 8))
+        (tile-height (/ height-px 8)))
+    ;; Process each 8x8 tile
+    (dotimes (ty tile-height)
+      (dotimes (tx tile-width)
+        (let ((tile-bytes (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0)))
+          ;; ColecoVision uses 1-bit per pixel for CHR (monochrome)
+          (dotimes (y 8)
+            (dotimes (x 8)
+              (let* ((px (+ (* tx 8) x))
+                     (py (+ (* ty 8) y))
+                     (pixel-value (if (and (< px width-px) (< py height-px))
+                                    (aref palette-pixels py px)
+                                    0)))
+                ;; For ColecoVision, treat any non-zero as 1 (monochrome)
+                (when (> pixel-value 0)
+                  (setf (aref tile-bytes y)
+                        (logior (aref tile-bytes y) (ash 1 (- 7 x))))))))
+          (push tile-bytes tiles))))
+    (nreverse tiles)))
+
+(defun write-colecovision-chr-rom (index-out chr-data)
+  "Write ColecoVision CHR ROM data to binary file"
+  (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
+                           :if-exists :supersede)
+    (dolist (tile chr-data)
+      (dotimes (i 8)
+        (write-byte (aref tile i) out))))
+  (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 8) index-out))
+
 (defun compile-art-colecovision (index-out index-in)
   "Compile art assets for ColecoVision platform"
-  (error "ColecoVision art compilation not yet implemented"))
+  (let ((*machine* 264))
+    (write-colecovision-chr-rom index-out
+                                (parse-into-colecovision-chr-data
+                                 (read-colecovision-art-index index-in)))))
+
+(defun compile-art-nes (index-out index-in)
+  "Compile art assets for Nintendo Entertainment System platform"
+  (let ((*machine* 3))
+    (write-nes-chr-rom index-out
+                       (parse-into-nes-chr-data
+                        (read-nes-art-index index-in)))))
+
+(defun read-snes-art-index (index-in)
+  "Read SNES art index file and return list of (png-name mode width-px height-px)"
+  (let ((png-list (list)))
+    (format *trace-output* "~&~A: reading SNES art index …" (enough-namestring index-in))
+    (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page) line)))
+                 (cond
+                   ((emptyp line) nil)
+                   ((char= #\# (char line 0)) nil)
+                   (t (destructuring-bind (png-name mode cell-size)
+                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                        (destructuring-bind (width-px height-px)
+                            (split-sequence #\× cell-size :test #'char=)
+                          (push (list (make-keyword mode)
+                                      (make-pathname :defaults index-in
+                                                     :name (subseq png-name 0
+                                                                   (position #\. png-name :from-end t))
+                                                     :type "png")
+                                      (parse-integer width-px)
+                                      (parse-integer height-px))
+                                png-list))))))))
+    (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
+    (reverse png-list)))
+
+(defun parse-into-snes-chr-data (art-index)
+  "Parse PNG files into SNES CHR data (8x8 tiles with various bit depths)"
+  (let ((chr-data (list)))
+    (dolist (art-item art-index)
+      (destructuring-bind (mode png-name width-px height-px) art-item
+        (format *trace-output* "~&~A: parsing SNES CHR data … "
+                png-name)
+        (let* ((png (png-read:read-png-file png-name))
+               (height (png-read:height png))
+               (width (png-read:width png))
+               (palette-pixels (png->palette height width
+                                             (png-read:image-data png)
+                                             (png-read:transparency png))))
+          ;; SNES CHR format: 8x8 tiles, various bit depths (2, 4, 8)
+          (let ((tile-data (parse-snes-chr-tiles palette-pixels width-px height-px mode)))
+            (setf chr-data (append chr-data tile-data))))
+        (format *trace-output* " done.")))
+    chr-data))
+
+(defun parse-snes-chr-tiles (palette-pixels width-px height-px mode)
+  "Convert palette pixels to SNES CHR ROM format (8x8 tiles, various bit depths)"
+  (let ((tiles (list))
+        (tile-width (/ width-px 8))
+        (tile-height (/ height-px 8))
+        (bits-per-pixel (ecase mode
+                          (:2bpp 2)
+                          (:4bpp 4)
+                          (:8bpp 8))))
+    ;; Process each 8x8 tile
+    (dotimes (ty tile-height)
+      (dotimes (tx tile-width)
+        (let ((tile-bytes (make-array (* bits-per-pixel 8) :element-type '(unsigned-byte 8) :initial-element 0)))
+          ;; SNES uses interleaved bitplanes
+          (dotimes (y 8)
+            (dotimes (x 8)
+              (let* ((px (+ (* tx 8) x))
+                     (py (+ (* ty 8) y))
+                     (color-index (if (and (< px width-px) (< py height-px))
+                                    (mod (aref palette-pixels py px) (ash 1 bits-per-pixel))
+                                    0)))
+                ;; Set bits in the bitplanes
+                (dotimes (bit  bits-per-pixel)
+                  (when (logbitp bit color-index)
+                    (let ((byte-index (+ (* bit 8) y)))
+                      (setf (aref tile-bytes byte-index)
+                            (logior (aref tile-bytes byte-index) (ash 1 (- 7 x))))))))))
+          (push tile-bytes tiles))))
+    (nreverse tiles)))
+
+(defun write-snes-chr-rom (index-out chr-data)
+  "Write SNES CHR ROM data to binary file"
+  (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
+                           :if-exists :supersede)
+    (dolist (tile chr-data)
+      (dotimes (i (length tile))
+        (write-byte (aref tile i) out))))
+  (format *trace-output* "~&Wrote ~:D bytes to ~A"
+          (reduce #'+ (mapcar #'length chr-data)) index-out))
 
 (defun compile-art-snes (index-out index-in)
   "Compile art assets for Super Nintendo platform"
-  (error "SNES art compilation not yet implemented"))
+  (let ((*machine* 88))
+    (write-snes-chr-rom index-out
+                        (parse-into-snes-chr-data
+                         (read-snes-art-index index-in)))))
 
-(defun blob-rip-5200-tile (png-file)
-  "Extract tile data from PNG for Atari 5200"
-  (error "Atari 5200 tile blob ripping not yet implemented"))
+(defun compile-art-sms (index-out index-in)
+  "Compile art assets for Sega Master System platform"
+  (let ((*machine* 3010))
+    (write-sms-chr-rom index-out
+                       (parse-into-sms-chr-data
+                        (read-sms-art-index index-in)))))
+
+(defun read-sms-art-index (index-in)
+  "Read SMS art index file and return list of (png-name mode width-px height-px)"
+  (let ((png-list (list)))
+    (format *trace-output* "~&~A: reading SMS art index …" (enough-namestring index-in))
+    (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page) line)))
+                 (cond
+                   ((emptyp line) nil)
+                   ((char= #\# (char line 0)) nil)
+                   (t (destructuring-bind (png-name mode cell-size)
+                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                        (destructuring-bind (width-px height-px)
+                            (split-sequence #\× cell-size :test #'char=)
+                          (push (list (make-keyword mode)
+                                      (make-pathname :defaults index-in
+                                                     :name (subseq png-name 0
+                                                                   (position #\. png-name :from-end t))
+                                                     :type "png")
+                                      (parse-integer width-px)
+                                      (parse-integer height-px))
+                                png-list))))))))
+    (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
+    (reverse png-list)))
+
+(defun parse-into-sms-chr-data (art-index)
+  "Parse PNG files into SMS CHR data (8x8 tiles)"
+  (let ((chr-data (list)))
+    (dolist (art-item art-index)
+      (destructuring-bind (mode png-name width-px height-px) art-item
+        (format *trace-output* "~&~A: parsing SMS CHR data … "
+                png-name)
+        (let* ((png (png-read:read-png-file png-name))
+               (height (png-read:height png))
+               (width (png-read:width png))
+               (palette-pixels (png->palette height width
+                                             (png-read:image-data png)
+                                             (png-read:transparency png))))
+          ;; SMS CHR format: 8x8 tiles, 4 colors (2 bits per pixel)
+          (let ((tile-data (parse-sms-chr-tiles palette-pixels width-px height-px)))
+            (setf chr-data (append chr-data tile-data))))
+        (format *trace-output* " done.")))
+    chr-data))
+
+(defun parse-sms-chr-tiles (palette-pixels width-px height-px)
+  "Convert palette pixels to SMS CHR ROM format (8x8 tiles, 2 bits per pixel)"
+  (let ((tiles (list))
+        (tile-width (/ width-px 8))
+        (tile-height (/ height-px 8)))
+    ;; Process each 8x8 tile
+    (dotimes (ty tile-height)
+      (dotimes (tx tile-width)
+        (let ((tile-bytes (make-array 32 :element-type '(unsigned-byte 8) :initial-element 0)))
+          ;; SMS uses 4 bitplanes (2 bits per pixel)
+          (dotimes (y 8)
+            (dotimes (x 8)
+              (let* ((px (+ (* tx 8) x))
+                     (py (+ (* ty 8) y))
+                     (color-index (if (and (< px width-px) (< py height-px))
+                                    (mod (aref palette-pixels py px) 4)
+                                    0))
+                     (bit0 (if (logbitp 0 color-index) 1 0))
+                     (bit1 (if (logbitp 1 color-index) 1 0)))
+                ;; Set bits in the bitplanes
+                (when (= bit0 1)
+                  (setf (aref tile-bytes y)
+                        (logior (aref tile-bytes y) (ash 1 (- 7 x)))))
+                (when (= bit1 1)
+                  (setf (aref tile-bytes (+ y 16))
+                        (logior (aref tile-bytes (+ y 16)) (ash 1 (- 7 x))))))))
+          (push tile-bytes tiles))))
+    (nreverse tiles)))
+
+(defun write-sms-chr-rom (index-out chr-data)
+  "Write SMS CHR ROM data to binary file"
+  (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
+                           :if-exists :supersede)
+    (dolist (tile chr-data)
+      (dotimes (i 32)
+        (write-byte (aref tile i) out))))
+  (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 32) index-out))
+
+(defun compile-art-sms (index-out index-in)
+  "Compile art assets for Sega Master System platform"
+  (let ((*machine* 3010))
+    (write-sms-chr-rom index-out
+                       (parse-into-sms-chr-data
+                        (read-sms-art-index index-in)))))
 
 (defun blob-rip-5200-pmg (png-file)
   "Extract PMG data from PNG for Atari 5200"
@@ -3601,3 +4001,21 @@ treating non-black/non-white pixels as black"
 (defun compile-lynx-tileset (png-file output-file width height &optional imperfectp)
   "Compile tileset data for Atari Lynx platform"
   (error "Lynx tileset compilation not yet implemented"))
+
+;; ZX81/T/S-1000 platform stubs
+(defun compile-art-zx81 (index-out index-in)
+  "Compile art assets for ZX81 platform"
+  (error "ZX81 art compilation not yet implemented"))
+
+(defun blob-rip-zx81-tile (png-file)
+  "Extract tile data from PNG for ZX81"
+  (error "ZX81 tile blob ripping not yet implemented"))
+
+;; ZX Spectrum/T/S-2068 platform stubs
+(defun compile-art-spectrum (index-out index-in)
+  "Compile art assets for ZX Spectrum platform"
+  (error "ZX Spectrum art compilation not yet implemented"))
+
+(defun blob-rip-spectrum-tile (png-file)
+  "Extract tile data from PNG for ZX Spectrum"
+  (error "ZX Spectrum tile blob ripping not yet implemented"))

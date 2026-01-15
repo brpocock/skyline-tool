@@ -27,7 +27,9 @@
   (is-true (fboundp 'skyline-tool::compile-music-nes)
            "compile-music-nes should exist")
   ;; Currently just signals error, but shouldn't crash
-  (signals error (skyline-tool::compile-music-nes "/tmp/test.s" "/tmp/test.mid")
+  (signals error (skyline-tool::compile-music-nes
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   (format nil "Object/~a/test-~x.mid" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
            "compile-music-nes should signal error (not yet implemented)"))
 
 ;; Test NES monochrome detection

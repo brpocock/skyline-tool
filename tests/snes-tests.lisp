@@ -15,7 +15,9 @@
   (is-true (fboundp 'skyline-tool::compile-music-snes)
            "compile-music-snes should exist")
   ;; Currently just signals error, but shouldn't crash
-  (signals error (skyline-tool::compile-music-snes "/tmp/test.s" "/tmp/test.mid")
+  (signals error (skyline-tool::compile-music-snes
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   (format nil "Object/~a/test-~x.mid" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
            "compile-music-snes should signal error (not yet implemented)"))
 
 ;; Test SNES blob ripping functions
@@ -34,7 +36,8 @@
   (is-true (fboundp 'skyline-tool::compile-art-snes)
            "compile-art-snes should exist")
   ;; Test with invalid inputs
-  (signals error (skyline-tool::compile-art-snes "/nonexistent.in" "/tmp/test.out")
+  (signals error (skyline-tool::compile-art-snes "/nonexistent.in"
+                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
            "compile-art-snes should signal error for missing input"))
 
 ;; Test SNES blob ripping with invalid inputs

@@ -27,7 +27,8 @@
   ;; compile-map should signal error for missing files
   (signals error (skyline-tool:compile-map "/nonexistent/file.tmx"))
   ;; compile-art-7800 should signal error for missing files
-  (signals error (skyline-tool:compile-art-7800 "/nonexistent/file.png" "/tmp/test.o")))
+  (signals error (skyline-tool:compile-art-7800 "/nonexistent/file.png"
+                   (format nil "Object/~a/test-~x.o" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))))
 
 ;; Define missing functions for testing
 (defun stamp-is-monochrome-p (stamp)
@@ -383,7 +384,8 @@
 
   ;; compile-art-7800 should signal error for missing files
   (signals error
-    (skyline-tool:compile-art-7800 "/nonexistent/input.txt" "/tmp/output.s"))
+    (skyline-tool:compile-art-7800 "/nonexistent/input.txt"
+     (format nil "Object/~a/output-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))))
 
   ;; blob-rip-7800 should signal error for missing files
   (signals error
@@ -414,7 +416,8 @@
   (signals error (skyline-tool:compile-map "/nonexistent/file.tmx")
            "compile-map should signal error for missing file")
 
-  (signals error (skyline-tool:compile-art-7800 "/nonexistent/input.txt" "/tmp/output.s")
+  (signals error (skyline-tool:compile-art-7800 "/nonexistent/input.txt"
+                   (format nil "Object/~a/output-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time))))
            "compile-art-7800 should signal error for missing input")
 
   (signals error (skyline-tool:blob-rip-7800 "/nonexistent/file.png")

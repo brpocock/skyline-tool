@@ -89,7 +89,9 @@
 ;; Test 7800 music compilation output validation
 (test 7800-music-compilation-output-validation
   "Test that 7800 music compilation produces valid binary output"
-  (let ((temp-file "/tmp/7800-test-music.bin"))
+  (let ((temp-file (format nil "Object/~a/7800-test-music-~x.bin"
+                           (skyline-tool::machine-directory-name)
+                           (sxhash (get-universal-time)))))
     ;; Create a minimal mock MIDI file for testing
     ;; This would normally be done with actual MIDI data, but for testing
     ;; we'll use the existing compilation framework
@@ -165,7 +167,9 @@
 ;; Test 7800 binary file writing and reading
 (test 7800-binary-file-io
   "Test that 7800 binary file writing produces readable data"
-  (let ((test-file "/tmp/test-7800-data.bin")
+  (let ((test-file (format nil "Object/~a/test-7800-data-~x.bin"
+                           (skyline-tool::machine-directory-name)
+                           (sxhash (get-universal-time))))
         (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
     ;; Write test data
     (skyline-tool::write-7800-binary test-file test-data)
@@ -197,7 +201,9 @@
     (is (= (length result) 2) "array should have 2 voices (TIA channels)"))
 
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
-  (signals error (skyline-tool::compile-music-7800 "/tmp/test.s" "/nonexistent.mid" :tia)
+  (signals error (skyline-tool::compile-music-7800
+                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   "/nonexistent.mid" :tia)
             "compile-music-7800 should signal error for missing MIDI file"))
 
 ;; Test 7800 platform constants

@@ -66,6 +66,10 @@
            #:compile-animation-sequences
            #:compile-art-7800
            #:compile-art-5200
+           #:compile-art-nes
+           #:compile-art-colecovision
+           #:compile-art-snes
+           #:compile-art-sms
            #:compile-art-lynx
            #:compile-art-cgb
            #:compile-art-dmg
@@ -196,16 +200,16 @@
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
 ;; Try to load project.json during package initialization if PLATFORM is set
-(let* ((platform (sb-ext:posix-getenv "PLATFORM")))
-  (when platform
-    (let ((project-json-path (merge-pathnames (format nil "Project.~A.json" platform) (project-root))))
-      (if (probe-file project-json-path)
-          (handler-case
-              (setf *project.json* (with-open-file (stream project-json-path)
-                                     (json:decode-json stream)))
-            (error (e)
-              (error "Could not load project.json ~A: ~A" project-json-path e)))
-          (error "Project JSON file not found: ~A" project-json-path)))))
+;; (let* ((platform (sb-ext:posix-getenv "PLATFORM")))
+;;   (when platform
+;;     (let ((project-json-path (merge-pathnames (format nil "Project.~A.json" platform) (project-root))))
+;;       (if (probe-file project-json-path)
+;;           (handler-case
+;;               (setf *project.json* (with-open-file (stream project-json-path)
+;;                                      (json:decode-json stream)))
+;;             (error (e)
+;;               (error "Could not load project.json ~A: ~A" project-json-path e)))
+;;           (error "Project JSON file not found: ~A" project-json-path)))))
 
 (defvar *game-title* nil)
 (defvar *part-number* nil)

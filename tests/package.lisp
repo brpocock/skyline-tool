@@ -13,7 +13,9 @@
            #:intv-asset-converters
            #:intv-card-layouts
            #:intv-gram-tests
-           #:run-intv-gram-tests)
+           #:run-intv-gram-tests
+           #:zx81-tests
+           #:spectrum-tests)
 
   ;; Define variables that were referenced in removed test files
   (:export #:*hex-start*
@@ -24,7 +26,14 @@
 (defparameter *hex-start* #x1000
   "Default starting address for hex output in tests")
 
-(defparameter *test-file* "/tmp/test-output.bin"
+(defparameter *test-file*
+  (let* ((platform-dir (if (and (boundp 'skyline-tool:*machine*)
+                                skyline-tool:*machine*)
+                           (skyline-tool::machine-directory-name)
+                           "test"))
+         (path (format nil "Object/~a/tmpnam-~x.bin" platform-dir (sxhash (get-universal-time)))))
+    (ensure-directories-exist path)
+    path)
   "Default test file path for file I/O tests")
 
 (defun make-test-stamp (prefix)
