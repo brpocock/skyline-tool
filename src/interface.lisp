@@ -61,7 +61,14 @@
         :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
-        :write-master-makefile 'write-master-makefile))
+        :write-master-makefile 'write-master-makefile
+        :self-test 'run-self-test))
+
+(defun run-self-test (&rest args)
+  "Run all unit tests for SkylineTool."
+  (declare (ignore args))
+  (ql:quickload :skyline-tool/test)
+  (fiveam:run-all-tests :summary t))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
@@ -482,36 +489,22 @@ See COPYING for details
 (defun run-gui ()
   (clim-debugger:with-debugger ()
     (launcher)))
+;       (error "Command not recognized: ~a (try help)" verb))))
 
 (defun run-for-port (port-label &rest subcommand)
-  (setf *project.json*
-        (json:decode-json-from-source
-         (asdf:system-relative-pathname
-          :skyline-tool (make-pathname :directory '(:relative :up)
-                                       :name (format nil "Project.~a" port-label) :type "json" )))
-        *game-title* (cdr (assoc "Game" *project.json* :test #'string=))
-        *part-number*  (cdr (assoc "PartNumber" *project.json* :test #'string=))
-        *studio* (cdr (assoc "Studio" *project.json* :test #'string=))
-        *publisher* (cdr (assoc "Publisher" *project.json* :test #'string=))
-        *machine* (cdr (assoc "Machine" *project.json* :test #'string=))
-        *sound* (cdr (assoc "Sound" *project.json* :test #'string=))
-        *common-palette* (mapcar #'intern (cdr (assoc "CommonPalette" *project.json* :test #'string=)))
-        *default-skin-color* (cdr (assoc "DefaultSkinColor" *project.json* :test #'string=))
-        *default-hair-color* (cdr (assoc "DefaultHairColor" *project.json* :test #'string=))
-        *default-clothes-color* (cdr (assoc "DefaultClothesColor" *project.json* :test #'string=)))
+  (format t "~&DEBUG: run-for-port called with port-label=~a~%" port-label)
+  (setf *machine* (parse-integer port-label))
+  (format t "~&DEBUG: set *machine* to ~a~%" *machine*)
   (format *trace-output* "~&Running for port: ~a" port-label)
-  ;; Execute the subcommand directly instead of calling command again
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
       (apply fun args)
-      (error "Command not recognized: “~a” (try “help”)" verb))))
+      (error "Command not recognized: ~a (try help)" verb))))
 
 (defun command (argv)
-    (format t "~&Skyline tool (© 2026) invoked:
+  (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-  (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)
@@ -529,6 +522,9 @@ See COPYING for details
           (flet ((runner ()
                    (apply fun (remove-if (curry #'string= self)
                                          invocation))
+  (unless (char= #\- (char argv 0))
+    (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+    (finish-output *trace-output*))
                    (fresh-line)))
             (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
                 #+mcclim

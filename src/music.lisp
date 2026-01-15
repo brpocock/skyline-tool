@@ -1576,3 +1576,7 @@ Music:~:*
 
 (defun compile-music-lynx (output-file input-file &optional chip)
   (error "Lynx music compilation not yet implemented"))
+
+(defun compile-speech-2609 (output-file input-file)
+  "Compile speech for Intellivision platform"
+  (error "Intellivision speech compilation not yet implemented"))

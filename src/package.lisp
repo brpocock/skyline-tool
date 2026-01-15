@@ -234,3 +234,11 @@
         *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*))))
 
 (defvar *region* :ntsc)
+
+(defun generated-file-path (filename)
+  "Return the platform-specific path for a generated file."
+  (let ((platform-dir (format nil "~d" *machine*)))
+    (merge-pathnames (make-pathname :directory (list :relative "Source" "Generated" platform-dir)
+                                    :name (pathname-name filename)
+                                    :type (pathname-type filename))
+                     (project-root))))

@@ -43,14 +43,14 @@
              "Binary output file should be created")
 
     ;; Check file size: 2 pages * 256 bytes each = 512 bytes
-    (when (probe-file temp-file)
-      (is (= (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+    (when (probe-file test-file)
+      (is (= (with-open-file (stream test-file :element-type '(unsigned-byte 8))
                (file-length stream))
              512)
            "File should be exactly 512 bytes (2 pages × 256 bytes)")
 
       ;; Read and validate first page content
-      (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+      (with-open-file (stream test-file :element-type '(unsigned-byte 8))
         (let ((first-page (loop for i from 0 to 3 collect (read-byte stream))))
           (is (equal first-page '(1 2 3 4))
               "First page should contain the correct data"))
@@ -160,7 +160,7 @@
   (let ((test-data '((1 2 3) (4 5 6) (7 8 9))))
     (let ((result (skyline-tool::interleave-7800-bytes test-data)))
       (is (equalp result '(1 4 7 2 5 8 3 6 9))
-          "interleave-7800-bytes should correctly interleave columns into rows")))
+          "interleave-7800-bytes should correctly interleave columns into rows"))))
 
 ;; Test 7800 binary file writing and reading
 (test 7800-binary-file-io

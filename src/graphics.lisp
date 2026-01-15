@@ -3535,3 +3535,69 @@ treating non-black/non-white pixels as black"
 (defun assemble-intv-rom (source-files output-file)
   "Assemble Intellivision ROM"
   (error "Intellivision ROM assembly not yet implemented"))
+;;; Stub functions for unimplemented platform-specific features
+;;; These signal errors when called, as expected by the test suite
+
+(defun compile-art-5200 (index-out index-in)
+  "Compile art assets for Atari 5200 platform"
+  (error "Atari 5200 art compilation not yet implemented"))
+
+(defun compile-art-colecovision (index-out index-in)
+  "Compile art assets for ColecoVision platform"
+  (error "ColecoVision art compilation not yet implemented"))
+
+(defun compile-art-snes (index-out index-in)
+  "Compile art assets for Super Nintendo platform"
+  (error "SNES art compilation not yet implemented"))
+
+(defun blob-rip-5200-tile (png-file)
+  "Extract tile data from PNG for Atari 5200"
+  (error "Atari 5200 tile blob ripping not yet implemented"))
+
+(defun blob-rip-5200-pmg (png-file)
+  "Extract PMG data from PNG for Atari 5200"
+  (error "Atari 5200 PMG blob ripping not yet implemented"))
+
+(defun blob-rip-colecovision-tile (png-file)
+  "Extract tile data from PNG for ColecoVision"
+  (error "ColecoVision tile blob ripping not yet implemented"))
+
+(defun blob-rip-colecovision-sprite (png-file)
+  "Extract sprite data from PNG for ColecoVision"
+  (error "ColecoVision sprite blob ripping not yet implemented"))
+
+(defun blob-rip-colecovision-font (png-file)
+  "Extract font data from PNG for ColecoVision"
+  (error "ColecoVision font blob ripping not yet implemented"))
+
+(defun blob-rip-snes-tile (png-file)
+  "Extract tile data from PNG for SNES"
+  (error "SNES tile blob ripping not yet implemented"))
+
+(defun blob-rip-snes-sprite (png-file)
+  "Extract sprite data from PNG for SNES"
+  (error "SNES sprite blob ripping not yet implemented"))
+
+(defun blob-rip-snes-font (png-file)
+  "Extract font data from PNG for SNES"
+  (error "SNES font blob ripping not yet implemented"))
+
+(defun detect-5200-tile-mode (pixels)
+  "Detect tile mode for Atari 5200"
+  (error "Atari 5200 tile mode detection not yet implemented"))
+
+(defun detect-colecovision-tile-mode (pixels)
+  "Detect tile mode for ColecoVision"
+  (error "ColecoVision tile mode detection not yet implemented"))
+
+(defun compile-lynx-blob (png-file output-file width height &optional imperfectp)
+  "Compile blob data for Atari Lynx platform"
+  (error "Lynx blob compilation not yet implemented"))
+
+(defun compile-lynx-sprite (png-file output-file width height &optional imperfectp)
+  "Compile sprite data for Atari Lynx platform"
+  (error "Lynx sprite compilation not yet implemented"))
+
+(defun compile-lynx-tileset (png-file output-file width height &optional imperfectp)
+  "Compile tileset data for Atari Lynx platform"
+  (error "Lynx tileset compilation not yet implemented"))

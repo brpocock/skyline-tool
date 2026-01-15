@@ -172,11 +172,11 @@ Checking for Quicklisp first…")
                         (list "libcurl" t t) (list "libidn" t t) (list "libnghttp2" t t)
                         (list "libssh2" t t) (list "libzip" t t) (list "nss-util")
                         (list "openssl-libs" t t) (list "pcre" t t) (list "SDL" t t)
-                        (list "openldap" t t) (list "make")))
+                        (list "openldap" t t) (list "make"))))
     ;; Add texinfo-tex for documentation building (needed on all systems)
     (push (list "texinfo-tex") packages)
     (loop for (package &optional libp develp) in packages
-          do (install-os-package package :libp libp :develp develp)))))
+          do (install-os-package package :libp libp :develp develp))))
 
 (format t "~&Adding Ultralisp repo…")
 
