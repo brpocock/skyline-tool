@@ -287,20 +287,19 @@
 (define-constant +all-video+ '("NTSC" "PAL" "SECAM")
   :test #'equalp)
 
-(defun supported-video-types (machine)
+(defun supported-video-types (&optional (machine *machine*))
   "Return the list of video types supported by MACHINE.
    Filters out unsupported video types for specific machines."
-  (ecase machine
+  (case machine
     ;; Atari 5200: NTSC only, no PAL or SECAM
-    (5200 '(NTSC))
+    (5200 '(:NTSC))
     ;; Atari 7800: NTSC and PAL, no SECAM
-    (7800 '(NTSC PAL))
+    (7800 '(:NTSC :PAL))
     ;; ZX81/T/S-1000
-    (81 '(NTSC PAL))
+    (81 '(:NTSC :PAL))
     ;; ZX Spectrum/T/S-2068
-    (2068 '(NTSC PAL)
-    ;; Most other machines support NTSC and PAL
-    (t +all-video+)))
+    (2068 '(:NTSC :PAL))
+    (otherwise +all-video+)))
 
 (defvar *first-assets-bank* nil)
 
@@ -336,7 +335,7 @@
   (assert (member build +all-builds+ :test 'equal) (build)
           "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
   (let ((assets-list (all-assets-for-build build)))
-    (dolist (video (supported-video-types *machine*))
+    (dolist (video (supported-video-types))
       (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
               build video)
       (loop with allocation = (find-best-allocation assets-list
@@ -788,11 +787,11 @@ file ~a.s in bank $~(~2,'0x~)~
              (format nil "~20tSource/Generated/~a/Orchestration.s\\
 ~{~20tObject/~a/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                      machine-dir machine-dir
-                     (loop for video in (supported-video-types *machine*)
+                     (loop for video in (supported-video-types)
                            collecting (list name video))))
           ((equal kind "Maps")
            (format nil "~{~25t~a~^ \\~%~}"
-                   (loop for video in (supported-video-types *machine*)
+                   (loop for video in (supported-video-types)
                          collect (asset->object-name asset-indicator :video video))))
           ((equal kind "Blob")
            (format nil "Source/Generated/Assets/Blob.~a.s" name))
@@ -843,12 +842,12 @@ file ~a.s in bank $~(~2,'0x~)~
     (ensure-directories-exist source-pathname)
     (with-output-to-file (source source-pathname :if-exists :supersede)
       (format source ";; This is a generated file~2%")
-      (dolist (video (supported-video-types *machine*))
+      (dolist (video (supported-video-types))
         (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
                 video basename video)))
-    (dolist (video (supported-video-types *machine*))
+    (dolist (video (supported-video-types))
       (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
@@ -861,7 +860,7 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun write-asset-compilation/map (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types *machine*))
+    (dolist (video (supported-video-types))
       (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -874,7 +873,7 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types *machine*))
+    (dolist (video (supported-video-types))
       (format t "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -1398,7 +1397,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                (write-bank-makefile bank-source
                                     :build build :video video))
               (t (write-asset-bank-makefile *bank*
-                                            :build build :video video))))))))))
+                                            :build build :video video)))))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 81)))
   "Write makefile content for ZX81 platform"
@@ -1407,12 +1406,12 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
     (let ((bank-source (bank-source-pathname)))
       (cond
         ((= *bank* *last-bank*)
-         (write-ram-bank-makefile :build "Public" :video "NTSC"))
+         (write-ram-bank-makefile :build "Public" :video :NTSC))
         ((probe-file bank-source)
          (write-bank-makefile bank-source
                               :build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-                                      :build "Public" :video "NTSC")))))))
+                                      :build "Public" :video "NTSC"))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 2068)))
   "Write makefile content for ZX Spectrum platform"
@@ -1426,7 +1425,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
          (write-bank-makefile bank-source
                               :build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-                                      :build "Public" :video "NTSC")))))))
+                                      :build "Public" :video "NTSC"))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 128)))
   "Write makefile content for Commodore 128"
