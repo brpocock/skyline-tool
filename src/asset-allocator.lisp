@@ -1346,4 +1346,4 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                                                :build build :video video))))))))))
     (t
      ;; Simple machines that just need makefile top line
-     (write-makefile-top-line)))))
+     (write-makefile-top-line))))

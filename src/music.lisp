@@ -397,32 +397,32 @@ skipping MIDI music with ~:d track~:p"
           (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
           (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun ooxml->string (xml)
-    (if (consp xml)
-        (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
-        xml))
-
-  (defun ooxml-cell-repeats (cell)
-    (if-let (repeat-index (and (consp (second cell))
-                               (consp (first (second cell)))
-                               (position-if (lambda (attr) (equal (first attr) "number-columns-repeated"))
-                                            (second cell))))
-      (parse-integer (second (elt (second cell) repeat-index)))
-      1))
-
-  (defun ooxml-repeated-cell (cell string)
-    (loop repeat (ooxml-cell-repeats cell)
-          collect string))
-
-  (defun ods-table-rows->list (table)
-    (mapcar (lambda (row)
-              (loop for cell in (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
-                                               row)
-                    append (ooxml-repeated-cell cell (ooxml->string cell))))
-            (mapcar #'rest (remove-if-not (lambda (el)
-                                            (equal (caar el) "table-row"))
-                                          table))))
+;; (eval-when (:compile-toplevel :load-toplevel :execute)
+;;   (defun ooxml->string (xml)
+;;     (if (consp xml)
+;;         (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
+;;         xml))
+;; 
+;;   (defun ooxml-cell-repeats (cell)
+;;     (if-let (repeat-index (and (consp (second cell))
+;;                                (consp (first (second cell)))
+;;                                (position-if (lambda (attr) (equal (first attr) "number-columns-repeated"))
+;;                                             (second cell))))
+;;       (parse-integer (second (elt (second cell) repeat-index)))
+;;       1))
+;; 
+;;   (defun ooxml-repeated-cell (cell string)
+;;     (loop repeat (ooxml-cell-repeats cell)
+;;           collect string))
+;; 
+;;   (defun ods-table-rows->list (table)
+;;     (mapcar (lambda (row)
+;;               (loop for cell in (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
+;;                                                row)
+;;                     append (ooxml-repeated-cell cell (ooxml->string cell))))
+;;             (mapcar #'rest (remove-if-not (lambda (el)
+;;                                             (equal (caar el) "table-row"))
+;;                                           table))))
 
   (defun midi->note-name (note)
     (if (and note (<= 0 note 127))
@@ -514,42 +514,42 @@ skipping MIDI music with ~:d track~:p"
                      do (setf (aref array c r) column))
             finally (return array))))
 
-  (defun read-pokey.ods ()
-    (format *trace-output* "~&Reading Synthpopalooza's POKEY tables spreadsheet… ")
-    (prog1
-        (zip:with-zipfile (zip (make-pathname
-                                :name "Synthpopalooza POKEY tables"
-                                :type "ods"
-                                :directory (append (pathname-directory
-                                                    (asdf:system-source-directory :skyline-tool))
-                                                   (list "data")))
-                           :force-utf-8 t)
-          (let ((xml (xmls:parse-to-list
-                      (map 'string #'code-char
-                           (zip:zipfile-entry-contents
-                            (zip:get-zipfile-entry "content.xml" zip))))))
-            (assert (and (consp (first xml))
-                         (equal (car (first xml)) "document-content")
-                         (equal (cdr (first xml))
-                                "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-                    (xml)
-                    "ODS file seems to be malformed: document-content tag missing or invalid~%~s"
-                    (first xml))
-            (let ((body (first (remove-if-not (lambda (el) (equal (caar el) "body")) (rest xml)))))
-              (assert (and (consp (caaddr body))
-                           (equal (car (caaddr body)) "spreadsheet")
-                           (equal (cdr (caaddr body)) "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-                      (xml)
-                      "ODS is not a spreadsheet?~%~s"
-                      (first body))
-              (let* ((tables (mapcar #'cdr
-                                     (remove-if-not (lambda (el) (equal (caar el) "table"))
-                                                    (subseq (caddr body) 2)))))
-                (mapcar #'ods-table-rows->list tables)))))
-      (format *trace-output* " done.")))
+  ;; (defun read-pokey.ods ()
+  ;;   (format *trace-output* "~&Reading Synthpopalooza's POKEY tables spreadsheet… ")
+  ;;   (prog1
+  ;;       (zip:with-zipfile (zip (make-pathname
+  ;;                               :name "Synthpopalooza POKEY tables"
+  ;;                               :type "ods"
+  ;;                               :directory (append (pathname-directory
+  ;;                                                   (asdf:system-source-directory :skyline-tool))
+  ;;                                                  (list "data")))
+  ;;                          :force-utf-8 t)
+  ;;         (let ((xml (xmls:parse-to-list
+  ;;                     (map 'string #'code-char
+  ;;                          (zip:zipfile-entry-contents
+  ;;                           (zip:get-zipfile-entry "content.xml" zip))))))
+  ;;           (assert (and (consp (first xml))
+  ;;                        (equal (car (first xml)) "document-content")
+  ;;                        (equal (cdr (first xml))
+  ;;                               "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
+  ;;                   (xml)
+  ;;                   "ODS file seems to be malformed: document-content tag missing or invalid~%~s"
+  ;;                   (first xml))
+  ;;           (let ((body (first (remove-if-not (lambda (el) (equal (caar el) "body")) (rest xml)))))
+  ;;             (assert (and (consp (caaddr body))
+  ;;                          (equal (car (caaddr body)) "spreadsheet")
+  ;;                          (equal (cdr (caaddr body)) "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
+  ;;                     (xml)
+  ;;                     "ODS is not a spreadsheet?~%~s"
+  ;;                     (first body))
+  ;;             (let* ((tables (mapcar #'cdr
+  ;;                                    (remove-if-not (lambda (el) (equal (caar el) "table"))
+  ;;                                                   (subseq (caddr body) 2)))))
+  ;;               (mapcar #'ods-table-rows->list tables)))))
+  ;;     (format *trace-output* " done.")))
 
-  (defun read-pokey-tables ()
-    (interpret-pokey-tables (mapcar #'lists->2d-array (read-pokey.ods)))))
+  ;; (defun read-pokey-tables ()
+  ;;   (interpret-pokey-tables (mapcar #'lists->2d-array (read-pokey.ods)))))
 
 ;; (define-constant +pokey-notes-table+
 ;;     #2A((0 0 0 0 0 0 0 0)
