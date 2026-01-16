@@ -55,7 +55,7 @@
                  (:file "assembly" :depends-on ("package"))
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("package" "7800gd-debug" "eprom"))
-                 ;; (:file "music" :depends-on ("package"))
+                 (:file "music" :depends-on ("package"))
                  (:file "eprom" :depends-on ("package"))
                  (:file "forth" :depends-on ("package"))
                  (:file "fountain" :depends-on ("package"))

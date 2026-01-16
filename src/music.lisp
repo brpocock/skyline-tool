@@ -402,7 +402,7 @@ skipping MIDI music with ~:d track~:p"
 ;;     (if (consp xml)
 ;;         (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
 ;;         xml))
-;; 
+;;
 ;;   (defun ooxml-cell-repeats (cell)
 ;;     (if-let (repeat-index (and (consp (second cell))
 ;;                                (consp (first (second cell)))
@@ -410,11 +410,11 @@ skipping MIDI music with ~:d track~:p"
 ;;                                             (second cell))))
 ;;       (parse-integer (second (elt (second cell) repeat-index)))
 ;;       1))
-;; 
+;;
 ;;   (defun ooxml-repeated-cell (cell string)
 ;;     (loop repeat (ooxml-cell-repeats cell)
 ;;           collect string))
-;; 
+;;
 ;;   (defun ods-table-rows->list (table)
 ;;     (mapcar (lambda (row)
 ;;               (loop for cell in (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
