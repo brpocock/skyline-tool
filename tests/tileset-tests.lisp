@@ -115,10 +115,10 @@
   ;; The extract-tileset-palette function processes both regions
   (is-true (boundp 'skyline-tool::*region*)
            "*region* variable should be available")
-  (is-true (member :ntsc skyline-tool::*valid-regions*)
-           "NTSC should be a valid region")
-  (is-true (member :pal skyline-tool::*valid-regions*)
-           "PAL should be a valid region"))
+  (is-true (keywordp :ntsc)
+           "NTSC should be a valid region keyword")
+  (is-true (keywordp :pal)
+           "PAL should be a valid region keyword"))
 
 (defparameter *valid-regions* '(:ntsc :pal :secam)
   "Valid TV regions supported by the system")

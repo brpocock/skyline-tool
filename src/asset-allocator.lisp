@@ -274,10 +274,10 @@
 (define-constant +all-video+ '(:ntsc :pal :secam)
   :test #'equalp)
 
-(defun supported-video-types (machine)
+(defun supported-video-types (&optional (machine *machine*))
   "Return the list of video types supported by MACHINE.
    Filters out unsupported video types for specific machines."
-  (ecase machine
+  (case machine
     ;; Atari 5200: NTSC only, no PAL or SECAM
     (5200 '(:ntsc))
     ;; Atari 7800: NTSC and PAL, no SECAM
@@ -324,7 +324,7 @@
   (assert (member build +all-builds+ :test 'equal) (build)
           "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
   (let ((assets-list (all-assets-for-build build)))
-    (dolist (video (supported-video-types *machine*))
+    (dolist (video (supported-video-types))
       (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
               build video)
       (loop with allocation = (find-best-allocation assets-list
@@ -391,38 +391,33 @@
 (defun machine-directory-name (&optional (machine *machine*))
   "Return the directory name for the current machine platform"
   (ecase machine
-    (1 "Oric-1")      ; Oric-1
-    (10 "2gs")  ; Apple //gs
-    (1000 "SG1000") ; SG-1000
-    (128 "CBM") ; C=128 (same as C=64)
-    (16 "TG16") ; TG-16
-    (1601 "SMD") ; Genesis/MegaDrive
-    (2 "A2")    ; Apple ][
-    (20 "C16")  ; VIC-20
-    (200 "Lynx")    ; Lynx
-    (2068 "Spectrum") ; Spectrum/T/S-2068
-    (20953 "DMG") ; Game Boy
-    (222 "2gs") ; Apple //gs (duplicate)
-    (223 "BBC") ; BBC (duplicate)
-    (23 "A2e")  ; Apple //e
-    (2600 "2600") ; VCS
-    (2609 "Intv") ; Intellivision
-    (264 "C16") ; C=16 & Plus/4 (duplicate)
-    (3 "NES")   ; NES
-    (3010 "SMS") ; Master System
-    (35902 "GBC") ; Game Boy Color
-    (5200 "5200") ; SuperSystem
-    (6 "SNES")  ; SNES
-    (64 "CBM")  ; C=64
-    (7 "BBC")   ; BBC
-    (7800 "7800") ; ProSystem
-    (8 "A2")    ; Apple II
-    (81 "ZX81") ; ZX81/T/S-1000
-    (837 "GG")   ; Game Gear
-    (88 "SNES") ; SNES (duplicate, but ok)
-    (9 "A3")    ; Apple ///
-    (9918 "Clcv") ; ColecoVision
-    ))
+    (1 "Oric-1")
+    (2 "A2")
+    (3 "A3")
+    (8 "NES")
+    (16 "TG16")
+    (20 "VIC20")
+    (23 "A2e")
+    (64 "CBM")
+    (81 "ZX81")
+    (88 "SNES")
+    (128 "CBM")
+    (200 "Lynx")
+    (222 "2gs")
+    (223 "BBC")
+    (264 "C=16")
+    (837 "GG")
+    (1000 "SG1000")
+    (1601 "SMD")
+    (2068 "Spectrum")
+    (2600 "2600")
+    (2609 "Intv")
+    (3010 "SMS")
+    (35902 "DMG")
+    (359020 "CGB")
+    (5200 "5200")
+    (7800 "7800")
+    (9918 "ClcV")))
 
 (defun include-paths-for-current-bank (&key cwd testp)
   (let* ((bank (if (= *bank* *last-bank*)
@@ -765,17 +760,17 @@ file ~a.s in bank $~(~2,'0x~)~
              (format nil "~20tSource/Generated/~a/Orchestration.s\\
 ~{~20tObject/~a/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
                      machine-dir machine-dir
-                     (loop for video in (supported-video-types *machine*)
-                           collecting (list name video))))
-            ((equal kind "Maps")
-             (format nil "~{~25t~a~^ \\~%~}"
-                     (loop for video in (supported-video-types *machine*)
-                           collect (asset->object-name asset-indicator :video video))))
-            ((equal kind "Blob")
-             (format nil "Source/Generated/Assets/Blob.~a.s" name))
-            ((equal kind "Art")
-             (format nil "Source/Generated/Assets/Art.~a.s" name))
-            (t (asset->object-name asset-indicator))))))
+                      (loop for video in (supported-video-types)
+                            collecting (list name video))))
+           ((equal kind "Maps")
+            (format nil "~{~25t~a~^ \\~%~}"
+                    (loop for video in (supported-video-types)
+                          collect (asset->object-name asset-indicator :video video))))
+           ((equal kind "Blob")
+            (format nil "Source/Generated/Assets/Blob.~a.s" name))
+           ((equal kind "Art")
+            (format nil "Source/Generated/Assets/Art.~a.s" name))
+           (t (asset->object-name asset-indicator)))))
 
 (defun asset->symbol-name (asset-indicator)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
@@ -821,12 +816,12 @@ file ~a.s in bank $~(~2,'0x~)~
     (ensure-directories-exist source-pathname)
     (with-output-to-file (source source-pathname :if-exists :supersede)
       (format source ";; This is a generated file~2%")
-      (dolist (video (supported-video-types *machine*))
+      (dolist (video (supported-video-types))
         (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
-                video basename video)))
-    (dolist (video (supported-video-types *machine*))
+                  video basename video)))
+    (dolist (video (supported-video-types))
       (format *standard-output* "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
@@ -837,9 +832,9 @@ file ~a.s in bank $~(~2,'0x~)~
               machine-dir machine-dir
               (asset-compilation-line asset-indicator :video video)))))
 
-(defun write-asset-compilation/map (asset-indicator)
-  (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types *machine*))
+  (defun write-asset-compilation/map (asset-indicator)
+    (let ((machine-dir (machine-directory-name)))
+    (dolist (video (supported-video-types))
       (format *standard-output* "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -850,9 +845,9 @@ file ~a.s in bank $~(~2,'0x~)~
               machine-dir
               (asset-compilation-line asset-indicator :video video)))))
 
-(defun write-asset-compilation/blob (asset-indicator)
-  (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types *machine*))
+  (defun write-asset-compilation/blob (asset-indicator)
+    (let ((machine-dir (machine-directory-name)))
+    (dolist (video (supported-video-types))
       (format *standard-output* "~%
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool
@@ -1385,7 +1380,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
     (let ((bank-source (bank-source-pathname)))
       (cond
         ((= *bank* *last-bank*)
-         (write-ram-bank-makefile :build "Public" :video "NTSC"))
+         (write-ram-bank-makefile :build "Public" :video :NTSC))
         ((probe-file bank-source)
          (write-bank-makefile bank-source
                               :build "Public" :video "NTSC"))
