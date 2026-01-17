@@ -68,6 +68,10 @@
   "Run all unit tests for SkylineTool."
   (declare (ignore args))
   (format *trace-output* "~&Loading test system…")
+  ;; Load the .asd file first, similar to setup.lisp
+  (asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool" :type "asd")
+                                  (project-root))
+                 :name :skyline-tool)
   (asdf:load-system :skyline-tool/test)
   (format *trace-output* " Running tests…")
   (handler-case

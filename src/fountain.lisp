@@ -3509,18 +3509,20 @@ ActorClassSize:
 (defun write-actor-prototypes ()
   "Write the prototype data for NPCs to ActorPrototypes.s"
   (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
-  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
-  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/ActorPrototypes.s" (project-root))
-                                          :if-exists :supersede)
-    (print-actor-prototypes))
-  (format *trace-output* " …done."))
+  (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (project-root))
+                                            :if-exists :supersede)
+      (print-actor-prototypes))
+    (format *trace-output* " …done."))
 
 (defun write-character-ids ()
   "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
   (format *trace-output* "~&Writing CharacterIDs.s …")
-  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
-  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/CharacterIDs.s" (project-root))
-                                          :if-exists :supersede)
+  (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (project-root))
+                                            :if-exists :supersede)
     (format t "~&;;; Generated character ID data from NPC Stats file~2%")
     (dolist (actor (load-npc-stats))
       (destructuring-bind (&key name character-id
@@ -3538,9 +3540,10 @@ ActorClassSize:
     (format *trace-output* " …done."))
 
   (format *trace-output* "~&Writing CharacterIDs.forth …")
-  (ensure-directories-exist (merge-pathnames "Source/Generated/" (project-root)))
-  (with-output-to-file (*standard-output* (merge-pathnames "Source/Generated/CharacterIDs.forth" (project-root))
-                                          :if-exists :supersede)
+  (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth") (project-root))
+                                            :if-exists :supersede)
     (format t "~& ( Generated character ID data from NPC Stats file )~2%")
     (dolist (actor (load-npc-stats))
       (destructuring-bind (&key name character-id

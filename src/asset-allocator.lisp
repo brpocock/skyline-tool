@@ -837,7 +837,7 @@ file ~a.s in bank $~(~2,'0x~)~
 
 (defun compile-enemy-stats ()
   (compile-enemies #p"Source/Tables/EnemyStats.ods"
-                   #p"Source/Generated/EnemyStatsTable.s"))
+                   (format nil "Source/Generated/~a/EnemyStatsTable.s" (machine-directory-name))))
 
 (define-constant +skyline-writes-files+
     (list "ActorPrototypes" 'write-actor-prototypes
@@ -1128,7 +1128,7 @@ Currently just enumerates all four asset loaders."
         (format nil "Source/Code/~a/Routines/LoadSong.s" (machine-directory-name))
         (format nil "Source/Code/~a/Routines/LoadScript.s" (machine-directory-name))))
 
-(defun write-asset-ids (&optional (outfile-pathname #p"Source/Generated/AssetIDs.s")
+(defun write-asset-ids (&optional (outfile-pathname (format nil "Source/Generated/~a/AssetIDs.s" (machine-directory-name)))
                                   (infile-pathname #p"Source/Assets.index"))
   "Computes the hashes of assets from INFILE-PATHNAME and writes OUTFILE-PATHNAME.
 
@@ -1513,11 +1513,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
-  (format *trace-output* "~%Starting makefile generation for 7800")
   (dolist (build +all-builds+)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
-        (format *trace-output* "~%Processing build=~a video=~a" build video)
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
         (dotimes (*bank* (1+ *last-bank*))
