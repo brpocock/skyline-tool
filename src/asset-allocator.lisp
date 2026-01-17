@@ -747,6 +747,11 @@ Returns the pathname of the found file, or signals an error if not found."
     (let ((possible-file (make-pathname :directory path :name name :type "s")))
       (when (probe-file possible-file)
         (return-from find-included-file possible-file))))
+  (let ((shared-generated-pathname
+          (make-pathname :directory (list :relative "Source" "Generated")
+                         :name name :type "s")))
+    (when (skyline-tool-writes-p shared-generated-pathname)
+      (return-from find-included-file shared-generated-pathname)))
   (let ((generated-pathname
           (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
                          :name name :type "s")))

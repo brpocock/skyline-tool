@@ -3553,3 +3553,4 @@ ActorClassSize:
           (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
                   (pascal-case (string name)) character-id))))
     (format *trace-output* " …done.")))
+)
