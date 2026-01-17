@@ -2,24 +2,44 @@
 
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
-  "Writes ClassConstants from CLASS-DEFS-PATHNAME"
-  (let ((all-classes-sequentially (list)))
+  "Generate OOP class definitions for assembly and Forth code.
+
+@table @asis
+@item Input
+@table @asis
+@item CLASS-DEFS-PATHNAME
+Path to the Classes.Defs file containing class definitions.
+@end table
+@end table
+
+@table @asis
+@item Output
+Generates multiple files in Source/Generated/$PORT/:
+- Classes.forth: Forth class accessors
+- Classes.dot: GraphViz class hierarchy diagram
+- ClassMethods.s: Assembly method tables
+- ClassConstants.s: Assembly class constants
+- ClassInheritance.s: Assembly inheritance tables
+- ClassSizes.s: Assembly class sizes
+@end table"
+  (let ((all-classes-sequentially (list))
+        (port-dir (machine-directory-name)))
     (with-input-from-file (class-file class-defs-pathname)
-      (ensure-directories-exist #p"./Source/Generated/")
-      (with-output-to-file (classes.forth #p"./Source/Generated/Classes.forth"
+      (ensure-directories-exist (format nil "./Source/Generated/~a/" port-dir))
+      (with-output-to-file (classes.forth (format nil "./Source/Generated/~a/Classes.forth" port-dir)
                                           :if-exists :supersede)
         (format classes.forth "( -*- forth -*- )
  ( class accessors and such for Forth code, generated from Classes.Defs )~2%")
-        (with-output-to-file (class-graph #p"./Source/Generated/Classes.dot"
+        (with-output-to-file (class-graph (format nil "./Source/Generated/~a/Classes.dot" port-dir)
                                           :if-exists :supersede)
           (format class-graph "digraph Classes {
 node [shape=Mrecord];
 ")
-          (with-output-to-file (class-methods #p"./Source/Generated/ClassMethods.s"
+          (with-output-to-file (class-methods (format nil "./Source/Generated/~a/ClassMethods.s" port-dir)
                                               :if-exists :supersede)
             (format class-methods ";;; ClassMethods derived from ~s~2%"
                     (enough-namestring class-defs-pathname))
-            (with-output-to-file (class-constants #p"./Source/Generated/ClassConstants.s"
+            (with-output-to-file (class-constants (format nil "./Source/Generated/~a/ClassConstants.s" port-dir)
                                                   :if-exists :supersede)
               (format class-constants ";;; ClassConstants derived from ~s~2%"
                       (enough-namestring class-defs-pathname))
@@ -218,7 +238,7 @@ Method~aDestroy: .proc
                         finally
                            (when current-class
                              (finalize-oops-class current-class slot-offset))))
-                (with-output-to-file (inheritance #p"./Source/Generated/ClassInheritance.s"
+                (with-output-to-file (inheritance (format nil "./Source/Generated/~a/ClassInheritance.s" port-dir)
                                                   :if-exists :supersede)
                   (format inheritance ";;; Class inheritances derived from ~s~2%"
                           (enough-namestring class-defs-pathname))
@@ -228,7 +248,7 @@ Method~aDestroy: .proc
                           (mapcan (lambda (class)
                                     (list (gethash class class-bases) class))
                                   (reverse (copy-list all-classes-sequentially)))))
-                (with-output-to-file (sizes #p"./Source/Generated/ClassSizes.s"
+                (with-output-to-file (sizes (format nil "./Source/Generated/~a/ClassSizes.s" port-dir)
                                             :if-exists :supersede)
                   (format sizes ";;; Class sizes derived from ~s~2%ClassSize: .block"
                           (enough-namestring class-defs-pathname))

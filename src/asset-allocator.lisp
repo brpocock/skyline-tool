@@ -1,10 +1,46 @@
 (in-package :skyline-tool)
 
-(defvar *bank*)
-(defvar *last-bank*)
+(defvar *bank*
+  "The current ROM bank number being processed during asset allocation.
+
+@table @asis
+@item Purpose
+This dynamic variable tracks which ROM bank is currently being allocated.
+@item Modified by
+Asset allocation process.
+@item Used by
+@ref{fun:include-paths-for-current-bank}, @ref{fun:find-included-file}, bank-specific file generation.
+@item Impact
+Controls which bank-specific source directories are searched for includes.
+@end table
+
+Do not modify this variable directly; it is managed by the asset allocation system.")
+
+(defvar *last-bank*
+  "The final ROM bank number in the system.
+
+@table @asis
+@item Purpose
+This dynamic variable identifies the highest-numbered ROM bank in the system.
+@item Modified by
+System initialization from project configuration.
+@item Used by
+@ref{fun:include-paths-for-current-bank} for bank naming logic.
+@item Impact
+Affects whether bank directories are named \"LastBank\" vs \"Bank$XX\".
+@end table
+
+Do not modify this variable after system initialization.")
 
 (defun parse-assets-line (line)
-  "Parse one LINE from Assets.index"
+  "Parse one LINE from Assets.index.
+
+@table @asis
+@item LINE
+A line from the assets index file.
+@end table
+
+Returns @code{(ASSET BUILDS)} where ASSET is the asset identifier and BUILDS is a list of build targets."
   (if (or (emptyp (string-trim " " line))
           (char= #\; (char (string-trim " " line) 0)))
       (list nil nil)
@@ -24,6 +60,21 @@
                                 "Demo"))))))))
 
 (defun kind-by-name (kind$)
+  "Convert a string KIND$ representing an asset type to the corresponding keyword.
+
+@table @asis
+@item Input
+@table @asis
+@item KIND$
+A string like @samp{Art}, @samp{Blob}, @samp{Song}, etc. Can be nil or empty.
+@end table
+@end table
+
+@table @asis
+@item Output
+Returns the keyword @code{:ART}, @code{:BLOB}, @code{:SONG}, etc., or @code{NIL} for empty/null input.
+Signals an error for unknown asset types.
+@end table"
   (cond
     ((or (equal kind$ "Songs")
          (equal kind$ "Song"))
@@ -44,24 +95,61 @@
     (t (error "Unrecognized asset kind: ~a" kind$))))
 
 (defun asset-kind/name (asset)
+  "Split an ASSET identifier into its kind and name components.
+
+@table @asis
+@item Input
+@table @asis
+@item ASSET
+A string like @samp{Art/PlayerSprite} or @samp{Song/BackgroundMusic}.
+@end table
+@end table
+
+@table @asis
+@item Output
+Returns a list of @code{(KIND NAME)} where @var{KIND} is the asset type and @var{NAME} is the asset name.
+Returns @code{NIL} if @var{ASSET} is @code{NIL}.
+@end table"
   (when asset
     (list (subseq asset 0 (position #\/ asset))
           (subseq asset (1+ (position #\/ asset))))))
 
 (defun kind-of-asset (indicator)
-  "Return the keyword for the kind of asset indicated by INDICATOR"
+  "Return the keyword for the kind of asset indicated by INDICATOR.
+
+@table @asis
+@item INDICATOR
+Asset identifier string like @samp{Art/PlayerSprite}.
+@end table
+
+Returns the asset type keyword (@code{:ART}, @code{:BLOB}, etc.)."
   (kind-by-name (first (asset-kind/name indicator))))
 
 (defvar *assets-list* nil)
 (defvar *asset-ids-seen* nil)
 
 (defun make-seen-ids-table ()
+  "Create a hash table for tracking seen asset IDs.
+
+Returns a new hash table with test @code{EQL} for tracking asset IDs that have been processed."
   (let ((seen-ids (make-hash-table)))
     (dolist (kind '(:song :map :script :blob))
       (setf (gethash kind seen-ids) (make-hash-table)))
     seen-ids))
 
 (defun interpret-line-from-assets-list (line &key seen-ids index-hash)
+  "Parse one LINE from Assets.index and register the asset.
+
+@table @asis
+@item LINE
+A line from the assets index file.
+@item SEEN-IDS
+Hash table tracking already seen asset IDs (optional).
+@item INDEX-HASH
+Hash table for asset index data (optional).
+@end table
+
+Returns the parsed asset information or NIL if line is empty/invalid."
   (tagbody top
      (destructuring-bind (asset builds) (parse-assets-line line)
        (when asset
@@ -85,7 +173,14 @@
        (setf (gethash asset index-hash) builds))))
 
 (defun read-assets-list (&optional (index-file #p"Source/Assets.index"))
-  "Read Assets.index from INDEX-FILE (using *ASSETS-LIST* cache)"
+  "Read Assets.index from INDEX-FILE (using *ASSETS-LIST* cache).
+
+@table @asis
+@item INDEX-FILE
+Pathname to the assets index file (default @file{Source/Assets.index}).
+@end table
+
+Returns the cached or freshly parsed assets list."
   (when (and *assets-list* *asset-ids-seen*)
     (return-from read-assets-list
       (values *assets-list* *asset-ids-seen*)))
@@ -103,35 +198,88 @@
     (values index-hash seen-ids)))
 
 (defun filter-assets-for-build (index-hash build)
-  "Select only the assets from INDEX-HASH which are for the selected BUILD"
+  "Select only the assets from INDEX-HASH which are for the selected BUILD.
+
+@table @asis
+@item INDEX-HASH
+Hash table mapping asset identifiers to build lists.
+@item BUILD
+Build target string (e.g., @samp{AA}, @samp{Public}).
+@end table
+
+Returns a list of asset identifiers that are included in the specified BUILD."
   (loop for asset being the hash-keys of index-hash
         when (member build (gethash asset index-hash) :test #'equal)
           collect asset))
 
 (defun existing-object-file (file-name)
-  "Asset that file FILE-NAME exists"
+  "Assert that file FILE-NAME exists.
+
+@table @asis
+@item FILE-NAME
+Name of the file to check.
+@end table
+
+Signals an error if the file does not exist."
   (assert (probe-file file-name) (file-name)
           "Object file not found: “~a”" (enough-namestring file-name))
   file-name)
 
 (defun asset-file (asset &key video)
-  "The filename of the object file indicated by ASSET, in format for VIDEO."
+  "The filename of the object file indicated by ASSET, in format for VIDEO.
+
+@table @asis
+@item ASSET
+Asset identifier string.
+@item VIDEO
+Video standard keyword (optional).
+@end table
+
+Returns the object filename for the asset, asserting it exists."
   (existing-object-file (asset->object-name asset :video video)))
 
 (defun song-asset-p (asset)
-  "Is ASSET a song?"
+  "Is ASSET a song?
+
+@table @asis
+@item ASSET
+Asset identifier string.
+@end table
+
+Returns @code{T} if the asset is a song, @code{NIL} otherwise."
   (eql :song (kind-of-asset asset)))
 
 (defun script-asset-p (asset)
-  "Is ASSET a script?"
+  "Is ASSET a script?
+
+@table @asis
+@item ASSET
+Asset identifier string.
+@end table
+
+Returns @code{T} if the asset is a script, @code{NIL} otherwise."
   (eql :script (kind-of-asset asset)))
 
 (defun map-asset-p (asset)
-  "Is ASSET a map?"
+  "Is ASSET a map?
+
+@table @asis
+@item ASSET
+Asset identifier string.
+@end table
+
+Returns @code{T} if the asset is a map, @code{NIL} otherwise."
   (eql :map (kind-of-asset asset)))
 
 (defun blob-asset-p (asset)
-  "Is ASSET a BLOB?"
+  "Is ASSET a BLOB?
+
+@table @asis
+@item ASSET
+Asset identifier string.
+@end table
+
+Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
   (eql :blob (kind-of-asset asset)))
 
 (defgeneric asset-loader-size (kind record-count machine)
@@ -182,6 +330,18 @@
     (7800 #x4000)))
 
 (defun try-allocation-sequence (sequence file-sizes &key video)
+  "Attempt to allocate assets in SEQUENCE into ROM banks.
+
+@table @asis
+@item SEQUENCE
+List of assets to allocate.
+@item FILE-SIZES
+Hash table mapping assets to their sizes.
+@item VIDEO
+Video standard for allocation (optional).
+@end table
+
+Returns allocation result if successful, NIL if allocation fails."
   (tagbody top
      (loop with banks = (make-hash-table :test 'equal)
            with bank = 0
@@ -220,6 +380,16 @@
                      (return-from try-allocation-sequence banks)))))
 
 (defun compute-asset-size (asset-file &key file-sizes)
+  "Compute the size of ASSET-FILE for ROM allocation.
+
+@table @asis
+@item ASSET-FILE
+Pathname or asset identifier.
+@item FILE-SIZES
+Optional hash table of pre-computed file sizes.
+@end table
+
+Returns the size in bytes required for the asset in ROM."
   (let ((n (cond ((equal "o" (pathname-type asset-file))
                   (ql-util:file-size asset-file))
                  ((equal "s" (pathname-type asset-file))
@@ -292,13 +462,16 @@
 (defvar *first-assets-bank* nil)
 
 (defun first-assets-bank (build)
+  (declare (ignore build))
   (or *first-assets-bank*
       (setf *first-assets-bank*
             (loop for bank from 0
                   for bank-name = (format nil "Bank~(~2,'0x~)" bank)
                   unless (probe-file (make-pathname
                                       :directory (list :relative
-                                                       "Source" "Banks"
+                                                       "Source" "Code"
+                                                       (machine-directory-name)
+                                                       "Banks"
                                                        (machine-directory-name)
                                                        bank-name)
                                       :name bank-name
@@ -379,6 +552,20 @@
             (t 64)))))
 
 (defun included-file (line)
+  "Extract the filename from an assembler .include directive in LINE.
+
+@table @asis
+@item Input
+@table @asis
+@item LINE
+A string containing an assembler directive like @samp{.include \"Filename.s\"}.
+@end table
+@end table
+
+@table @asis
+@item Output
+Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
+@end table"
   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\.include \"(.*)\\.s\"" line))))
     (when (and match (plusp (array-dimension match 0)))
       (aref match 0))))
@@ -391,7 +578,7 @@
 (defun machine-directory-name (&optional (machine *machine*))
   "Return the directory name for the current machine platform"
   (ecase machine
-    (1 "Oric-1")
+    (1 "Oric")
     (2 "A2")
     (3 "A3")
     (8 "NES")
@@ -409,7 +596,7 @@
     (837 "GG")
     (1000 "SG1000")
     (1601 "SMD")
-    (2068 "Spectrum")
+    (2068 "Spc")
     (2600 "2600")
     (2609 "Intv")
     (3010 "SMS")
@@ -420,6 +607,16 @@
     (9918 "ClcV")))
 
 (defun include-paths-for-current-bank (&key cwd testp)
+  "Return a list of directories to search for included files in the current bank.
+
+@table @asis
+@item CWD
+Current working directory (optional).
+@item TESTP
+If true, include test-specific directories.
+@end table
+
+Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
   (let* ((bank (if (= *bank* *last-bank*)
                    "LastBank"
                    (format nil "Bank~(~2,'0x~)" *bank*)))
@@ -437,9 +634,9 @@
     (when testp (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))
     ;; also include platform tests when testing
     (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))
-    (when (probe-file (make-pathname :directory (list :relative "Source" "Banks" bank)
+    (when (probe-file (make-pathname :directory (list :relative "Source" "Code" machine-dir "Banks" bank)
                                      :name bank :type "s"))
-      (appendf includes (list (list :relative "Source" "Banks" bank))))
+      (appendf includes (list (list :relative "Source" "Code" machine-dir "Banks" bank))))
     includes))
 
 (defun generated-path (path)
@@ -527,6 +724,18 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
               do (return t)))))
 
 (defun find-included-file (name &key cwd testp)
+  "Find the pathname of an included source file NAME.
+
+@table @asis
+@item NAME
+The base name of the file to find (without .s extension).
+@item CWD
+Current working directory (optional).
+@item TESTP
+If true, include test directories in search.
+@end table
+
+Returns the pathname of the found file, or signals an error if not found."
   (let ((generated-asset-pathname
           (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name) "Assets")
                          :name name :type "s")))
@@ -554,40 +763,40 @@ file ~a.s in bank $~(~2,'0x~)~
 (defun find-included-binary-file (name)
   (when (search "StagehandHigh" name)
     (return-from find-included-binary-file
-      (make-pathname :directory '(:relative "Object")
+      (make-pathname :directory (list :relative "Object" (machine-directory-name))
                      :name "StagehandHigh" :type "o")))
   (when (search "StagehandLow" name)
     (return-from find-included-binary-file
-      (make-pathname :directory '(:relative "Object")
+      (make-pathname :directory (list :relative "Object" (machine-directory-name))
                      :name "StagehandLow" :type "o")))
   (when (eql 0 (search "Art." name))
-    (let ((possible-file (make-pathname :directory '(:relative "Source" "Art")
+    (let ((possible-file (make-pathname :directory (list :relative "Source" "Art" (machine-directory-name))
                                         :name (subseq name 4) :type "art")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets")
+          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
     (let ((possible-file (make-pathname
-                          :directory '(:relative "Source" "Maps" "Tiles")
+                          :directory (list :relative "Source" "Maps" "Tiles" (machine-directory-name))
                           :name (subseq name 8) :type "tsx")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets")
+          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
                          :name name :type "o")))))
   (when (eql 0 (search "Blob." name))
-    (let ((possible-file (make-pathname :directory '(:relative "Source" "Blobs")
+    (let ((possible-file (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
                                         :name (subseq name 5) :type "xcf")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Source" "Generated" "Assets")
+          (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name) "Assets")
                          :name name :type "s")))))
   (when (eql 0 (search "Song." name))
     (let ((possible-file (make-pathname :directory '(:relative "Source" "Songs")
                                         :name (subseq name 5) :type "mscz")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory '(:relative "Object" "Assets")
+          (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
                          :name name :type "o")))))
   (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)"
          name *bank*))
@@ -600,7 +809,7 @@ file ~a.s in bank $~(~2,'0x~)~
           (error "Can't find “~a” and don't know how to make it~2%(~s)"
                  (enough-namestring source-file) source-file)))
     (with-input-from-file (source source-file)
-      (let* ((testp (or testp
+       (let* ((testp (or testp
                         (when (search "Tests" (namestring source-file)) t)))
              (includes (loop for line = (read-line source nil nil)
                              while line
@@ -649,6 +858,11 @@ file ~a.s in bank $~(~2,'0x~)~
   :test 'equalp)
 
 (defun skyline-tool-writes-p (pathname)
+  "Check if PATHNAME is a file that Skyline-Tool can generate.
+
+PATHNAME: A pathname object.
+Returns a function to generate the file if Skyline-Tool handles it, otherwise NIL.
+Checks for files in Generated directories with specific names or containing 'Palette'."
   (and (member (pathname-type pathname) '("s" "forth") :test #'string=)
        (member "Generated" (pathname-directory pathname) :test #'string=)
        (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
@@ -758,10 +972,10 @@ file ~a.s in bank $~(~2,'0x~)~
     (destructuring-bind (kind name) (asset-kind/name asset-indicator)
       (cond ((equal kind "Songs")
              (format nil "~20tSource/Generated/~a/Orchestration.s\\
-~{~20tObject/~a/Assets/Song.~{~a.~a~}.o~^ \\~%~}"
-                     machine-dir machine-dir
-                      (loop for video in (supported-video-types)
-                            collecting (list name video))))
+~{~20tObject/~{~a/Assets/Song.~a.~a~}.o~^ \\~%~}"
+                     machine-dir
+                     (loop for video in (supported-video-types)
+                            collecting (list machine-dir name video))))
            ((equal kind "Maps")
             (format nil "~{~25t~a~^ \\~%~}"
                     (loop for video in (supported-video-types)
@@ -770,7 +984,7 @@ file ~a.s in bank $~(~2,'0x~)~
             (format nil "Source/Generated/Assets/Blob.~a.s" name))
            ((equal kind "Art")
             (format nil "Source/Generated/Assets/Art.~a.s" name))
-           (t (asset->object-name asset-indicator)))))
+           (t (asset->object-name asset-indicator))))))
 
 (defun asset->symbol-name (asset-indicator)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
@@ -822,7 +1036,7 @@ file ~a.s in bank $~(~2,'0x~)~
 ~10t.fi~%"
                   video basename video)))
     (dolist (video (supported-video-types))
-      (format *standard-output* "~%
+      (format t "
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
 	mkdir -p Object/~a/Assets
@@ -909,10 +1123,10 @@ file ~a.s in bank $~(~2,'0x~)~
 
 Currently just enumerates all four asset loaders."
   (declare (ignore asset-objects))
-  (list "Source/Routines/LoadMap.s"
-        "Source/Routines/LoadBlob.s"
-        "Source/Routines/LoadSong.s"
-        "Source/Routines/LoadScript.s"))
+  (list (format nil "Source/Code/~a/Routines/LoadMap.s" (machine-directory-name))
+        (format nil "Source/Code/~a/Routines/LoadBlob.s" (machine-directory-name))
+        (format nil "Source/Code/~a/Routines/LoadSong.s" (machine-directory-name))
+        (format nil "Source/Code/~a/Routines/LoadScript.s" (machine-directory-name))))
 
 (defun write-asset-ids (&optional (outfile-pathname #p"Source/Generated/AssetIDs.s")
                                   (infile-pathname #p"Source/Assets.index"))
@@ -1111,7 +1325,6 @@ Object/Phantasia.CBM.zip: \\~
 "
                  (all-encoded-asset-names)
                  *game-title*))))
-
 
 (defvar *assets-for-builds* (make-hash-table :test 'equalp)
   "A cache of assets and in which builds they are used.")
@@ -1325,7 +1538,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 (defmethod write-master-makefile-for-machine ((machine (eql 200)))
   "Write makefile content for Atari Lynx"
   (dolist (build +all-builds+)
-    (let ((*last-bank* (1- (number-of-banks build video))))
+    (let ((*last-bank* (1- (number-of-banks build nil))))
         (write-makefile-top-line :build build)
         (write-header-script :build build)
         (dotimes (*bank* (1+ *last-bank*))
@@ -1731,7 +1944,7 @@ EndOfBinary = *
                    "--verbose-list" "-DTV=NTSC"
                    "-I"
                    (namestring
-                    (merge-pathnames #p"Source/Common/"))
+                    (merge-pathnames (format nil "Source/Code/~a/Common/" (machine-directory-name))))
                    "-I"
                    (namestring
                     (merge-pathnames #p"Source/Generated/"))

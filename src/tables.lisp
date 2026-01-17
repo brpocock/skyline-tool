@@ -1,6 +1,14 @@
 (in-package :skyline-tool)
 
 (defun read-ods-into-lists (pathname)
+  "Read an ODS spreadsheet file and convert it to lists of lists.
+
+@table @asis
+@item PATHNAME
+Path to the ODS file to read.
+@end table
+
+Returns a list where each element represents a worksheet as a list of rows."
   (zip:with-zipfile (zip pathname :force-utf-8 t)
     (let ((xml (xmls:parse-to-list
                 (babel:octets-to-string
@@ -30,11 +38,27 @@
           (mapcar #'ods-table-rows->list tables))))))
 
 (defun extract-ss-titles (row1)
+  "Extract column titles from the first row of a spreadsheet.
+
+@table @asis
+@item ROW1
+First row of the spreadsheet as a list.
+@end table
+
+Returns a list of keywords representing column titles."
   (loop for column in row1
         when (not (emptyp column))
           collect (make-keyword (string-upcase (cl-change-case:param-case column)))))
 
 (defun ss->lol (page)
+  "Convert a spreadsheet page to a list of property lists.
+
+@table @asis
+@item PAGE
+Spreadsheet page as a list of rows.
+@end table
+
+Returns a list where each element is a property list representing a row."
   (let* ((row1 (first page))
          (titles (extract-ss-titles row1)))
     (loop for row in (cdr page)
@@ -134,7 +158,16 @@
 (defun compile-item-drops (&optional (pathname "../Source/Tables/ItemDrop.ods")
                                      (output-pathname
                                       "../Source/Generated/ItemDropTable.s"))
-  "Compile the item drop tables from PATHNAME into OUTPUT-PATHNAME"
+  "Compile the item drop tables from PATHNAME into OUTPUT-PATHNAME.
+
+@table @asis
+@item PATHNAME
+Path to the ODS file containing item drop data.
+@item OUTPUT-PATHNAME
+Path where the generated assembly file will be written.
+@end table
+
+Reads item drop tables from an ODS spreadsheet and generates assembly code."
   (format *trace-output* "~&Reading item drops sheets in ~a … "
           (enough-namestring pathname))
   (unless (probe-file pathname)
@@ -174,7 +207,16 @@
 
 (defun compile-shops (&optional (pathname "../Source/Tables/Shops.ods")
                                 (output-pathname "../Source/Generated/ShoppingTable.s"))
-  "Compile the shopping tables from PATHNAME into OUTPUT-PATHNAME"
+  "Compile the shopping tables from PATHNAME into OUTPUT-PATHNAME.
+
+@table @asis
+@item PATHNAME
+Path to the ODS file containing shopping data.
+@item OUTPUT-PATHNAME
+Path where the generated assembly file will be written.
+@end table
+
+Reads shop tables from an ODS spreadsheet and generates assembly code."
   (format *trace-output* "~&Reading shopping sheets in ~a … "
           (enough-namestring pathname))
   (let* ((sheet (read-ods-into-lists pathname))
