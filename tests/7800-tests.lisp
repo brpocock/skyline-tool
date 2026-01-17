@@ -43,14 +43,14 @@
              "Binary output file should be created")
 
     ;; Check file size: 2 pages * 256 bytes each = 512 bytes
-    (when (probe-file test-file)
-      (is (= (with-open-file (stream test-file :element-type '(unsigned-byte 8))
+    (when (probe-file temp-file)
+      (is (= (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
                (file-length stream))
              512)
            "File should be exactly 512 bytes (2 pages × 256 bytes)")
 
       ;; Read and validate first page content
-      (with-open-file (stream test-file :element-type '(unsigned-byte 8))
+      (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
         (let ((first-page (loop for i from 0 to 3 collect (read-byte stream))))
           (is (equal first-page '(1 2 3 4))
               "First page should contain the correct data"))
@@ -66,25 +66,65 @@
 ;; Test 7800 music processing correctness
 (test 7800-music-processing-correctness
   "Test that 7800 music functions process MIDI data correctly"
-  ;; Test midi->7800-tia with mock MIDI data
-  (let ((mock-midi-notes '((:time 0 :key 60 :velocity 100)    ; Middle C
-                           (:time 1 :key 64 :velocity 80)     ; E above middle C
-                           (:time 2 :key 67 :velocity 60))))  ; G above middle C
+  ;; Test midi->7800-tia with comprehensive mock MIDI data
+  (let ((mock-midi-notes '((:time 0 :key 60 :velocity 100 :channel 0)    ; Middle C
+                           (:time 100 :key 64 :velocity 80 :channel 0)   ; E above middle C
+                           (:time 200 :key 67 :velocity 60 :channel 0)   ; G above middle C
+                           (:time 300 :key 60 :velocity 0 :channel 0)))) ; Note off
 
-    (let ((result (skyline-tool::midi->7800-tia mock-midi-notes)))
+    (let ((result (skyline-tool::midi->7800-tia mock-midi-notes :ntsc)))
       (is (listp result)
           "midi->7800-tia should return a list")
-      (is (= (length result) 3)
-          "midi->7800-tia should process all input notes")))
+      (is (= (length result) 4)
+          "midi->7800-tia should process all input events")
 
-  ;; Test array<-7800-tia-notes-list
-  (let ((tia-notes '((:frequency 440 :volume 15 :control #x00)
-                     (:frequency 880 :volume 10 :control #x00))))
-    (let ((result (skyline-tool::array<-7800-tia-notes-list tia-notes)))
+      ;; Verify first note (Middle C)
+      (let ((first-note (first result)))
+        (is (and (consp first-note) (eql (first first-note) :frequency))
+            "First element should be frequency event")
+        (is (< 259 (getf first-note :frequency) 262)  ; Middle C ~261.63Hz
+            "Middle C frequency should be correct"))
+
+      ;; Verify note-off handling
+      (let ((note-off-event (fourth result)))
+        (is (and (consp note-off-event) (eql (first note-off-event) :frequency))
+            "Note-off should be converted to frequency event")
+        (is (= (getf note-off-event :frequency) 0)
+            "Note-off should set frequency to 0"))))
+
+  ;; Test array<-7800-tia-notes-list with detailed validation
+  (let ((tia-notes '((:frequency 261.63 :volume 15 :control #x04)  ; Middle C, AUDC value
+                     (:frequency 329.63 :volume 10 :control #x08)  ; E4, different AUDC
+                     (:frequency 0 :volume 0 :control #x00))))     ; Silence
+    (let ((result (skyline-tool::array<-7800-tia-notes-list tia-notes :ntsc)))
       (is (arrayp result)
           "array<-7800-tia-notes-list should return an array")
-      (is (= (length result) 2)
-          "array should contain all input notes"))))
+      (is (= (length result) 3)
+          "array should contain all input notes")
+
+      ;; Verify array structure - should contain AUDC/AUDF pairs
+      (is (= (length (aref result 0)) 2)
+          "Each note should be encoded as 2 bytes (AUDF, AUDC)")
+      (is (= (first (aref result 0)) #x0F)  ; AUDF for ~262Hz (rounded)
+          "First note AUDF should be correct")
+      (is (= (second (aref result 0)) #x84) ; AUDC with volume 15
+          "First note AUDC should have correct volume and control")
+
+      ;; Verify silence encoding
+      (is (= (first (aref result 2)) 0)
+          "Silence should have AUDF = 0")
+      (is (= (second (aref result 2)) 0)
+          "Silence should have AUDC = 0")))
+
+  ;; Test frequency calculation accuracy
+  (let ((test-frequencies '(261.63 293.66 329.63 349.23 392.00 440.00))) ; C major scale
+    (dolist (freq test-frequencies)
+      (let* ((midi-key (skyline-tool::key<-midi-key freq))
+             (reconstructed-freq (skyline-tool:freq<-midi-key midi-key)))
+        ;; Allow 1% tolerance for TIA frequency approximation
+        (is (< (abs (- freq reconstructed-freq)) (* freq 0.01))
+            (format nil "Frequency ~A should round-trip accurately, got ~A"
+                    freq reconstructed-freq))))))
 
 ;; Test 7800 music compilation output validation
 (test 7800-music-compilation-output-validation
@@ -108,39 +148,69 @@
 ;; Test 7800 graphics conversion correctness
 (test 7800-graphics-conversion-correctness
   "Test that 7800 graphics conversion produces correct byte data"
-  ;; Create a test palette (4 colors for 160A mode)
-  (let ((test-palette (vector #xFF000000 #xFFFFFFFF #xFF808080 #xFFC0C0C0))  ; black, white, gray, light gray
-        (test-image (make-array '(4 1) :element-type '(unsigned-byte 32))))
+  ;; Test 160A mode (2 bits per pixel, 4 pixels per byte)
+  (let ((test-palette (vector #xFF000000 #xFFFFFFFF #xFF808080 #xFFC0C0C0))  ; BG, FG1, FG2, FG3
+        (test-image (make-array '(8 2) :element-type '(unsigned-byte 32))))
 
-    ;; Set up test image: black, white, gray, light gray pixels
-    (setf (aref test-image 0 0) #xFF000000)  ; black -> palette index 0
-    (setf (aref test-image 1 0) #xFFFFFFFF)  ; white -> palette index 1
-    (setf (aref test-image 2 0) #xFF808080)  ; gray -> palette index 2
-    (setf (aref test-image 3 0) #xFFC0C0C0)  ; light gray -> palette index 3
+    ;; Create test pattern: 2 rows × 8 pixels = 16 pixels total
+    ;; Row 0: BG, FG1, BG, FG2, BG, FG3, BG, FG1
+    ;; Row 1: FG2, BG, FG3, BG, FG1, BG, FG2, BG
+    (dotimes (x 8)
+      (setf (aref test-image x 0) (aref test-palette (mod x 4))))
+    (dotimes (x 8)
+      (setf (aref test-image x 1) (aref test-palette (mod (+ x 1) 4))))
 
     ;; Test 160A conversion (4 pixels = 1 byte, 2 bits per pixel)
-    ;; Expected: indices 0,1,2,3 -> binary 00,01,10,11 -> byte #b00110110 = 54
+    ;; Row 0: pixels 0-3 (BG, FG1, BG, FG2) -> indices 0,1,0,2 -> bits 00,01,00,10 -> #b00010000 = 16
+    ;; Row 0: pixels 4-7 (BG, FG3, BG, FG1) -> indices 0,3,0,1 -> bits 00,11,00,01 -> #b00001100 = 12
+    ;; Row 1: pixels 0-3 (FG2, BG, FG3, BG) -> indices 2,0,3,0 -> bits 10,00,11,00 -> #b00111000 = 56
+    ;; Row 1: pixels 4-7 (FG1, BG, FG2, BG) -> indices 1,0,2,0 -> bits 01,00,10,00 -> #b00001000 = 8
     (let ((result-160a (skyline-tool::7800-image-to-160a test-image
-                                                        :byte-width 1 :height 1
+                                                        :byte-width 2 :height 2
                                                         :palette test-palette)))
-      (is (equalp result-160a '((54)))  ; ((00 01 10 11)) packed = 54
-          "160A conversion should pack 4 pixels into correct byte value"))
+      (is (= (length result-160a) 2) "160A should return 2 rows")
+      (is (= (length (first result-160a)) 2) "160A row should contain 2 bytes")
+      (is (= (nth 0 (first result-160a)) 16) "First byte of first row should be correct")
+      (is (= (nth 1 (first result-160a)) 12) "Second byte of first row should be correct")
+      (is (= (nth 0 (second result-160a)) 56) "First byte of second row should be correct")
+      (is (= (nth 1 (second result-160a)) 8) "Second byte of second row should be correct"))
 
     ;; Test 320A conversion (2 pixels per byte, 4 bits per pixel)
-    ;; Expected: first 2 pixels (0,1) -> #b00001111 = 15
+    ;; Row 0: pixels 0-1 (BG=0, FG1=1) -> 4-bit values -> byte #x01
+    ;; Row 0: pixels 2-3 (BG=0, FG2=2) -> 4-bit values -> byte #x02
+    ;; etc.
     (let ((result-320a (skyline-tool::7800-image-to-320a test-image
-                                                        :byte-width 1 :height 1
+                                                        :byte-width 4 :height 2
                                                         :palette test-palette)))
-      (is (= (length result-320a) 1) "320A should return one row")
-      (is (= (length (first result-320a)) 1) "320A row should contain one byte")
-      (is (= (caar result-320a) 15) "320A should pack first 2 pixels correctly"))
+      (is (= (length result-320a) 2) "320A should return 2 rows")
+      (is (= (length (first result-320a)) 4) "320A row should contain 4 bytes")
+      (is (= (nth 0 (first result-320a)) #x10) "320A first byte should be correct")
+      (is (= (nth 1 (first result-320a)) #x02) "320A second byte should be correct"))
 
-    ;; Test 320C conversion (2 pixels per byte with color lookup)
+    ;; Test 320C conversion (2 pixels per byte with color lookup table)
     (let ((result-320c (skyline-tool::7800-image-to-320c test-image
-                                                        :byte-width 1 :height 1
+                                                        :byte-width 4 :height 2
                                                         :palette test-palette)))
-      (is (= (length result-320c) 1) "320C should return one row")
-      (is (= (length (first result-320c)) 1) "320C row should contain one byte"))))
+      (is (= (length result-320c) 2) "320C should return 2 rows")
+      (is (= (length (first result-320c)) 4) "320C row should contain 4 bytes")
+      ;; 320C uses color lookup - verify basic structure
+      (is (every #'integerp (first result-320c)) "320C bytes should be integers")))
+
+  ;; Test edge cases and error conditions
+  (let ((empty-palette (vector))
+        (empty-image (make-array '(0 0) :element-type '(unsigned-byte 32))))
+
+    ;; Test with empty palette
+    (signals error (skyline-tool::7800-image-to-160a empty-image
+                                                     :byte-width 1 :height 1
+                                                     :palette empty-palette)
+             "Should signal error with empty palette")
+
+    ;; Test with mismatched dimensions
+    (signals error (skyline-tool::7800-image-to-160a (make-array '(3 1))
+                                                     :byte-width 1 :height 1
+                                                     :palette (vector #xFF000000 #xFFFFFFFF))
+             "Should signal error with invalid pixel count for 160A")))
 
 ;; Test 7800 parse-object method
 (test 7800-parse-object-method
@@ -203,7 +273,7 @@
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
   (signals error (skyline-tool::compile-music-7800
                    (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
-                   "/nonexistent.mid" :tia)
+                   "/nonexistent.mid" :tia :binary)
             "compile-music-7800 should signal error for missing MIDI file"))
 
 ;; Test 7800 platform constants

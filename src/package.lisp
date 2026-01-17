@@ -136,6 +136,7 @@
            #:write-projection-tables.s
            #:write-sound-effects-file
            #:write-master-makefile
+           #:write-makefile-top-line
            #:run-for-port
            #:run-gui
            #:run-repl
@@ -148,7 +149,7 @@
            ;; Platform-specific compilation functions
            #:compile-music-cgb #:compile-music-dmg #:compile-music-nes #:compile-music-snes
            #:compile-music-colecovision #:compile-music-sg1000 #:compile-music-sms #:compile-music-sgg
-           #:compile-music-c16 #:compile-music-a2 #:compile-music-a3 #:compile-music-a2gs #:compile-music-bbc #:compile-music-lynx
+           #:compile-music-c16 #:compile-music-a2 #:compile-music-a3 #:compile-music-a2gs #:compile-music-bbc #:compile-music-lynx #:compile-music-2609
            ;; Platform-specific blob ripping functions
            #:blob-rip-cgb-tile #:blob-rip-cgb-sprite #:blob-rip-cgb-font
            #:blob-rip-dmg-tile #:blob-rip-dmg-sprite #:blob-rip-dmg-font
@@ -199,17 +200,6 @@
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
-;; Try to load project.json during package initialization if PLATFORM is set
-;; (let* ((platform (sb-ext:posix-getenv "PLATFORM")))
-;;   (when platform
-;;     (let ((project-json-path (merge-pathnames (format nil "Project.~A.json" platform) (project-root))))
-;;       (if (probe-file project-json-path)
-;;           (handler-case
-;;               (setf *project.json* (with-open-file (stream project-json-path)
-;;                                      (json:decode-json stream)))
-;;             (error (e)
-;;               (error "Could not load project.json ~A: ~A" project-json-path e)))
-;;           (error "Project JSON file not found: ~A" project-json-path)))))
 
 (defvar *game-title* nil)
 (defvar *part-number* nil)
@@ -221,8 +211,6 @@
 (defvar *default-skin-color* nil)
 (defvar *default-hair-color* nil)
 (defvar *default-clothes-color* nil)
-(defvar *valid-machines* '(1 2 8 16 20 64 88 128 200 222 223 264 2609 1601 2600 3010 5200 7800))
-(defvar *valid-regions* '(:ntsc :pal :secam))
 
 ;; Set the variables from project.json if it was loaded
 (when *project.json*

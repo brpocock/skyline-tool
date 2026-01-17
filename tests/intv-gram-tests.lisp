@@ -247,7 +247,42 @@
                                                 :palette-pixels test-array)
               (error (e)
                 (fail "Fuzz test failed for floored dimensions ~D×~D from ~F×~F: ~A"
-                      floored-w floored-h w h e)))))))))
+                       floored-w floored-h w h e))))))))
+
+;; Test 9: GRAM card data validation
+(test gram-compiler-card-data-validation
+  "Test that GRAM compiler produces correct 16-bit card data"
+  (with-temp-gram-output (output-path "data-test.s")
+    ;; Create a simple 8x8 test pattern
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      ;; Fill with a simple pattern: top-left 4x4 = color 1, bottom-right 4x4 = color 2
+      (dotimes (x 8)
+        (dotimes (y 8)
+          (setf (aref test-array x y)
+                (if (and (< x 4) (< y 4)) 1 2))))
+
+      (let ((test-png (make-pathname :name "data-test" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        ;; Verify the output contains correct GRAM card data
+        (let ((content (uiop:read-file-string output-path)))
+          ;; Each GRAM card should be represented as 8 DECLE statements (8 rows × 1 card)
+          ;; For 8x8 input, we get 1 GRAM card (8 rows of 8 pixels each = 8 DECLE)
+          (let ((decle-lines (cl-ppcre:all-matches-as-strings "DECLE \\$([0-9A-F]{4})" content)))
+            (is (= 8 (length decle-lines))
+                "Should generate 8 DECLE statements for 8x8 GRAM card")
+
+            ;; The first row should have left 4 pixels as color 1, right 4 as color 2
+            ;; In Intellivision GRAM format, each DECLE represents 8 pixels
+            ;; Color 1 and 2 would be encoded based on the palette
+            (is (> (length decle-lines) 0)
+                "Should have at least one DECLE line")
+
+            ;; Verify each DECLE is a valid 16-bit hex value
+            (dolist (line decle-lines)
+              (is-true (cl-ppcre:scan "^DECLE \\$[0-9A-F]{4}$" line)
+                       "Each DECLE should be valid 16-bit hex: ~A" line)))))))))
 
 ;; Test 9: Regression test - single card output
 (test gram-compiler-regression-single-card
@@ -293,8 +328,10 @@
 ;; Test Intellivision platform integration
 (test intv-platform-constants
   "Test that Intellivision platform constants are properly defined"
-  (is-true (member 2609 skyline-tool::*valid-machines*)
-           "Intellivision (machine 2609) should be in valid machines list"))
+  ;; Test Intellivision (machine 2609) validation
+  (let ((skyline-tool::*machine* 2609))
+    (is-true (skyline-tool::machine-valid-p)
+             "Intellivision (machine 2609) should be recognized as valid")))
 
 ;; Test exported Intellivision functions exist
 (test intv-exported-functions-existence

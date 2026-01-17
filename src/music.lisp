@@ -397,178 +397,6 @@ skipping MIDI music with ~:d track~:p"
           (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
           (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
-;; (eval-when (:compile-toplevel :load-toplevel :execute)
-;;   (defun ooxml->string (xml)
-;;     (if (consp xml)
-;;         (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
-;;         xml))
-;;
-;;   (defun ooxml-cell-repeats (cell)
-;;     (if-let (repeat-index (and (consp (second cell))
-;;                                (consp (first (second cell)))
-;;                                (position-if (lambda (attr) (equal (first attr) "number-columns-repeated"))
-;;                                             (second cell))))
-;;       (parse-integer (second (elt (second cell) repeat-index)))
-;;       1))
-;;
-;;   (defun ooxml-repeated-cell (cell string)
-;;     (loop repeat (ooxml-cell-repeats cell)
-;;           collect string))
-;;
-;;   (defun ods-table-rows->list (table)
-;;     (mapcar (lambda (row)
-;;               (loop for cell in (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
-;;                                                row)
-;;                     append (ooxml-repeated-cell cell (ooxml->string cell))))
-;;             (mapcar #'rest (remove-if-not (lambda (el)
-;;                                             (equal (caar el) "table-row"))
-;;                                           table))))
-
-  (defun midi->note-name (note)
-    (if (and note (<= 0 note 127))
-        (multiple-value-bind (octave letter) (floor note 12)
-          (format nil "~a~d" (elt '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B") letter)
-                  (- octave 1)))
-        (error "Invalid MIDI note number: ~a" note)))
-
-  (defun note->midi-note-number (octave note-name)
-    (+ 12
-       (* 12 octave)
-       (or (position note-name '("C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B")
-                     :test #'string-equal)
-           (position note-name '("C" "Db" "D" "Eb" "E" "F" "Gb" "G" "Ab" "A" "Bb" "B")
-                     :test #'string-equal)
-           (position note-name '("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B")
-                     :test #'string-equal)
-           (position note-name '("C" "D♭" "D" "E♭" "E" "F" "G♭" "G" "A♭" "A" "B♭" "B")
-                     :test #'string-equal))))
-
-  (assert (= 60 (note->midi-note-number 4 "C")) ()
-          "Note->MIDI-Note-Number is not tuned correctly")
-
-  (defun interpret-pokey-sheet1 (sheet1)
-    (assert (eql 0 (search "POKEY table" (aref sheet1 2 0))) (sheet1)
-            "POKEY tables not in expected format~%~s" (aref sheet1 2 0))
-    (assert (equal "C" (aref sheet1 0 3)) ()
-            "Table does not start with C~%~s" (aref sheet1 0 3))
-    (loop for row from 3 below 112
-          for out-row from 0
-          with notes = (make-array (list 18 109) :element-type '(or null (unsigned-byte 16)))
-          with octave = 1
-          do (progn
-               (when (eql 0 (search "OCTAVE " (aref sheet1 35 row)))
-                 (setf octave (parse-integer (subseq (aref sheet1 35 row) 7))))
-               (setf (aref notes 0 out-row) (note->midi-note-number
-                                             octave
-                                             (string-trim " " (aref sheet1 0 row))))
-               (loop for column from 1 below 35 by 2
-                     for out-column from 1
-                     do (let ((number$ (aref sheet1 column row)))
-                          (setf (aref notes out-column out-row)
-                                (if (and (not (emptyp number$))
-                                         (every #'digit-char-p number$))
-                                    (parse-integer number$)
-                                    nil)))))
-          finally (return notes)))
-
-  (defun interpret-pokey-sheet2 (sheet2)
-    (return-from interpret-pokey-sheet2 nil)
-    (assert (eql 0 (search "POKEY table" (aref sheet2 2 0))) (sheet2)
-            "POKEY tables not in expected format~%~s" (aref sheet2 2 0))
-    (assert (equal "C" (aref sheet2 0 3)) ()
-            "Table does not start with C~%~s" (aref sheet2 0 3))
-    (loop for row from 3 below 112
-          for out-row from 0
-          with notes = (make-array (list 18 109) :element-type '(or null (unsigned-byte 16)))
-          with octave = 1
-          do (progn
-               (when (eql 0 (search "OCTAVE " (aref sheet2 35 row)))
-                 (setf octave (parse-integer (subseq (aref sheet2 35 row) 7))))
-               (setf (aref notes 0 out-row) (note->midi-note-number
-                                             octave
-                                             (string-trim " " (aref sheet2 0 row))))
-               (loop for column from 1 below 35 by 2
-                     for out-column from 1
-                     do (let ((number$ (aref sheet2 column row)))
-                          (setf (aref notes out-column out-row)
-                                (if (and (not (emptyp number$))
-                                         (every #'digit-char-p number$))
-                                    (parse-integer number$)
-                                    nil)))))
-          finally (return notes)))
-
-  (defun interpret-pokey-tables (tables)
-    (destructuring-bind (sheet1 sheet2 sheet3 sheet4) tables
-      (declare (ignore sheet3 sheet4))
-      (interpret-pokey-sheet2 sheet2) ; TODO: #1228, ignored
-      (interpret-pokey-sheet1 sheet1)))
-
-  (defun lists->2d-array (lists)
-    (let ((rows (length lists))
-          (cols (reduce #'max (mapcar #'length lists))))
-      (loop with array = (make-array (list cols rows))
-            for row in lists
-            for r from 0
-            do (loop for column in row
-                     for c from 0
-                     do (setf (aref array c r) column))
-            finally (return array))))
-
-  ;; (defun read-pokey.ods ()
-  ;;   (format *trace-output* "~&Reading Synthpopalooza's POKEY tables spreadsheet… ")
-  ;;   (prog1
-  ;;       (zip:with-zipfile (zip (make-pathname
-  ;;                               :name "Synthpopalooza POKEY tables"
-  ;;                               :type "ods"
-  ;;                               :directory (append (pathname-directory
-  ;;                                                   (asdf:system-source-directory :skyline-tool))
-  ;;                                                  (list "data")))
-  ;;                          :force-utf-8 t)
-  ;;         (let ((xml (xmls:parse-to-list
-  ;;                     (map 'string #'code-char
-  ;;                          (zip:zipfile-entry-contents
-  ;;                           (zip:get-zipfile-entry "content.xml" zip))))))
-  ;;           (assert (and (consp (first xml))
-  ;;                        (equal (car (first xml)) "document-content")
-  ;;                        (equal (cdr (first xml))
-  ;;                               "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-  ;;                   (xml)
-  ;;                   "ODS file seems to be malformed: document-content tag missing or invalid~%~s"
-  ;;                   (first xml))
-  ;;           (let ((body (first (remove-if-not (lambda (el) (equal (caar el) "body")) (rest xml)))))
-  ;;             (assert (and (consp (caaddr body))
-  ;;                          (equal (car (caaddr body)) "spreadsheet")
-  ;;                          (equal (cdr (caaddr body)) "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-  ;;                     (xml)
-  ;;                     "ODS is not a spreadsheet?~%~s"
-  ;;                     (first body))
-  ;;             (let* ((tables (mapcar #'cdr
-  ;;                                    (remove-if-not (lambda (el) (equal (caar el) "table"))
-  ;;                                                   (subseq (caddr body) 2)))))
-  ;;               (mapcar #'ods-table-rows->list tables)))))
-  ;;     (format *trace-output* " done.")))
-
-  ;; (defun read-pokey-tables ()
-  ;;   (interpret-pokey-tables (mapcar #'lists->2d-array (read-pokey.ods)))))
-
-;; (define-constant +pokey-notes-table+
-;;     #2A((0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0)
-;;         (0 0 0 0 0 0 0 0))
-;;   :test 'equalp)
 
 (defvar +pokey-notes-table+
   #2A((0 0 0 0 0 0 0 0)
@@ -1700,3 +1528,46 @@ Music:~:*
       ;; Placeholder for actual MIDI conversion
       (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%")
       (format source ";;; Spectrum 128K has AY-3-8912 PSG chip available~%"))))
+
+(defun midi->note-name (midi-note-number)
+  "Convert a MIDI note number to a note name like 'C4'
+
+@table @asis
+@item Inputs
+@item MIDI-NOTE-NUMBER
+A MIDI note number from 0 to 127
+@item Outputs
+@item string
+A string containing the note name (e.g., \"C4\", \"F♯3\"). Note,
+the string will have the correct sharp sign (♯) not the octothorpe (#).
+@end table"
+  (let* ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+         (octave (floor midi-note-number 12))
+         (note-index (mod midi-note-number 12)))
+    (format nil "~a~d" (aref note-names note-index) (1- octave))))
+
+(defun note->midi-note-number (note-name)
+  "Convert a note name like 'C4' to a MIDI note number
+
+@table @asis
+@item Inputs
+@item NOTE-NAME
+A string containing a note name (e.g., \"C4\", \"F♯3\").
+Caution: You must use the sharp sign (♯) not the octothorpe (#),
+and flats (♭) or naturals (♮) are not understood.
+@item Outputs
+@item integer or nil
+A MIDI note number from 0 to 127, or nil if parsing fails
+@end table"
+  (let ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+        (note-name (string-upcase note-name)))
+    ;; Simple parsing: find the note part and octave part
+    (let* ((len (length note-name))
+           (note-part (if (and (>= len 2) (char= (char note-name 1) #\#))
+                         (subseq note-name 0 2)
+                         (subseq note-name 0 1)))
+           (octave-part (subseq note-name (length note-part)))
+           (octave (parse-integer octave-part :junk-allowed t))
+           (note-index (position note-part note-names :test #'string=)))
+      (when (and note-index octave)
+        (+ (* octave 12) note-index)))))

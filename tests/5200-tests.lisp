@@ -60,7 +60,21 @@
           (is-true (search "Height = 8" content)
                    "Should report correct height")
           (is-true (search "Width = 8" content)
-                   "Should report correct width"))))))
+                   "Should report correct width")
+
+          ;; Verify specific byte patterns for known input
+          ;; Row 0: all zeros -> .byte $00
+          ;; Row 1: all ones -> .byte $FF
+          ;; Row 2: alternating -> .byte $AA (10101010)
+          ;; Row 3: inverse alternating -> .byte $55 (01010101)
+          (is-true (search ".byte $00" content)
+                   "All-zero row should produce .byte $00")
+          (is-true (search ".byte $FF" content)
+                   "All-ones row should produce .byte $FF")
+          (is-true (search ".byte $AA" content)
+                   "Alternating pattern should produce .byte $AA")
+          (is-true (search ".byte $55" content)
+                   "Inverse alternating should produce .byte $55"))))))
 
 ;; Test 5200 Mode E bitmap error handling
 (test 5200-mode-e-error-handling

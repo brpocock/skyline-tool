@@ -561,6 +561,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
     (values output palettes)))
 
 (defun tile-property-value (key tile.xml &key tile-width)
+  (declare (ignore tile-width))
   (dolist (info (cddr tile.xml))
     (when (and (equal "properties" (car info)))
       (dolist (prop (cddr info))
@@ -1081,9 +1082,7 @@ Tileset object containing image data, tile dimensions, and palette information."
         (reduce #'shorter fully)))))
 
 (defparameter *rle-fast-mode* 1)
-
 (defvar *rle-options* 0)
-
 (defvar *rle-best-full* most-positive-fixnum)
 
 (defun rle-compress (source)
@@ -1299,12 +1298,6 @@ range is 0 - #xffffffff (4,294,967,295)"
     s))
 
 (defun compile-map (pathname)
-  "Compile Tiled map (TMX) files into binary format for the game engine.
-
-PATHNAME: Path to the TMX map file to compile
-
-Processes TMX XML files and generates optimized binary map data with
-collision information, tile indices, and other game-specific metadata."
   "Compiles a Tiled Map Editor (TMX) file into binary format for PATHNAME.
 
 @cindex map compilation
@@ -1318,7 +1311,9 @@ collision information, tile indices, and other game-specific metadata."
 @item Side Effects: Writes compiled map data to Object/Assets/ directory
 @end table
 
-This function processes TMX map files exported from Tiled Map Editor, converting them into the binary format expected by the Stagehand game engine. The compilation includes:
+This function  processes TMX map  files exported from Tiled  Map Editor,
+converting them  into the binary  format expected by the  Stagehand game
+engine. The compilation includes:
 
 @itemize
 @item Tile layer processing and tile ID mapping
@@ -1328,7 +1323,8 @@ This function processes TMX map files exported from Tiled Map Editor, converting
 @item Run-command script integration
 @end itemize
 
-The compiled output is stored in the Object/Assets/ directory with appropriate naming for the game engine to load.
+The compiled  output is  stored in the  Object/$(PORT)/Assets/ directory
+with appropriate naming for the game engine to load.
 
 @strong{Example:}
 @example
@@ -1425,7 +1421,7 @@ The compiled output is stored in the Object/Assets/ directory with appropriate n
                               :name (format nil "Map.~a.~a.~a"
                                             (last-elt (pathname-directory pathname))
                                             (pathname-name pathname) tv)
-                              :directory '(:relative "Object" "Assets")
+                              :directory `(:relative "Object"  ,(machine-directory-name) "Assets")
                               :type "o"))
                     (offset 0))
                 (ensure-directories-exist outfile)

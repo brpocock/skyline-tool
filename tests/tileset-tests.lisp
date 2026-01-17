@@ -28,28 +28,25 @@
 
 ;; Create a mock tileset structure for testing
 (defun create-mock-tileset (width height)
-  "Create a mock tileset with a simple gradient pattern"
-  (let ((image (make-array (list height width) :element-type '(unsigned-byte 32))))
-    ;; Create a simple color pattern
+  "Create a mock tileset with a simple pattern using palette indices"
+  (let ((image (make-array (list height width) :element-type '(unsigned-byte 8))))
+    ;; Create a simple pattern using palette indices 0-15
     (dotimes (y height)
       (dotimes (x width)
-        (let ((color-index (mod (+ x y) 16)))
-          ;; Convert to ARGB format (simple palette index for testing)
-          (setf (aref image y x) (logior (ash #xff 24)  ; Alpha
-                                        (ash (* color-index 16) 16)  ; Red
-                                        (ash (* color-index 8) 8)    ; Green
-                                        (* color-index 4))))))       ; Blue
+        (setf (aref image y x) (mod (+ x y) 16))))
     image))
 
 ;; Test palette extraction from image data
 (test palette-extraction-from-image
   "Test that palettes can be extracted from image data"
-  (let ((test-image (create-mock-tileset 16 16)))
+  (let ((skyline-tool::*machine* 7800) ; Set machine for palette functions
+        (skyline-tool::*region* :ntsc) ; Set region for palette functions
+        (test-image (create-mock-tileset 16 16)))
     ;; Test that extract-palettes function exists and works
     (is-true (fboundp 'skyline-tool::extract-palettes)
              "extract-palettes function should exist")
-    ;; The function should return palette data
-    (is-true (arrayp (skyline-tool::extract-palettes test-image))
+    ;; The function should return palette data (use count=4 to fit in 16 pixels)
+    (is-true (arrayp (skyline-tool::extract-palettes test-image :count 4))
              "extract-palettes should return an array")))
 
 ;; Test Atari color conversion
@@ -80,7 +77,9 @@
   "Test the adjust-palettes function"
   (is-true (fboundp 'skyline-tool::adjust-palettes)
            "adjust-palettes should exist")
-  (let ((test-palettes (make-array '(8 4) :initial-element 8))) ; Simple test palette
+  (let ((skyline-tool::*machine* 7800) ; Set machine for palette functions
+        (skyline-tool::*region* :ntsc) ; Set region for palette functions
+        (test-palettes (make-array '(8 4) :initial-element 8))) ; Simple test palette
     (is (arrayp (skyline-tool::adjust-palettes #'skyline-tool::darken-color-in-palette test-palettes))
         "adjust-palettes should return an array when using darken function")
     (is (arrayp (skyline-tool::adjust-palettes #'skyline-tool::lighten-color-in-palette test-palettes))

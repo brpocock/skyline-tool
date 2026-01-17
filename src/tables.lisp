@@ -137,12 +137,13 @@
   "Compile the item drop tables from PATHNAME into OUTPUT-PATHNAME"
   (format *trace-output* "~&Reading item drops sheets in ~a … "
           (enough-namestring pathname))
-  (if (probe-file pathname)
-      (let ((sheet (read-ods-into-lists pathname)))
-        (destructuring-bind (enemies-page tiles-page) sheet
-          (let* ((enemies-drops (ss->lol enemies-page))
-                 (tiles-drops (ss->lol tiles-page)))
-            (with-output-to-file (output output-pathname :if-exists :supersede)
+  (unless (probe-file pathname)
+    (error "Item drop source file ~a not found" pathname))
+  (let ((sheet (read-ods-into-lists pathname)))
+    (destructuring-bind (enemies-page tiles-page) sheet
+      (let* ((enemies-drops (ss->lol enemies-page))
+             (tiles-drops (ss->lol tiles-page)))
+        (with-output-to-file (output output-pathname :if-exists :supersede)
           (format *trace-output* "writing ~a … " (enough-namestring output-pathname))
           (finish-output *trace-output*)
           (format output ";;; Generated from ~a~2%EnemiesDrops: .block~%"
@@ -169,12 +170,6 @@
                           enemies-drops))
           (format output "~%~10t.bend")
           (format output "~2%TilesDrops:~{~%;;; ~{ ~a: ~s~^, ~}~}" tiles-drops)))))
-      (progn
-        (with-output-to-file (output output-pathname :if-exists :supersede)
-          (format output ";;; Placeholder - source file ~a not found~2%EnemiesDrops: .block~%~10t.bend~2%TilesDrops:~%"
-                  (enough-namestring pathname)))
-        (format *trace-output* "created placeholder for ~a … " (enough-namestring output-pathname))
-        (finish-output *trace-output*)))
   (format *trace-output* "Done.~%"))
 
 (defun compile-shops (&optional (pathname "../Source/Tables/Shops.ods")

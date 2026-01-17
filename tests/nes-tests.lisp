@@ -39,13 +39,13 @@
            "monochrome-lines-p should exist")
 
   ;; Test with mock palette data
-  (let ((test-palette (make-array '(16 3) :element-type '(unsigned-byte 8)
+  (let ((test-palette (make-array '(18 3) :element-type '(unsigned-byte 8)
                                   :initial-contents '((0 0 0) (255 255 255) (128 128 128)
                                                      (255 0 0) (0 255 0) (0 0 255)
                                                      (255 255 0) (255 0 255) (0 255 255)
                                                      (255 128 128) (128 255 128) (128 128 255)
                                                      (255 255 128) (255 128 255) (128 255 255)
-                                                     (192 192 192) (128 128 128)))))
+                                                     (192 192 192) (128 128 128) (64 64 64)))))
     (is-false (skyline-tool::monochrome-lines-p test-palette 16 3)
                "monochrome-lines-p should return false for multi-color palette")))
 

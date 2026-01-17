@@ -12,10 +12,14 @@
 ;; Test Sega platform constants
 (test sega-platform-constants
   "Test that Sega platform constants are properly defined"
-  (is-true (member 1000 skyline-tool::*valid-machines*)
-           "SG-1000 (machine 1000) should be in valid machines list")
-  (is-true (member 3010 skyline-tool::*valid-machines*)
-           "Master System (machine 3010) should be in valid machines list"))
+  ;; Test SG-1000 (machine 1000) validation
+  (let ((skyline-tool::*machine* 1000))
+    (is-true (skyline-tool::machine-valid-p)
+             "SG-1000 (machine 1000) should be recognized as valid"))
+  ;; Test Master System (machine 3010) validation
+  (let ((skyline-tool::*machine* 3010))
+    (is-true (skyline-tool::machine-valid-p)
+             "Master System (machine 3010) should be recognized as valid")))
 
 ;; Test Sega machine code validation
 (test sega-machine-codes
@@ -56,10 +60,14 @@
 ;; Test Sega platform dispatch recognition
 (test sega-dispatch-recognition
   "Test that Sega platforms are recognized in dispatch system"
-  (is-true (member 1000 skyline-tool::*valid-machines*)
-           "SG-1000 should be recognized for general operations")
-  (is-true (member 3010 skyline-tool::*valid-machines*)
-           "Master System should be recognized for general operations"))
+  ;; Test SG-1000 recognition
+  (let ((skyline-tool::*machine* 1000))
+    (is-true (skyline-tool::machine-valid-p)
+             "SG-1000 should be recognized for general operations"))
+  ;; Test Master System recognition
+  (let ((skyline-tool::*machine* 3010))
+    (is-true (skyline-tool::machine-valid-p)
+             "Master System should be recognized for general operations")))
 
 (defun run-sega-tests ()
   "Run all Sega tests and return results"

@@ -67,8 +67,19 @@
 (defun run-self-test (&rest args)
   "Run all unit tests for SkylineTool."
   (declare (ignore args))
-  (ql:quickload :skyline-tool/test)
-  (fiveam:run-all-tests :summary t))
+  (format *trace-output* "~&Loading test system…")
+  (asdf:load-system :skyline-tool/test)
+  (format *trace-output* " Running tests…")
+  (handler-case
+      (let ((results (fiveam:run-all-tests :summary :suite)))
+        (multiple-value-bind (ok failed skipped)
+            (fiveam:results-status results)
+          (declare (ignore skipped))
+          (when (and ok (plusp ok)) (format t " Tests passed."))
+          (when (and failed (plusp failed))
+            (error " TESTS FAILED:~%~{~% * ~a~}" failed))))
+    (serious-condition (c)
+      (error "Error running tests: ~s~2%~a" c c))))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
@@ -491,10 +502,10 @@ See COPYING for details
     (launcher)))
 
 (defun run-for-port (port-label &rest subcommand)
-  (handler-case
+
       (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
-                                         (project-root))))
-        (let ((project-data (json:decode-json-from-source json-path)))
+                                         (project-root)))
+             (project-data (json:decode-json-from-source json-path)))
           (setf *project.json* project-data
                 *game-title* (cdr (assoc :*game project-data))
                 *part-number*  (cdr (assoc :*part-number project-data))
@@ -506,8 +517,6 @@ See COPYING for details
                 *default-skin-color* (cdr (assoc :*default-skin-color project-data))
                 *default-hair-color* (cdr (assoc :*default-hair-color project-data))
                 *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
-    (error (e)
-      (error e))))
   (format *trace-output* "~&Running for port: ~a" port-label)
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))

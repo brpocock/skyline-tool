@@ -18,24 +18,43 @@
            #:spectrum-tests)
 
   ;; Define variables that were referenced in removed test files
-  (:export #:*hex-start*
-           #:*test-file*
+  (:export #:*test-file*
            #:make-test-stamp))
-
-;; Define the variables with default values
-(defparameter *hex-start* #x1000
-  "Default starting address for hex output in tests")
 
 (defparameter *test-file*
   (let* ((platform-dir (if (and (boundp 'skyline-tool:*machine*)
                                 skyline-tool:*machine*)
                            (skyline-tool::machine-directory-name)
                            "test"))
-         (path (format nil "Object/~a/tmpnam-~x.bin" platform-dir (sxhash (get-universal-time)))))
+         ;; Use timestamp and random for unique identifier
+         (random-id (format nil "~x-~x" (get-universal-time) (random #x100000)))
+         (path (format nil "Object/~a/tmpnam-~a.bin" platform-dir random-id)))
     (ensure-directories-exist path)
     path)
   "Default test file path for file I/O tests")
 
-(defun make-test-stamp (prefix)
-  "Create a test timestamp string for test identification"
-  (format nil "~a-~a" prefix (get-universal-time)))
+(defun make-test-stamp (width height pattern)
+  "Create a test graphics stamp (2D array) with the specified pattern.
+Width and height specify dimensions, pattern can be:
+:solid-0 - all zeros
+:solid-1 - all ones
+:checkerboard - alternating 0s and 1s
+:horizontal-bars - alternating rows of 0s and 1s"
+  (let ((stamp (make-array (list width height) :element-type '(unsigned-byte 8) :initial-element 0)))
+    (ecase pattern
+      (:solid-0
+       ;; Already initialized to 0
+       )
+      (:solid-1
+       (dotimes (x width)
+         (dotimes (y height)
+           (setf (aref stamp x y) 1))))
+      (:checkerboard
+       (dotimes (x width)
+         (dotimes (y height)
+           (setf (aref stamp x y) (if (evenp (+ x y)) 0 1)))))
+      (:horizontal-bars
+       (dotimes (x width)
+         (dotimes (y height)
+           (setf (aref stamp x y) (if (evenp y) 0 1))))))
+    stamp))

@@ -92,6 +92,7 @@
                              (:file "text-transcription-tests" :depends-on ("package"))
                              (:file "animation-preview-tests" :depends-on ("package"))
                              (:file "graphics-tests" :depends-on ("package"))
+                             (:file "music-tests" :depends-on ("package"))
                              (:file "build-tests" :depends-on ("package"))
                              (:file "interface-tests" :depends-on ("package"))
                              (:file "5200-tests" :depends-on ("package"))

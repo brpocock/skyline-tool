@@ -478,7 +478,7 @@ PNG image in an unsuitable format:
                                  0
                                  (expt 2 (- 7 x)))))))
 
-(defun tile->colour (tile)
+(defun tile->color (tile)
   (remove-duplicates
    (remove-if (curry #'= #xff)
               (loop for y from 0 to 7
@@ -495,10 +495,10 @@ PNG image in an unsuitable format:
               #\Space
               #\@))))))
 
-(defun image-colours (palette-image
-                      &optional
-                        (height (array-dimension palette-image 1))
-                        (width (array-dimension palette-image 0)))
+(defun image-colors (palette-image
+                     &optional
+                       (height (array-dimension palette-image 1))
+                       (width (array-dimension palette-image 0)))
   "Return the set of distinct colors in use in the paletted image"
   (remove-duplicates
    (remove-if #'null
@@ -506,25 +506,25 @@ PNG image in an unsuitable format:
                     appending (loop for x from 0 to (1- width)
                                     collecting (aref palette-image x y))))))
 
-(defun mob-colours (mob)
-  (image-colours mob 21 24))
+(defun mob-colors (mob)
+  (image-colors mob 21 24))
 
 (defun ensure-monochrome (mob)
-  (let ((all-colours (mob-colours mob)))
-    (unless (= 1 (length all-colours))
+  (let ((all-colors (mob-colors mob)))
+    (unless (= 1 (length all-colors))
       (warn "MOB data is hi-res and not monochrome (using ~D; saw ~{~D~^, ~})"
-            (car all-colours) all-colours))
-    (code-char (car all-colours))))
+            (car all-colors) all-colors))
+    (code-char (car all-colors))))
 
 (defun ensure-1+chrome (mob)
-  (let ((all-colours (remove-if (rcurry #'member '(9 10))
-                                (mob-colours mob))))
-    (unless (or (null all-colours)
-                (= 1 (length all-colours)))
-      (warn "MOB data has more than 1 distinct colour after brown & orange ~
+  (let ((all-colors (remove-if (rcurry #'member '(9 10))
+                               (mob-colors mob))))
+    (unless (or (null all-colors)
+                (= 1 (length all-colors)))
+      (warn "MOB data has more than 1 distinct color after brown & orange ~
 \(using ~D; saw ~{~D~^, ~})"
-            (car all-colours) all-colours))
-    (code-char (logior #x80 (or (car all-colours) 0)))))
+            (car all-colors) all-colors))
+    (code-char (logior #x80 (or (car all-colors) 0)))))
 
 (defun mob-empty (mob)
   (every (curry #'= #xff)
@@ -1262,19 +1262,19 @@ Proceed with caution."))
 VIC2Font:
 "
               png-file)
-      (let ((colour (loop for char from 0 below (* (/ height 8) (/ width 8))
-                          for x-cell = (mod (* char 8) width)
-                          for y-cell = (* 8 (floor (* char 8) width))
-                          for char-data = (extract-region image-nybbles
-                                                          x-cell y-cell
-                                                          (+ 7 x-cell) (+ 7 y-cell))
-                          do (format src-file
-                                     "~%	;; 		 character ~d ($~:*~x)~{~a~}"
-                                     char
-                                     (map 'list #'byte-and-art
-                                          (tile->bits char-data)))
-                          collect (tile->colour char-data))))
-        (format *error-output* "~% Wrote binary font (monochrome) data to ~A." out-file))
+      (loop for char from 0 below (* (/ height 8) (/ width 8))
+            for x-cell = (mod (* char 8) width)
+            for y-cell = (* 8 (floor (* char 8) width))
+            for char-data = (extract-region image-nybbles
+                                            x-cell y-cell
+                                            (+ 7 x-cell) (+ 7 y-cell))
+            do (format src-file
+                       "~%	;; 		 character ~d ($~:*~x)~{~a~}"
+                       char
+                       (map 'list #'byte-and-art
+                            (tile->bits char-data)))
+            collect (tile->color char-data))
+      (format *error-output* "~% Wrote binary font (monochrome) data to ~A." out-file)
       (finish-output src-file))))
 
 (defun tile-cell-vic2-x (cell width)
@@ -1365,19 +1365,19 @@ All cards in the source image are output as one file."
             "Height ~D exceeds array height ~D"
             height array-height)
     ;; Check if monochrome (only black=0 and white=7 palette indices)
-    (let ((colors (image-colours palette-pixels height width)))
+    (let ((colors (image-colors palette-pixels height width)))
       (unless (subsetp colors '(0 7) :test '=)
         (warn "GRAM image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
               png-file colors))
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name
+      (let ((out-file (merge-pathnames
+                       (make-pathname :name
                                       (pathname-name png-file)
-                                  :type "s")
-                   out-dir))
+                                      :type "s")
+                       out-dir))
             (cards-across (floor (/ width 8)))
             (cards-down (floor (/ height 8))))
         (ensure-directories-exist (directory-namestring out-file))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
+        (with-output-to-file (src-file out-file :if-exists :supersede)
           (format src-file ";;; GRAM cards compiled from ~A~%;;; Generated for Intellivision~%;;; Each card: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
                   png-file)
           ;; Process each 8×8 card
@@ -1388,10 +1388,10 @@ All cards in the source image are output as one file."
                                   (start-y (* card-y 8))
                                   (card-bytes '()))
                               ;; Extract 8 bytes (one per row)
-                          (loop for y from 0 below 8
+                              (loop for y from 0 below 8
                                     for byte = 0
-                                do (loop for x from 0 below 8
-                                         for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
+                                    do (loop for x from 0 below 8
+                                             for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
                                              ;; White (palette index 7) = bit 1, black (0) or other = bit 0
                                              do (when (= palette-index 7)
                                                   (setf byte (logior byte (ash 1 (- 7 x))))))
@@ -1406,15 +1406,6 @@ All cards in the source image are output as one file."
                                       do (format src-file "    DECLE   $~4,'0X~%" word))))))
           (format *trace-output* "~% Wrote GRAM card data to ~A." out-file))))))
 
-;; Missing Intellivision functions that are exported
-(defun compile-art-intv (input-file output-file)
-  "Compile Intellivision art assets"
-  (error "Intellivision art compilation not yet implemented"))
-
-(defun compile-intv-tileset (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision tileset"
-  (error "Intellivision tileset compilation not yet implemented"))
-
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision sprite (MOB data)
 
@@ -1422,7 +1413,7 @@ In Intellivision terminology, sprites are called MOBs (Moving Object Blocks).
 This function compiles sprite graphics into MOB data format, similar to GRAM
 compilation but for sprites that can be positioned anywhere on screen."
   (check-type png-file (or pathname string))
-  (check-type out-dir (or pathname string))
+  (check-type output-dir (or pathname string))
   (let* ((palette-pixels (or palette-pixels
                              (let* ((png (png-read:read-png-file png-file))
                                     (png-height (png-read:height png))
@@ -1456,7 +1447,7 @@ compilation but for sprites that can be positioned anywhere on screen."
                        (make-pathname :name
                                       (pathname-name png-file)
                                       :type "s")
-                       out-dir))
+                       output-dir))
             (sprites-across (floor (/ width 8)))
             (sprites-down (floor (/ height 8))))
         (ensure-directories-exist (directory-namestring out-file))
@@ -1504,26 +1495,26 @@ compilation but for sprites that can be positioned anywhere on screen."
                                   :type "s")
                    out-dir)))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (let ((colour (loop for cell from 0 to #xff
-                          for x-cell = (tile-cell-vic2-x cell width)
-                          for y-cell = (tile-cell-vic2-y cell width)
-                          for tile-data = (extract-region image-nybbles x-cell y-cell (+ 7 x-cell) (+ 7 y-cell))
-                          do (format src-file "~{~a~}"
-                                     (map 'list #'bytes-and-art (tile->bits tile-data)))
-                          collect (tile->colour tile-data))))
+        (let ((color (loop for cell from 0 to #xff
+                           for x-cell = (tile-cell-vic2-x cell width)
+                           for y-cell = (tile-cell-vic2-y cell width)
+                           for tile-data = (extract-region image-nybbles x-cell y-cell (+ 7 x-cell) (+ 7 y-cell))
+                           do (format src-file "~{~a~}"
+                                      (map 'list #'bytes-and-art (tile->bits tile-data)))
+                           collect (tile->color tile-data))))
 
-        (format *error-output* "~% Tileset with multiple colours found")
-        (loop for cell in colour
-              for i from 0 upto #xff
-              do (cond
-                   ((null cell) (princ #\NUL src-file))
-                   ((null (cdr cell)) (princ (code-char (car cell)) src-file))
-                   (t (princ (code-char (car cell)) src-file)
-                      (warn "Tile ~D (~:*$~2,'0X) cell at (~:D×~:D) uses colours: ~{~D, ~D~}; using ~D"
-                            (floor i 4) (floor i 4)
-                            (tile-cell-vic2-x i width) (tile-cell-vic2-y i width)
-                            cell (car cell)))))
-        (format *error-output* "~% Wrote binary tileset data to ~A." out-file)))))
+          (format *error-output* "~% Tileset with multiple colors found")
+          (loop for cell in color
+                for i from 0 upto #xff
+                do (cond
+                     ((null cell) (princ #\NUL src-file))
+                     ((null (cdr cell)) (princ (code-char (car cell)) src-file))
+                     (t (princ (code-char (car cell)) src-file)
+                        (warn "Tile ~D (~:*$~2,'0X) cell at (~:D×~:D) uses colors: ~{~D, ~D~}; using ~D"
+                              (floor i 4) (floor i 4)
+                              (tile-cell-vic2-x i width) (tile-cell-vic2-y i width)
+                              cell (car cell)))))
+          (format *error-output* "~% Wrote binary tileset data to ~A." out-file)))))
 
 #+ (or)
 (defun compile-tileset (png-file out-dir height width image-nybbles)
@@ -1566,7 +1557,7 @@ compilation but for sprites that can be positioned anywhere on screen."
            0 0))))))
 
 (defun monochrome-image-p (palette-pixels)
-  (> 3 (length (image-colours palette-pixels))))
+  (> 3 (length (image-colors palette-pixels))))
 
 (defmethod dispatch-png% ((machine (eql 2600)) png-file target-dir
                           png height width α palette-pixels)
@@ -2381,8 +2372,8 @@ Used internally by BLOB ripping for color stamp conversion."
                (palette (grab-nes-palette mode palette-pixels)))
           ;; NES CHR ROM format: 8x8 tiles, 2 bits per pixel
           (let ((tile-data (parse-nes-chr-tiles palette-pixels width-px height-px palette)))
-            (setf chr-data (append chr-data tile-data))))
-        (format *trace-output* " done.")))
+            (setf chr-data (append chr-data tile-data)))))
+      (format *trace-output* " done."))
     chr-data))
 
 (defun extract-palette-from-bottom (palette-pixels)
@@ -2400,32 +2391,36 @@ Used internally by BLOB ripping for color stamp conversion."
 
 (defun grab-nes-palette (mode palette-pixels)
   "Extract NES palette from the bottom of the image"
+  (declare (ignore mode))
   ;; NES expects 4 palettes, each with 4 colors (background + 3 sprite colors)
-  ;; The palette key at the bottom shows groups of 3 colors, with background repeated
+  ;; The palette key at the bottom contains palette data laid out as:
+  ;; background, color1, color2, color3, background, color1, color2, color3, ...
+  ;; for each of the 4 palettes
   (let* ((height (array-dimension palette-pixels 0))
          (width (array-dimension palette-pixels 1))
          (last-row (1- height))
-         (palette-groups (list)))
-    ;; Extract palette groups from the bottom row
-    ;; Each group of 3 colors becomes 4 colors (background repeated)
-    (dotimes (x width)
-      (let ((color (aref palette-pixels last-row x)))
-        (unless (member color palette-groups :test #'equal)
-          (push color palette-groups))))
-    ;; NES needs 4 palettes, each with 4 colors
-    ;; For simplicity, create 4 palettes using the available colors
-    (let ((available-colors (reverse palette-groups)))
-      (if (>= (length available-colors) 4)
-          ;; Use first 4 colors as palette entries
-          (list (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
-                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
-                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors))
-                (list (nth 0 available-colors) (nth 1 available-colors) (nth 2 available-colors) (nth 3 available-colors)))
-          ;; Pad with duplicates if fewer than 4 colors
-          (let ((padded-colors (append available-colors
-                                      (make-list (- 4 (length available-colors))
-                                               :initial-element (or (first available-colors) 0)))))
-            (make-list 4 :initial-element padded-colors))))))
+         (palettes (list)))
+    ;; Extract 4 palettes from the bottom row: Each palette takes colors
+    ;; sequentially: bg, p1c1, p1c2, p1c3, bg, p2c1, p2c2, p2c3, ...
+    (dotimes (palette-index 4)
+      (let ((palette-colors (list))
+            (background-color (aref palette-pixels last-row 0)))
+        ;; Collect colors for  this palette (up to 16  pixels worth, but
+        ;; we'll use first 4)
+        (loop for x from (* palette-index 16) ;; 16 pixels per palette block
+              while (or (>= x width) (>= x (* (1+ palette-index) 16)))
+              do (let ((color (aref palette-pixels last-row x)))
+                   (push color palette-colors)))
+        ;; Reverse to get correct order
+        (setf palette-colors (nreverse palette-colors))
+        ;; For NES, we only use the first 4 colors, starting with background
+        (let ((nes-colors (subseq palette-colors 0 (min 4 (length palette-colors)))))
+          ;; Ensure we have exactly 4 colors
+          (loop while (< (length nes-colors) 4)
+                do (push (or background-color 0) nes-colors))
+          (push nes-colors palettes))))
+    ;; Return the 4 palettes
+    (nreverse palettes)))
 
 (defun parse-nes-chr-tiles (palette-pixels width-px height-px palette)
   "Convert palette pixels to NES CHR ROM format (8x8 tiles, 2 bits per pixel)"
@@ -3100,8 +3095,7 @@ Rip a Bitmap Large Object Block in 160A mode from PNG-FILE for standard sprite g
 @end itemize
 
 Pass --imperfect to allow imperfect palette matches instead of signaling errors."
-  (let* ((*machine* 7800)
-         (*region* :ntsc)
+  (let* ((imperfectp (and imperfectp$ (not (emptyp imperfectp$))))
          (png (png-read:read-png-file png-file))
          (height (png-read:height png))
          (width (png-read:width png))
@@ -3334,6 +3328,9 @@ Blob_~a:~10t.block~2%"
         (dotimes (zone zones)
           (format output "~2&Zone~d:" zone)
           (flet ((emit-span (x span last-palette last-mode)
+                   ;; FIXME: Need  to switch  header types if  the current
+                   ;; mode ≠ the last mode to write an "alt" header with
+                   ;; the new mode enabled.
                    (when span
                      (let ((id (or (gethash span spans)
                                    (prog1
@@ -3347,9 +3344,10 @@ Blob_~a:~10t.block~2%"
                                              (>= (+ stamp-counting (length span)) #x100))
                                         (setf stamp-counting #x100))
                                        (t (incf stamp-counting)))))))
+                       (error "FIXME")
                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
                                id last-palette (length span)
-                               (- x (length span)))))))))
+                               (- x (length span)))))))
             (loop with span = nil
                   with last-palette = nil
                   with last-mode = nil
@@ -3395,10 +3393,14 @@ Blob_~a:~10t.block~2%"
                               last-mode mode)))
                   finally
                      (emit-span x span last-palette last-mode)))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans-320ac spans output :imperfectp imperfectp)
-    (format output "~2%~10t.bend~%"))
-  (format *trace-output* " … done!~%"))
+          (format output "~%~10t.word $0000")
+          (blob/write-spans-320ac spans output :imperfectp imperfectp)
+          (format output "~2%~10t.bend~%")))
+      (format *trace-output* " … done!~%"))))
+
+(defun blob-rip-5200-tile (png-file)
+  "Extract tile data from PNG for Atari 5200"
+  (error "Atari 5200 tile blob ripping not yet implemented"))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -3586,6 +3588,9 @@ Columns: ~d
                           (- i 12)))
     (t nil)))
 
+;; if  the other  version  of this  is working,  then  delete this  one,
+;; else merge.
+#+ ()
 (defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
   "Compile Intellivision sprite (MOB data)
 
@@ -3657,21 +3662,11 @@ treating non-black/non-white pixels as black"
                               ;; Big-endian: most significant byte first
                               (let ((bytes-list (reverse sprite-bytes)))
                                 (loop for i from 0 below 4
-                                      for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
-                                      for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
+                                      for byte-first = (nth (* i 2) bytes-list) ; First byte (high byte)
+                                      for byte-second = (nth (+ (* i 2) 1) bytes-list) ; Second byte (low byte)
                                       for word = (logior (ash byte-first 8) byte-second)
                                       do (format src-file "    DECLE   $~4,'0X~%" word)))))))
         (format *trace-output* "~% Wrote MOB sprite data to ~A." out-file)))))
-
-(defun assemble-intv-rom (source-files output-file)
-  "Assemble Intellivision ROM"
-  (error "Intellivision ROM assembly not yet implemented"))
-;;; Stub functions for unimplemented platform-specific features
-;;; These signal errors when called, as expected by the test suite
-
-(defun compile-art-5200 (index-out index-in)
-  "Compile art assets for Atari 5200 platform"
-  (error "Atari 5200 art compilation not yet implemented"))
 
 (defun read-colecovision-art-index (index-in)
   "Read ColecoVision art index file and return list of (png-name mode width-px height-px)"
@@ -3924,8 +3919,8 @@ treating non-black/non-white pixels as black"
               (let* ((px (+ (* tx 8) x))
                      (py (+ (* ty 8) y))
                      (color-index (if (and (< px width-px) (< py height-px))
-                                    (mod (aref palette-pixels py px) 4)
-                                    0))
+                                      (mod (aref palette-pixels py px) 4)
+                                      0))
                      (bit0 (if (logbitp 0 color-index) 1 0))
                      (bit1 (if (logbitp 1 color-index) 1 0)))
                 ;; Set bits in the bitplanes
@@ -3938,84 +3933,3 @@ treating non-black/non-white pixels as black"
           (push tile-bytes tiles))))
     (nreverse tiles)))
 
-(defun write-sms-chr-rom (index-out chr-data)
-  "Write SMS CHR ROM data to binary file"
-  (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
-    (dolist (tile chr-data)
-      (dotimes (i 32)
-        (write-byte (aref tile i) out))))
-  (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 32) index-out))
-
-(defun compile-art-sms (index-out index-in)
-  "Compile art assets for Sega Master System platform"
-  (let ((*machine* 3010))
-    (write-sms-chr-rom index-out
-                       (parse-into-sms-chr-data
-                        (read-sms-art-index index-in)))))
-
-(defun blob-rip-5200-pmg (png-file)
-  "Extract PMG data from PNG for Atari 5200"
-  (error "Atari 5200 PMG blob ripping not yet implemented"))
-
-(defun blob-rip-colecovision-tile (png-file)
-  "Extract tile data from PNG for ColecoVision"
-  (error "ColecoVision tile blob ripping not yet implemented"))
-
-(defun blob-rip-colecovision-sprite (png-file)
-  "Extract sprite data from PNG for ColecoVision"
-  (error "ColecoVision sprite blob ripping not yet implemented"))
-
-(defun blob-rip-colecovision-font (png-file)
-  "Extract font data from PNG for ColecoVision"
-  (error "ColecoVision font blob ripping not yet implemented"))
-
-(defun blob-rip-snes-tile (png-file)
-  "Extract tile data from PNG for SNES"
-  (error "SNES tile blob ripping not yet implemented"))
-
-(defun blob-rip-snes-sprite (png-file)
-  "Extract sprite data from PNG for SNES"
-  (error "SNES sprite blob ripping not yet implemented"))
-
-(defun blob-rip-snes-font (png-file)
-  "Extract font data from PNG for SNES"
-  (error "SNES font blob ripping not yet implemented"))
-
-(defun detect-5200-tile-mode (pixels)
-  "Detect tile mode for Atari 5200"
-  (error "Atari 5200 tile mode detection not yet implemented"))
-
-(defun detect-colecovision-tile-mode (pixels)
-  "Detect tile mode for ColecoVision"
-  (error "ColecoVision tile mode detection not yet implemented"))
-
-(defun compile-lynx-blob (png-file output-file width height &optional imperfectp)
-  "Compile blob data for Atari Lynx platform"
-  (error "Lynx blob compilation not yet implemented"))
-
-(defun compile-lynx-sprite (png-file output-file width height &optional imperfectp)
-  "Compile sprite data for Atari Lynx platform"
-  (error "Lynx sprite compilation not yet implemented"))
-
-(defun compile-lynx-tileset (png-file output-file width height &optional imperfectp)
-  "Compile tileset data for Atari Lynx platform"
-  (error "Lynx tileset compilation not yet implemented"))
-
-;; ZX81/T/S-1000 platform stubs
-(defun compile-art-zx81 (index-out index-in)
-  "Compile art assets for ZX81 platform"
-  (error "ZX81 art compilation not yet implemented"))
-
-(defun blob-rip-zx81-tile (png-file)
-  "Extract tile data from PNG for ZX81"
-  (error "ZX81 tile blob ripping not yet implemented"))
-
-;; ZX Spectrum/T/S-2068 platform stubs
-(defun compile-art-spectrum (index-out index-in)
-  "Compile art assets for ZX Spectrum platform"
-  (error "ZX Spectrum art compilation not yet implemented"))
-
-(defun blob-rip-spectrum-tile (png-file)
-  "Extract tile data from PNG for ZX Spectrum"
-  (error "ZX Spectrum tile blob ripping not yet implemented"))

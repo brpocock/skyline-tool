@@ -686,6 +686,93 @@
   (signals error (blob-rip-7800-160a "/dev/null"))
   (signals error (blob-rip-7800-320ac "/dev/null")))
 
+;; Test NES palette extraction with actual data
+(test nes-palette-extraction-data-validation
+  "Test NES palette extraction with actual pixel data"
+  ;; Create mock palette pixels for bottom row
+  ;; Format: 4 palettes × 4 pixels each = 16 pixels total
+  ;; Each palette: [background, color1, color2, color3]
+  (let* ((palette-pixels (make-array '(2 16)
+                                           :element-type '(unsigned-byte 8)
+                                           :initial-contents '((0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)  ; Row 0: regular image data (all zeros)
+                                                               (0 11 12 13 0 21 22 23 0 31 32 33 0 41 42 43)))) ; Row 1: palette data
+         ;; All palettes share the same background/transparent color (0)
+         (expected-palettes '((0 11 12 13) (0 21 22 23) (0 31 32 33) (0 41 42 43))))
+
+    ;; Test palette extraction
+    (let ((extracted-palettes (skyline-tool::grab-nes-palette :nes palette-pixels)))
+      (is (= 4 (length extracted-palettes)) "Should extract exactly 4 palettes")
+
+      ;; Verify each palette
+      (dotimes (i 4)
+        (let ((expected (nth i expected-palettes))
+              (actual (nth i extracted-palettes)))
+          (is (equal expected actual)
+              (format nil "Palette ~d should be ~a but was ~a" i expected actual)))))))
+
+;; Test NES CHR tile conversion with actual data
+(test nes-chr-tile-conversion-data-validation
+  "Test NES CHR tile conversion with actual pixel data"
+  ;; Create 8x8 test tile
+  (let* ((tile-pixels (make-array '(8 8) :element-type '(unsigned-byte 8)))
+         (palette '((0 0 0 0) (85 85 85 85) (170 170 170 170) (255 255 255 255))))
+
+    ;; Create checkerboard pattern
+    (dotimes (y 8)
+      (dotimes (x 8)
+        (if (evenp (+ x y))
+            (setf (aref tile-pixels x y) 0)  ; Use palette entry 0
+            (setf (aref tile-pixels x y) 3)))) ; Use palette entry 3
+
+    ;; Convert to NES CHR format
+    (let ((chr-bytes (skyline-tool::parse-nes-chr-tiles palette 8 8 tile-pixels)))
+      (is (= 16 (length chr-bytes)) "NES CHR tile should produce 16 bytes")
+
+      ;; For checkerboard pattern, we expect alternating bits
+      ;; First bitplane (low bits)
+      (is (= #b10101010 (aref chr-bytes 0)) "First byte of first bitplane")
+      (is (= #b10101010 (aref chr-bytes 1)) "Second byte of first bitplane")
+      ;; Second bitplane (high bits) should be all zeros for this simple pattern
+      (is (= #b00000000 (aref chr-bytes 8)) "First byte of second bitplane")
+      (is (= #b00000000 (aref chr-bytes 9)) "Second byte of second bitplane"))))
+
+;; Test 7800 blob ripping with actual data
+(test 7800-blob-ripping-data-validation
+  "Test 7800 blob ripping with actual pixel data"
+  ;; Create test 16x16 pixel data
+  (let ((pixels (make-array '(16 16) :element-type '(unsigned-byte 8))))
+    ;; Fill with test pattern
+    (dotimes (y 16)
+      (dotimes (x 16)
+        (setf (aref pixels x y) (mod (+ x y) 4)))) ; 0,1,2,3 pattern
+
+    ;; Test dimension validation
+    (is-true (check-height+width-for-blob 16 16 pixels)
+             "16x16 pixels should pass blob dimension check")
+
+    ;; Test that conversion functions exist and can be called with mock data
+    (let ((converted-320a (7800-image-to-320a pixels :byte-width 8 :height 16 :palette nil)))
+      (is (arrayp converted-320a) "Should return array")
+      (is (= 16 (array-dimension converted-320a 0)) "Should have correct height")
+      (is (= 8 (array-dimension converted-320a 1)) "Should have correct width"))))
+
+;; Test color palette operations with actual data
+(test color-palette-operations-data-validation
+  "Test color palette operations with actual RGB values"
+  ;; Test specific RGB conversions
+  (is (= 0 (rgb->palette 0 0 0)) "Black should map to palette 0")
+  (is (= 15 (rgb->palette 255 255 255)) "White should map to high palette index")
+
+  ;; Test round-trip conversion
+  (let* ((test-rgb '(255 128 64))
+         (palette-idx (apply #'rgb->palette test-rgb))
+         (back-to-rgb (palette->rgb palette-idx)))
+    (is (listp back-to-rgb) "Should convert back to RGB list")
+    (is (= 3 (length back-to-rgb)) "Should have 3 components"))
+
+  ;; Test RGB to integer conversion
+  (is (= #xFF8040 (rgb->int 255 128 64)) "RGB to int conversion"))
+
 ;; Integration test for complete BLOB conversion pipeline
 (test blob-conversion-integration
   "Integration test for complete BLOB conversion pipeline"
