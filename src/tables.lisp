@@ -37,6 +37,37 @@ Returns a list where each element represents a worksheet as a list of rows."
                                               (subseq (caddr body) 2)))))
           (mapcar #'ods-table-rows->list tables))))))
 
+(defun ods-table-rows->list (table)
+  "Convert an ODS table to a list of rows.
+
+@table @asis
+@item Input
+@table @asis
+@item TABLE
+ODS table structure from XML parsing.
+@end table
+@end table
+
+@table @asis
+@item Output
+Returns a list where each element is a row as a list of cell values.
+@end table"
+  (let ((rows (remove-if-not (lambda (el) (equal (caar el) "table-row"))
+                             (subseq (cdr table) 2))))
+    (mapcar (lambda (row)
+              (let ((cells (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
+                                          (subseq (cdr row) 0))))
+                (mapcar (lambda (cell)
+                          (let ((text-nodes (remove-if-not (lambda (el)
+                                                             (and (consp el)
+                                                                  (equal (car el) "text:p")))
+                                                           (cdr cell))))
+                            (if text-nodes
+                                (cadr (first text-nodes))
+                                "")))
+                        cells)))
+            rows)))
+
 (defun extract-ss-titles (row1)
   "Extract column titles from the first row of a spreadsheet.
 
