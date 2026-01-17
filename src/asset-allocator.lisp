@@ -434,7 +434,7 @@
                          (list :relative "Source" "Generated" machine-dir)
                          (list :relative "Source" "Generated" machine-dir "Assets"))))
     (when cwd (appendf includes (list (pathname-directory cwd))))
-    (when testp (appendf includes (list (list :relative "Source" "Tests"))))
+    (when testp (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))
     ;; also include platform tests when testing
     (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))
     (when (probe-file (make-pathname :directory (list :relative "Source" "Banks" bank)

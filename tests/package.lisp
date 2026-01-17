@@ -26,8 +26,8 @@
                                 skyline-tool:*machine*)
                            (skyline-tool::machine-directory-name)
                            "test"))
-         ;; Use timestamp and random for unique identifier
-         (random-id (format nil "~x-~x" (get-universal-time) (random #x100000)))
+         ;; Use cryptographically secure random identifier (must be secure)
+         (random-id (format nil "~16,'0x" (cryptographic-random-integer (expt 2 64))))
          (path (format nil "Object/~a/tmpnam-~a.bin" platform-dir random-id)))
     (ensure-directories-exist path)
     path)
