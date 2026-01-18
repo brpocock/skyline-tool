@@ -2,7 +2,20 @@
 
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
-  "Writes ClassConstants from CLASS-DEFS-PATHNAME"
+  "Generate OOPS class definitions from class specification file.
+
+Processes the Classes.Defs file to generate various output files containing
+class constants, Forth definitions, inheritance graphs, and assembly code
+for the OOPS (Object-Oriented Programming System).
+
+@table @asis
+@item CLASS-DEFS-PATHNAME
+Path to Classes.Defs file (default: ./Source/Classes/Classes.Defs)
+@item Outputs
+Generates Classes.forth, Classes.dot, ClassConstants.s, ClassInheritance.s, ClassMethods.s, ClassSizes.s
+@end table
+
+@xref{fun:make-classes-for-oops}."
   (let ((all-classes-sequentially (list)))
     (with-input-from-file (class-file class-defs-pathname)
       (ensure-directories-exist #p"./Source/Generated/")
