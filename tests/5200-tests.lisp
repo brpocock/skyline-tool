@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite 5200-tests
-  :description "Tests for Atari 5200-specific SkylineTool functionality")
+  :description "Tests for Atari 5200-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite 5200-tests)
 

@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite nes-tests
-  :description "Tests for NES-specific SkylineTool functionality")
+  :description "Tests for NES-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite nes-tests)
 

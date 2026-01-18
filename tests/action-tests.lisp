@@ -4,13 +4,24 @@
 (defpackage :skyline-tool/test
   (:use :cl :skyline-tool :fiveam)
   (:export #:action-tests
-           #:animation-preview-tests))
+           #:animation-preview-tests
+           #:music-compilation-tests
+           #:5200-tests
+           #:7800-tests
+           #:colecovision-tests
+           #:intv-gram-tests
+           #:nes-tests
+           #:snes-tests))
 (in-package :skyline-tool/test)
 
 #|(shadowing-import '(fiveam:def-suite fiveam:test fiveam:is fiveam:in-suite))|#
 
+(def-suite skyline-tool/test
+  :description "All Skyline-Tool test suites")
+
 (def-suite action-tests
-  :description "Tests for character actions: gesture, panic, flying, wave-arms, dancing")
+  :description "Tests for character actions: gesture, panic, flying, wave-arms, dancing"
+  :in skyline-tool/test)
 
 (in-suite action-tests)
 

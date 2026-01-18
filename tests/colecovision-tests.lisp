@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite colecovision-tests
-  :description "Tests for ColecoVision-specific SkylineTool functionality")
+  :description "Tests for ColecoVision-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite colecovision-tests)
 

@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite 7800-tests
-  :description "Tests for Atari 7800-specific SkylineTool functionality")
+  :description "Tests for Atari 7800-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite 7800-tests)
 

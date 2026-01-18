@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite intv-gram-tests
-  :description "Tests for Intellivision GRAM card compilation")
+  :description "Tests for Intellivision GRAM card compilation"
+  :in skyline-tool/test)
 
 (in-suite intv-gram-tests)
 
