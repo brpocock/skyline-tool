@@ -46,6 +46,7 @@
            #:interleave-7800-bytes
            #:speech-supported-p
            #:simple-animation-sequence
+           #:machine-directory-name
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
