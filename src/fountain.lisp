@@ -1866,7 +1866,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
   (tagbody
    top
-     (with-input-from-file (speakjet.dic #p"Source/Tables/SpeakJet.dic")
+     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (project-root)))
        (assert (equalp "[words]" (read-line speakjet.dic nil nil)) ()
                "SpeakJet.dic must begin with [words] magic cookie")
 
@@ -2989,19 +2989,34 @@ PlaySong EXECUTE "  song))))
   (setf *actors* nil))
 
 (defun fountain/write-speech (text)
-  "Write the speech data for TEXT in text and SpeakJet forms"
+  "Write the speech data for TEXT in text, SpeakJet, and IntelliVoice forms"
   (assert (< (length text) #x100) (text)
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
+  (format t "~% C\" ~a\"" (prepare-dialogue text))
+  (when (speech-supported-p)
+    (restart-case
+        (format t "~% SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
+                (convert-for-atarivox text))
+      (reload-dictionary ()
+        :report "Reload the AtariVox (SpeakJet) dictionary"
+        (reload-atarivox-dictionary)
+        (fountain/write-speech text))))
   (restart-case
-      (format t "
+      (progn
+        (format t "
   C\" ~a\"
   SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-              (prepare-dialogue text)
-              (convert-for-atarivox text))
+                (prepare-dialogue text)
+                (convert-for-atarivox text))
+        ;; Include IntelliVoice phonemes for Intellivision
+         (format t "
+  IntelliVoice[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]IntelliVoice"
+                  (convert-for-speech text :intellivoice)))
     (reload-dictionary ()
-      :report "Reload the AtariVox (SpeakJet) dictionary"
+      :report "Reload the speech dictionaries"
       (reload-atarivox-dictionary)
+      (reload-intellivoice-dictionary)
       (fountain/write-speech text)))
   (format t "~% ( ~s ) do-dialogue"
           text))
@@ -3210,7 +3225,7 @@ FadeColor~:(~a~) FadingTarget C!"
                  (member name (getf npc :nicks) :test #'string-equal))
           do (return npc)))
 
-(defun load-npc-stats (&optional (pathname "Source/Tables/NPCStats.ods"))
+(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root))))
   "Load the NPC stats table from PATHNAME"
   (format *trace-output* "~&Reading NPC stats from “~a” …"
           (enough-namestring pathname))
@@ -3228,7 +3243,7 @@ FadeColor~:(~a~) FadingTarget C!"
             (length *npc-stats*))
     *npc-stats*))
 
-(defun load-boats (&optional (pathname "Source/Tables/Boats.ods"))
+(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (project-root))))
   "Load the registry of boats from PATHNAME"
   (unless (and *boat-ids* *boat-classes*)
     (format *trace-output* "~&Reading boats from “~a” …" (enough-namestring pathname))
@@ -3382,17 +3397,27 @@ FadeColor~:(~a~) FadingTarget C!"
                                          (#\F :female)
                                          (otherwise :nonbinary)))))))
 
+(defun speech-supported-p ()
+  "Return true if the current platform supports speech synthesis."
+  (member *machine* '(2600 7800 2609))) ; VCS (2600), 7800, Intellivision (2609)
+
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
   (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
-  (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90)))
+  (if (speech-supported-p)
+      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
+      ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))
   (format nil "~10t.byte CoLu(COL~a, $f)" (string-upcase (pascal-case (or (getf actor :speech-color) "Gray")))))
@@ -3484,44 +3509,50 @@ ActorClassSize:
 (defun write-actor-prototypes ()
   "Write the prototype data for NPCs to ActorPrototypes.s"
   (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/ActorPrototypes.s"
-                                          :if-exists :supersede)
-    (print-actor-prototypes))
-  (format *trace-output* " …done."))
+  (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (project-root))
+                                            :if-exists :supersede)
+      (print-actor-prototypes))
+    (format *trace-output* " …done.")))
 
 (defun write-character-ids ()
-  "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
-  (format *trace-output* "~&Writing CharacterIDs.s …")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.s"
-                                          :if-exists :supersede)
-    (format t "~&;;; Generated character ID data from NPC Stats file~2%")
-    (dolist (actor (load-npc-stats))
-      (destructuring-bind (&key name character-id
-                           &allow-other-keys)
-          actor
-        (unless (member name '(player narrator) :test 'string-equal)
-          (when (> (length (string name)) 12)
-            (let ((trunc (subseq (string name) 0 12)))
-              (cerror (format nil "Continue with truncated name “~a”" trunc)
-                      "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
-                      name name (length (string name)))
-              (setf name trunc)))
-          (format t "~%~10tCharacterID_~a = $~2,'0x"
-                  (pascal-case (string name)) character-id))))
-    (format *trace-output* " …done."))
+  (progn
+    "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
+    (format *trace-output* "~&Writing CharacterIDs.s …")
+    (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+      (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+      (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (project-root))
+                                              :if-exists :supersede)
+        (format t "~&;;; Generated character ID data from NPC Stats file~2%")
+        (dolist (actor (load-npc-stats))
+          (destructuring-bind (&key name character-id
+                               &allow-other-keys)
+              actor
+            (unless (member name '(player narrator) :test 'string-equal)
+              (when (> (length (string name)) 12)
+                (let ((trunc (subseq (string name) 0 12)))
+                  (cerror (format nil "Continue with truncated name “~a”" trunc)
+                          "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+                          name name (length (string name)))
+                  (setf name trunc)))
+              (format t "~%~10tCharacterID_~a = $~2,'0x"
+                      (pascal-case (string name)) character-id))))
+        (format *trace-output* " …done."))
 
-  (format *trace-output* "~&Writing CharacterIDs.forth …")
-  (ensure-directories-exist #p"Source/Generated/")
-  (with-output-to-file (*standard-output* #p"Source/Generated/CharacterIDs.forth"
-                                          :if-exists :supersede)
-    (format t "~& ( Generated character ID data from NPC Stats file )~2%")
-    (dolist (actor (load-npc-stats))
-      (destructuring-bind (&key name character-id
-                           &allow-other-keys)
-          actor
-        (unless (member name '(player narrator) :test 'string-equal)
-          (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
-                  (pascal-case (string name)) character-id))))
-    (format *trace-output* " …done.")))
+      (format *trace-output* "~&Writing CharacterIDs.forth …")
+      (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+        (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+        (with-output-to-file (*standard-output*
+                              (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
+                                               (project-root))
+                              :if-exists :supersede)
+          (format t "~& ( Generated character ID data from NPC Stats file )~2%")
+          (dolist (actor (load-npc-stats))
+            (destructuring-bind (&key name character-id
+                                 &allow-other-keys)
+                actor
+              (unless (member name '(player narrator) :test 'string-equal)
+                (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
+                        (pascal-case (string name)) character-id))))
+          (format *trace-output* " …done."*))))))
