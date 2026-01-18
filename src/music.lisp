@@ -926,24 +926,46 @@ Music:~:*
 ~:*~[~:; in “~a” coding~] for ~a."
           (hash-table-count catalog) output-coding sound-chip))
 
-(defun compile-music-7800 (object-name midi-name sound-chip output-coding)
+
+
+
+(defgeneric compile-music-for-machine (machine sound-chip source-out-name in-file-name output-coding)
+  (:documentation "Compile music for a specific machine type with given sound chip and parameters."))
+
+;; Machines that use keyword conversion for both sound-chip and output-coding
+(defmethod compile-music-for-machine ((machine (eql 5200)) sound-chip source-out-name in-file-name output-coding)
   (let ((*machine* 7800)
         (catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
-    (with-output-to-file (object object-name :element-type '(unsigned-byte 8)
-                                             :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing ~a…" object-name)
-      (import-song-to-catalog :song-file-name midi-name
-                              :sound-chip sound-chip
-                              :output-coding output-coding
+    (with-output-to-file (object source-out-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (import-song-to-catalog :song-file-name in-file-name
+                              :sound-chip (make-keyword (string-upcase sound-chip))
+                              :output-coding (make-keyword (string-upcase output-coding))
                               :catalog catalog
                               :comments-catalog comments-catalog)
       (loop for symbol being the hash-keys of catalog
             for notes = (gethash symbol catalog)
-            do (write-song-data-to-binary notes object *machine* sound-chip)))))
+            do (write-song-data-to-binary notes object *machine* (make-keyword (string-upcase sound-chip)))))))
 
-(defun compile-music-2609 (source-out-name midi-name sound-chip output-coding)
-  "Compile music for Intellivision AY-3-8910 PSG"
+(defmethod compile-music-for-machine ((machine (eql 7800)) sound-chip source-out-name in-file-name output-coding)
+  (let ((*machine* 7800)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table)))
+    (with-output-to-file (object source-out-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (import-song-to-catalog :song-file-name in-file-name
+                              :sound-chip (make-keyword (string-upcase sound-chip))
+                              :output-coding (make-keyword (string-upcase output-coding))
+                              :catalog catalog
+                              :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-binary notes object *machine* (make-keyword (string-upcase sound-chip)))))))
+
+(defmethod compile-music-for-machine ((machine (eql 2609)) sound-chip source-out-name in-file-name output-coding)
   (let ((*machine* 2609)
         (catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
@@ -951,17 +973,19 @@ Music:~:*
       (format *trace-output* "~&Writing ~a…" source-out-name)
       (format source-out ";;; Music compiled from ~a for Intellivision AY-3-8910 PSG
 ;;; do not bother editing (generated file will be overwritten)"
-              midi-name)
-      (import-song-to-catalog :song-file-name midi-name
-                              :sound-chip sound-chip
-                              :output-coding output-coding
+              in-file-name)
+      (import-song-to-catalog :song-file-name in-file-name
+                              :sound-chip (make-keyword (string-upcase sound-chip))
+                              :output-coding (make-keyword (string-upcase output-coding))
                               :catalog catalog
                               :comments-catalog comments-catalog)
       (loop for symbol being the hash-keys of catalog
             for notes = (gethash symbol catalog)
             do (write-song-data-to-ay-3-8910 notes source-out)))))
 
-(defun compile-music-2600 (source-out-name in-file-name)
+;; Machine that ignores sound-chip and output-coding parameters
+(defmethod compile-music-for-machine ((machine (eql 2600)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore sound-chip output-coding))
   (let ((catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
     (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
@@ -987,98 +1011,143 @@ Music:~:*
     (format *trace-output* "~&… done.~%")
     (finish-output)))
 
-(defgeneric compile-music-for-machine (machine sound-chip source-out-name in-file-name output-coding)
-  (:documentation "Compile music for a specific machine type with given sound chip and parameters."))
-
-;; Machines that use keyword conversion for both sound-chip and output-coding
-(defmethod compile-music-for-machine ((machine (eql 5200)) sound-chip source-out-name in-file-name output-coding)
-  (compile-music-7800 source-out-name in-file-name
-                      (make-keyword (string-upcase sound-chip))
-                      (make-keyword (string-upcase output-coding))))
-
-(defmethod compile-music-for-machine ((machine (eql 7800)) sound-chip source-out-name in-file-name output-coding)
-  (compile-music-7800 source-out-name in-file-name
-                      (make-keyword (string-upcase sound-chip))
-                      (make-keyword (string-upcase output-coding))))
-
-(defmethod compile-music-for-machine ((machine (eql 2609)) sound-chip source-out-name in-file-name output-coding)
-  (compile-music-2609 source-out-name in-file-name
-                      (make-keyword (string-upcase sound-chip))
-                      (make-keyword (string-upcase output-coding))))
-
-;; Machine that ignores sound-chip and output-coding parameters
-(defmethod compile-music-for-machine ((machine (eql 2600)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore sound-chip output-coding))
-  (compile-music-2600 source-out-name in-file-name))
-
 ;; Machines that only use sound-chip parameter (ignore output-coding)
 (defmethod compile-music-for-machine ((machine (eql 35902)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-cgb source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "Game Boy Color music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 20953)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-dmg source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "DMG music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 9918)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-colecovision source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "ColecoVision music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 1000)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-sg1000 source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "SG-1000 music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 3010)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-sms source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "SMS music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 837)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-sgg source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "SGG music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 3)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-nes source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "NES music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 6)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-snes source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "SNES music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 7)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-bbc source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "BBC music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 64)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-c64 source-out-name in-file-name sound-chip))
+  (let ((*machine* 64))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing SID music ~a…" source-out-name)
+      (format source ";;; SID Music compiled from ~a~%;" in-file-name)  )))
 
 (defmethod compile-music-for-machine ((machine (eql 128)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-c128 source-out-name in-file-name sound-chip))
+  ;; Compile music for Commodore 128 (same as C64 SID)
+  (let ((*machine* 64))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing SID music ~a…" source-out-name)
+      (format source ";;; SID Music compiled from ~a~%;" in-file-name)
+      (format source ";;; Commodore 128 SID synthesizer~2%")
+      ;; Basic SID music framework - would need full MIDI parsing
+      (format source "sid_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta $d404  ; Voice 1 control~%")
+      (format source "    sta $d40b  ; Voice 2 control~%")
+      (format source "    sta $d412  ; Voice 3 control~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to SID conversion~%")
+      (format source ";;; SID has 3 voices, each with:~%")
+      (format source ";;; - Oscillator (triangle, sawtooth, pulse, noise)~%")
+      (format source ";;; - ADSR envelope~%")
+      (format source ";;; - Filter~%"))))
 
 (defmethod compile-music-for-machine ((machine (eql 264)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-c16 source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "C=16/Plus4 music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 8)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-a2 source-out-name in-file-name sound-chip))
+  (let ((*machine* 8))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Mockingboard music ~a…" source-out-name)
+      (format source ";;; Mockingboard Music compiled from ~a~%;" in-file-name)
+      (format source ";;; Apple ][ Mockingboard (AY-3-8910 PSG)~2%")
+      ;; Mockingboard uses AY-3-8910 PSG chip, similar to Intellivision
+      (format source "mock_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta AY_REG  ; AY-3-8910 register select~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to AY-3-8910 conversion~%")
+      (format source ";;; Mockingboard has 3 voices, 8 registers each~%"))))
 
 (defmethod compile-music-for-machine ((machine (eql 9)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (compile-music-a3 source-out-name in-file-name sound-chip))
+  (declare (ignore output-coding sound-chip in-file-name))
+  (error "Apple III music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 10)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-a2gs source-out-name in-file-name sound-chip))
+  (let ((*machine* 10))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Apple IIGS music ~a…" source-out-name)
+      (format source ";;; Apple IIGS Enhanced Sound compiled from ~a~%;" in-file-name)
+      (format source ";;; Apple IIGS has Ensoniq DOC (32 oscillator wavetable synthesis)~2%")
+      ;; Apple IIGS has sophisticated sound hardware
+      (format source "sound_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta SOUNDCTL  ; Sound control register~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to Ensoniq DOC conversion~%")
+      (format source ";;; IIGS has 32 oscillators, 8-bit samples, stereo~%"))))
 
 (defmethod compile-music-for-machine ((machine (eql 81)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-zx81 source-out-name in-file-name sound-chip))
+  (let ((*machine* 81))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ZX81 EAR music ~a…" source-out-name)
+      (format source ";;; ZX81 EAR Music compiled from ~a~%;" in-file-name)
+      (format source ";;; ZX81 cassette EAR interface (1-bit audio)~2%")
+      ;; ZX81 has very limited sound capabilities via EAR cassette port
+      (format source "ear_init:~%")
+      (format source "    ld a, $00~%")
+      (format source "    out ($fe), a  ; EAR output (bit 4 of port $fe)~%")
+      (format source "    ret~2%")
+      ;; Placeholder for actual MIDI conversion to 1-bit audio
+      (format source ";;; TODO: Implement MIDI to 1-bit EAR audio conversion~%")
+      (format source ";;; ZX81 EAR can only produce simple tones/beeps~%"))))
 
 (defmethod compile-music-for-machine ((machine (eql 2068)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (compile-music-spectrum source-out-name in-file-name sound-chip))
+  (let ((*machine* 2068))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Spectrum beeper music ~a…" source-out-name)
+      (format source ";;; ZX Spectrum Beeper Music compiled from ~a~%;" in-file-name)
+      (format source ";;; ZX Spectrum internal speaker (1-bit audio)~2%")
+      ;; ZX Spectrum has AY-3-8912 in 128K models, but basic beeper in 48K
+      (format source "beeper_init:~%")
+      (format source "    ld a, $00~%")
+      (format source "    out ($fe), a  ; Border color and speaker (bit 4)~%")
+      (format source "    ret~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%")
+      (format source ";;; Spectrum 128K has AY-3-8912 PSG chip available~%"))))
 
 (defun compile-music (source-out-name in-file-name
                       &optional (machine-type$ "2600")
@@ -1494,135 +1563,6 @@ Music:~:*
   (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
                                   (make-keyword format) (make-keyword frame-rate))
                      (make-keyword format) output))
-;; Platform-specific music compilation functions (stub implementations)
-(defun compile-music-cgb (output-file input-file &optional chip)
-  (error "Game Boy Color music compilation not yet implemented"))
-
-(defun compile-music-dmg (output-file input-file &optional chip)
-  (error "DMG music compilation not yet implemented"))
-
-(defun compile-music-nes (output-file input-file &optional chip)
-  (error "NES music compilation not yet implemented"))
-
-(defun compile-music-snes (output-file input-file &optional chip)
-  (error "SNES music compilation not yet implemented"))
-
-(defun compile-music-colecovision (output-file input-file &optional chip)
-  (error "ColecoVision music compilation not yet implemented"))
-
-(defun compile-music-sg1000 (output-file input-file &optional chip)
-  (error "SG-1000 music compilation not yet implemented"))
-
-(defun compile-music-sms (output-file input-file &optional chip)
-  (error "SMS music compilation not yet implemented"))
-
-(defun compile-music-sgg (output-file input-file &optional chip)
-  (error "SGG music compilation not yet implemented"))
-
-(defun compile-music-c64 (output-file input-file &optional chip)
-  "Compile music for Commodore 64 SID chipset"
-  (let ((*machine* 64))
-    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing SID music ~a…" output-file)
-      (format source ";;; SID Music compiled from ~a~%;" input-file)
-      (format source ";;; Commodore 64 SID synthesizer~2%")
-      ;; Basic SID music framework - would need full MIDI parsing
-      (format source "sid_init:~%")
-      (format source "    lda #$00~%")
-      (format source "    sta $d404  ; Voice 1 control~%")
-      (format source "    sta $d40b  ; Voice 2 control~%")
-      (format source "    sta $d412  ; Voice 3 control~%")
-      (format source "    rts~2%")
-      ;; Placeholder for actual MIDI conversion
-      (format source ";;; TODO: Implement MIDI to SID conversion~%")
-      (format source ";;; SID has 3 voices, each with:~%")
-      (format source ";;; - Oscillator (triangle, sawtooth, pulse, noise)~%")
-      (format source ";;; - ADSR envelope~%")
-      (format source ";;; - Filter~%"))))
-
-(defun compile-music-c128 (output-file input-file &optional chip)
-  "Compile music for Commodore 128 (same as C64 SID)"
-  (compile-music-c64 output-file input-file chip))
-
-(defun compile-music-c16 (output-file input-file &optional chip)
-  (error "C=16/Plus4 music compilation not yet implemented"))
-
-(defun compile-music-a2 (output-file input-file &optional chip)
-  "Compile music for Apple ][ with Mockingboard sound card"
-  (let ((*machine* 8))
-    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing Mockingboard music ~a…" output-file)
-      (format source ";;; Mockingboard Music compiled from ~a~%;" input-file)
-      (format source ";;; Apple ][ Mockingboard (AY-3-8910 PSG)~2%")
-      ;; Mockingboard uses AY-3-8910 PSG chip, similar to Intellivision
-      (format source "mock_init:~%")
-      (format source "    lda #$00~%")
-      (format source "    sta AY_REG  ; AY-3-8910 register select~%")
-      (format source "    rts~2%")
-      ;; Placeholder for actual MIDI conversion
-      (format source ";;; TODO: Implement MIDI to AY-3-8910 conversion~%")
-      (format source ";;; Mockingboard has 3 voices, 8 registers each~%"))))
-
-(defun compile-music-a3 (output-file input-file &optional chip)
-  (error "Apple III music compilation not yet implemented"))
-
-(defun compile-music-a2gs (output-file input-file &optional chip)
-  "Compile music for Apple IIGS enhanced sound"
-  (let ((*machine* 10))
-    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing Apple IIGS music ~a…" output-file)
-      (format source ";;; Apple IIGS Enhanced Sound compiled from ~a~%;" input-file)
-      (format source ";;; Apple IIGS has Ensoniq DOC (32 oscillator wavetable synthesis)~2%")
-      ;; Apple IIGS has sophisticated sound hardware
-      (format source "sound_init:~%")
-      (format source "    lda #$00~%")
-      (format source "    sta SOUNDCTL  ; Sound control register~%")
-      (format source "    rts~2%")
-      ;; Placeholder for actual MIDI conversion
-      (format source ";;; TODO: Implement MIDI to Ensoniq DOC conversion~%")
-      (format source ";;; IIGS has 32 oscillators, 8-bit samples, stereo~%"))))
-
-(defun compile-music-bbc (output-file input-file &optional chip)
-  (error "BBC music compilation not yet implemented"))
-
-(defun compile-music-lynx (output-file input-file &optional chip)
-  (error "Lynx music compilation not yet implemented"))
-
-(defun compile-speech-2609 (output-file input-file)
-  "Compile speech for Intellivision platform"
-  (error "Intellivision speech compilation not yet implemented"))
-
-(defun compile-music-zx81 (output-file input-file &optional chip)
-  "Compile music for ZX81 EAR cassette interface"
-  (let ((*machine* 81))
-    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing ZX81 EAR music ~a…" output-file)
-      (format source ";;; ZX81 EAR Music compiled from ~a~%;" input-file)
-      (format source ";;; ZX81 cassette EAR interface (1-bit audio)~2%")
-      ;; ZX81 has very limited sound capabilities via EAR cassette port
-      (format source "ear_init:~%")
-      (format source "    ld a, $00~%")
-      (format source "    out ($fe), a  ; EAR output (bit 4 of port $fe)~%")
-      (format source "    ret~2%")
-      ;; Placeholder for actual MIDI conversion to 1-bit audio
-      (format source ";;; TODO: Implement MIDI to 1-bit EAR audio conversion~%")
-      (format source ";;; ZX81 EAR can only produce simple tones/beeps~%"))))
-
-(defun compile-music-spectrum (output-file input-file &optional chip)
-  "Compile music for ZX Spectrum beeper"
-  (let ((*machine* 2068))
-    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing Spectrum beeper music ~a…" output-file)
-      (format source ";;; ZX Spectrum Beeper Music compiled from ~a~%;" input-file)
-      (format source ";;; ZX Spectrum internal speaker (1-bit audio)~2%")
-      ;; ZX Spectrum has AY-3-8912 in 128K models, but basic beeper in 48K
-      (format source "beeper_init:~%")
-      (format source "    ld a, $00~%")
-      (format source "    out ($fe), a  ; Border color and speaker (bit 4)~%")
-      (format source "    ret~2%")
-      ;; Placeholder for actual MIDI conversion
-      (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%")
-      (format source ";;; Spectrum 128K has AY-3-8912 PSG chip available~%"))))
 
 (defun midi->note-name (midi-note-number)
   "Convert a MIDI note number to a note name like 'C4'
