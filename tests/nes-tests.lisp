@@ -40,14 +40,12 @@
            "monochrome-lines-p should exist")
 
   ;; Test with mock palette data
-  (let ((test-palette (make-array '(18 3) :element-type '(unsigned-byte 8)
-                                  :initial-contents '((0 0 0) (255 255 255) (128 128 128)
-                                                     (255 0 0) (0 255 0) (0 0 255)
-                                                     (255 255 0) (255 0 255) (0 255 255)
-                                                     (255 128 128) (128 255 128) (128 128 255)
-                                                     (255 255 128) (255 128 255) (128 255 255)
-                                                     (192 192 192) (128 128 128) (64 64 64)))))
-    (is-false (skyline-tool::monochrome-lines-p test-palette 16 3)
+  (let ((test-palette (make-array '(3 18) :element-type '(unsigned-byte 8))))
+    ;; Fill with test data - multiple colors per row to test non-monochrome
+    (dotimes (row 18)
+      (dotimes (col 3)
+        (setf (aref test-palette col row) (mod (+ col (* row 3)) 256))))
+    (is-false (skyline-tool::monochrome-lines-p test-palette 18 3)
                "monochrome-lines-p should return false for multi-color palette")))
 
 ;; Test NES platform in dispatch system
@@ -61,8 +59,8 @@
 (test nes-palette-integration
   "Test NES palette integration in graphics system"
   ;; Test that NES palettes are used in the region-based palette selection
-  (let ((ntsc-palette (skyline-tool::machine-palette 3 :ntsc))
-        (pal-palette (skyline-tool::machine-palette 3 :pal)))
+  (let ((ntsc-palette (skyline-tool::machine-palette 8 :ntsc))
+        (pal-palette (skyline-tool::machine-palette 8 :pal)))
     (is-true (arrayp ntsc-palette) "NES NTSC palette should be available")
     (is-true (arrayp pal-palette) "NES PAL palette should be available")
     (is (= (length ntsc-palette) (length pal-palette))
