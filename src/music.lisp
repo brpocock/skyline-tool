@@ -3,22 +3,6 @@
 (declaim (optimize (debug 3)))
 
 (define-constant +tia-voices+
-    "TIA voice frequency tables for Atari 2600 audio.
-
-This constant contains frequency tables for each of the TIA's audio waveforms,
-indexed by voice number and waveform type. Each entry is a list where the first
-element is the waveform number, and subsequent elements are pairs of frequencies
-for each octave.
-
-@table @asis
-@item Structure
-List of lists, where each sublist represents a waveform and contains frequency
-pairs (low, high) for each octave.
-@item Used by
-@ref{fun:best-tia-ntsc-note-for}, @ref{fun:best-tia-pal-note-for}, TIA audio generation.
-@item Format
-Each waveform entry: (waveform-number (freq-low freq-high) ...)
-@end table"
     '( ;; Waveform 0 = silent
       (0)
       (1 ;; Waveform 1 = "Buzzy"
@@ -368,27 +352,35 @@ Each waveform entry: (waveform-number (freq-low freq-high) ...)
 
        ))
   :test #'equalp
-  :documentation "NTSC and PAL/SECAM sound values for each frequency code
+  :documentation
+  "TIA voice frequency tables for Atari 2600 audio.
+
+This constant contains frequency tables for each of the TIA's audio waveforms,
+indexed by voice number and waveform type. Each entry is a list where the first
+element is the waveform number, and subsequent elements are pairs of frequencies
+for each octave.
+
+@table @asis
+@item Structure
+List of lists, where each sublist represents a waveform and contains frequency
+pairs (low, high) for each octave.
+@item Used by
+@ref{fun:best-tia-ntsc-note-for}, @ref{fun:best-tia-pal-note-for}, TIA audio generation.
+@item Format
+Each waveform entry: (waveform-number (freq-low freq-high) ...)
+@end table
+
+NTSC and PAL/SECAM sound values for each frequency code
 
 Format: NTSC followed by PAL/SECAM frequency values for each AUDF value")
 
 (define-constant +vic-notes+
-    "VIC-20 note frequency table (currently empty).
-
-This constant is reserved for VIC-20 specific note frequencies. Currently
-unimplemented as VIC-20 music support is not yet added.
-
-@table @asis
-@item Status
-Currently empty - VIC-20 support not implemented
-@item Future use
-Will contain VIC-20 specific frequency tables when implemented
-@end table"
     '()
-  :test 'equalp)
+  :test 'equalp
+  :documentation "VIC-20 note frequency table")
 
 (defgeneric midi-to-sound-binary (output-coding machine-type midi-notes sound-chip)
-  "Convert MIDI note data to platform-specific sound chip binary format.
+  (:documentation "Convert MIDI note data to platform-specific sound chip binary format.
 
 This generic function dispatches on OUTPUT-CODING, MACHINE-TYPE, and SOUND-CHIP
 to convert MIDI note sequences into the appropriate binary format for each
@@ -407,7 +399,7 @@ Sound chip identifier (:tia, :pokey, :ay-3-8910, etc.)
 Platform-specific binary data for the sound chip
 @end table
 
-@xref{7800}, @xref{2600}, @xref{2609}."
+@xref{7800}, @xref{2600}, @xref{2609}.")
   (:method (output-coding machine-type midi-notes sound-chip)
     (error "No handler for output coding ~s (machine ~s, sound chip ~s); ~
 skipping MIDI music with ~:d track~:p"
@@ -551,11 +543,13 @@ List of lists, where each sublist represents a table row
                     append (ooxml-repeated-cell cell (ooxml->string cell))))
             (mapcar #'rest (remove-if-not (lambda (el)
                                             (equal (caar el) "table-row"))
-                                          table))))
-
+                                          table)))))
 
 (define-constant +all-hokey-distortions+
-    "List of all valid Pokey distortion settings.
+    '(:10 :2 :12a :12b :8 :4b :4a)
+  :test #'equalp
+  :documentation 
+  "List of all valid Pokey distortion settings.
 
 This constant defines the valid distortion values for the Atari POKEY sound chip.
 Each distortion setting produces a different waveform shape and timbre.
@@ -577,9 +571,7 @@ Sawtooth wave
 Triangle wave
 @end table
 
-@xref{fun:pokey-distortion-column}, @xref{fun:best-pokey-note-for}."
-    '(:10 :2 :12a :12b :8 :4b :4a)
-  :test #'equalp)
+@xref{fun:pokey-distortion-column}, @xref{fun:best-pokey-note-for}.")
 
 (defun pokey-distortion-column (distortion bits)
   "Calculate POKEY AUDCTL distortion column value.
@@ -784,6 +776,14 @@ List of (voice note-code frequency-error) with lowest error
 (defun find-tia-distortion (params)
   (warn "Not finding best TIA distortion for ~a" params)
   1)
+
+(defun merge-tia-voices (notes)
+  "Merge TIA voices. Currently a stub, returns notes unchanged."
+  notes)
+
+(defun merge-pokey-tia-voices (notes)
+  "Merge POKEY/TIA voices. Currently a stub, returns notes unchanged."
+  notes)
 
 (defun midi->7800-tia (midi-notes tv)
   (loop for track in midi-notes

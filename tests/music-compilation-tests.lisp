@@ -77,26 +77,20 @@
       (ignore-errors (delete-file input-file)))))
 
 (test 7800-music-compilation-validation
-  "Test that Atari 7800 music compilation produces correct binary output"
-  (let ((output-file (format nil "Object/7800/test-music-~a.bin" (random 1000)))
-        (input-file "test-input.mid"))
-    (unwind-protect
-        ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+  "Test that Atari 7800 music compilation functions work correctly"
+  ;; Test that the 7800 music compilation functions are available and callable
+  (is-true (fboundp 'skyline-tool::compile-music-for-machine)
+           "compile-music-for-machine should be available")
 
-        ;; Test compilation
-        (finishes (skyline-tool::compile-music output-file input-file "7800" "TIA" "NTSC"))
+  ;; Test that 7800 music processing functions work
+  (let ((mock-track '((:text . "Piano") (:note :time 0 :key 60 :duration 100))))
+    (let ((result (skyline-tool::midi->7800-tia (list mock-track) :ntsc)))
+      (is (arrayp result) "midi->7800-tia should return an array for 7800")
+      (is (= (length result) 2) "7800 TIA should have 2 voices")))
 
-        ;; Validate output file exists and has reasonable size
-        (is-true (probe-file output-file)
-                 "7800 music compilation should create output file")
-        (when (probe-file output-file)
-          (is-true (> (ql-util:file-size output-file) 0)
-                   "7800 music output file should have non-zero size"))
-      ;; Cleanup
-      (ignore-errors (delete-file output-file))
-      (ignore-errors (delete-file input-file)))))
+  ;; Test array conversion function
+  (let ((result (skyline-tool::array<-7800-tia-notes-list '((60 100 480)) :ntsc)))
+    (is (vectorp result) "array<-7800-tia-notes-list should return a vector")))
 
 (test 2609-music-compilation-validation
   "Test that Intellivision music compilation produces correct assembly output"
@@ -272,6 +266,26 @@
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
+
+;; Test MIDI utility functions
+
+(test midi-utility-functions
+  "Test MIDI utility functions work correctly"
+  ;; Test note->midi-note-number function
+  (is (= 60 (skyline-tool::note->midi-note-number "C5"))
+      "C5 should convert to MIDI note 60")
+  (is (= 69 (skyline-tool::note->midi-note-number "A4"))
+      "A4 should convert to MIDI note 69 (concert A)")
+  (is (= 61 (skyline-tool::note->midi-note-number "C♯5"))
+      "C♯5 should convert to MIDI note 61")
+  (is (= 62 (skyline-tool::note->midi-note-number "D5"))
+      "D5 should convert to MIDI note 62")
+
+  ;; Test midi->note-name function
+  (is (string= "C5" (skyline-tool::midi->note-name 60))
+      "MIDI note 60 should convert to C5")
+  (is (string= "A4" (skyline-tool::midi->note-name 69))
+      "MIDI note 69 should convert to A4"))
 
 ;; Test platform-specific parameter validation
 

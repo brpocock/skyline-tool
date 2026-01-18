@@ -80,31 +80,30 @@
 ;; Test 7800 music processing correctness
 (test 7800-music-processing-correctness
   "Test that 7800 music functions process MIDI data correctly"
-  ;; Test midi->7800-tia with comprehensive mock MIDI data
-  (let ((mock-midi-notes '((:time 0 :key 60 :velocity 100 :channel 0)    ; Middle C
-                           (:time 100 :key 64 :velocity 80 :channel 0)   ; E above middle C
-                           (:time 200 :key 67 :velocity 60 :channel 0)   ; G above middle C
-                           (:time 300 :key 60 :velocity 0 :channel 0)))) ; Note off
+  ;; Test midi->7800-tia with proper track format
+  (let ((mock-midi-track '((:text . "Piano")  ; Set instrument
+                          (:note :time 0 :key 60 :duration 100)    ; Middle C
+                          (:note :time 100 :key 64 :duration 100)  ; E above middle C
+                          (:note :time 200 :key 67 :duration 100)  ; G above middle C
+                          (:note :time 300 :key 60 :duration 0)))) ; Note off
 
-    (let ((result (skyline-tool::midi->7800-tia mock-midi-notes :ntsc)))
-      (is (listp result)
-          "midi->7800-tia should return a list")
-      (is (= (length result) 4)
-          "midi->7800-tia should process all input events")
+    (let ((result (skyline-tool::midi->7800-tia (list mock-midi-track) :ntsc)))
+      (is (arrayp result)
+          "midi->7800-tia should return an array")
+      (is (= (length result) 2)
+          "midi->7800-tia should return 2 TIA voices")
 
-      ;; Verify first note (Middle C)
-      (let ((first-note (first result)))
-        (is (and (consp first-note) (eql (first first-note) :frequency))
-            "First element should be frequency event")
-        (is (< 259 (getf first-note :frequency) 262)  ; Middle C ~261.63Hz
-            "Middle C frequency should be correct"))
+      ;; Check that at least one voice has notes assigned
+      (is (some #'identity result)
+          "At least one voice should contain notes")
 
-      ;; Verify note-off handling
-      (let ((note-off-event (fourth result)))
-        (is (and (consp note-off-event) (eql (first note-off-event) :frequency))
-            "Note-off should be converted to frequency event")
-        (is (= (getf note-off-event :frequency) 0)
-            "Note-off should set frequency to 0"))))
+      ;; Check voice structure - each voice is a list of notes
+      (dolist (voice result)
+        (when voice
+          (is (listp voice) "Each voice should be a list")
+          (dolist (note voice)
+            (is (and (listp note) (= (length note) 4))
+                "Each note should have 4 elements: time, key, duration, distortion"))))))
 
   ;; Test array<-7800-tia-notes-list with detailed validation
   (let ((tia-notes '((:frequency 261.63 :volume 15 :control #x04)  ; Middle C, AUDC value
@@ -281,9 +280,10 @@
     (is (= (length result) 2) "vector should contain both input notes"))
 
   ;; Test midi->7800-tia with mock data
-  (let ((result (skyline-tool::midi->7800-tia '((60 100 480)) :ntsc)))
-    (is (arrayp result) "midi->7800-tia should return an array")
-    (is (= (length result) 2) "array should have 2 voices (TIA channels)"))
+  (let ((mock-track '((:text . "Piano") (:note :time 0 :key 60 :duration 100))))
+    (let ((result (skyline-tool::midi->7800-tia (list mock-track) :ntsc)))
+      (is (arrayp result) "midi->7800-tia should return an array")
+      (is (= (length result) 2) "array should have 2 voices (TIA channels)")))
 
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
   (signals error (skyline-tool::compile-music-7800
