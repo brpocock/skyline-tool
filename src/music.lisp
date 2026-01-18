@@ -5,7 +5,7 @@
 (define-constant +tia-voices+
     '( ;; Waveform 0 = silent
       (0)
-      (1 ;; Waveform 1 = "Buzzy"
+      (1 ;; Waveform 1 = “Buzzy”
        (2096 2080)
        (1048 1040)
        (698.7  693.3)
@@ -548,7 +548,7 @@ List of lists, where each sublist represents a table row
 (define-constant +all-hokey-distortions+
     '(:10 :2 :12a :12b :8 :4b :4a)
   :test #'equalp
-  :documentation 
+  :documentation
   "List of all valid Pokey distortion settings.
 
 This constant defines the valid distortion values for the Atari POKEY sound chip.
@@ -1830,7 +1830,8 @@ A MIDI note number from 0 to 127, or nil if parsing fails
         (note-name (string-upcase note-name)))
     ;; Simple parsing: find the note part and octave part
     (let* ((len (length note-name))
-           (note-part (if (and (>= len 2) (char= (char note-name 1) #\#))
+           (note-part (if (and (>= len 2) (or (char= (char note-name 1) #\#)
+                                                  (char= (char note-name 1) #\♯)))
                          (subseq note-name 0 2)
                          (subseq note-name 0 1)))
            (octave-part (subseq note-name (length note-part)))

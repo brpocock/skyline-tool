@@ -101,12 +101,16 @@
   "Test 5200 Mode E bitmap compilation with different valid sizes"
   ;; Test with 16x16 array
   (let ((large-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels :target-dir "Object/5200/")
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels
+                                                        :png-file #P"test-16x16.png"
+                                                        :target-dir "Object/5200/")
              "Should handle 16x16 arrays and return truthy value"))
 
   ;; Test with 4x4 array
   (let ((small-pixels (make-array '(4 4) :element-type '(unsigned-byte 32) :initial-element 1)))
-    (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels :target-dir "Object/5200/")
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels
+                                                        :png-file #P"test-4x4.png"
+                                                        :target-dir "Object/5200/")
              "Should handle 4x4 arrays and return truthy value"))
 
   ;; Test with rectangular array (not square)
