@@ -102,30 +102,49 @@
 
 ;; Test function existence and basic calling
 (test graphics-functions-exist
-  "Test that all graphics functions exist and are callable"
+  "Test that all graphics functions exist and can be called with basic parameters"
   (is-true (fboundp 'blob-rip-7800))
   (is-true (fboundp 'blob-rip-7800-160a))
   (is-true (fboundp 'blob-rip-7800-320ac))
   (is-true (fboundp 'stamp-is-monochrome-p))
   (is-true (fboundp 'extract-4×16-stamps))
   (is-true (fboundp 'blob/write-span-to-stamp-buffer-320ac))
-  (is-true (fboundp 'blob/write-spans-320ac)))
+  (is-true (fboundp 'blob/write-spans-320ac))
+
+  ;; Test stamp-is-monochrome-p with actual data
+  (let ((mono-stamp (make-test-stamp 4 4 :solid-0))
+        (color-stamp (make-test-stamp 4 4 :checkerboard)))
+    (is-true (stamp-is-monochrome-p mono-stamp) "Solid color stamp should be monochrome")
+    (is-false (stamp-is-monochrome-p color-stamp) "Checkerboard stamp should not be monochrome")))
 
 ;; Test basic 320A/C conversion functions
 (test 320-conversion-functions
-  "Test 320A and 320C conversion function existence"
+  "Test 320A and 320C conversion functions work with basic input"
   (is-true (fboundp '7800-image-to-320a))
-  (is-true (fboundp '7800-image-to-320c)))
+  (is-true (fboundp '7800-image-to-320c))
+
+  ;; Test with minimal valid input
+  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0))
+        (palette (vector #(0 0 0) #(255 255 255))))
+    ;; Should not error and return some result
+    (finishes (7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
+    (finishes (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette))))
 
 ;; Test blob ripping with actual functionality validation
 (test blob-rip-7800-existence
-  "Test that blob-rip-7800 function exists"
-  (is-true (fboundp 'blob-rip-7800) "blob-rip-7800 should exist"))
+  "Test that blob-rip-7800 function exists and handles basic input"
+  (is-true (fboundp 'blob-rip-7800) "blob-rip-7800 should exist")
+
+  ;; Test that it doesn't crash with nil input (should signal error appropriately)
+  (signals error (blob-rip-7800 nil)))
 
 ;; Test 320AC functionality specifically
 (test blob-rip-7800-320ac-existence
-  "Test that 320AC blob ripping function exists"
-  (is-true (fboundp 'blob-rip-7800-320ac) "blob-rip-7800-320ac should exist"))
+  "Test that 320AC blob ripping function exists and handles basic input"
+  (is-true (fboundp 'blob-rip-7800-320ac) "blob-rip-7800-320ac should exist")
+
+  ;; Test that it doesn't crash with nil input (should signal error appropriately)
+  (signals error (blob-rip-7800-320ac nil)))
 
 ;; Test dimension validation functions
 (test blob-dimension-validation

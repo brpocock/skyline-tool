@@ -10,9 +10,9 @@
 
 (in-suite 7800-tests)
 
-;; Test 7800 graphics functions existence
+;; Test 7800 graphics functions existence and basic functionality
 (test 7800-graphics-functions-existence
-  "Test that 7800 graphics conversion functions exist"
+  "Test that 7800 graphics conversion functions exist and work with basic input"
   (is-true (fboundp 'skyline-tool::7800-image-to-160a)
            "7800-image-to-160a should exist")
   (is-true (fboundp 'skyline-tool::7800-image-to-320a)
@@ -20,15 +20,28 @@
   (is-true (fboundp 'skyline-tool::7800-image-to-320c)
            "7800-image-to-320c should exist")
   (is-true (fboundp 'skyline-tool::parse-7800-object)
-           "parse-7800-object should exist"))
+           "parse-7800-object should exist")
 
-;; Test 7800 binary functions existence
+  ;; Test basic functionality with minimal input
+  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0))
+        (palette (vector #(0 0 0) #(255 255 255))))
+    (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 1 :height 1 :palette palette))
+    (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
+    (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette))))
+
+;; Test 7800 binary functions existence and basic functionality
 (test 7800-binary-functions-existence
-  "Test that 7800 binary processing functions exist"
+  "Test that 7800 binary processing functions exist and work"
   (is-true (fboundp 'skyline-tool::write-7800-binary)
            "write-7800-binary should exist")
   (is-true (fboundp 'skyline-tool::interleave-7800-bytes)
-           "interleave-7800-bytes should exist"))
+           "interleave-7800-bytes should exist")
+
+  ;; Test interleave-7800-bytes with basic input
+  (let ((test-data '((1 2) (3 4))))
+    (let ((result (skyline-tool::interleave-7800-bytes test-data)))
+      (is-true (listp result) "interleave-7800-bytes should return a list")
+      (is (= 4 (length result)) "Should interleave 2 pairs into 4 bytes"))))
 
 ;; Test 7800 binary output validation
 (test 7800-binary-output-validation
@@ -120,9 +133,9 @@
   ;; Test frequency calculation accuracy
   (let ((test-frequencies '(261.63 293.66 329.63 349.23 392.00 440.00))) ; C major scale
     (dolist (freq test-frequencies)
-      (let* ((midi-key (skyline-tool::key<-midi-key freq))
+      (let* ((midi-key (skyline-tool::midi-key<-freq freq))
              (reconstructed-freq (skyline-tool:freq<-midi-key midi-key)))
-        ;; Allow 1% tolerance for TIA frequency approximation
+        ;; Allow 1% tolerance for frequency round-trip conversion
         (is (< (abs (- freq reconstructed-freq)) (* freq 0.01))
             (format nil "Frequency ~A should round-trip accurately, got ~A"
                     freq reconstructed-freq))))))
