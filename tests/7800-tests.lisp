@@ -372,9 +372,9 @@
     (is (member 'west directions) "West scrolling should be supported")
 
     ;; Test direction opposites
-    (is (eq 'south (case 'north ('north 'south) ('south 'north) ('east 'west) ('west 'east)))
+    (is (eq 'south (case 'north ('north 'south) ('south 'north) ('east 'west) ('west 'east) (otherwise nil)))
         "North should be opposite of south")
-    (is (eq 'west (case 'east ('north 'south) ('south 'north) ('east 'west) ('west 'east)))
+    (is (eq 'west (case 'east ('north 'south) ('south 'north) ('east 'west) ('west 'east) (otherwise nil)))
         "East should be opposite of west")))
 
 ;; Test scrolling boundary conditions

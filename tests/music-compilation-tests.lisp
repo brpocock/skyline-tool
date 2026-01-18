@@ -70,8 +70,9 @@
         (is-true (probe-file output-file)
                  "5200 music compilation should create output file")
         (when (probe-file output-file)
-          (is-true (> (ql-util:file-size output-file) 0)
-                   "5200 music output file should have non-zero size"))
+        (is-true (> (with-open-file (s output-file :element-type '(unsigned-byte 8))
+                       (file-length s)) 0)
+                 "5200 music output file should have non-zero size"))
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
