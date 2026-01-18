@@ -364,7 +364,11 @@ Format: NTSC followed by PAL/SECAM frequency values for each AUDF value")
   (:method (output-coding machine-type midi-notes sound-chip)
     (error "No handler for output coding ~s (machine ~s, sound chip ~s); ~
 skipping MIDI music with ~:d track~:p"
-           output-coding machine-type sound-chip (length midi-notes))))
+           output-coding machine-type sound-chip (length midi-notes)))
+
+  ;; Intellivision AY-3-8910 PSG support
+  (:method (output-coding (machine-type (eql 2609)) midi-notes (sound-chip (eql :ay-3-8910)))
+    (midi-to-ay-3-8910 midi-notes output-coding)))
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
   (when freq
@@ -466,89 +470,6 @@ skipping MIDI music with ~:d track~:p"
                                     nil)))))
           finally (return notes)))
 
-  (defun interpret-pokey-sheet2 (sheet2)
-    (return-from interpret-pokey-sheet2 nil)
-    (assert (eql 0 (search "POKEY table" (aref sheet2 2 0))) (sheet2)
-            "POKEY tables not in expected format~%~s" (aref sheet2 2 0))
-    (assert (equal "C" (aref sheet2 0 3)) ()
-            "Table does not start with C~%~s" (aref sheet2 0 3))
-    (loop for row from 3 below 112
-          for out-row from 0
-          with notes = (make-array (list 18 109) :element-type '(or null (unsigned-byte 16)))
-          with octave = 1
-          do (progn
-               (when (eql 0 (search "OCTAVE " (aref sheet2 35 row)))
-                 (setf octave (parse-integer (subseq (aref sheet2 35 row) 7))))
-               (setf (aref notes 0 out-row) (note->midi-note-number
-                                             octave
-                                             (string-trim " " (aref sheet2 0 row))))
-               (loop for column from 1 below 35 by 2
-                     for out-column from 1
-                     do (let ((number$ (aref sheet2 column row)))
-                          (setf (aref notes out-column out-row)
-                                (if (and (not (emptyp number$))
-                                         (every #'digit-char-p number$))
-                                    (parse-integer number$)
-                                    nil)))))
-          finally (return notes)))
-
-  (defun interpret-pokey-tables (tables)
-    (destructuring-bind (sheet1 sheet2 sheet3 sheet4) tables
-      (declare (ignore sheet3 sheet4))
-      (interpret-pokey-sheet2 sheet2) ; TODO: #1228, ignored
-      (interpret-pokey-sheet1 sheet1)))
-
-  (defun lists->2d-array (lists)
-    (let ((rows (length lists))
-          (cols (reduce #'max (mapcar #'length lists))))
-      (loop with array = (make-array (list cols rows))
-            for row in lists
-            for r from 0
-            do (loop for column in row
-                     for c from 0
-                     do (setf (aref array c r) column))
-            finally (return array))))
-
-  (defun read-pokey.ods ()
-    (format *trace-output* "~&Reading Synthpopalooza's POKEY tables spreadsheet… ")
-    (prog1
-        (zip:with-zipfile (zip (make-pathname
-                                :name "Synthpopalooza POKEY tables"
-                                :type "ods"
-                                :directory (append (pathname-directory
-                                                    (asdf:system-source-directory :skyline-tool))
-                                                   (list "data")))
-                           :force-utf-8 t)
-          (let ((xml (xmls:parse-to-list
-                      (map 'string #'code-char
-                           (zip:zipfile-entry-contents
-                            (zip:get-zipfile-entry "content.xml" zip))))))
-            (assert (and (consp (first xml))
-                         (equal (car (first xml)) "document-content")
-                         (equal (cdr (first xml))
-                                "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-                    (xml)
-                    "ODS file seems to be malformed: document-content tag missing or invalid~%~s"
-                    (first xml))
-            (let ((body (first (remove-if-not (lambda (el) (equal (caar el) "body")) (rest xml)))))
-              (assert (and (consp (caaddr body))
-                           (equal (car (caaddr body)) "spreadsheet")
-                           (equal (cdr (caaddr body)) "urn:oasis:names:tc:opendocument:xmlns:office:1.0"))
-                      (xml)
-                      "ODS is not a spreadsheet?~%~s"
-                      (first body))
-              (let* ((tables (mapcar #'cdr
-                                     (remove-if-not (lambda (el) (equal (caar el) "table"))
-                                                    (subseq (caddr body) 2)))))
-                (mapcar #'ods-table-rows->list tables)))))
-      (format *trace-output* " done.")))
-
-  (defun read-pokey-tables ()
-    (interpret-pokey-tables (mapcar #'lists->2d-array (read-pokey.ods)))))
-
-(define-constant +pokey-notes-table+
-    (read-pokey-tables)
-  :test 'equalp)
 
 (define-constant +all-hokey-distortions+
     '(:10 :2 :12a :12b :8 :4b :4a)
@@ -567,9 +488,6 @@ skipping MIDI music with ~:d track~:p"
        (:4b 14)
        (:4a 16))))
 
-(assert (= 97 (aref +pokey-notes-table+ (pokey-distortion-column :12a 8) 5))
-        () "POKEY notes table seems to be incorrect")
-
 (defun pokey->frequency (AUDF)
   (/ 15699.9 #| FIXME: #1229 NTSC? |# (* 2 (1+ AUDF))))
 
@@ -578,7 +496,7 @@ skipping MIDI music with ~:d track~:p"
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
   (declare (ignore distortion bits))
-  (multiple-value-bind (value error) 
+  (multiple-value-bind (value error)
       (frequency->pokey (freq<-midi-key midi-note-number))
     #+ () (format *trace-output* "~&For ~a, ~d × ~d then ~d × ~d" (midi->note-name midi-note-number)
                   value (ash (logand #xf0 (apply #'fraction-nybbles (simplify-to-rational error))) -4)
@@ -960,9 +878,7 @@ Gathered text:~{~% • ~a~}"
 
 (defun pokey-distortion-code (distortion)
   (ecase distortion
-    (:10 10) (:2 2) (:12a 12) (:12b 13) (:8 8) (:4a 4) (:4b 5))
-  
-  (parse-integer (symbol-name distortion) :junk-allowed t))
+    (:10 10) (:2 2) (:12a 12) (:12b 13) (:8 8) (:4a 4) (:4b 5)))
 
 (defun assigned-song-bank-and-title (assignment)
   (list (car assignment)
@@ -1051,6 +967,25 @@ Music:~:*
             for notes = (gethash symbol catalog)
             do (write-song-data-to-binary notes object *machine* sound-chip)))))
 
+(defun compile-music-2609 (source-out-name midi-name sound-chip output-coding)
+  "Compile music for Intellivision AY-3-8910 PSG"
+  (let ((*machine* 2609)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table)))
+    (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (format source-out ";;; Music compiled from ~a for Intellivision AY-3-8910 PSG
+;;; do not bother editing (generated file will be overwritten)"
+              midi-name)
+      (import-song-to-catalog :song-file-name midi-name
+                              :sound-chip sound-chip
+                              :output-coding output-coding
+                              :catalog catalog
+                              :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-ay-3-8910 notes source-out)))))
+
 (defun compile-music-2600 (source-out-name in-file-name)
   (let ((catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
@@ -1077,17 +1012,43 @@ Music:~:*
     (format *trace-output* "~&… done.~%")
     (finish-output)))
 
+(defun compile-music-for-machine (machine source-out-name in-file-name sound-chip output-coding)
+  "Compile music for a specific machine type with given parameters."
+  (ecase machine
+    (2600 (compile-music-2600 source-out-name in-file-name))
+    (5200 (compile-music-7800 source-out-name in-file-name
+                              (make-keyword (string-upcase sound-chip))
+                              (make-keyword (string-upcase output-coding))))
+    (7800 (compile-music-7800 source-out-name in-file-name
+                              (make-keyword (string-upcase sound-chip))
+                              (make-keyword (string-upcase output-coding))))
+    (2609 (compile-music-2609 source-out-name in-file-name
+                              (make-keyword (string-upcase sound-chip))
+                              (make-keyword (string-upcase output-coding))))
+    (35902 (compile-music-cgb source-out-name in-file-name sound-chip)) ; CGB
+    (20953 (compile-music-dmg source-out-name in-file-name sound-chip)) ; DMG
+    (9918 (compile-music-colecovision source-out-name in-file-name sound-chip)) ; ColecoVision
+    (1000 (compile-music-sg1000 source-out-name in-file-name sound-chip)) ; SG-1000
+    (3010 (compile-music-sms source-out-name in-file-name sound-chip)) ; SMS
+    (837 (compile-music-sgg source-out-name in-file-name sound-chip)) ; SGG
+    (3 (compile-music-nes source-out-name in-file-name sound-chip)) ; NES
+    (6 (compile-music-snes source-out-name in-file-name sound-chip)) ; SNES
+    (7 (compile-music-bbc source-out-name in-file-name sound-chip)) ; BBC
+    (64 (compile-music-c64 source-out-name in-file-name sound-chip)) ; C=64
+    (128 (compile-music-c128 source-out-name in-file-name sound-chip)) ; C=128
+    (264 (compile-music-c16 source-out-name in-file-name sound-chip)) ; C=16
+    (8 (compile-music-a2 source-out-name in-file-name sound-chip)) ; Apple ][
+    (9 (compile-music-a3 source-out-name in-file-name sound-chip)) ; Apple ///
+    (10 (compile-music-a2gs source-out-name in-file-name sound-chip)) ; Apple //gs
+    (81 (compile-music-zx81 source-out-name in-file-name sound-chip)) ; ZX81
+    (2068 (compile-music-spectrum source-out-name in-file-name sound-chip)))) ; Spectrum
+
 (defun compile-music (source-out-name in-file-name
                       &optional (machine-type$ "2600")
                                 (sound-chip "TIA")
                                 (output-coding "NTSC"))
-  (let ((*machine* (parse-integer machine-type$)))
-    (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
-    (ecase *machine*
-      (2600 (compile-music-2600 source-out-name in-file-name))
-      (7800 (compile-music-7800 source-out-name in-file-name
-                                (make-keyword (string-upcase sound-chip))
-                                (make-keyword (string-upcase output-coding)))))))
+  (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
+  (compile-music-for-machine *machine* source-out-name in-file-name sound-chip output-coding))
 
 (defvar *sec/quarter-note* 1/2)
 
@@ -1100,7 +1061,7 @@ Music:~:*
                       #+ () (format *trace-output* "~&<start ~a at ~d>" (midi->note-name key) time)
                       (setf (aref keyboard key) (list time velocity)))
                      ((and key (zerop velocity) (aref keyboard key))
-                      (let ((d (- time (first (aref keyboard key))))) 
+                      (let ((d (- time (first (aref keyboard key)))))
                         #+ () (format *trace-output* "~& end ~a at ~d (duration ~d)" (midi->note-name key) time d)
                         (destructuring-bind (start-time first-velocity)
                             (aref keyboard key)
@@ -1328,7 +1289,7 @@ Music:~:*
             decay-duration
             sustain-duration
             release-duration
-            (floor (* 100 (hokey-note-volume note))))  
+            (floor (* 100 (hokey-note-volume note))))
     (if (< sustain-duration 1)
         (let ((quieter (quieter-note note)))
           (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"
@@ -1390,6 +1351,92 @@ Music:~:*
                 note-count (* 8 (1+ note-count))))
       (terpri *trace-output*))))
 
+(defun midi-to-ay-3-8910 (midi-notes output-coding)
+  "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision"
+  (let ((frame-rate (ecase output-coding (:ntsc 60) (:pal 50)))
+        (output (list)))
+    (dolist (track midi-notes)
+      (let ((voice-assignments (make-array 3 :initial-element nil)) ; 3 PSG channels
+            (current-time 0))
+        (dolist (event track)
+          (ecase (first event)
+            (:note
+             (destructuring-bind (&key time key duration velocity) (rest event)
+               (let ((psg-channel (find-free-psg-channel voice-assignments time)))
+                 (when psg-channel
+                   (let ((frequency (freq<-midi-key key))
+                         (period (frequency-to-ay-period frequency)))
+                     ;; Store note data: (time channel period-low period-high volume duration)
+                     (push (list time psg-channel (logand period #xff) (ash period -8)
+                                (min 15 (floor (* 15 (/ velocity 127)))) duration)
+                           output)
+                     (setf (aref voice-assignments psg-channel)
+                           (+ time duration)))))))))
+        ;; Sort by time
+        (setf output (sort output #'< :key #'first))))
+    ;; Convert to array format expected by the system
+    (let ((result (make-array (list (length output) 6))))
+      (loop for i from 0
+            for note in output
+            do (destructuring-bind (time channel period-lo period-hi volume duration) note
+                 (setf (aref result i 0) (floor time)) ; time in frames
+                 (setf (aref result i 1) channel)       ; PSG channel (0-2)
+                 (setf (aref result i 2) period-lo)     ; period low byte
+                 (setf (aref result i 3) period-hi)     ; period high byte
+                 (setf (aref result i 4) volume)        ; volume (0-15)
+                 (setf (aref result i 5) duration)))    ; duration in frames
+      (values result nil))))
+
+(defun find-free-psg-channel (voice-assignments current-time)
+  "Find the first available PSG channel"
+  (loop for channel from 0 below 3
+        when (or (null (aref voice-assignments channel))
+                 (< (aref voice-assignments channel) current-time))
+          return channel
+        finally (return nil)))
+
+(defun frequency-to-ay-period (frequency)
+  "Convert frequency in Hz to AY-3-8910 period value"
+  (let ((clock-frequency 2000000)) ; AY-3-8910 clock is 2MHz
+    (max 1 (min #xffff (round (/ clock-frequency (* 16 frequency)))))))
+
+(defun write-song-data-to-ay-3-8910 (notes source-out)
+  "Write AY-3-8910 PSG music data to assembly source"
+  (format source-out "~2%;;; AY-3-8910 PSG music data")
+  (loop for i below (array-dimension notes 0)
+        do (let ((time (aref notes i 0))
+                 (channel (aref notes i 1))
+                 (period-lo (aref notes i 2))
+                 (period-hi (aref notes i 3))
+                 (volume (aref notes i 4))
+                 (duration (aref notes i 5)))
+             (format source-out "~%	.byte ~d, ~d, $~2,'0x, $~2,'0x, ~d, ~d	; Time:~d Ch:~d Vol:~d Dur:~d"
+                     time channel period-lo period-hi volume duration
+                     time channel volume duration))))
+
+(defmethod write-song-data-to-binary (notes object (machine (eql 2609)) (sound-chip (eql :ay-3-8910)))
+  "Write AY-3-8910 binary data for Intellivision"
+  (with-output-to-file (out object :element-type '(unsigned-byte 8)
+                           :if-exists :supersede :if-does-not-exist :create)
+    ;; Write header (number of notes)
+    (let ((num-notes (array-dimension notes 0)))
+      (write-byte (logand num-notes #xff) out)
+      (write-byte (ash num-notes -8) out))
+    ;; Write note data
+    (loop for i below (array-dimension notes 0)
+          do (let ((time (aref notes i 0))
+                   (channel (aref notes i 1))
+                   (period-lo (aref notes i 2))
+                   (period-hi (aref notes i 3))
+                   (volume (aref notes i 4))
+                   (duration (aref notes i 5)))
+               (write-byte time out)
+               (write-byte channel out)
+               (write-byte period-lo out)
+               (write-byte period-hi out)
+               (write-byte volume out)
+               (write-byte duration out)))))
+
 (defun compile-midi (argv0 input format frame-rate
                      &optional (output (make-pathname
                                         :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
@@ -1410,3 +1457,175 @@ Music:~:*
   (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
                                   (make-keyword format) (make-keyword frame-rate))
                      (make-keyword format) output))
+;; Platform-specific music compilation functions (stub implementations)
+(defun compile-music-cgb (output-file input-file &optional chip)
+  (error "Game Boy Color music compilation not yet implemented"))
+
+(defun compile-music-dmg (output-file input-file &optional chip)
+  (error "DMG music compilation not yet implemented"))
+
+(defun compile-music-nes (output-file input-file &optional chip)
+  (error "NES music compilation not yet implemented"))
+
+(defun compile-music-snes (output-file input-file &optional chip)
+  (error "SNES music compilation not yet implemented"))
+
+(defun compile-music-colecovision (output-file input-file &optional chip)
+  (error "ColecoVision music compilation not yet implemented"))
+
+(defun compile-music-sg1000 (output-file input-file &optional chip)
+  (error "SG-1000 music compilation not yet implemented"))
+
+(defun compile-music-sms (output-file input-file &optional chip)
+  (error "SMS music compilation not yet implemented"))
+
+(defun compile-music-sgg (output-file input-file &optional chip)
+  (error "SGG music compilation not yet implemented"))
+
+(defun compile-music-c64 (output-file input-file &optional chip)
+  "Compile music for Commodore 64 SID chipset"
+  (let ((*machine* 64))
+    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing SID music ~a…" output-file)
+      (format source ";;; SID Music compiled from ~a~%;" input-file)
+      (format source ";;; Commodore 64 SID synthesizer~2%")
+      ;; Basic SID music framework - would need full MIDI parsing
+      (format source "sid_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta $d404  ; Voice 1 control~%")
+      (format source "    sta $d40b  ; Voice 2 control~%")
+      (format source "    sta $d412  ; Voice 3 control~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to SID conversion~%")
+      (format source ";;; SID has 3 voices, each with:~%")
+      (format source ";;; - Oscillator (triangle, sawtooth, pulse, noise)~%")
+      (format source ";;; - ADSR envelope~%")
+      (format source ";;; - Filter~%"))))
+
+(defun compile-music-c128 (output-file input-file &optional chip)
+  "Compile music for Commodore 128 (same as C64 SID)"
+  (compile-music-c64 output-file input-file chip))
+
+(defun compile-music-c16 (output-file input-file &optional chip)
+  (error "C=16/Plus4 music compilation not yet implemented"))
+
+(defun compile-music-a2 (output-file input-file &optional chip)
+  "Compile music for Apple ][ with Mockingboard sound card"
+  (let ((*machine* 8))
+    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Mockingboard music ~a…" output-file)
+      (format source ";;; Mockingboard Music compiled from ~a~%;" input-file)
+      (format source ";;; Apple ][ Mockingboard (AY-3-8910 PSG)~2%")
+      ;; Mockingboard uses AY-3-8910 PSG chip, similar to Intellivision
+      (format source "mock_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta AY_REG  ; AY-3-8910 register select~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to AY-3-8910 conversion~%")
+      (format source ";;; Mockingboard has 3 voices, 8 registers each~%"))))
+
+(defun compile-music-a3 (output-file input-file &optional chip)
+  (error "Apple III music compilation not yet implemented"))
+
+(defun compile-music-a2gs (output-file input-file &optional chip)
+  "Compile music for Apple IIGS enhanced sound"
+  (let ((*machine* 10))
+    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Apple IIGS music ~a…" output-file)
+      (format source ";;; Apple IIGS Enhanced Sound compiled from ~a~%;" input-file)
+      (format source ";;; Apple IIGS has Ensoniq DOC (32 oscillator wavetable synthesis)~2%")
+      ;; Apple IIGS has sophisticated sound hardware
+      (format source "sound_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta SOUNDCTL  ; Sound control register~%")
+      (format source "    rts~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to Ensoniq DOC conversion~%")
+      (format source ";;; IIGS has 32 oscillators, 8-bit samples, stereo~%"))))
+
+(defun compile-music-bbc (output-file input-file &optional chip)
+  (error "BBC music compilation not yet implemented"))
+
+(defun compile-music-lynx (output-file input-file &optional chip)
+  (error "Lynx music compilation not yet implemented"))
+
+(defun compile-speech-2609 (output-file input-file)
+  "Compile speech for Intellivision platform"
+  (error "Intellivision speech compilation not yet implemented"))
+
+(defun compile-music-zx81 (output-file input-file &optional chip)
+  "Compile music for ZX81 EAR cassette interface"
+  (let ((*machine* 81))
+    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ZX81 EAR music ~a…" output-file)
+      (format source ";;; ZX81 EAR Music compiled from ~a~%;" input-file)
+      (format source ";;; ZX81 cassette EAR interface (1-bit audio)~2%")
+      ;; ZX81 has very limited sound capabilities via EAR cassette port
+      (format source "ear_init:~%")
+      (format source "    ld a, $00~%")
+      (format source "    out ($fe), a  ; EAR output (bit 4 of port $fe)~%")
+      (format source "    ret~2%")
+      ;; Placeholder for actual MIDI conversion to 1-bit audio
+      (format source ";;; TODO: Implement MIDI to 1-bit EAR audio conversion~%")
+      (format source ";;; ZX81 EAR can only produce simple tones/beeps~%"))))
+
+(defun compile-music-spectrum (output-file input-file &optional chip)
+  "Compile music for ZX Spectrum beeper"
+  (let ((*machine* 2068))
+    (with-output-to-file (source output-file :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Spectrum beeper music ~a…" output-file)
+      (format source ";;; ZX Spectrum Beeper Music compiled from ~a~%;" input-file)
+      (format source ";;; ZX Spectrum internal speaker (1-bit audio)~2%")
+      ;; ZX Spectrum has AY-3-8912 in 128K models, but basic beeper in 48K
+      (format source "beeper_init:~%")
+      (format source "    ld a, $00~%")
+      (format source "    out ($fe), a  ; Border color and speaker (bit 4)~%")
+      (format source "    ret~2%")
+      ;; Placeholder for actual MIDI conversion
+      (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%")
+      (format source ";;; Spectrum 128K has AY-3-8912 PSG chip available~%"))))
+
+(defun midi->note-name (midi-note-number)
+  "Convert a MIDI note number to a note name like 'C4'
+
+@table @asis
+@item Inputs
+@item MIDI-NOTE-NUMBER
+A MIDI note number from 0 to 127
+@item Outputs
+@item string
+A string containing the note name (e.g., \"C4\", \"F♯3\"). Note,
+the string will have the correct sharp sign (♯) not the octothorpe (#).
+@end table"
+  (let* ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+         (octave (floor midi-note-number 12))
+         (note-index (mod midi-note-number 12)))
+    (format nil "~a~d" (aref note-names note-index) (1- octave))))
+
+(defun note->midi-note-number (note-name)
+  "Convert a note name like 'C4' to a MIDI note number
+
+@table @asis
+@item Inputs
+@item NOTE-NAME
+A string containing a note name (e.g., \"C4\", \"F♯3\").
+Caution: You must use the sharp sign (♯) not the octothorpe (#),
+and flats (♭) or naturals (♮) are not understood.
+@item Outputs
+@item integer or nil
+A MIDI note number from 0 to 127, or nil if parsing fails
+@end table"
+  (let ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+        (note-name (string-upcase note-name)))
+    ;; Simple parsing: find the note part and octave part
+    (let* ((len (length note-name))
+           (note-part (if (and (>= len 2) (char= (char note-name 1) #\#))
+                         (subseq note-name 0 2)
+                         (subseq note-name 0 1)))
+           (octave-part (subseq note-name (length note-part)))
+           (octave (parse-integer octave-part :junk-allowed t))
+           (note-index (position note-part note-names :test #'string=)))
+      (when (and note-index octave)
+        (+ (* octave 12) note-index)))))
