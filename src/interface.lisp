@@ -65,13 +65,23 @@
         :self-test 'run-self-test))
 
 (defun run-self-test (&rest args)
-  "Run all unit tests for SkylineTool."
+  "Run all unit tests for SkylineTool and exit with appropriate status.
+
+Loads the test system and executes all FiveAM unit tests, providing
+a summary of results and exiting with status 0 for success or 1 for failure.
+
+@table @asis
+@item ARGS
+Command-line arguments (ignored)
+@item Side Effects
+Loads test system, runs tests, exits the Lisp process
+@end table
+
+@xref{function:command}, @xref{function:run-repl}."
   (declare (ignore args))
   (handler-case
       (progn
-        (unless (find-package :skyline-tool/test)
-          ;; Load the test system only if not already loaded
-          (asdf:load-system :skyline-tool/test))
+          (asdf:load-system :skyline-tool/test)
         ;; Run all tests and exit with appropriate code
         (let ((results (fiveam:run-all-tests)))
           (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
@@ -123,10 +133,33 @@
                               :package :Skyline-Tool))
 
 (defun x11-p ()
+  "Check if an X11 display is available.
+
+Determines whether an X11 graphics display is available by checking the
+DISPLAY environment variable for a valid X11 display specification.
+
+@table @asis
+@item Returns
+Generalized boolean: T if X11 display available, NIL otherwise
+@end table
+
+@xref{fun:prompt}, @xref{fun:tty-xterm-p}."
   (when-let (display (sb-posix:getenv "DISPLAY"))
     (find #\: display)))
 
 (defun prompt (query)
+  "Prompt user for input string.
+
+Displays a query to the user and reads a line of input, trimming whitespace.
+
+@table @asis
+@item QUERY
+String to display as prompt
+@item Returns
+User input string with whitespace trimmed
+@end table
+
+@xref{fun:prompt-function}, @xref{fun:x11-p}."
   (format *query-io* "~&~a" query)
   (force-output *query-io*)
   (prog1
@@ -531,6 +564,19 @@ See COPYING for details
       (error "Command not recognized: “~a” (try “help”)" verb))))
 
 (defun command (argv)
+  "Main entry point for Skyline-Tool command-line interface.
+
+Processes command-line arguments and dispatches to appropriate subcommands.
+This is the function called by buildapp as the entry point.
+
+@table @asis
+@item ARGV
+List of command-line arguments (strings)
+@item Side Effects
+Executes the requested command, may exit the process
+@end table
+
+@xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
   (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
