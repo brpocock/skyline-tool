@@ -26,7 +26,6 @@
            #:midi-key<-freq
            #:midi->note-name
            #:note->midi-note-number
-           #:note->midi-note-number ; temporarily disabled
            #:midi->7800-tia
            #:array<-7800-tia-notes-list
            #:compile-script

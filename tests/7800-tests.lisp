@@ -329,8 +329,7 @@
 
 ;; Scrolling subsystem tests
 (def-suite 7800-scrolling-suite
-  :description "Tests for 7800 scrolling subsystem functionality"
-  :in skyline-tool/test)
+  :description "Tests for 7800 scrolling subsystem functionality")
 
 (in-suite 7800-scrolling-suite)
 
