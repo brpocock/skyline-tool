@@ -3,9 +3,25 @@
 (declaim (optimize (debug 3)))
 
 (define-constant +tia-voices+
+    "TIA voice frequency tables for Atari 2600 audio.
+
+This constant contains frequency tables for each of the TIA's audio waveforms,
+indexed by voice number and waveform type. Each entry is a list where the first
+element is the waveform number, and subsequent elements are pairs of frequencies
+for each octave.
+
+@table @asis
+@item Structure
+List of lists, where each sublist represents a waveform and contains frequency
+pairs (low, high) for each octave.
+@item Used by
+@ref{fun:best-tia-ntsc-note-for}, @ref{fun:best-tia-pal-note-for}, TIA audio generation.
+@item Format
+Each waveform entry: (waveform-number (freq-low freq-high) ...)
+@end table"
     '( ;; Waveform 0 = silent
       (0)
-      (1 ;; Waveform 1 = “Buzzy”
+      (1 ;; Waveform 1 = "Buzzy"
        (2096 2080)
        (1048 1040)
        (698.7  693.3)
@@ -357,10 +373,41 @@
 Format: NTSC followed by PAL/SECAM frequency values for each AUDF value")
 
 (define-constant +vic-notes+
+    "VIC-20 note frequency table (currently empty).
+
+This constant is reserved for VIC-20 specific note frequencies. Currently
+unimplemented as VIC-20 music support is not yet added.
+
+@table @asis
+@item Status
+Currently empty - VIC-20 support not implemented
+@item Future use
+Will contain VIC-20 specific frequency tables when implemented
+@end table"
     '()
   :test 'equalp)
 
 (defgeneric midi-to-sound-binary (output-coding machine-type midi-notes sound-chip)
+  "Convert MIDI note data to platform-specific sound chip binary format.
+
+This generic function dispatches on OUTPUT-CODING, MACHINE-TYPE, and SOUND-CHIP
+to convert MIDI note sequences into the appropriate binary format for each
+target platform's sound hardware.
+
+@table @asis
+@item OUTPUT-CODING
+TV standard or output format (:ntsc, :pal, :secam, etc.)
+@item MACHINE-TYPE
+Target machine identifier (7800, 2600, 2609, etc.)
+@item MIDI-NOTES
+List of MIDI note events to convert
+@item SOUND-CHIP
+Sound chip identifier (:tia, :pokey, :ay-3-8910, etc.)
+@item Returns
+Platform-specific binary data for the sound chip
+@end table
+
+@xref{7800}, @xref{2600}, @xref{2609}."
   (:method (output-coding machine-type midi-notes sound-chip)
     (error "No handler for output coding ~s (machine ~s, sound chip ~s); ~
 skipping MIDI music with ~:d track~:p"
@@ -371,6 +418,24 @@ skipping MIDI music with ~:d track~:p"
     (midi-to-ay-3-8910 midi-notes output-coding)))
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
+  "Find the best TIA note for NTSC Atari 2600 that matches a given frequency.
+
+This function searches the TIA frequency tables for the note that best matches
+the input frequency, considering both the exact note and interpolation between
+adjacent notes for better accuracy.
+
+@table @asis
+@item FREQ
+Frequency in Hz to match (NIL returns NIL)
+@item VOICE
+TIA voice number (1-4, default 1)
+@item Returns
+List of (voice-number note-code interpolation-ratio) or NIL if no match
+@item Algorithm
+Uses frequency distance minimization with linear interpolation between notes
+@end table
+
+@xref{fun:best-tia-pal-note-for}, @ref{constant:+tia-voices+}."
   (when freq
     (let ((notes (mapcar #'first
                          (rest (elt +tia-voices+ voice)))))
@@ -385,6 +450,24 @@ skipping MIDI music with ~:d track~:p"
               (list voice freq-code (/ dist0 (+ dist0 dist+1)))))))))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
+  "Find the best TIA note for PAL Atari 2600 that matches a given frequency.
+
+This function searches the TIA frequency tables for PAL timing for the note that
+best matches the input frequency, considering both the exact note and interpolation
+between adjacent notes for better accuracy.
+
+@table @asis
+@item FREQ
+Frequency in Hz to match
+@item VOICE
+TIA voice number (1-4, default 1)
+@item Returns
+List of (voice-number note-code interpolation-ratio) or NIL if no match
+@item Algorithm
+Uses frequency distance minimization with linear interpolation between notes
+@end table
+
+@xref{fun:best-tia-ntsc-note-for}, @ref{constant:+tia-voices+}."
   (let ((notes (mapcar #'second
                        (rest (elt +tia-voices+ voice)))))
     (when-let (freq-code (position (first (sort (copy-list notes) #'<
@@ -399,11 +482,33 @@ skipping MIDI music with ~:d track~:p"
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
+    "Convert OOXML (Office Open XML) structure to string.
+
+Recursively extracts text content from OOXML spreadsheet cell structures,
+concatenating all text elements found in the XML tree.
+
+@table @asis
+@item XML
+OOXML structure (list or string)
+@item Returns
+String containing all text content from the XML structure
+@end table"
     (if (consp xml)
         (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
         xml))
 
   (defun ooxml-cell-repeats (cell)
+    "Extract repeat count from OOXML cell attributes.
+
+Parses the 'number-columns-repeated' attribute from an OOXML spreadsheet cell
+to determine how many times this cell should be repeated.
+
+@table @asis
+@item CELL
+OOXML cell structure
+@item Returns
+Integer repeat count (default 1 if no repeat attribute found)
+@end table"
     (if-let (repeat-index (and (consp (second cell))
                                (consp (first (second cell)))
                                (position-if (lambda (attr) (equal (first attr) "number-columns-repeated"))
@@ -412,10 +517,34 @@ skipping MIDI music with ~:d track~:p"
       1))
 
   (defun ooxml-repeated-cell (cell string)
+    "Create repeated cell values from OOXML cell structure.
+
+Generates a list of repeated string values based on the cell's repeat count
+attribute, used for expanding compressed spreadsheet data.
+
+@table @asis
+@item CELL
+OOXML cell structure
+@item STRING
+String value to repeat
+@item Returns
+List of repeated string values
+@end table"
     (loop repeat (ooxml-cell-repeats cell)
           collect string))
 
   (defun ods-table-rows->list (table)
+    "Convert ODS (OpenDocument Spreadsheet) table to list format.
+
+Parses OOXML table structure and converts it to a list of lists, expanding
+repeated cells and extracting string content from each cell.
+
+@table @asis
+@item TABLE
+OOXML table structure from ODS file
+@item Returns
+List of lists, where each sublist represents a table row
+@end table"
     (mapcar (lambda (row)
               (loop for cell in (remove-if-not (lambda (el) (equal (caar el) "table-cell"))
                                                row)
@@ -424,33 +553,51 @@ skipping MIDI music with ~:d track~:p"
                                             (equal (caar el) "table-row"))
                                           table))))
 
-  (defun midi->note-name (note)
-    (if note
-        (multiple-value-bind (octave letter) (floor (- note 9) 12)
-          (format nil "~a ~d" (elt '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯") letter)
-                  octave))
-        "Ø"))
-
-  (defun note->midi-note-number (octave note-name)
-    (+ 9
-       (* 12 octave)
-       (or (position note-name '("A" "A#" "B" "C" "C#" "D" "D#" "E" "F" "F#" "G" "G#")
-                     :test #'string-equal)
-           (position note-name '("A" "A♯" "B" "C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯")
-                     :test #'string-equal)
-           (let ((index (position note-name '( "A♭" "A" "B♭" "B" "C" "D♭" "D" "E♭" "E" "F" "G♭" "G")
-                                  :test #'string-equal)))
-             (return-from note->midi-note-number (+ 8 (* 12 octave) index))))))
-
-  (assert (= 60 (note->midi-note-number 4 "C")) ()
-          "Note->MIDI-Note-Number is not tuned correctly"))
-
 
 (define-constant +all-hokey-distortions+
+    "List of all valid Pokey distortion settings.
+
+This constant defines the valid distortion values for the Atari POKEY sound chip.
+Each distortion setting produces a different waveform shape and timbre.
+
+@table @asis
+@item :10
+Pure tone (no distortion)
+@item :2
+Buzzier tone
+@item :12a
+High-pass filtered tone
+@item :12b
+Band-pass filtered tone
+@item :8
+Square wave
+@item :4b
+Sawtooth wave
+@item :4a
+Triangle wave
+@end table
+
+@xref{fun:pokey-distortion-column}, @xref{fun:best-pokey-note-for}."
     '(:10 :2 :12a :12b :8 :4b :4a)
   :test #'equalp)
 
 (defun pokey-distortion-column (distortion bits)
+  "Calculate POKEY AUDCTL distortion column value.
+
+Computes the AUDCTL register value for POKEY sound chip based on distortion
+type and bit resolution. The POKEY uses a matrix of distortion settings that
+combine waveform shape with bit resolution.
+
+@table @asis
+@item DISTORTION
+Distortion type from @ref{constant:+all-hokey-distortions+}
+@item BITS
+Bit resolution (8 or 16)
+@item Returns
+AUDCTL register value for the specified distortion and bit settings
+@end table
+
+@xref{fun:best-pokey-note-for}, @ref{constant:+all-hokey-distortions+}."
   (+ (ecase bits
        (16 0)
        (8 1))
@@ -464,12 +611,57 @@ skipping MIDI music with ~:d track~:p"
        (:4a 16))))
 
 (defun pokey->frequency (AUDF)
+  "Convert POKEY AUDF register value to frequency in Hz.
+
+Calculates the output frequency for a given AUDF (Audio Frequency) register
+value in the POKEY sound chip.
+
+@table @asis
+@item AUDF
+AUDF register value (0-255)
+@item Returns
+Frequency in Hz
+@item Note
+Currently uses NTSC timing (FIXME: #1229 should support PAL too)
+@end table
+
+@xref{fun:frequency->pokey}, @xref{fun:best-pokey-note-for}."
   (/ 15699.9 #| FIXME: #1229 NTSC? |# (* 2 (1+ AUDF))))
 
 (defun frequency->pokey (frequency)
+  "Convert frequency in Hz to nearest POKEY AUDF register value.
+
+Calculates the AUDF register value that produces the closest frequency match
+for the POKEY sound chip.
+
+@table @asis
+@item FREQUENCY
+Frequency in Hz
+@item Returns
+AUDF register value (0-255)
+@end table
+
+@xref{fun:pokey->frequency}, @xref{fun:best-pokey-note-for}."
   (ceiling (/ (- 15699.9 #| FIXME: #1229 NTSC? |# (* 2 frequency)) (* 2 frequency))))
 
 (defun best-pokey-note-for (midi-note-number &optional distortion bits)
+  "Find the best POKEY AUDF value for a MIDI note number.
+
+Converts a MIDI note number to the closest POKEY frequency register value.
+Currently ignores distortion and bits parameters (FIXME: should use them).
+
+@table @asis
+@item MIDI-NOTE-NUMBER
+MIDI note number (0-127)
+@item DISTORTION
+Ignored (FIXME: should affect frequency calculation)
+@item BITS
+Ignored (FIXME: should affect frequency calculation)
+@item Returns
+AUDF register value and frequency error
+@end table
+
+@xref{fun:frequency->pokey}, @xref{fun:freq<-midi-key}, @ref{constant:+all-hokey-distortions+}."
   (declare (ignore distortion bits))
   (multiple-value-bind (value error)
       (frequency->pokey (freq<-midi-key midi-note-number))
@@ -479,9 +671,32 @@ skipping MIDI music with ~:d track~:p"
     (values value error)))
 
 (defun null-if-zero-note (n)
+  "Return NIL if note has zero frequency component, otherwise return note.
+
+Used to filter out invalid or zero-frequency notes from TIA note matching results.
+
+@table @asis
+@item N
+Note tuple (voice note-code frequency) or NIL
+@item Returns
+Note tuple if frequency component is non-zero, otherwise NIL
+@end table"
   (if (or (null n) (zerop (third n))) nil n))
 
 (defun best-tia-note-for-ntsc (note)
+  "Find the best TIA note for NTSC across all voices.
+
+Searches all TIA voices (2, 4, 5, 6, 8) to find the best frequency match
+for the given note, returning the optimal voice/note combination.
+
+@table @asis
+@item NOTE
+Frequency in Hz to match
+@item Returns
+List of (voice note-code frequency-error) with lowest error
+@end table
+
+@xref{fun:best-tia-ntsc-note-for}, @xref{fun:best-tia-note-for-pal}."
   (labels ((nearest (&rest set)
              (first (sort (remove-if #'null set) #'< :key #'third))))
     (nearest (null-if-zero-note (best-tia-ntsc-note-for note 4))
@@ -492,6 +707,19 @@ skipping MIDI music with ~:d track~:p"
              (list 0 0 most-positive-fixnum))))
 
 (defun best-tia-note-for-pal (note)
+  "Find the best TIA note for PAL across all voices.
+
+Searches all TIA voices (2, 4, 5, 6, 8) to find the best frequency match
+for the given note, returning the optimal voice/note combination for PAL timing.
+
+@table @asis
+@item NOTE
+Frequency in Hz to match
+@item Returns
+List of (voice note-code frequency-error) with lowest error
+@end table
+
+@xref{fun:best-tia-pal-note-for}, @xref{fun:best-tia-note-for-ntsc}."
   (labels ((nearest (&rest set)
              (first (sort (remove-if #'null set) #'< :key #'third))))
     (nearest (null-if-zero-note (best-tia-pal-note-for note 4))
@@ -655,6 +883,10 @@ skipping MIDI music with ~:d track~:p"
 
 (defun freq<-midi-key (key)
   (* (expt 2 (/ (midi-distance-from-a4 key) 12)) +a4/hz+))
+
+(defun midi-key<-freq (freq)
+  "Convert a frequency in Hz to the nearest MIDI key number"
+  (round (+ 69 (* 12 (/ (log (/ freq +a4/hz+)) (log 2))))))
 
 (defun frequency-distance (a b)
   (cond ((or (null a) (null b)) most-positive-fixnum)
@@ -1470,11 +1702,11 @@ Music:~:*
              (destructuring-bind (&key time key duration velocity) (rest event)
                (let ((psg-channel (find-free-psg-channel voice-assignments time)))
                  (when psg-channel
-                   (let ((frequency (freq<-midi-key key))
-                         (period (frequency-to-ay-period frequency)))
+                   (let* ((frequency (freq<-midi-key key))
+                          (period (frequency-to-ay-period frequency)))
                      ;; Store note data: (time channel period-low period-high volume duration)
                      (push (list time psg-channel (logand period #xff) (ash period -8)
-                                (min 15 (floor (* 15 (/ velocity 127)))) duration)
+                                 (min 15 (floor (* 15 (/ velocity 127)))) duration)
                            output)
                      (setf (aref voice-assignments psg-channel)
                            (+ time duration)))))))))
