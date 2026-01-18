@@ -103,4 +103,8 @@
 (defparameter *default-hair-color* (cdr (assoc :*default-hair-color *project.json*)))
 (defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
 
+(defun project-root ()
+  "Return the project root directory as a pathname"
+  (asdf:system-relative-pathname :skyline-tool #p"../"))
+
 (defvar *region* :ntsc)
