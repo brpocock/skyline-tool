@@ -443,32 +443,7 @@ skipping MIDI music with ~:d track~:p"
              (return-from note->midi-note-number (+ 8 (* 12 octave) index))))))
 
   (assert (= 60 (note->midi-note-number 4 "C")) ()
-          "Note->MIDI-Note-Number is not tuned correctly")
-
-  (defun interpret-pokey-sheet1 (sheet1)
-    (assert (eql 0 (search "POKEY table" (aref sheet1 2 0))) (sheet1)
-            "POKEY tables not in expected format~%~s" (aref sheet1 2 0))
-    (assert (equal "C" (aref sheet1 0 3)) ()
-            "Table does not start with C~%~s" (aref sheet1 0 3))
-    (loop for row from 3 below 112
-          for out-row from 0
-          with notes = (make-array (list 18 109) :element-type '(or null (unsigned-byte 16)))
-          with octave = 1
-          do (progn
-               (when (eql 0 (search "OCTAVE " (aref sheet1 35 row)))
-                 (setf octave (parse-integer (subseq (aref sheet1 35 row) 7))))
-               (setf (aref notes 0 out-row) (note->midi-note-number
-                                             octave
-                                             (string-trim " " (aref sheet1 0 row))))
-               (loop for column from 1 below 35 by 2
-                     for out-column from 1
-                     do (let ((number$ (aref sheet1 column row)))
-                          (setf (aref notes out-column out-row)
-                                (if (and (not (emptyp number$))
-                                         (every #'digit-char-p number$))
-                                    (parse-integer number$)
-                                    nil)))))
-          finally (return notes)))
+          "Note->MIDI-Note-Number is not tuned correctly"))
 
 
 (define-constant +all-hokey-distortions+
@@ -1012,43 +987,105 @@ Music:~:*
     (format *trace-output* "~&… done.~%")
     (finish-output)))
 
-(defun compile-music-for-machine (machine source-out-name in-file-name sound-chip output-coding)
-  "Compile music for a specific machine type with given parameters."
-  (ecase machine
-    (2600 (compile-music-2600 source-out-name in-file-name))
-    (5200 (compile-music-7800 source-out-name in-file-name
-                              (make-keyword (string-upcase sound-chip))
-                              (make-keyword (string-upcase output-coding))))
-    (7800 (compile-music-7800 source-out-name in-file-name
-                              (make-keyword (string-upcase sound-chip))
-                              (make-keyword (string-upcase output-coding))))
-    (2609 (compile-music-2609 source-out-name in-file-name
-                              (make-keyword (string-upcase sound-chip))
-                              (make-keyword (string-upcase output-coding))))
-    (35902 (compile-music-cgb source-out-name in-file-name sound-chip)) ; CGB
-    (20953 (compile-music-dmg source-out-name in-file-name sound-chip)) ; DMG
-    (9918 (compile-music-colecovision source-out-name in-file-name sound-chip)) ; ColecoVision
-    (1000 (compile-music-sg1000 source-out-name in-file-name sound-chip)) ; SG-1000
-    (3010 (compile-music-sms source-out-name in-file-name sound-chip)) ; SMS
-    (837 (compile-music-sgg source-out-name in-file-name sound-chip)) ; SGG
-    (3 (compile-music-nes source-out-name in-file-name sound-chip)) ; NES
-    (6 (compile-music-snes source-out-name in-file-name sound-chip)) ; SNES
-    (7 (compile-music-bbc source-out-name in-file-name sound-chip)) ; BBC
-    (64 (compile-music-c64 source-out-name in-file-name sound-chip)) ; C=64
-    (128 (compile-music-c128 source-out-name in-file-name sound-chip)) ; C=128
-    (264 (compile-music-c16 source-out-name in-file-name sound-chip)) ; C=16
-    (8 (compile-music-a2 source-out-name in-file-name sound-chip)) ; Apple ][
-    (9 (compile-music-a3 source-out-name in-file-name sound-chip)) ; Apple ///
-    (10 (compile-music-a2gs source-out-name in-file-name sound-chip)) ; Apple //gs
-    (81 (compile-music-zx81 source-out-name in-file-name sound-chip)) ; ZX81
-    (2068 (compile-music-spectrum source-out-name in-file-name sound-chip)))) ; Spectrum
+(defgeneric compile-music-for-machine (machine sound-chip source-out-name in-file-name output-coding)
+  (:documentation "Compile music for a specific machine type with given sound chip and parameters."))
+
+;; Machines that use keyword conversion for both sound-chip and output-coding
+(defmethod compile-music-for-machine ((machine (eql 5200)) sound-chip source-out-name in-file-name output-coding)
+  (compile-music-7800 source-out-name in-file-name
+                      (make-keyword (string-upcase sound-chip))
+                      (make-keyword (string-upcase output-coding))))
+
+(defmethod compile-music-for-machine ((machine (eql 7800)) sound-chip source-out-name in-file-name output-coding)
+  (compile-music-7800 source-out-name in-file-name
+                      (make-keyword (string-upcase sound-chip))
+                      (make-keyword (string-upcase output-coding))))
+
+(defmethod compile-music-for-machine ((machine (eql 2609)) sound-chip source-out-name in-file-name output-coding)
+  (compile-music-2609 source-out-name in-file-name
+                      (make-keyword (string-upcase sound-chip))
+                      (make-keyword (string-upcase output-coding))))
+
+;; Machine that ignores sound-chip and output-coding parameters
+(defmethod compile-music-for-machine ((machine (eql 2600)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore sound-chip output-coding))
+  (compile-music-2600 source-out-name in-file-name))
+
+;; Machines that only use sound-chip parameter (ignore output-coding)
+(defmethod compile-music-for-machine ((machine (eql 35902)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-cgb source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 20953)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-dmg source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 9918)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-colecovision source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 1000)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-sg1000 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 3010)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-sms source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 837)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-sgg source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 3)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-nes source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 6)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-snes source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 7)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-bbc source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 64)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-c64 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 128)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-c128 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 264)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-c16 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 8)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-a2 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 9)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-a3 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 10)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-a2gs source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 81)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-zx81 source-out-name in-file-name sound-chip))
+
+(defmethod compile-music-for-machine ((machine (eql 2068)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (compile-music-spectrum source-out-name in-file-name sound-chip))
 
 (defun compile-music (source-out-name in-file-name
                       &optional (machine-type$ "2600")
                                 (sound-chip "TIA")
                                 (output-coding "NTSC"))
   (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
-  (compile-music-for-machine *machine* source-out-name in-file-name sound-chip output-coding))
+  (compile-music-for-machine *machine* sound-chip source-out-name in-file-name output-coding))
 
 (defvar *sec/quarter-note* 1/2)
 
