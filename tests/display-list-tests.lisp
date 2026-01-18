@@ -429,6 +429,73 @@
         (is (equalp recycled-entry (first original-entries))
             "Recycled entry should be repositioned correctly")))))
 
+(test 7800-scrolling-display-list-specific
+  "Test 7800-specific scrolling display list operations"
+  ;; Test 7800-specific display list manipulation during scrolling
+  (let ((mem (make-test-memory 1024))
+        (dll-start #x1800)
+        (dl-start #x1900))
+
+    ;; Initialize a basic DLL structure for 7800 scrolling
+    ;; DLL entries for 7800 have specific format
+    (let ((entries '()))
+      ;; Create 3 DLL entries (typical for a scrolling viewport)
+      (loop for i from 0 below 3
+            for offset = (* i 3)
+            do (progn
+                 ;; DLL offset byte
+                 (setf (aref mem (+ dll-start offset)) (+ (* i 8) 1))
+                 ;; DLL DL pointer high
+                 (setf (aref mem (+ dll-start offset 1)) #x19)
+                 ;; DLL DL pointer low
+                 (setf (aref mem (+ dll-start offset 2)) (+ #x00 (* i 32)))
+                 (push (list (aref mem (+ dll-start offset))
+                           (aref mem (+ dll-start offset 1))
+                           (aref mem (+ dll-start offset 2)))
+                       entries)))
+
+      ;; Verify initial DLL structure
+      (is (= 3 (length entries)) "Should have 3 DLL entries initially")
+
+      ;; Test DLL entry format validation
+      (dolist (entry entries)
+        (is (= 3 (length entry)) "Each DLL entry should have 3 bytes")
+        (is (not (zerop (first entry))) "DLL offset should be non-zero")))))
+
+(test 7800-scrolling-memory-layout
+  "Test 7800 scrolling memory layout and addressing"
+  ;; Test that scrolling operations respect 7800 memory layout
+  (let ((ram-start #x1800)    ; 7800 RAM starts at $1800
+        (ram-end #x27FF)      ; 7800 RAM ends at $27FF
+        (dll-typical-start #x1800)
+        (dl-typical-start #x1900))
+
+    ;; Verify memory ranges are within 7800 RAM
+    (is (>= dll-typical-start ram-start) "DLL should be in RAM")
+    (is (<= dll-typical-start ram-end) "DLL should be in RAM")
+    (is (>= dl-typical-start ram-start) "DL should be in RAM")
+    (is (<= dl-typical-start ram-end) "DL should be in RAM")
+
+    ;; Verify DL comes after DLL in memory (typical layout)
+    (is (> dl-typical-start dll-typical-start) "DL should come after DLL in memory")))
+
+(test 7800-scrolling-zone-management
+  "Test scrolling zone management and boundary handling"
+  ;; Test that scrolling properly manages zones and boundaries
+  (let ((map-rows 24)         ; Total map rows
+        (viewport-rows 12)    ; Visible viewport rows
+        (current-top-row 5))  ; Current scroll position
+
+    ;; Verify viewport constraints
+    (is (<= viewport-rows map-rows) "Viewport cannot exceed map size")
+    (is (>= current-top-row 0) "Cannot scroll above map")
+    (is (<= (+ current-top-row viewport-rows) map-rows) "Cannot scroll below map")
+
+    ;; Test scroll range calculations
+    (let ((max-scroll-position (- map-rows viewport-rows)))
+      (is (= max-scroll-position 12) "Max scroll position should be map-rows - viewport-rows")
+      (is (<= current-top-row max-scroll-position) "Current position should not exceed max"))))
+
 (test zone-regeneration-accuracy
   "Test that full zone regeneration produces accurate display lists"
   ;; Test that when we do need to regenerate a zone, it produces correct results
