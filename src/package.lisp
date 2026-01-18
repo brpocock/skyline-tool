@@ -44,6 +44,8 @@
            #:parse-7800-object
            #:write-7800-binary
            #:interleave-7800-bytes
+           #:speech-supported-p
+           #:simple-animation-sequence
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences

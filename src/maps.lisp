@@ -1130,7 +1130,7 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (define-constant +minifont-punctuation+
   " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0"
-  :test 'string=)
+  :test 'string-equal)
 
 (defun char->minifont (char)
   ;; Treat pilcrow (¶) as a space for minifont encoding. The pilcrow is a
