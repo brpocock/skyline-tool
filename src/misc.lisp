@@ -1,12 +1,50 @@
 (in-package :skyline-tool)
 
 (defun region-valid-p ()
-  (assert (member *region* '(:ntsc :pal :secam)) (*region*)
-          "For some systems, the TV standard (region) must be set to one
- of (the keywords) NTSC, PAL, SECAM"))
+  "Validate that the current region setting is valid.
 
-(defvar *warned* (make-hash-table :test 'equal))
+Checks that *region* is set to one of the supported TV standards.
+Signals an error if the region is invalid.
+
+@table @asis
+@item Returns
+T if region is valid (does not return if invalid)
+@item Signals
+Error if *region* is not one of :ntsc, :pal, or :secam
+@end table
+
+@xref{var:*region*}."
+
+(defvar *warned*
+  "Hash table tracking warnings that have been issued.
+
+Used by warn-once to avoid repeating the same warning message.
+Keys are warning strings, values are counts of how many times issued.
+
+@table @asis
+@item Type
+Hash table with string keys and integer values
+@item Used by
+@ref{fun:warn-once}
+@end table"
+  (make-hash-table :test 'equal))
+
 (defun warn-once (format &rest args)
+  "Issue a warning message, but only once per unique message.
+
+Prevents warning spam by only issuing each unique warning occasionally,
+with decreasing frequency as the warning is repeated.
+
+@table @asis
+@item FORMAT
+Format string for warning message
+@item ARGS
+Format arguments
+@item Side Effects
+May issue a warning to *error-output*
+@end table
+
+@xref{var:*warned*}."
   (let ((s (apply #'format nil format args)))
     (let ((n (gethash s *warned* 0)))
       (when (or (zerop n) (zerop (random (* n n))))
@@ -44,7 +82,19 @@
     pathname))
 
 (defun machine-from-filename (file-name)
-  "Given a filename of an object file, identify which machine's object directory it is in."
+  "Extract machine identifier from object file pathname.
+
+Parses a file path to determine which target machine the file belongs to,
+based on the directory structure convention.
+
+@table @asis
+@item FILE-NAME
+Pathname string of an object file
+@item Returns
+Machine identifier number (e.g., 7800, 2600) or 5200 as default
+@end table
+
+@xref{fun:make-source-file-name}, @xref{var:*machine*}."
   (let ((path-parts (split-sequence #\/ file-name)))
     (if (and (< 3 (length path-parts))
              (equal "Source" (elt path-parts 0))
@@ -178,6 +228,22 @@
      (* 40 (/ (logand index #xc0) 32))))
 
 (define-constant +unicode->petscii-ish+
+    "Unicode to PETSCII character mapping table.
+
+Property list mapping Unicode characters to their closest PETSCII equivalents
+for Commodore systems. Includes special mappings for characters that don't
+have direct equivalents in PETSCII.
+
+@table @asis
+@item Structure
+Property list with Unicode characters as keys and PETSCII codes as values
+@item Purpose
+Character conversion for Commodore PETSCII text encoding
+@item Used by
+Text processing and font rendering functions
+@end table
+
+@xref{fun:char->petscii-font}."
     '(;; ASCII not found in PETSCII
       #\| #x5d
       #\\ #x5f
