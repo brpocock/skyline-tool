@@ -20,6 +20,15 @@
            #:compile-map
            #:compile-sound
            #:compile-music
+           #:compile-music-for-machine
+           #:freq<-midi-key
+           #:key<-midi-key
+           #:midi-key<-freq
+           #:midi->note-name
+           #:note->midi-note-number
+           #:note->midi-note-number ; temporarily disabled
+           #:midi->7800-tia
+           #:array<-7800-tia-notes-list
            #:compile-script
            #:command
            #:build-banking
@@ -28,7 +37,14 @@
            #:about-skyline-tool
            #:allocate-assets
            #:atari800-label-file
+           #:blob-rip-5200-tile
            #:blob-rip-7800
+           #:7800-image-to-160a
+           #:7800-image-to-320a
+           #:7800-image-to-320c
+           #:parse-7800-object
+           #:write-7800-binary
+           #:interleave-7800-bytes
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
@@ -107,4 +123,37 @@
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
+
+(defvar *game-title* nil)
+(defvar *part-number* nil)
+(defvar *studio* nil)
+(defvar *publisher* nil)
+(defvar *machine* nil)
+(defvar *sound* nil)
+(defvar *common-palette* nil)
+(defvar *default-skin-color* nil)
+(defvar *default-hair-color* nil)
+(defvar *default-clothes-color* nil)
+
+;; Set the variables from project.json if it was loaded
+(when *project.json*
+  (setf *game-title* (cdr (assoc :*game *project.json*))
+        *part-number* (cdr (assoc :*part-number *project.json*))
+        *studio* (cdr (assoc :*studio *project.json*))
+        *publisher* (cdr (assoc :*publisher *project.json*))
+        *machine* (cdr (assoc :*machine *project.json*))
+        *sound* (cdr (assoc :*sound *project.json*))
+        *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
+        *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
+        *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
+        *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*))))
+
 (defvar *region* :ntsc)
+(defun generated-file-path (filename)
+  "Return the platform-specific path for a generated file."
+  (let ((platform-dir (format nil "~d" *machine*)))
+    (merge-pathnames (make-pathname :directory (list :relative "Source" "Generated" platform-dir)
+                                    :name (pathname-name filename)
+                                    :type (pathname-type filename))
+                     (project-root))))
+

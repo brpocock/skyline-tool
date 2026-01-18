@@ -51,7 +51,24 @@
 
 (define-constant +apple-hires-palette+ '()) ;; TODO: #1243: #1223
 (define-constant +nes-palette-ntsc+
-    "NES NTSC color palette.
+    '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
+      (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
+      (#x24 #x44 #x00) (#x00 #x57 #x00) (#x00 #x5c #x00) (#x00 #x53 #x24)
+      (#x00 #x3c #x76) (#x00 #x00 #x00) (#x00 #x00 #x00) (#x00 #x00 #x00)
+      (#xab #xab #xab) (#x0d #x57 #xff) (#x4b #x30 #xff) (#x8a #x13 #xff)
+      (#xbc #x08 #xd6) (#xd2 #x12 #x69) (#xc7 #x2e #x00) (#x9d #x54 #x00)
+      (#x60 #x7b #x00) (#x20 #x98 #x00) (#x00 #xa3 #x00) (#x00 #x99 #x42)
+      (#x00 #x7d #xb4) (#x00 #x00 #x00) (#x00 #x00 #x00) (#x00 #x00 #x00)
+      (#xff #xff #xff) (#x53 #xae #xff) (#x90 #x85 #xff) (#xd3 #x65 #xff)
+      (#xff #x57 #xff) (#xff #x5d #xcf) (#xff #x77 #x57) (#xfa #x9e #x00)
+      (#xbd #xc7 #x00) (#x7a #xe7 #x00) (#x43 #xf6 #x11) (#x26 #xef #x7e)
+      (#x2c #xd5 #xf6) (#x4e #x4e #x4e) (#x00 #x00 #x00) (#x00 #x00 #x00)
+      (#xff #xff #xff) (#xb6 #xe1 #xff) (#xce #xd1 #xff) (#xe9 #xc3 #xff)
+      (#xff #xbc #xff) (#xff #xbd #xf4) (#xff #xc6 #xc3) (#xff #xd5 #x9a)
+      (#xe9 #xe6 #x81) (#xce #xf4 #x81) (#xb6 #xfb #x9a) (#xa9 #xfa #xc3)
+      (#xa9 #xf0 #xf4) (#xb8 #xb8 #xb8) (#x00 #x00 #x00) (#x00 #x00 #x00))
+  :test 'equalp
+  :documentation "NES NTSC color palette.
 
 The standard NES color palette for NTSC systems, containing 64 colors
 organized as 4 palettes of 16 colors each. The first color in each palette
@@ -66,7 +83,8 @@ List of 64 RGB color triples (R G B values 0-255)
 Used for NES graphics conversion and palette matching
 @end table
 
-@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-pal+}."
+@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-pal+}.")
+(define-constant +nes-palette-pal+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
       (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
       (#x24 #x44 #x00) (#x00 #x57 #x00) (#x00 #x5c #x00) (#x00 #x53 #x24)
@@ -83,9 +101,8 @@ Used for NES graphics conversion and palette matching
       (#xff #xbc #xff) (#xff #xbd #xf4) (#xff #xc6 #xc3) (#xff #xd5 #x9a)
       (#xe9 #xe6 #x81) (#xce #xf4 #x81) (#xb6 #xfb #x9a) (#xa9 #xfa #xc3)
       (#xa9 #xf0 #xf4) (#xb8 #xb8 #xb8) (#x00 #x00 #x00) (#x00 #x00 #x00))
-  :test 'equalp)
-(define-constant +nes-palette-pal+
-    "NES PAL color palette.
+  :test 'equalp
+  :documentation "NES PAL color palette.
 
 The standard NES color palette for PAL systems, containing 64 colors
 organized as 4 palettes of 16 colors each. The first color in each palette
@@ -100,24 +117,7 @@ List of 64 RGB color triples (R G B values 0-255)
 Used for NES graphics conversion and palette matching on PAL systems
 @end table
 
-@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-ntsc+}."
-    '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
-      (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
-      (#x24 #x44 #x00) (#x00 #x57 #x00) (#x00 #x5c #x00) (#x00 #x53 #x24)
-      (#x00 #x3c #x76) (#x00 #x00 #x00) (#x00 #x00 #x00) (#x00 #x00 #x00)
-      (#xab #xab #xab) (#x0d #x57 #xff) (#x4b #x30 #xff) (#x8a #x13 #xff)
-      (#xbc #x08 #xd6) (#xd2 #x12 #x69) (#xc7 #x2e #x00) (#x9d #x54 #x00)
-      (#x60 #x7b #x00) (#x20 #x98 #x00) (#x00 #xa3 #x00) (#x00 #x99 #x42)
-      (#x00 #x7d #xb4) (#x00 #x00 #x00) (#x00 #x00 #x00) (#x00 #x00 #x00)
-      (#xff #xff #xff) (#x53 #xae #xff) (#x90 #x85 #xff) (#xd3 #x65 #xff)
-      (#xff #x57 #xff) (#xff #x5d #xcf) (#xff #x77 #x57) (#xfa #x9e #x00)
-      (#xbd #xc7 #x00) (#x7a #xe7 #x00) (#x43 #xf6 #x11) (#x26 #xef #x7e)
-      (#x2c #xd5 #xf6) (#x4e #x4e #x4e) (#x00 #x00 #x00) (#x00 #x00 #x00)
-      (#xff #xff #xff) (#xb6 #xe1 #xff) (#xce #xd1 #xff) (#xe9 #xc3 #xff)
-      (#xff #xbc #xff) (#xff #xbd #xf4) (#xff #xc6 #xc3) (#xff #xd5 #x9a)
-      (#xe9 #xe6 #x81) (#xce #xf4 #x81) (#xb6 #xfb #x9a) (#xa9 #xfa #xc3)
-      (#xa9 #xf0 #xf4) (#xb8 #xb8 #xb8) (#x00 #x00 #x00) (#x00 #x00 #x00))
-  :test 'equalp)
+@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-ntsc+}.")
 
 (define-constant +tg16-palette+
     '((#x00 #x00 #x00) (#x00 #x00 #x1b) (#x01 #x02 #x3d) (#x00 #x00 #x58)
@@ -248,7 +248,8 @@ Used for NES graphics conversion and palette matching on PAL systems
       (#xde #xf9 #x9b) (#xe2 #xfe #xbe) (#xdf #xfb #xd8) (#xe3 #xff #xfb)
       (#xff #xfd #x2c) (#xfd #xfa #x47) (#xff #xff #x6a) (#xfe #xfb #x84)
       (#xff #xff #xa7) (#xfe #xfd #xc2) (#xff #xff #xe4) (#xff #xff #xff))
-  :test 'equalp)
+  :test 'equalp
+  :documentation "Palette for the TurboGrafx-16")
 
 (define-constant +ted-palette+ '()) ;; TODO: #1243: #1224
 (define-constant +vcs-ntsc-palette+
@@ -1852,13 +1853,13 @@ position within a larger image I."
   "Convert image to Atari 7800 160A graphics format.
 
 Converts a pixel image to 160A mode bytes for the Atari 7800. In 160A mode,
-each pixel is 4 bits (16 colors) and pixels are packed 2 per byte.
+each pixel is 2 bits (4 colors) and pixels are packed 4 per byte.
 
 @table @asis
 @item IMAGE
 2D array of pixel indices
 @item BYTE-WIDTH
-Width of image in bytes (each byte = 2 pixels)
+Width of image in bytes (each byte = 4 pixels)
 @item HEIGHT
 Height of image in pixels
 @item PALETTE
@@ -2855,6 +2856,22 @@ Signals assertion errors for invalid dimensions."
                       (aref stamp-buffer i) i serial stamp)
             (setf (aref stamp-buffer i)
                   (elt bytes (- 15 byte)))))))))
+
+(defun blob-rip-5200-tile (png-file &optional (imperfectp$ nil))
+  "Rip a tile for Atari 5200 graphics mode E.
+
+This function is not yet implemented.
+
+@table @asis
+@item PNG-FILE
+Path to PNG file containing tile graphics
+@item IMPERFECTP$
+If true, allow imperfect palette matches
+@end table
+
+Signals an error indicating the function is not implemented."
+  (declare (ignore png-file imperfectp$))
+  (error "blob-rip-5200-tile is not yet implemented"))
 
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
