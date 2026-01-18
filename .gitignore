@@ -18,7 +18,7 @@ comments/
 # Generated/output files
 Dist/*
 Object/*
-Source/Generated/*
+Source/Generated/
 *.fasl
 phantasia.trace
 /dumper*.lisp
