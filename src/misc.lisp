@@ -901,7 +901,8 @@ inventory_end = *
     (2609 "Intv")
     (3010 "SMS")
     (5200 "SuperSystem")
-    (7800 "ProSystem")))
+    (7800 "ProSystem")
+    (9918 "Coleco")))
 
 (defun machine-long-name ()
   (ecase *machine*
@@ -924,11 +925,16 @@ inventory_end = *
     (2600 "ATARI Video Computer System CX-2600")
     (3010 "Sega Master System")
     (5200 "ATARI Video SuperSystem CX-5200")
-    (7800 "ATARI Video ProSystem CX-7800")))
+    (7800 "ATARI Video ProSystem CX-7800")
+    (9918 "ColecoVision")))
 
-(defun machine-valid-p ()
-  (assert (and (machine-short-name) (machine-long-name))
-          (*machine*)))
+(defun machine-valid-p (&optional machine)
+  "Check if MACHINE (or *MACHINE* if not provided) is a valid machine type.
+Returns T if the machine is supported, NIL otherwise."
+  (let ((*machine* (or machine *machine*)))
+    ;; If machine-short-name and machine-long-name don't signal errors, machine is valid
+    (ignore-errors
+      (and (machine-short-name) (machine-long-name) t))))
 
 
 

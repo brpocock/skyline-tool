@@ -474,6 +474,14 @@ skipping MIDI music with ~:d track~:p"
              (null-if-zero-note (best-tia-pal-note-for note 8))
              (list 0 0 most-positive-fixnum))))
 
+(defun merge-tia-voices (notes)
+  "Merge TIA voices into a single timeline. For TIA, voices are already combined."
+  notes)
+
+(defun merge-pokey-tia-voices (notes)
+  "Merge Pokey voices into a single timeline. For Pokey, voices are already combined."
+  notes)
+
 (defun array<-7800-tia-notes-list (notes tv-type)
   (let ((frame-rate (ecase tv-type (:ntsc 60) (:pal 50))))
     (coerce (sort (adjust-note-timing-for-frame-rate (merge-tia-voices notes) frame-rate)

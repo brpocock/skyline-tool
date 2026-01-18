@@ -403,8 +403,8 @@
 (test intv-integration-workflow
   "Test Intellivision integration workflow components"
   ;; Test that all core components are in place
-  (is-true (member 2609 skyline-tool::*valid-machines*)
-           "Intellivision should be in valid machines")
+  (is-true (skyline-tool::check-machine-valid 2609)
+           "Intellivision should be a valid machine")
 
   ;; Test dispatch system recognizes Intellivision
   ;; TODO: Add proper dispatch system testing

@@ -141,6 +141,9 @@
            #:run-gui
            #:run-repl
            #:machine-long-name
+           #:machine-valid-p
+           #:check-machine-valid
+           #:check-machine-valid
            ;; Global variables (for testing)
            #:*machine*
            #:*game-title*

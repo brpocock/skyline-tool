@@ -18,7 +18,8 @@
                        (setf (gethash address classes-table) class-name)))))
             finally (return-from read-class-methods-from-file classes-table)))))
 
-(defun read-class-ids-from-file (&optional (pathname (merge-pathnames "Source/Generated/ClassConstants.s" (project-root))))
+(defun read-class-ids-from-file (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/ClassConstants.s" (skyline-tool::machine-directory-name))
+                                                                          (project-root))))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
     (let ((classes-table (make-hash-table)))
       (loop for line = (read-line labeled nil nil)

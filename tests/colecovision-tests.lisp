@@ -66,8 +66,8 @@
 ;; Test ColecoVision platform constants
 (test colecovision-platform-constants
   "Test that ColecoVision platform constants are properly defined"
-  (is-true (member 9918 skyline-tool::*valid-machines*)
-           "ColecoVision (machine 9918) should be in valid machines list"))
+  (is-true (skyline-tool::check-machine-valid 9918)
+           "ColecoVision (machine 9918) should be a valid machine"))
 
 ;; Test ColecoVision error conditions
 (test colecovision-error-conditions

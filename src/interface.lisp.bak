@@ -67,13 +67,45 @@
 (defun run-self-test (&rest args)
   "Run all unit tests for SkylineTool."
   (declare (ignore args))
-  (unless (find-package :skyline-tool/test)
-    ;; Load the test system only if not already loaded
-    (asdf:load-system :skyline-tool/test))
-  ;; Run all tests - since there are known failures, always fail
-  (fiveam:run-all-tests)
-  (format t "~&TESTS FAILED: known failures exist in test suite~%")
-  (sb-ext:exit :code 1))
+  (format *trace-output* "~&Loading test system…")
+  ;; Load the .asd file first, similar to setup.lisp
+  (asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool" :type "asd")
+                                  (project-root))
+                 :name :skyline-tool)
+  (asdf:load-system :skyline-tool/test)
+  (format *trace-output* " Running tests…")
+  (handler-case
+      (progn
+        ;; Run all test suites
+        (dolist (suite-name '(tileset-tests
+                              tileset-palette-extraction-suite
+                              intv-gram-tests
+                              intv-comprehensive-suite
+                              sega-tests
+                              nes-tests
+                              7800-tests
+                              7800-comprehensive-suite
+                              graphics-tests
+                              5200-tests
+                              music-tests
+                              colecovision-tests
+                              snes-tests
+                              speech-filter-tests
+                              interface-tests
+                              action-tests
+                              animation-preview-tests))
+          (let ((suite (find-symbol (string-upcase suite-name) :skyline-tool/test)))
+            (when suite
+              (fiveam:run! suite)))))
+        (let ((results (fiveam:run-all-tests :summary t)))
+          (multiple-value-bind (ok failed skipped)
+              (fiveam:results-status results)
+            (declare (ignore skipped))
+            (when (and ok (plusp ok)) (format t " Tests passed."))
+            (when (and failed (plusp failed))
+              (error " TESTS FAILED:~%~{~% * ~a~}" failed)))))
+    (serious-condition (c)
+      (error "Error running tests: ~s~2%~a" c c))))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."

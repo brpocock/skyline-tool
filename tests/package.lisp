@@ -26,8 +26,15 @@
                                 skyline-tool:*machine*)
                            (skyline-tool::machine-directory-name)
                            "test"))
-         ;; Use cryptographically secure random identifier (must be secure)
-         (random-id (format nil "~16,'0x" (cryptographic-random-integer (expt 2 64))))
+        ;; Use cryptographically secure random identifier
+        (random-id (format nil "~16,'0x"
+                          (or (ignore-errors
+                                (with-open-file (urandom "/dev/urandom" :element-type '(unsigned-byte 8))
+                                  (let ((bytes (make-array 8 :element-type '(unsigned-byte 8))))
+                                    (read-sequence bytes urandom)
+                                    (loop for i from 0 below 8
+                                          sum (ash (aref bytes i) (* i 8))))))
+                              (random (expt 2 64)))))
          (path (format nil "Object/~a/tmpnam-~a.bin" platform-dir random-id)))
     (ensure-directories-exist path)
     path)

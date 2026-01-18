@@ -644,7 +644,7 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
     (cond
       ((equalp path '(:relative "Source" "Code" platform-dir "Common"))
        (list :relative "Source" "Generated" platform-dir "Common"))
-      ((and (>= (length path) 4) (equalp (subseq path 0 4) '(:relative "Source" "Code" platform-dir "Banks")))
+      ((and (>= (length path) 5) (equalp (subseq path 0 5) '(:relative "Source" "Code" platform-dir "Banks")))
        (append (list :relative "Source" "Generated" platform-dir) (subseq path 4)))
       (t (error "Don't know how to find a generated path from ~a" path)))))
 
@@ -747,11 +747,6 @@ Returns the pathname of the found file, or signals an error if not found."
     (let ((possible-file (make-pathname :directory path :name name :type "s")))
       (when (probe-file possible-file)
         (return-from find-included-file possible-file))))
-  (let ((shared-generated-pathname
-          (make-pathname :directory (list :relative "Source" "Generated")
-                         :name name :type "s")))
-    (when (skyline-tool-writes-p shared-generated-pathname)
-      (return-from find-included-file shared-generated-pathname)))
   (let ((generated-pathname
           (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
                          :name name :type "s")))
@@ -821,7 +816,7 @@ file ~a.s in bank $~(~2,'0x~)~
                              for included = (included-file line)
                              for binary = (included-binary-file line)
                              for file = (cond
-                                          (included (find-included-file included :testp testp))
+                                          (included (find-included-file included :cwd (pathname-directory source-file) :testp testp))
                                           (binary (find-included-binary-file binary))
                                           (t nil))
                              when file collect file)))
@@ -920,6 +915,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
               (enough-namestring
                (make-pathname :directory
                               (append (list :relative "Source")
+                                      (machine-directory-name)
                                       (subseq (pathname-directory
                                                (merge-pathnames pathname))
                                               source-prefix-length))
@@ -1427,7 +1423,7 @@ exit
                        "LastBank"
                        (format nil "Bank~(~2,'0x~)" *bank*)))
              (bank-source (make-pathname
-                           :directory (list :relative "Source" "Banks" bank)
+                           :directory (list :relative "Source" (machine-directory-name) "Banks" bank)
                            :name bank
                            :type "s")))
         (when (= *bank* *last-bank*)
@@ -1503,40 +1499,54 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 
 (defun bank-source-pathname ()
   (make-pathname
-   :directory (list :relative "Source" "Banks"
-                    (format nil "Bank~(~2,'0x~)" *bank*))
-   :name (format nil "Bank~(~2,'0x~)" *bank*)
-   :type "s"))
+                        :directory (list :relative "Source" "Code" (machine-directory-name) "Banks"
+                                         (format nil "Bank~(~2,'0x~)" *bank*))
+                        :name (format nil "Bank~(~2,'0x~)" *bank*)
+                        :type "s"))
 
 (defun last-bank-source-pathname ()
   (make-pathname
-   :directory (list :relative "Source" "Banks" "LastBank")
-   :name "LastBank" :type "s"))
+                        :directory (list :relative "Source" "Code" (machine-directory-name) "Banks" "LastBank")
+                        :name "LastBank" :type "s"))
 
 (defgeneric write-master-makefile-for-machine (machine)
   (:documentation "Write machine-specific makefile content for MACHINE"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
+  (format *trace-output* "~%Method called for 7800")
+  (format *trace-output* "~%Starting makefile generation for 7800")
+  (format *trace-output* "~%+all-builds+ = ~a" +all-builds+)
   (dolist (build +all-builds+)
+    (format *trace-output* "~%Processing build: ~a" build)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
+        (format *trace-output* "~%Processing build=~a video=~a" build video)
         (write-makefile-top-line :build build :video video)
+        (format *trace-output* "~%Wrote makefile top line")
         (write-header-script :build build :video video)
+        (format *trace-output* "~%Wrote header script")
         (dotimes (*bank* (1+ *last-bank*))
+          (format *trace-output* "~%Processing bank ~a" *bank*)
           (let ((bank-source (bank-source-pathname)))
             (cond
               ((= *bank* *last-bank*)
+               (format *trace-output* "~%Writing last bank makefile")
                (write-bank-makefile (last-bank-source-pathname)
                                     :build build :video video))
               ((and (= *last-bank* #x3f)
                     (= *bank* #x3e))
+               (format *trace-output* "~%Writing RAM bank makefile")
                (write-ram-bank-makefile :build build :video video))
               ((probe-file bank-source)
+               (format *trace-output* "~%Writing bank makefile for ~a" bank-source)
                (write-bank-makefile bank-source
                                     :build build :video video))
-              (t (write-asset-bank-makefile *bank*
-                                            :build build :video video)))))))))
+              (t (format *trace-output* "~%Writing asset bank makefile")
+                 (write-asset-bank-makefile *bank*
+                                            :build build :video video)))))
+        (format *trace-output* "~%Finished processing build=~a video=~a" build video))))
+  (format *trace-output* "~%Finished makefile generation for 7800"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 200)))
   "Write makefile content for Atari Lynx"
@@ -1753,7 +1763,7 @@ This will  include the assets  and asset  loaders needed for  that bank,
 based on the asset listing files."
   (let* ((*bank* (parse-integer bank-hex :radix 16))
          (basename (format nil "Bank~(~2,'0x~).~a.~a" *bank* build video))
-         (outfile (make-pathname :directory (list :relative "Source" "Generated")
+         (outfile (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
                                  :name basename
                                  :type "s"))
          (assets (with-input-from-file (list (allocation-list-name *bank* build video))

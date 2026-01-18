@@ -53,8 +53,8 @@
 ;; Test SNES platform constants
 (test snes-platform-constants
   "Test that SNES platform constants are properly defined"
-  (is-true (member 6 skyline-tool::*valid-machines*)
-           "SNES (machine 6) should be in valid machines list"))
+  (is-true (skyline-tool::check-machine-valid 88)
+           "SNES (machine 88) should be a valid machine"))
 
 ;; Test SNES error conditions
 (test snes-error-conditions

@@ -758,7 +758,7 @@ Update map/s or script to agree with one another and DO-OVER."
 (defvar *enemies-by-name* (make-hash-table :test #'equalp))
 
 (defun load-enemies-index (&optional
-                             (index-pathname #p"Source/Generated/Enemies.index"))
+                             (index-pathname (format nil "Source/Generated/~a/Enemies.index" (skyline-tool::machine-directory-name))))
   (with-input-from-file (index index-pathname)
     (loop for line = (read-line index nil nil)
           while line

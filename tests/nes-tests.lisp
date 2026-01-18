@@ -53,8 +53,8 @@
 (test nes-platform-dispatch
   "Test NES platform integration in dispatch system"
   ;; NES should be in valid machines
-  (is-true (member 3 skyline-tool::*valid-machines*)
-           "NES (machine 3) should be in valid machines list"))
+  (is-true (skyline-tool::check-machine-valid 8)
+           "NES (machine 8) should be a valid machine"))
 
 ;; Test NES palette usage in graphics
 (test nes-palette-integration

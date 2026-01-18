@@ -129,21 +129,21 @@
 ;; Test 7800 music compilation output validation
 (test 7800-music-compilation-output-validation
   "Test that 7800 music compilation produces valid binary output"
-  (let ((temp-file (format nil "Object/~a/7800-test-music-~x.bin"
-                           (skyline-tool::machine-directory-name)
+  (let ((temp-file (format nil "Object/7800/7800-test-music-~x.bin"
                            (sxhash (get-universal-time)))))
-    ;; Create a minimal mock MIDI file for testing
-    ;; This would normally be done with actual MIDI data, but for testing
-    ;; we'll use the existing compilation framework
+    (let ((skyline-tool::*machine* 7800))
+      ;; Create a minimal mock MIDI file for testing
+      ;; This would normally be done with actual MIDI data, but for testing
+      ;; we'll use the existing compilation framework
 
-    ;; For now, test that the compilation function exists and can handle
-    ;; basic parameters without crashing (full validation would require MIDI files)
-    (is-true (fboundp 'skyline-tool::compile-music-7800)
-             "compile-music-7800 function should exist")
+      ;; For now, test that the compilation function exists and can handle
+      ;; basic parameters without crashing (full validation would require MIDI files)
+      (is-true (fboundp 'skyline-tool::compile-music-7800)
+               "compile-music-7800 function should exist")
 
-    ;; Test that it properly handles invalid inputs
-    (signals error (skyline-tool::compile-music-7800 temp-file "/nonexistent.mid" :tia :binary)
-             "compile-music-7800 should signal error for missing MIDI file")))
+      ;; Test that it properly handles invalid inputs
+      (signals error (skyline-tool::compile-music-7800 temp-file "/nonexistent.mid" :tia :binary)
+               "compile-music-7800 should signal error for missing MIDI file"))))
 
 ;; Test 7800 graphics conversion correctness
 (test 7800-graphics-conversion-correctness
@@ -237,8 +237,8 @@
 ;; Test 7800 binary file writing and reading
 (test 7800-binary-file-io
   "Test that 7800 binary file writing produces readable data"
-  (let ((test-file (format nil "Object/~a/test-7800-data-~x.bin"
-                           (skyline-tool::machine-directory-name)
+  (let ((skyline-tool::*machine* 7800)
+        (test-file (format nil "Object/7800/test-7800-data-~x.bin"
                            (sxhash (get-universal-time))))
         (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
     ;; Write test data
@@ -279,8 +279,8 @@
 ;; Test 7800 platform constants
 (test 7800-platform-constants
   "Test that 7800 platform constants are properly defined"
-  (is-true (member 7800 skyline-tool::*valid-machines*)
-           "7800 should be in valid machines list"))
+  (is-true (skyline-tool::machine-valid-p 7800)
+           "7800 should be a valid machine"))
 
 ;; Test error conditions for 7800 functions
 (test 7800-error-conditions
