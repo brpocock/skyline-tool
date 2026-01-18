@@ -349,7 +349,17 @@
     ;; Verify basic state management logic
     (is (>= test-map-top-row 0) "Map top row should be non-negative")
     (is (<= test-map-top-line 15) "Map top line should be 0-15 for fine scrolling")
-    (is (> test-map-rows 0) "Map should have at least one row")))
+    (is (> test-map-rows 0) "Map should have at least one row")
+
+    ;; Test fine scrolling increment
+    (let ((new-top-line (mod (1+ test-map-top-line) 16)))
+      (is (= new-top-line 6) "Fine scrolling should increment line"))
+
+    ;; Test coarse scrolling (when line wraps)
+    (let ((wrapped-line (mod (+ test-map-top-line 11) 16))
+          (new-top-row (+ test-map-top-row 1)))
+      (is (= wrapped-line 0) "Line should wrap to 0 after 15")
+      (is (= new-top-row 11) "Row should increment on coarse scroll"))))
 
 ;; Test scrolling direction constants/logic
 (test 7800-scrolling-directions
@@ -360,7 +370,13 @@
     (is (member 'north directions) "North scrolling should be supported")
     (is (member 'south directions) "South scrolling should be supported")
     (is (member 'east directions) "East scrolling should be supported")
-    (is (member 'west directions) "West scrolling should be supported")))
+    (is (member 'west directions) "West scrolling should be supported")
+
+    ;; Test direction opposites
+    (is (eq 'south (case 'north ('north 'south) ('south 'north) ('east 'west) ('west 'east)))
+        "North should be opposite of south")
+    (is (eq 'west (case 'east ('north 'south) ('south 'north) ('east 'west) ('west 'east)))
+        "East should be opposite of west")))
 
 ;; Test scrolling boundary conditions
 (test 7800-scrolling-boundaries
@@ -373,11 +389,17 @@
 
     ;; Test horizontal scrolling boundaries
     (is (<= viewport-width map-width) "Viewport width should not exceed map width")
-    (is (>= (- map-width viewport-width) 0) "Should be able to scroll horizontally")
+    (is (>= (- map-width viewport-width) 20) "Should be able to scroll 20 pixels horizontally")
 
     ;; Test vertical scrolling boundaries
     (is (<= viewport-height map-height) "Viewport height should not exceed map height")
-    (is (>= (- map-height viewport-height) 0) "Should be able to scroll vertically")))
+    (is (>= (- map-height viewport-height) 18) "Should be able to scroll 18 pixels vertically")
+
+    ;; Test boundary calculations
+    (let ((max-scroll-x (- map-width viewport-width))
+          (max-scroll-y (- map-height viewport-height)))
+      (is (= max-scroll-x 20) "Max horizontal scroll should be map-width - viewport-width")
+      (is (= max-scroll-y 18) "Max vertical scroll should be map-height - viewport-height"))))
 
 ;; Test fine vs coarse scrolling logic
 (test 7800-scrolling-fine-coarse
