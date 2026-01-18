@@ -106,4 +106,4 @@
                              (:file "nes-tests")
                              (:file "snes-tests"))))
   :perform (asdf:test-op (o c)
-             (uiop:symbol-call :fiveam :run! :skyline-tool/test))))
+             (uiop:symbol-call :fiveam :run! :skyline-tool/test)))
