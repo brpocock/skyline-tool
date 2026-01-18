@@ -61,7 +61,24 @@
         :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
-        :write-master-makefile 'write-master-makefile))
+        :write-master-makefile 'write-master-makefile
+        :self-test 'run-self-test))
+
+(defun run-self-test (&rest args)
+  "Run all unit tests for SkylineTool."
+  (declare (ignore args))
+  (unless (find-package :skyline-tool/test)
+    ;; Load the test system only if not already loaded
+    (asdf:load-system :skyline-tool/test))
+  ;; Run all tests and exit with appropriate code
+  (let ((results (fiveam:run-all-tests)))
+    (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+      (declare (ignore skipped))
+      (if (and passed (zerop failed) (zerop skipped))
+          (format t "~&All tests passed~%")
+          (progn
+            (format t "~&Tests failed: ~d test(s) failed~%" failed)
+            (sb-ext:exit :code 1))))))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
@@ -112,7 +129,7 @@
     (finish-output *query-io*)))
 
 (defun prompt-function ()
-  (if (and (tty-xterm-p) #+mcclim (x11-p) #-mcclim nil)
+  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
@@ -120,7 +137,7 @@
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
-  (if (and (tty-xterm-p) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)
@@ -232,16 +249,27 @@
 
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (string-equal (or (sb-ext:posix-getenv "RESTARTS") "") "NIL")
+  (when (or (string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
+            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
-[31;1mAn error of type ~:(~a~) was signalled and RESTARTS=NIL,
-ending immediately.[0m
+[31;1mAn error of type ~:(~a~) was signalled~a, ending immediately.[0m
 ~a
 "
             (class-name (class-of condition))
+            (cond ((string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+                   " (SKYLINE_DEBUG_BACKTRACE=t)")
+                  ((string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
+                   " (RESTARTS=NIL)")
+                  (t ""))
             condition)
+    ;; Show backtrace if requested
+    (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+      (format *error-output* "~&Backtrace:~%")
+      (sb-debug:backtrace)
+      (format *error-output* "~&"))
     (finish-output *error-output*)
     (sb-ext:exit :code 2))
   (let ((restarts (compute-restarts))
@@ -322,10 +350,16 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                               *debugger-hook*)))
-        (restart-case
-            (unwind-protect
-                 (progn ,@body)
-              (force-output *trace-output*))
+        (if (or (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+                (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
+            ;; When debug backtrace is requested, don't provide restarts - let errors go to debugger
+            (handler-bind ((error #'friendly-tty-debugger))
+              ,@body))
+            ;; Otherwise, provide the normal restart functionality
+            (restart-case
+                (unwind-protect
+                     (progn ,@body)
+                  (force-output *trace-output*))
           (do-over ()
             :report "Try again, from the top"
             (go do-over))
@@ -395,7 +429,7 @@ Supply a list of verb(s) to see detailed documentation"
  ————————————
 
 Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright © 2024-2025 Interworldly Adventuring, LLC.
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -467,30 +501,32 @@ See COPYING for details
     (launcher)))
 
 (defun run-for-port (port-label &rest subcommand)
-  (setf *project.json*
-        (json:decode-json-from-source
-         (asdf:system-relative-pathname
-          :skyline-tool (make-pathname :directory '(:relative :up)
-                                       :name (format nil "Project.~a" port-label) :type "json" )))
-        *game-title* (cdr (assoc :*game *project.json*))
-        *part-number*  (cdr (assoc :*part-number *project.json*))
-        *studio* (cdr (assoc :*studio *project.json*))
-        *publisher* (cdr (assoc :*publisher *project.json*))
-        *machine* (cdr (assoc :*machine *project.json*))
-        *sound* (cdr (assoc :*sound *project.json*))
-        *common-palette* (mapcar #'intern (cdr (assoc :*common-palette *project.json*)))
-        *default-skin-color* (cdr (assoc :*default-skin-color *project.json*))
-        *default-hair-color* (cdr (assoc :*default-hair-color *project.json*))
-        *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
+
+  (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
+                                     (project-root)))
+         (project-data (json:decode-json-from-source json-path)))
+    (setf *project.json* project-data
+          *game-title* (cdr (assoc :*game project-data))
+          *part-number*  (cdr (assoc :*part-number project-data))
+          *studio* (cdr (assoc :*studio project-data))
+          *publisher* (cdr (assoc :*publisher project-data))
+          *machine* (cdr (assoc :*machine project-data))
+          *sound* (cdr (assoc :*sound project-data))
+          *common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data)))
+          *default-skin-color* (cdr (assoc :*default-skin-color project-data))
+          *default-hair-color* (cdr (assoc :*default-hair-color project-data))
+          *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+
   (format *trace-output* "~&Running for port: ~a" port-label)
-  (command (append '("port") subcommand)))
+  (destructuring-bind (verb &rest args) subcommand
+    (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+      (apply fun args)
+      (error "Command not recognized: “~a” (try “help”)" verb))))
 
 (defun command (argv)
-  (format *trace-output* "~&Skyline tool (© 2025) invoked:
+  (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-  (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)
@@ -508,6 +544,9 @@ See COPYING for details
           (flet ((runner ()
                    (apply fun (remove-if (curry #'string= self)
                                          invocation))
+                   (unless (char= #\- (char argv 0))
+                     (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+                     (finish-output *trace-output*))
                    (fresh-line)))
             (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
                 #+mcclim

@@ -1247,7 +1247,7 @@ Proceed with caution."))
         (compile-font-generic *machine* nil font font-input)))))
 
 (defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  (declare (ignore))
+  (declare (ignore height width image-nybbles))
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
@@ -2314,20 +2314,23 @@ Binary graphics data and updated asset index for game engine loading.
                                   (aref *tia-pf-colors* tile line))
                                 tiles))))))
 
+(defun tile-hash (left right big-endian-p)
+  (logior (ash left 8) (ash right 16) (if big-endian-p 1 0)))
+
 (defun screen-to-grid/tia/tles (screen)
   (check-type screen (array integer (8 8)))
   (let ((tiles (make-array (list 4 8) :element-type 'fixnum)))
     (dotimes (y 8)
       (dotimes (2x 4)
-        (let ((big-endian-p (evenp 2x)))
-          (let* ((left (aref screen (* 2x 2) y))
-                 (right (aref screen (1+ (* 2x 2)) y))
-                 #+ ()  (tile-hash (tile-hash left right big-endian-p))
-                 (merged-tile (or (gethash tile-hash *merged-tiles*)
-                                  (setf (gethash tile-hash *merged-tiles*)
-                                        (incf *tile-counter*)))))
-            (assert (<= merged-tile *tile-counter*))
-            (setf (aref tiles 2x y) merged-tile)))))
+        (let* ((big-endian-p (evenp 2x))
+               (left (aref screen (* 2x 2) y))
+               (right (aref screen (1+ (* 2x 2)) y))
+               (tile-hash (tile-hash left right big-endian-p))
+               (merged-tile (or (gethash tile-hash *merged-tiles*)
+                                (setf (gethash tile-hash *merged-tiles*)
+                                      (incf *tile-counter*)))))
+          (assert (<= merged-tile *tile-counter*))
+          (setf (aref tiles 2x y) merged-tile))))
     tiles))
 
 (defun screen-to-grid/tia (screen)
@@ -2735,11 +2738,11 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
   (let* ((*machine* 7800)
          (*region* :ntsc)
          (png (png-read:read-png-file png-file))
-         (height (png-read:height png))
+         #+ () (height (png-read:height png))
          (width (png-read:width png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)))
-         (output-pathname (png-to-blob-pathname png-file))
+         #+ () (palette-pixels (png->palette height width
+                                             (png-read:image-data png)))
+         #+ () (output-pathname (png-to-blob-pathname png-file))
          (imperfectp (or (eql :imperfect imperfectp$)
                          (equal imperfectp$ "--imperfect"))))
     (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
@@ -2866,84 +2869,7 @@ Blob_~a:~10t.block~2%"
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
         (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%"))
-    (let* ((palettes (extract-palettes palette-pixels))
-           (palettes-list (2a-to-lol palettes))
-           (stamps (extract-4×16-stamps palette-pixels))
-           (zones (floor height 16))
-           (columns (floor width 4))
-           (spans (make-hash-table :test 'equalp))
-           (stamp-counting 0)
-           (next-span-id 0))
-      (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-      (ensure-directories-exist output-pathname)
-      (with-output-to-file (output output-pathname :if-exists :supersede)
-        (format output ";;; Bitmap Large Object Block for Atari 7800
-;;; Derived from source file ~a. This is a generated file.~3%
-
-Blob_~a:~10t.block~2%"
-                (enough-namestring png-file)
-                (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output)
-        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-        (dotimes (zone zones)
-          (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span pal-index)
-                   (when span
-                     (let ((id (or (gethash span spans)
-                                   (prog1
-                                       (setf (gethash span spans) (prog1 next-span-id
-                                                                    (incf next-span-id)))
-                                     (cond
-                                       ((and (< stamp-counting #x100)
-                                             (< (+ stamp-counting (length span)) #x100))
-                                        (incf stamp-counting (length span)))
-                                       ((and (< stamp-counting #x100)
-                                             (>= (+ stamp-counting (length span)) #x100))
-                                        (setf stamp-counting #x100))
-                                       (t (incf stamp-counting)))))))
-                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                               id pal-index (length span)
-                               (- x (* 4 (length span))))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  for x from 0 by 4
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for palette = (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette)
-                        (setf span nil
-                              last-palette nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette))
-                       (t
-                        (emit-span x span last-palette)
-                        (setf span (list paletted-stamp)
-                              last-palette palette)))
-                  finally
-                     (emit-span x span last-palette)))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%"))
+    (format *trace-output* " … done!~%")))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
@@ -3011,7 +2937,7 @@ Blob_~a:~10t.block~2%"
         (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
         (dotimes (zone zones)
           (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span pal-index mode)
+          (flet ((emit-span (x span pal-index)
                    (when span
                      (let ((id (or (gethash span spans)
                                    (prog1
@@ -3027,7 +2953,7 @@ Blob_~a:~10t.block~2%"
                                        (t (incf stamp-counting)))))))
                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
                                id pal-index (length span)
-                               (- x (length span))))))
+                               (- x (length span)))))))
             (loop with span = nil
                   with last-palette = nil
                   with last-mode = nil
@@ -3055,7 +2981,7 @@ Blob_~a:~10t.block~2%"
                               last-palette palette
                               last-mode mode))
                        ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette last-mode)
+                        (emit-span x span last-palette)
                         (setf span nil
                               last-palette nil
                               last-mode nil))
@@ -3067,16 +2993,16 @@ Blob_~a:~10t.block~2%"
                         (setf last-palette palette
                               last-mode mode))
                        (t
-                        (emit-span x span last-palette last-mode)
+                        (emit-span x span last-palette)
                         (setf span (list paletted-stamp)
                               last-palette palette
                               last-mode mode)))
                   finally
-                     (emit-span x span last-palette last-mode)))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans-320ac spans output :imperfectp imperfectp))
+                     (emit-span x span last-palette))
+            (format output "~%~10t.word $0000")
+            (blob/write-spans-320ac spans output :imperfectp imperfectp)))
         (format output "~2%~10t.endblock~%"))
-    (format *trace-output* " … done!~%"))))
+      (format *trace-output* " … done!~%"))))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

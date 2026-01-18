@@ -894,12 +894,13 @@ inventory_end = *
     (222 "Apple //gs")
     (223 "BBC")
     (264 "Plus/4")
-    (1591 "Intv")
     (1601 "SMD")
     (2600 "VCS")
+    (2609 "Intv")
     (3010 "SMS")
     (5200 "SuperSystem")
-    (7800 "ProSystem")))
+    (7800 "ProSystem")
+    (9918 "Coleco")))
 
 (defun machine-long-name ()
   (ecase *machine*
@@ -909,22 +910,34 @@ inventory_end = *
     (16 "TurboGrafx-16 (PC Engine)")
     (20 "Commodore VIC-20 (VC-20)")
     (64 "Commodore 64")
+    (81 "Sinclair ZX-81 (TS-1000)")
     (88 "Super Nintendo Entertainment System")
     (128 "Commodore 128")
     (200 "Atari Lynx")
     (222 "Apple //gs")
     (223 "BBC Micro")
     (264 "Commodore Plus/4 (16)")
-    (1591 "Intellivision")
+    (2068 "Sinclair Spectrum (TS-2068)")
+    (2609 "Intellivision")
     (1601 "Sega Genesis (MegaDrive)")
     (2600 "Atari Video Computer System CX-2600")
     (3010 "Sega Master System")
     (5200 "Atari Video SuperSystem CX-5200")
-    (7800 "Atari Video ProSystem CX-7800")))
+    (7800 "Atari Video ProSystem CX-7800")
+    (9918 "ColecoVision")))
 
-(defun machine-valid-p ()
-  (assert (and (machine-short-name) (machine-long-name))
-          (*machine*)))
+(defun machine-valid-p (&optional (machine *machine* machine-provided-p))
+  "Check if MACHINE is a valid machine type.
+Returns T if the machine is supported, NIL otherwise."
+  (handler-case
+      (let ((*machine* (if machine-provided-p machine *machine*)))
+        (and (machine-short-name)
+             (machine-long-name)
+             t))
+    (error () nil)))
+
+(defun check-machine-valid ()
+  (assert (machine-valid-p)))
 
 
 
@@ -1107,7 +1120,45 @@ then use $f9 (512kiB) banking."
 ;;
 (defun write-cart-header (header-name binary-name)
   (ecase *machine*
-    (5200
+          (200
+           (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede)
+             ;; LYNX header (64 bytes total)
+             (write-byte (char-code #\L) header)
+             (write-byte (char-code #\Y) header)
+             (write-byte (char-code #\N) header)
+             (write-byte (char-code #\X) header)
+             (write-byte 0 header) ;; bank0_page
+             (write-byte 0 header) ;; bank1_page
+             (write-byte 1 header) ;; version
+             ;; cart_name (32 bytes, null-terminated)
+             (let ((name-str (format nil "~a~c" (or *game-title* "Unknown") #\null)))
+               (loop for i from 0 below 32
+                     do (write-byte (if (< i (length name-str))
+                                        (char-code (aref name-str i))
+                                        0)
+                                    header)))
+             ;; manuf_name (16 bytes, null-terminated)
+             (let ((manuf-str (format nil "~a~c" (or *studio* "Unknown") #\null)))
+               (loop for i from 0 below 16
+                     do (write-byte (if (< i (length manuf-str))
+                                        (char-code (aref manuf-str i))
+                                        0)
+                                    header)))
+             (write-byte #x00 header) ;; rotat_mode low
+             (write-byte #xA0 header) ;; rotat_mode high
+             ;; spare (7 bytes of zeros)
+             (dotimes (i 7)
+               (write-byte 0 header))
+             ;; Append the binary data
+             (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
+               (let ((bytes-written 0))
+                 (loop for byte = (read-byte binary nil nil)
+                       while byte
+                       do (write-byte byte header)
+                          (incf bytes-written))
+                 (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
+          (5200
      (let ((size (ql-util:file-size binary-name)))
        (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
                                                 :if-exists :supersede)
