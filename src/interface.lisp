@@ -67,18 +67,25 @@
 (defun run-self-test (&rest args)
   "Run all unit tests for SkylineTool."
   (declare (ignore args))
-  (unless (find-package :skyline-tool/test)
-    ;; Load the test system only if not already loaded
-    (asdf:load-system :skyline-tool/test))
-  ;; Run all tests and exit with appropriate code
-  (let ((results (fiveam:run-all-tests)))
-    (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
-      (declare (ignore skipped))
-      (if (and passed (zerop failed) (zerop skipped))
-          (format t "~&All tests passed~%")
-          (progn
-            (format t "~&Tests failed: ~d test(s) failed~%" failed)
-            (sb-ext:exit :code 1))))))
+  (handler-case
+      (progn
+        (unless (find-package :skyline-tool/test)
+          ;; Load the test system only if not already loaded
+          (asdf:load-system :skyline-tool/test))
+        ;; Run all tests and exit with appropriate code
+        (let ((results (fiveam:run-all-tests)))
+          (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+            (declare (ignore skipped))
+            (if (and passed (zerop failed) (zerop skipped))
+                (progn
+                  (format t "~&All tests passed~%")
+                  (sb-ext:exit :code 0))
+                (progn
+                  (format t "~&Tests failed: ~d test(s) failed~%" failed)
+                  (sb-ext:exit :code 1))))))
+    (error (e)
+      (format t "~&Failed to load or run tests: ~a~%" e)
+      (sb-ext:exit :code 1))))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
