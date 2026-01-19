@@ -1,12 +1,73 @@
 (in-package :skyline-tool)
 
 (defun region-valid-p ()
+  "Validate that the current region setting is valid.
+
+Checks that *region* is set to one of the supported TV standards.
+Signals an error if the region is invalid.
+
+@table @asis
+@item Returns
+T if region is valid (does not return if invalid)
+@item Signals
+Error if *region* is not one of :ntsc, :pal, or :secam
+@end table
+
+@xref{var:*region*}."
   (assert (member *region* '(:ntsc :pal :secam)) (*region*)
           "For some systems, the TV standard (region) must be set to one
  of (the keywords) NTSC, PAL, SECAM"))
 
-(defvar *warned* (make-hash-table :test 'equal))
+(defvar *warned*
+  (make-hash-table :test 'equal)
+  "Hash table tracking warnings that have been issued.
+
+Used by warn-once to avoid repeating the same warning message.
+Keys are warning strings, values are counts of how many times issued.
+
+@table @asis
+@item Type
+Hash table with string keys and integer values
+@item Used by
+@ref{fun:warn-once}
+@end table")
+
+(defun generate-secure-random-id (&optional (length 8))
+  "Generate a cryptographically secure random identifier.
+
+Uses Ironclad's cryptographically secure random number generator for
+true cryptographic randomness. Ironclad is required for this function.
+
+Returns a string of hexadecimal digits suitable for use as a unique
+identifier in temporary files, test data, etc.
+
+@table @asis
+@item LENGTH
+Number of random bytes to generate (default 8)
+@item Returns
+String containing LENGTH×2 hexadecimal characters
+@end table"
+  (let ((bytes (funcall (find-symbol "RANDOM-BYTES" :ironclad) length)))
+    (unless (and (arrayp bytes) (= (length bytes) length))
+      (error "Ironclad RANDOM-BYTES returned invalid data: ~s" bytes))
+    (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list))))
+
 (defun warn-once (format &rest args)
+  "Issue a warning message, but only once per unique message.
+
+Prevents warning spam by only issuing each unique warning occasionally,
+with decreasing frequency as the warning is repeated.
+
+@table @asis
+@item FORMAT
+Format string for warning message
+@item ARGS
+Format arguments
+@item Side Effects
+May issue a warning to *error-output*
+@end table
+
+@xref{var:*warned*}."
   (let ((s (apply #'format nil format args)))
     (let ((n (gethash s *warned* 0)))
       (when (or (zerop n) (zerop (random (* n n))))
@@ -44,7 +105,19 @@
     pathname))
 
 (defun machine-from-filename (file-name)
-  "Given a filename of an object file, identify which machine's object directory it is in."
+  "Extract machine identifier from object file pathname FILE-NAME.
+
+Parses a file path to determine which target machine the file belongs to,
+based on the directory structure convention.
+
+@table @asis
+@item FILE-NAME
+Pathname string of an object file
+@item Returns
+Machine identifier number (e.g., 7800, 2600) or 5200 as default
+@end table
+
+@xref{fun:make-source-file-name}, @xref{var:*machine*}."
   (let ((path-parts (split-sequence #\/ file-name)))
     (if (and (< 3 (length path-parts))
              (equal "Source" (elt path-parts 0))
@@ -249,7 +322,7 @@
       #\☉ #xa9
       #\✝ #x69
       #\≈ #x67
-      #\⁂ #x6f; actually ∴
+      #\⁂ #x6f ; actually ∴
       #\★ #x8f
       #\λ #x6a
       #\∕ #\/  ; fraction solidus
@@ -257,7 +330,23 @@
       #\∴ #x70
       #\␢ #x76
       #\␣ #x75)
-  :test 'equalp)
+  :test 'equalp
+  :documentation "Unicode to PETSCII character mapping table.
+
+Property list mapping Unicode characters to their closest PETSCII equivalents
+for Commodore systems. Includes special mappings for characters that don't
+have direct equivalents in PETSCII.
+
+@table @asis
+@item Structure
+Property list with Unicode characters as keys and PETSCII codes as values
+@item Purpose
+Character conversion for Commodore PETSCII text encoding
+@item Used by
+Text processing and font rendering functions
+@end table
+
+@xref{fun:char->petscii-font}.")
 
 (defun char->petscii-font (char)
   "Convert a character to a PETSCII-like code … deprecated in favour of directly using screen codes in future, though."
@@ -348,7 +437,7 @@
          (#\, 44)
          ((#\← #\<) 45)
          (#\> 46)
-         (otherwise (error "Can't encode ~s in ATARI minimalist coding" char))))))
+         (otherwise (error "Can't encode ~s in Atari minimalist coding" char))))))
 
 (defun char->font (char)
   (ecase *machine*
@@ -892,17 +981,17 @@ inventory_end = *
     (88 "SNES")
     (128 "C=128")
     (200 "Lynx")
-    (222 "//gs")
+    (222 "Apple //gs")
     (223 "BBC")
     (264 "Plus/4")
     (1601 "SMD")
     (2068 "Spectrum")
-    (2600 "VCS")
-    (2609 "Intv")
+    (2600 "Atari VCS")
+    (2609 "Intellivision")
     (3010 "SMS")
-    (5200 "SuperSystem")
-    (7800 "ProSystem")
-    (9918 "Coleco")))
+    (5200 "Atari SuperSystem")
+    (7800 "Atari ProSystem")
+    (9918 "ColecoVision")))
 
 (defun machine-long-name ()
   (ecase *machine*
@@ -915,26 +1004,32 @@ inventory_end = *
     (81 "Sinclair ZX-81 (TS-1000)")
     (88 "Super Nintendo Entertainment System")
     (128 "Commodore 128")
-    (200 "ATARI Lynx")
+    (200 "Atari Lynx")
     (222 "Apple //gs")
     (223 "BBC Micro")
     (264 "Commodore Plus/4 (16)")
     (2068 "Sinclair Spectrum (TS-2068)")
     (2609 "Intellivision")
     (1601 "Sega Genesis (MegaDrive)")
-    (2600 "ATARI Video Computer System CX-2600")
+    (2600 "Atari Video Computer System CX-2600")
     (3010 "Sega Master System")
-    (5200 "ATARI Video SuperSystem CX-5200")
-    (7800 "ATARI Video ProSystem CX-7800")
+    (5200 "Atari Video SuperSystem CX-5200")
+    (7800 "Atari Video ProSystem CX-7800")
     (9918 "ColecoVision")))
 
-(defun machine-valid-p (&optional machine)
-  "Check if MACHINE (or *MACHINE* if not provided) is a valid machine type.
+(defun machine-valid-p (&optional (machine *machine* machine-provided-p))
+  "Check if MACHINE is a valid machine type.
+
 Returns T if the machine is supported, NIL otherwise."
-  (let ((*machine* (or machine *machine*)))
-    ;; If machine-short-name and machine-long-name don't signal errors, machine is valid
-    (ignore-errors
-      (and (machine-short-name) (machine-long-name) t))))
+  (handler-case
+      (let ((*machine* (if machine-provided-p machine *machine*)))
+        (and (machine-short-name)
+             (machine-long-name)
+             t))
+    (error () nil)))
+
+(defun check-machine-valid ()
+  (assert (machine-valid-p)))
 
 
 
@@ -1116,8 +1211,8 @@ then use $f9 (512kiB) banking."
   (format s "#<Hash-Table (~s): ~s>" (hash-table-test hash-table) (hash-table-plist hash-table)))
 ;;
 (defun write-cart-header (header-name binary-name)
-  (cond
-          ((eql *machine* 200)
+  (ecase *machine*
+          (200
            (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
                                                 :if-exists :supersede)
              ;; LYNX header (64 bytes total)
@@ -1155,25 +1250,23 @@ then use $f9 (512kiB) banking."
                        do (write-byte byte header)
                           (incf bytes-written))
                  (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
-          ((eql *machine* 5200)
-           (let ((size (ql-util:file-size binary-name)))
-             (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
-                                                  :if-exists :supersede)
-               (write-byte (char-code #\C) header)
-               (write-byte (char-code #\A) header)
-               (write-byte (char-code #\R) header)
-               (write-byte (char-code #\T) header)
-               (write-bytes #(0 0 0) header)
-               (write-byte (ecase size
-                             (#x8000 4)
-                             (#x10000 71)
-                             (#x20000 72)
-                             (#x40000 73)
-                             (#x80000 74))
-                           header)
-               (write-bytes #(0 0 0 0 0 0 0 0) header))))
-    (t
-     (error "Unsupported machine type: ~a" *machine*))))
+          (5200
+     (let ((size (ql-util:file-size binary-name)))
+       (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede)
+         (write-byte (char-code #\C) header)
+         (write-byte (char-code #\A) header)
+         (write-byte (char-code #\R) header)
+         (write-byte (char-code #\T) header)
+         (write-bytes #(0 0 0) header)
+         (write-byte (ecase size
+                       (#x8000 4)
+                       (#x10000 71)
+                       (#x20000 72)
+                       (#x40000 73)
+                       (#x80000 74))
+                     header)
+         (write-bytes #(0 0 0 0 0 0 0 0) header))))))
 
 (defun prepend-fundamental-mode (file)
   (let ((contents (read-file-into-string file)))

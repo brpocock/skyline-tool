@@ -2,14 +2,17 @@
 
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
-  "Generate OOP class definitions for assembly and Forth code.
+  "Generate OOPS class definitions from class specification file.
+
+Processes the Classes.Defs file to generate various output files containing
+class constants, Forth definitions, inheritance graphs, and assembly code
+for the OOPS (Object-Oriented Programming System).
 
 @table @asis
-@item Input
-@table @asis
 @item CLASS-DEFS-PATHNAME
-Path to the Classes.Defs file containing class definitions.
-@end table
+Path to Classes.Defs file (default: ./Source/Classes/Classes.Defs)
+@item Outputs
+Generates Classes.forth, Classes.dot, ClassConstants.s, ClassInheritance.s, ClassMethods.s, ClassSizes.s
 @end table
 
 @table @asis
@@ -23,23 +26,23 @@ Generates multiple files in Source/Generated/$PORT/:
 - ClassSizes.s: Assembly class sizes
 @end table"
   (let ((all-classes-sequentially (list))
-        (port-dir (machine-directory-name)))
+        (output-dir (format nil "./Source/Generated/~a/" (machine-directory-name))))
     (with-input-from-file (class-file class-defs-pathname)
-      (ensure-directories-exist (format nil "./Source/Generated/~a/" port-dir))
-      (with-output-to-file (classes.forth (format nil "./Source/Generated/~a/Classes.forth" port-dir)
+      (ensure-directories-exist output-dir)
+      (with-output-to-file (classes.forth (concatenate 'string output-dir "Classes.forth")
                                           :if-exists :supersede)
         (format classes.forth "( -*- forth -*- )
  ( class accessors and such for Forth code, generated from Classes.Defs )~2%")
-        (with-output-to-file (class-graph (format nil "./Source/Generated/~a/Classes.dot" port-dir)
+        (with-output-to-file (class-graph (concatenate 'string output-dir "Classes.dot")
                                           :if-exists :supersede)
           (format class-graph "digraph Classes {
 node [shape=Mrecord];
 ")
-          (with-output-to-file (class-methods (format nil "./Source/Generated/~a/ClassMethods.s" port-dir)
+          (with-output-to-file (class-methods (concatenate 'string output-dir "ClassMethods.s")
                                               :if-exists :supersede)
             (format class-methods ";;; ClassMethods derived from ~s~2%"
                     (enough-namestring class-defs-pathname))
-            (with-output-to-file (class-constants (format nil "./Source/Generated/~a/ClassConstants.s" port-dir)
+            (with-output-to-file (class-constants (concatenate 'string output-dir "ClassConstants.s")
                                                   :if-exists :supersede)
               (format class-constants ";;; ClassConstants derived from ~s~2%"
                       (enough-namestring class-defs-pathname))
@@ -238,8 +241,8 @@ Method~aDestroy: .proc
                         finally
                            (when current-class
                              (finalize-oops-class current-class slot-offset))))
-                (with-output-to-file (inheritance (format nil "./Source/Generated/~a/ClassInheritance.s" port-dir)
-                                                  :if-exists :supersede)
+              (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
+                                                :if-exists :supersede)
                   (format inheritance ";;; Class inheritances derived from ~s~2%"
                           (enough-namestring class-defs-pathname))
                   (format inheritance
@@ -248,7 +251,7 @@ Method~aDestroy: .proc
                           (mapcan (lambda (class)
                                     (list (gethash class class-bases) class))
                                   (reverse (copy-list all-classes-sequentially)))))
-                (with-output-to-file (sizes (format nil "./Source/Generated/~a/ClassSizes.s" port-dir)
+                (with-output-to-file (sizes (concatenate 'string output-dir "ClassSizes.s")
                                             :if-exists :supersede)
                   (format sizes ";;; Class sizes derived from ~s~2%ClassSize: .block"
                           (enough-namestring class-defs-pathname))

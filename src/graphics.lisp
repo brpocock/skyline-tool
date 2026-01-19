@@ -67,7 +67,23 @@
       (#xff #xbc #xff) (#xff #xbd #xf4) (#xff #xc6 #xc3) (#xff #xd5 #x9a)
       (#xe9 #xe6 #x81) (#xce #xf4 #x81) (#xb6 #xfb #x9a) (#xa9 #xfa #xc3)
       (#xa9 #xf0 #xf4) (#xb8 #xb8 #xb8) (#x00 #x00 #x00) (#x00 #x00 #x00))
-  :test 'equalp)
+  :test 'equalp
+  :documentation "NES NTSC color palette.
+
+The standard NES color palette for NTSC systems, containing 64 colors
+organized as 4 palettes of 16 colors each. The first color in each palette
+is the background/transparent color that is shared across all palettes.
+
+@table @asis
+@item Structure
+List of 64 RGB color triples (R G B values 0-255)
+@item Organization
+4 palettes × 16 colors each, with shared background color
+@item Usage
+Used for NES graphics conversion and palette matching
+@end table
+
+@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-pal+}.")
 (define-constant +nes-palette-pal+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
       (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
@@ -85,7 +101,23 @@
       (#xff #xbc #xff) (#xff #xbd #xf4) (#xff #xc6 #xc3) (#xff #xd5 #x9a)
       (#xe9 #xe6 #x81) (#xce #xf4 #x81) (#xb6 #xfb #x9a) (#xa9 #xfa #xc3)
       (#xa9 #xf0 #xf4) (#xb8 #xb8 #xb8) (#x00 #x00 #x00) (#x00 #x00 #x00))
-  :test 'equalp)
+  :test 'equalp
+  :documentation "NES PAL color palette.
+
+The standard NES color palette for PAL systems, containing 64 colors
+organized as 4 palettes of 16 colors each. The first color in each palette
+is the background/transparent color that is shared across all palettes.
+
+@table @asis
+@item Structure
+List of 64 RGB color triples (R G B values 0-255)
+@item Organization
+4 palettes × 16 colors each, with shared background color
+@item Usage
+Used for NES graphics conversion and palette matching on PAL systems
+@end table
+
+@xref{fun:grab-nes-palette}, @ref{constant:+nes-palette-ntsc+}.")
 
 (define-constant +tg16-palette+
     '((#x00 #x00 #x00) (#x00 #x00 #x1b) (#x01 #x02 #x3d) (#x00 #x00 #x58)
@@ -216,7 +248,8 @@
       (#xde #xf9 #x9b) (#xe2 #xfe #xbe) (#xdf #xfb #xd8) (#xe3 #xff #xfb)
       (#xff #xfd #x2c) (#xfd #xfa #x47) (#xff #xff #x6a) (#xfe #xfb #x84)
       (#xff #xff #xa7) (#xfe #xfd #xc2) (#xff #xff #xe4) (#xff #xff #xff))
-  :test 'equalp)
+  :test 'equalp
+  :documentation "Palette for the TurboGrafx-16")
 
 (define-constant +ted-palette+ '()) ;; TODO: #1243: #1224
 (define-constant +vcs-ntsc-palette+
@@ -308,14 +341,39 @@
 (define-constant +unicode->ascii-ish+ nil)
 
 (defun double-up (list)
-  "Duplicate every entry in the list"
+  "Duplicate each element in a list.
+
+Creates a new list where each element from the input appears twice in sequence.
+
+@table @asis
+@item LIST
+Input list of any elements
+@item Returns
+New list with each element duplicated
+@item Example
+(double-up '(a b c)) => (a a b b c c)
+@end table"
   (loop for item in list
         append (list item item)))
 
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
 (defun machine-palette (&optional (machine *machine*) (region *region*))
-  "Get the palette for MACHINE in REGION"
+  "Get the standard color palette for a target machine and region.
+
+Returns the appropriate color palette for the specified machine type and
+video region, used for graphics conversion and color matching.
+
+@table @asis
+@item MACHINE
+Machine identifier (default: current *machine*)
+@item REGION
+Video region (:ntsc, :pal, :secam) (default: current *region*)
+@item Returns
+List of RGB color triples for the machine's palette
+@end table
+
+@xref{var:*machine*}, @xref{var:*region*}."
   (copy-list (ecase machine
                (20 (subseq +c64-palette+ 0 7))
                (200 +lynx-palette+)
@@ -337,20 +395,52 @@
                (16 +tg16-palette+))))
 
 (defun machine-colors ()
-  "Get the names of the colors for *MACHINE*"
-  (if (null *machine*)
-      nil
+  "Get the color names for the current target machine.
+
+Returns a list of color names corresponding to the palette indices for
+the currently selected machine (*machine*).
+
+@table @asis
+@item Returns
+List of color name strings for the current machine's palette
+@item Depends on
+* @var{*machine*} - current target machine
+@end table
+
+@xref{fun:machine-palette}, @xref{var:*machine*}."
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-        (2609 +intv-color-names+))))
+        (2609 +intv-color-names+)))
 
 (defun square (n)
-  "Returns the square of n ∀ (square n) = n × n"
+  "Calculate the square of N.
+
+Returns n² for any numeric input.
+
+@table @asis
+@item N
+Number to square
+@item Returns
+n × n
+@end table"
   (* n n))
 
 (defun color-distance (r0 g0 b0 rgb1)
-  "Given two RGB colors, finds the distance in XYZ/LAB space.
+  "Calculate perceptual color distance between two RGB colors.
+
+Computes the color difference using CIE LAB color space, which provides
+perceptually uniform color distance measurements that correlate better
+with human color perception than simple RGB Euclidean distance.
+
+@table @asis
+@item R0 G0 B0
+First color as individual RGB components (0-255)
+@item RGB1
+Second color as RGB triple (R G B)
+@item Returns
+Perceptual color distance (ΔE*ab value)
+@end table
 
 This is meant to discover the actual perception-relative color distance
 more accurately to the human eye than a linear distance in RGB space
@@ -363,28 +453,78 @@ can do."
         (sqrt (+ (square (- l0 l1)) (square (- a0 a1)) (square (- b0 b1))))))))
 
 (defun find-nearest-in-palette (palette red green blue)
-  "Find the nearest (perceptually similar) color in PALETTE to RED GREEN BLUE"
+  "Find the perceptually closest color in a palette to an RGB color.
+
+Searches through a palette to find the color that is closest to the given
+RGB values using perceptual color distance (CIE LAB ΔE*ab).
+
+@table @asis
+@item PALETTE
+List of RGB triples or palette indices
+@item RED GREEN BLUE
+Target color components (0-255)
+@item Returns
+RGB triple of the closest color in the palette
+@end table
+
+@xref{fun:color-distance}, @xref{fun:machine-palette}."
   (let ((palette (if (every #'listp palette)
                      palette
                      (mapcar (lambda (el) (elt (machine-palette) el)) palette))))
     (first (sort (copy-list palette) #'< :key (curry #'color-distance red green blue)))))
 
 (defun palette->rgb (index)
-  "In the current machine's palette, what is the RGB value of INDEX?"
+  "Get RGB values for a palette index in the current machine.
+
+Returns the RGB color triple for the specified index in the current
+machine's color palette.
+
+@table @asis
+@item INDEX
+Palette index (0-based)
+@item Returns
+RGB triple (R G B) for the palette entry
+@end table
+
+@xref{fun:machine-palette}."
   (nth index (machine-palette)))
 
 (defvar *palette-warnings* (make-hash-table :test 'eql))
 
 (defun rgb->int (red green blue)
-  "Get a 24-bit integer representing the color RED GREEN BLUE
+  "Convert RED, GREEN, & BLUE color components to a 24-bit integer.
 
-Each of RED, GREEN, and BLUE must be an unsigned 8-bit byte."
+Packs RGB color values into a single 24-bit integer with 8 bits per component.
+
+@table @asis
+@item RED GREEN BLUE
+Color components (0-255, unsigned-byte 8)
+@item Returns
+24-bit integer: #xRRGGBB
+@end table
+
+@xref{fun:rgb->palette}."
   (check-type red (unsigned-byte 8))
   (check-type green (unsigned-byte 8))
   (check-type blue (unsigned-byte 8))
   (logior (ash red 16) (ash green 8) blue))
 
 (defun rgb->palette (red green blue)
+  "Find the palette index for an RGB color in the current machine's palette.
+
+Looks up an RGB color in the current machine's palette. If the exact color
+is not found, finds the closest perceptual match and issues a warning.
+
+@table @asis
+@item RED GREEN BLUE
+Color components (0-255)
+@item Returns
+Palette index (0-based) of the color or closest match
+@item Side Effects
+May issue warnings for colors not in the palette
+@end table
+
+@xref{fun:find-nearest-in-palette}, @xref{fun:machine-palette}."
   (check-type red (integer 0 #xff))
   (check-type green (integer 0 #xff))
   (check-type blue (integer 0 #xff))
@@ -1249,7 +1389,7 @@ Proceed with caution."))
         (compile-font-generic *machine* nil font font-input)))))
 
 (defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  (declare (ignore))
+  (declare (ignore height width image-nybbles))
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
@@ -1887,13 +2027,27 @@ position within a larger image I."
     output))
 
 (defun 7800-image-to-160a (image &key byte-width height palette best-fit-p)
-  "Convert IMAGE to 160A bytes.
+  "Convert image to Atari 7800 160A graphics format.
 
-BYTE-WIDTH  is the  width of  IMAGE in  bytes; HEIGHT  is the  height in
-pixels; PALETTE is the palette to which to hold the image. If BEST-FIT-P
-is generally  true, then allow #'PIXELS-INTO-PALETTE  to use the
-best-fit color from  the palette; otherwise, allow  it to signal
-an error."
+Converts a pixel image to 160A mode bytes for the Atari 7800. In 160A mode,
+each pixel is 2 bits (4 colors) and pixels are packed 4 per byte.
+
+@table @asis
+@item IMAGE
+2D array of pixel indices
+@item BYTE-WIDTH
+Width of image in bytes (each byte = 4 pixels)
+@item HEIGHT
+Height of image in pixels
+@item PALETTE
+Color palette array (optional)
+@item BEST-FIT-P
+If true, use closest color match; if false, signal error for invalid colors
+@item Returns
+List of byte lists, one per column
+@end table
+
+@xref{fun:7800-image-to-320a}, @xref{fun:7800-image-to-320c}."
   (let ((bytes-across (list)))
     (dotimes (b byte-width)
       (let ((bytes (list)))
@@ -2465,6 +2619,24 @@ Used internally by BLOB ripping for color stamp conversion."
         (write-byte (aref tile i) out))))
   (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 16) index-out))
 
+(defun compile-art-7800 (index-out index-in)
+  "Compile 7800 graphics from INDEX-IN to INDEX-OUT.
+
+Processes 7800-specific graphics data, interleaving bytes and writing
+binary output for the Atari 7800 platform.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: index-out (pathname), index-in (pathname)
+@item Returns: nil
+@item Side Effects: Generates 7800 graphics binary files
+@end table"
+  (let ((*machine* 7800))
+    (write-7800-binary index-out
+                       (interleave-7800-bytes
+                        (parse-into-7800-bytes
+                         (read-7800-art-index index-in))))))
+
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.
 
@@ -2631,20 +2803,23 @@ Binary graphics data and updated asset index for game engine loading.
                                   (aref *tia-pf-colors* tile line))
                                 tiles))))))
 
+(defun tile-hash (left right big-endian-p)
+  (logior (ash left 8) (ash right 16) (if big-endian-p 1 0)))
+
 (defun screen-to-grid/tia/tles (screen)
   (check-type screen (array integer (8 8)))
   (let ((tiles (make-array (list 4 8) :element-type 'fixnum)))
     (dotimes (y 8)
       (dotimes (2x 4)
-        (let ((big-endian-p (evenp 2x)))
-          (let* ((left (aref screen (* 2x 2) y))
-                 (right (aref screen (1+ (* 2x 2)) y))
-                 #+ ()  (tile-hash (tile-hash left right big-endian-p))
-                 (merged-tile (or (gethash tile-hash *merged-tiles*)
-                                  (setf (gethash tile-hash *merged-tiles*)
-                                        (incf *tile-counter*)))))
-            (assert (<= merged-tile *tile-counter*))
-            (setf (aref tiles 2x y) merged-tile)))))
+        (let* ((big-endian-p (evenp 2x))
+               (left (aref screen (* 2x 2) y))
+               (right (aref screen (1+ (* 2x 2)) y))
+               (tile-hash (tile-hash left right big-endian-p))
+               (merged-tile (or (gethash tile-hash *merged-tiles*)
+                                (setf (gethash tile-hash *merged-tiles*)
+                                      (incf *tile-counter*)))))
+          (assert (<= merged-tile *tile-counter*))
+          (setf (aref tiles 2x y) merged-tile))))
     tiles))
 
 (defun screen-to-grid/tia (screen)
@@ -2789,7 +2964,7 @@ but world “~a” needs ~:d for the ~r level~:p
 @item Side Effects: none
 @end table
 
-Determine if a 4×16 pixel stamp uses only monochrome values (0,1), making it suitable for 320A mode.
+Determine if a 8×8 pixel stamp uses only monochrome values (0,1), making it suitable for 320A mode.
 
 @strong{Detection Logic:}
 @itemize
@@ -2801,7 +2976,8 @@ Determine if a 4×16 pixel stamp uses only monochrome values (0,1), making it su
 
 Used by 320A/C mode ripping to automatically select appropriate graphics mode per stamp."
   (let ((colors (make-hash-table)))
-    (destructuring-bind (width height) (array-dimensions stamp)
+    (destructuring-bind (width height)
+        (array-dimensions stamp)
       (dotimes (x width)
         (dotimes (y height)
           (setf (gethash (aref stamp x y) colors) t)))
@@ -3052,11 +3228,11 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
   (let* ((*machine* 7800)
          (*region* :ntsc)
          (png (png-read:read-png-file png-file))
-         (height (png-read:height png))
+         #+ () (height (png-read:height png))
          (width (png-read:width png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)))
-         (output-pathname (png-to-blob-pathname png-file))
+         #+ () (palette-pixels (png->palette height width
+                                             (png-read:image-data png)))
+         #+ () (output-pathname (png-to-blob-pathname png-file))
          (imperfectp (or (eql :imperfect imperfectp$)
                          (equal imperfectp$ "--imperfect"))))
     (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
@@ -3182,84 +3358,7 @@ Blob_~a:~10t.block~2%"
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
         (blob/write-spans spans output :imperfectp imperfectp)))
-    (format *trace-output* " … done!~%"))
-  (let* ((palettes (extract-palettes palette-pixels))
-         (palettes-list (2a-to-lol palettes))
-         (stamps (extract-4×16-stamps palette-pixels))
-         (zones (floor height 16))
-         (columns (floor width 4))
-         (spans (make-hash-table :test 'equalp))
-         (stamp-counting 0)
-         (next-span-id 0))
-    (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-    (ensure-directories-exist output-pathname)
-    (with-output-to-file (output output-pathname :if-exists :supersede)
-      (format output ";;; Bitmap Large Object Block for Atari 7800
-;;; Derived from source file ~a. This is a generated file.~3%
-
-Blob_~a:~10t.block~2%"
-              (enough-namestring png-file)
-              (assembler-label-name (pathname-name png-file)))
-      (write-blob-palettes png output)
-      (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-      (dotimes (zone zones)
-        (format output "~2&Zone~d:" zone)
-        (flet ((emit-span (x span pal-index)
-                 (when span
-                   (let ((id (or (gethash span spans)
-                                 (prog1
-                                     (setf (gethash span spans) (prog1 next-span-id
-                                                                  (incf next-span-id)))
-                                   (cond
-                                     ((and (< stamp-counting #x100)
-                                           (< (+ stamp-counting (length span)) #x100))
-                                      (incf stamp-counting (length span)))
-                                     ((and (< stamp-counting #x100)
-                                           (>= (+ stamp-counting (length span)) #x100))
-                                      (setf stamp-counting #x100))
-                                     (t (incf stamp-counting)))))))
-                     (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                             id pal-index (length span)
-                             (- x (* 4 (length span))))))))
-          (loop with span = nil
-                with last-palette = nil
-                for x from 0 by 4
-                for column from 0 below columns
-                for stamp = (aref stamps column zone)
-                for palette = (or (when (and last-palette
-                                             (tile-fits-palette-p
-                                              stamp
-                                              (elt palettes-list last-palette)))
-                                    last-palette)
-                                  (best-palette stamp palettes
-                                                :allow-imperfect-p imperfectp
-                                                :x column :y zone))
-                for paletted-stamp = (limit-region-to-palette
-                                      stamp (elt palettes-list palette)
-                                      :allow-imperfect-p imperfectp)
-                do
-                   (cond
-                     ((zerop column)
-                      (setf span (list paletted-stamp)
-                            last-palette palette))
-                     ((blank-stamp-p stamp (aref palettes 0 0))
-                      (emit-span x span last-palette)
-                      (setf span nil
-                            last-palette nil))
-                     ((and (or (null last-palette)
-                               (= palette last-palette))
-                           (< (length span) 31))
-                      (appendf span (list paletted-stamp))
-                      (setf last-palette palette))
-                     (t
-                      (emit-span x span last-palette)
-                      (setf span (list paletted-stamp)
-                            last-palette palette)))
-                finally
-                   (emit-span x span last-palette)))
-        (format output "~%~10t.word $0000"))
-      (blob/write-spans spans output :imperfectp imperfectp)))
-  (format *trace-output* " … done!~%"))
+    (format *trace-output* " … done!~%")))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
@@ -3279,7 +3378,7 @@ Rip a Bitmap Large Object Block in mixed 320A/C mode from PNG-FILE for 320px wid
 @strong{Graphics Mode:}
 @itemize
 @item Uses 320A mode for monochrome stamps (1 bit per pixel, 1 color + transparent)
-@item Uses 320C mode for color stamps (2 bits per pixel, 4 colors + transparent)
+@item Uses 320C mode for color stamps (4 bits per pixel, 4 colors + transparent)
 @item Automatically detects appropriate mode per 4×16 pixel stamp
 @end itemize
 
@@ -3375,7 +3474,7 @@ Blob_~a:~10t.block~2%"
                               last-palette palette
                               last-mode mode))
                        ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette last-mode)
+                        (emit-span x span last-palette)
                         (setf span nil
                               last-palette nil
                               last-mode nil))
@@ -3387,12 +3486,12 @@ Blob_~a:~10t.block~2%"
                         (setf last-palette palette
                               last-mode mode))
                        (t
-                        (emit-span x span last-palette last-mode)
+                        (emit-span x span last-palette)
                         (setf span (list paletted-stamp)
                               last-palette palette
                               last-mode mode)))
                   finally
-                     (emit-span x span last-palette last-mode)))
+                     (emit-span x span last-palette)))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp)
           (format output "~2%~10t.bend~%")))
@@ -3434,7 +3533,7 @@ Blob_~a:~10t.block~2%"
 (defun tty-xterm-p (&optional (stream *query-io*))
   "Returns a generalized true value if the terminal seems to be xterm-compatible"
   (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
-       (search "xterm" (sb-posix:getenv "TERM"))))
+       (search "xterm" (uiop:getenv "TERM"))))
 
 (defun write-gimp-palette (name colors &optional color-names)
   (with-output-to-file (pal (make-pathname :name name

@@ -25,6 +25,7 @@
                :cserial-port
                :dufy
                :fiveam
+               :ironclad
                :mcclim
                :lparallel
                :local-time
@@ -44,17 +45,16 @@
 
   :encoding :utf-8
 
-  :serial t
-
   :components
-  (   (:module "src"
+  ((:module "src"
     :components ((:file "package")
                  (:file "utils" :depends-on ("package"))
                  (:file "misc" :depends-on ("package"))
                  (:file "clim-simple-echo" :depends-on ("package"))
                  (:file "assembly" :depends-on ("package"))
                  (:file "7800gd-debug" :depends-on ("package"))
-                 (:file "7800gd-interface" :depends-on ("package" "7800gd-debug" "eprom"))
+                 (:file "7800gd-interface"
+                  :depends-on ("7800gd-debug" "eprom" "package"))
                  (:file "music" :depends-on ("package"))
                  (:file "eprom" :depends-on ("package"))
                  (:file "forth" :depends-on ("package"))
@@ -65,8 +65,10 @@
                  (:file "i18n-l10n" :depends-on ("package"))
                  (:file "listings" :depends-on ("package"))
                  (:file "decode-animation-buffers" :depends-on ("package"))
-                 (:file "decode-header" :depends-on ("package" "peek"))
-                 (:file "decode-decal" :depends-on ("package" "peek"))
+                 (:file "decode-header"
+                  :depends-on ("peek" "package"))
+                 (:file "decode-decal"
+                  :depends-on ("peek" "package"))
                  (:file "decode-map" :depends-on ("package"))
                  (:file "decode-object" :depends-on ("package"))
                  (:file "peek" :depends-on ("package"))
@@ -86,13 +88,16 @@
   :author "Bruce-Robert Pocock"
   :version "0.9.1"
   :depends-on (:skyline-tool :fiveam)
+  :defsystem-depends-on (:asdf)
   :components ((:module "tests"
                 :components ((:file "package")
                              (:file "action-tests" :depends-on ("package"))
+                             (:file "display-list-tests" :depends-on ("package"))
                              (:file "text-transcription-tests" :depends-on ("package"))
                              (:file "animation-preview-tests" :depends-on ("package"))
                              (:file "graphics-tests" :depends-on ("package"))
                              (:file "music-tests" :depends-on ("package"))
+                             (:file "music-compilation-tests" :depends-on ("package"))
                              (:file "build-tests" :depends-on ("package"))
                              (:file "interface-tests" :depends-on ("package"))
                              (:file "5200-tests" :depends-on ("package"))

@@ -1752,7 +1752,7 @@
 
 (defun compile-animation-sequences ()
   (format *trace-output* "~&Compiling animation sequence data …")
-  (let ((source-name (make-pathname :directory (list :relative "Source" "Generated" (skyline-tool::machine-directory-name))
+  (let ((source-name (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
                                     :name "AnimationTable" :type "s")))
     (ensure-directories-exist source-name)
     (load-all-animation-sequences)

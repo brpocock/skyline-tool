@@ -758,7 +758,7 @@ Update map/s or script to agree with one another and DO-OVER."
 (defvar *enemies-by-name* (make-hash-table :test #'equalp))
 
 (defun load-enemies-index (&optional
-                             (index-pathname (format nil "Source/Generated/~a/Enemies.index" (skyline-tool::machine-directory-name))))
+                             (index-pathname #p"Source/Generated/Enemies.index"))
   (with-input-from-file (index index-pathname)
     (loop for line = (read-line index nil nil)
           while line
@@ -875,12 +875,12 @@ Update map/s or script to agree with one another and DO-OVER."
   "Loads tileset data from XML-REFERENCE for processing.
 
 @cindex tileset loading
-@cindex TMX tileset parsing
+@cindex TSX tileset parsing
 @cindex tile graphics data
 
 @table @code
 @item Package: skyline-tool
-@item Arguments: xml-reference (pathname/string/xml cons), &optional relative-path (pathname)
+@item Arguments: XML-REFERENCE (pathname/string/xml cons), &optional relative-path (pathname)
 @item Returns: tileset object
 @item Side Effects: May load and cache tileset image data
 @end table
@@ -1082,7 +1082,9 @@ Tileset object containing image data, tile dimensions, and palette information."
         (reduce #'shorter fully)))))
 
 (defparameter *rle-fast-mode* 1)
+
 (defvar *rle-options* 0)
+
 (defvar *rle-best-full* most-positive-fixnum)
 
 (defun rle-compress (source)
@@ -1298,15 +1300,17 @@ range is 0 - #xffffffff (4,294,967,295)"
     s))
 
 (defun compile-map (pathname)
-  "Compiles a Tiled Map Editor (TMX) file into binary format for PATHNAME.
+  "Compile a Tiled map (TMX) file at PATHNAME into game-ready format.
 
+Processes TMX XML files from the Tiled map editor, extracting tile data,
+collision information, and object placements for use in the game engine.
 @cindex map compilation
 @cindex TMX processing
 @cindex tilemap compilation
 
 @table @code
 @item Package: skyline-tool
-@item Arguments: pathname (pathname designator)
+@item Arguments: pathname (pathname designator to TMX file)
 @item Returns: nil
 @item Side Effects: Writes compiled map data to Object/Assets/ directory
 @end table
@@ -1421,7 +1425,7 @@ with appropriate naming for the game engine to load.
                               :name (format nil "Map.~a.~a.~a"
                                             (last-elt (pathname-directory pathname))
                                             (pathname-name pathname) tv)
-                              :directory `(:relative "Object"  ,(machine-directory-name) "Assets")
+                              :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                               :type "o"))
                     (offset 0))
                 (ensure-directories-exist outfile)

@@ -1,14 +1,19 @@
 (in-package :skyline-tool)
 
 (defun read-ods-into-lists (pathname)
-  "Read an ODS spreadsheet file and convert it to lists of lists.
+  "Read an OpenDocument Spreadsheet (.ods) file into Lisp lists.
+
+Parses an ODS file and extracts spreadsheet data as a list of lists,
+where each sublist represents a worksheet/page in the spreadsheet.
 
 @table @asis
 @item PATHNAME
-Path to the ODS file to read.
+Path to the .ods file
+@item Returns
+List of worksheet data, where each worksheet is a list of rows
 @end table
 
-Returns a list where each element represents a worksheet as a list of rows."
+@xref{fun:ss->lol}, @xref{fun:extract-ss-titles}."
   (zip:with-zipfile (zip pathname :force-utf-8 t)
     (let ((xml (xmls:parse-to-list
                 (babel:octets-to-string

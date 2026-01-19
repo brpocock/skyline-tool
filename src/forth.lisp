@@ -10,6 +10,12 @@
     (loop for char = (read-char *standard-input* nil nil)
           while (member (peek-char nil *standard-input* nil)
                         '(#\Space #\Page #\Tab #\Newline))))
+  (let ((char (peek-char nil *standard-input* nil)))
+    (when (char= #\\ char)
+      ;; Skip backslash comment to end of line
+      (read-line *standard-input* nil "")
+      ;; Recursively read next word after comment
+      (return-from read-forth-word (read-forth-word))))
   (loop for char = (read-char *standard-input* nil nil)
         with word = (make-array 16 :element-type 'character
                                    :adjustable t :fill-pointer 0)

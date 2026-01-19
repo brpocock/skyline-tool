@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite 5200-tests
-  :description "Tests for Atari 5200-specific SkylineTool functionality")
+  :description "Tests for Atari 5200-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite 5200-tests)
 
@@ -100,12 +101,16 @@
   "Test 5200 Mode E bitmap compilation with different valid sizes"
   ;; Test with 16x16 array
   (let ((large-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
-    (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels :target-dir "Object/5200/")
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels
+                                                        :png-file (make-pathname :name "test-16x16" :type "png")
+                                                        :target-dir (make-pathname :directory '(:absolute "Object" "5200")))
              "Should handle 16x16 arrays and return truthy value"))
 
   ;; Test with 4x4 array
   (let ((small-pixels (make-array '(4 4) :element-type '(unsigned-byte 32) :initial-element 1)))
-    (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels :target-dir "Object/5200/")
+    (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels
+                                                        :png-file (make-pathname :name "test-4x4" :type "png")
+                                                        :target-dir (make-pathname :directory '(:absolute "Object" "5200")))
              "Should handle 4x4 arrays and return truthy value"))
 
   ;; Test with rectangular array (not square)

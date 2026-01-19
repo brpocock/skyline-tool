@@ -631,9 +631,8 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
                          (list :relative "Source" "Generated" machine-dir)
                          (list :relative "Source" "Generated" machine-dir "Assets"))))
     (when cwd (appendf includes (list (pathname-directory cwd))))
-    (when testp (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))
-    ;; also include platform tests when testing
-    (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))
+    (when testp
+      (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))  ;; Platform-specific tests
     (when (probe-file (make-pathname :directory (list :relative "Source" "Code" machine-dir "Banks" bank)
                                      :name bank :type "s"))
       (appendf includes (list (list :relative "Source" "Code" machine-dir "Banks" bank))))
@@ -914,8 +913,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
              (subseq
               (enough-namestring
                (make-pathname :directory
-                              (append (list :relative "Source")
-                                      (machine-directory-name)
+                              (append (list :relative "Source" (machine-directory-name))
                                       (subseq (pathname-directory
                                                (merge-pathnames pathname))
                                               source-prefix-length))
@@ -1479,9 +1477,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
       (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
-  (dolist (art (recursive-directory (make-pathname :directory (list :relative "Source" "Art")
-                                                    :name :wild
-                                                    :type "art")))
+  (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art" (machine-directory-name))
+                                         :name :wild
+                                         :type "art")))
     (write-art-generation art)))
 
 (defun write-makefile-for-tilesets ()
@@ -1495,7 +1493,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
     (write-asset-compilation asset)))
 
 (defun write-makefile-header ()
-  (format *standard-output* "# Makefile (generated)~%# -*- makefile -*-~%"))
+  (format t "# Makefile (generated)~%# -*- makefile -*-~%"))
 
 (defun bank-source-pathname ()
   (make-pathname
@@ -1514,39 +1512,25 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
-  (format *trace-output* "~%Method called for 7800")
-  (format *trace-output* "~%Starting makefile generation for 7800")
-  (format *trace-output* "~%+all-builds+ = ~a" +all-builds+)
   (dolist (build +all-builds+)
-    (format *trace-output* "~%Processing build: ~a" build)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
-        (format *trace-output* "~%Processing build=~a video=~a" build video)
         (write-makefile-top-line :build build :video video)
-        (format *trace-output* "~%Wrote makefile top line")
         (write-header-script :build build :video video)
-        (format *trace-output* "~%Wrote header script")
         (dotimes (*bank* (1+ *last-bank*))
-          (format *trace-output* "~%Processing bank ~a" *bank*)
           (let ((bank-source (bank-source-pathname)))
             (cond
               ((= *bank* *last-bank*)
-               (format *trace-output* "~%Writing last bank makefile")
                (write-bank-makefile (last-bank-source-pathname)
                                     :build build :video video))
               ((and (= *last-bank* #x3f)
                     (= *bank* #x3e))
-               (format *trace-output* "~%Writing RAM bank makefile")
                (write-ram-bank-makefile :build build :video video))
               ((probe-file bank-source)
-               (format *trace-output* "~%Writing bank makefile for ~a" bank-source)
                (write-bank-makefile bank-source
                                     :build build :video video))
-              (t (format *trace-output* "~%Writing asset bank makefile")
-                 (write-asset-bank-makefile *bank*
-                                            :build build :video video)))))
-        (format *trace-output* "~%Finished processing build=~a video=~a" build video))))
-  (format *trace-output* "~%Finished makefile generation for 7800"))
+              (t (write-asset-bank-makefile *bank*
+                                            :build build :video video)))))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 200)))
   "Write makefile content for Atari Lynx"
@@ -1640,7 +1624,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
         (t (write-asset-bank-makefile *bank*))))))
 
 (defun write-master-makefile ()
-  "Write  out   Source/Generated/Makefile  for  building   everything  not
+  "Write  out   Source/Generated/{platform}/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
   (let ((platform-dir (machine-directory-name)))
     (format *trace-output* "~&Platform dir: ~a" platform-dir)

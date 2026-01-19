@@ -65,15 +65,38 @@
         :self-test 'run-self-test))
 
 (defun run-self-test (&rest args)
-  "Run all unit tests for SkylineTool."
+  "Run all unit tests for SkylineTool and exit with appropriate status.
+
+Loads the test system and executes all FiveAM unit tests, providing
+a summary of results and exiting with status 0 for success or 1 for failure.
+
+@table @asis
+@item ARGS
+Command-line arguments (ignored)
+@item Side Effects
+Loads test system, runs tests, exits the Lisp process
+@end table
+
+@xref{function:command}, @xref{function:run-repl}."
   (declare (ignore args))
-  (unless (find-package :skyline-tool/test)
-    ;; Load the test system only if not already loaded
-    (asdf:load-system :skyline-tool/test))
-  ;; Run all tests - since there are known failures, always fail
-  (fiveam:run-all-tests)
-  (format t "~&TESTS FAILED: known failures exist in test suite~%")
-  (sb-ext:exit :code 1))
+  (handler-case
+      (progn
+          (asdf:load-system :skyline-tool/test)
+        ;; Run all tests and exit with appropriate code
+        (let ((results (fiveam:run-all-tests)))
+          (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+            (format *error-output* "~&Results: ~d passed, ~d failed, ~d skipped"
+                    passed failed skipped)
+            (if (and passed (zerop failed) (zerop skipped))
+                (progn
+                  (format t "~&All tests passed~%")
+                  (sb-ext:exit :code 0))
+                (progn
+                  (format t "~&Tests failed: ~d test(s) failed~%" failed)
+                  (sb-ext:exit :code 1))))))
+    (error (e)
+      (format t "~&Failed to load or run tests: ~a~%" e)
+      (sb-ext:exit :code 1))))
 
 (defun run-repl ()
   "Open a Read-Eval-Print-Loop (REPL) Lisp Listener."
@@ -111,10 +134,33 @@
                               :package :Skyline-Tool))
 
 (defun x11-p ()
+  "Check if an X11 display is available.
+
+Determines whether an X11 graphics display is available by checking the
+DISPLAY environment variable for a valid X11 display specification.
+
+@table @asis
+@item Returns
+Generalized boolean: T if X11 display available, NIL otherwise
+@end table
+
+@xref{fun:prompt}, @xref{fun:tty-xterm-p}."
   (when-let (display (sb-posix:getenv "DISPLAY"))
     (find #\: display)))
 
 (defun prompt (query)
+  "Prompt user for input string.
+
+Displays a query to the user and reads a line of input, trimming whitespace.
+
+@table @asis
+@item QUERY
+String to display as prompt
+@item Returns
+User input string with whitespace trimmed
+@end table
+
+@xref{fun:prompt-function}, @xref{fun:x11-p}."
   (format *query-io* "~&~a" query)
   (force-output *query-io*)
   (prog1
@@ -194,7 +240,7 @@
           (invoke-restart-interactively (first reply-name-matches)))
          (reply-name-matches
           (format *query-io* "“~a” is the name of ~r restart~:p."
-                  reply (length reply-name-partials))
+                  reply (length reply-name-matches))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-matches)
             (when (y-or-n-p "You want to “~a”?~%  ([3m~a[0m) ⇒ "
@@ -244,9 +290,7 @@
 
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (or (string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
-            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
+  (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
@@ -256,12 +300,10 @@
             (class-name (class-of condition))
             (cond ((string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
                    " (SKYLINE_DEBUG_BACKTRACE=t)")
-                  ((string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
-                   " (RESTARTS=NIL)")
                   (t ""))
             condition)
     ;; Show backtrace if requested
-    (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+    (when (string-equal (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "t")
       (format *error-output* "~&Backtrace:~%")
       (sb-debug:backtrace)
       (format *error-output* "~&"))
@@ -345,11 +387,9 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                               *debugger-hook*)))
-        (if (or (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-                (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
-            ;; When debug backtrace is requested, don't provide restarts - let errors go to debugger
-            (handler-bind ((error #'friendly-tty-debugger))
-              ,@body))
+        (if (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+            ;; When debug backtrace is requested, let errors go to the other debugger
+            ,@body
             ;; Otherwise, provide the normal restart functionality
             (restart-case
                 (unwind-protect
@@ -485,7 +525,7 @@ To see specifics about one command, add its name to the end, e.g.
 If you need more help, ask support@interworldly.com
 
 Copyright © 2016-2024, Bruce-Robert Pocock
-Copyright © 2024-2025, Interworldly Adventuring, LLC
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -496,22 +536,20 @@ See COPYING for details
     (launcher)))
 
 (defun run-for-port (port-label &rest subcommand)
-
   (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
          (project-data (json:decode-json-from-source json-path)))
-    (setf *project.json* project-data
-          *game-title* (cdr (assoc :*game project-data))
-          *part-number*  (cdr (assoc :*part-number project-data))
-          *studio* (cdr (assoc :*studio project-data))
-          *publisher* (cdr (assoc :*publisher project-data))
-          *machine* (cdr (assoc :*machine project-data))
-          *sound* (cdr (assoc :*sound project-data))
-          *common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data)))
-          *default-skin-color* (cdr (assoc :*default-skin-color project-data))
-          *default-hair-color* (cdr (assoc :*default-hair-color project-data))
-          *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
-
+         (*project.json* project-data)
+         (*game-title* (cdr (assoc :*game project-data)))
+         (*part-number*  (cdr (assoc :*part-number project-data)))
+         (*studio* (cdr (assoc :*studio project-data)))
+         (*publisher* (cdr (assoc :*publisher project-data)))
+         (*machine* (cdr (assoc :*machine project-data)))
+         (*sound* (cdr (assoc :*sound project-data)))
+         (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
+         (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
+         (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
+         (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data)))
   (format *trace-output* "~&Running for port: ~a" port-label)
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
@@ -519,9 +557,24 @@ See COPYING for details
       (error "Command not recognized: “~a” (try “help”)" verb))))
 
 (defun command (argv)
+  "Main entry point for Skyline-Tool command-line interface.
+
+Processes command-line arguments and dispatches to appropriate subcommands.
+This is the function called by buildapp as the entry point.
+
+@table @asis
+@item ARGV
+List of command-line arguments (strings)
+@item Side Effects
+Executes the requested command, may exit the process
+@end table
+
+@xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
   (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
+  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+  (finish-output *trace-output*)
   (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
                                            "?"))
   (finish-output)
@@ -537,13 +590,16 @@ See COPYING for details
       (destructuring-bind (self verb &rest invocation) argv
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
+                   (unless (char= #\- (char (first argv) 0))
+                     (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+                     (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
                                          invocation))
                    (unless (char= #\- (char argv 0))
                      (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
                      (finish-output *trace-output*))
                    (fresh-line)))
-            (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
+            (if (and #+mcclim (x11-p))
                 #+mcclim
                 (clim-simple-echo:run-in-simple-echo
                  #'runner
