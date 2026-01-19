@@ -85,6 +85,8 @@ Loads test system, runs tests, exits the Lisp process
         ;; Run all tests and exit with appropriate code
         (let ((results (fiveam:run-all-tests)))
           (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+            (format *error-output* "~&Results: ~d passed, ~d failed, ~d skipped"
+                    passed failed skipped)
             (if (and passed (zerop failed) (zerop skipped))
                 (progn
                   (format t "~&All tests passed~%")
@@ -238,7 +240,7 @@ User input string with whitespace trimmed
           (invoke-restart-interactively (first reply-name-matches)))
          (reply-name-matches
           (format *query-io* "“~a” is the name of ~r restart~:p."
-                  reply (length reply-name-partials))
+                  reply (length reply-name-matches))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-matches)
             (when (y-or-n-p "You want to “~a”?~%  ([3m~a[0m) ⇒ "
@@ -288,9 +290,7 @@ User input string with whitespace trimmed
 
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (or (string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
-            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-            (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
+  (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
@@ -300,12 +300,10 @@ User input string with whitespace trimmed
             (class-name (class-of condition))
             (cond ((string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
                    " (SKYLINE_DEBUG_BACKTRACE=t)")
-                  ((string-equal (or (sb-posix:getenv "RESTARTS") "") "NIL")
-                   " (RESTARTS=NIL)")
                   (t ""))
             condition)
     ;; Show backtrace if requested
-    (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+    (when (string-equal (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "t")
       (format *error-output* "~&Backtrace:~%")
       (sb-debug:backtrace)
       (format *error-output* "~&"))
@@ -389,11 +387,9 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                               *debugger-hook*)))
-        (if (or (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-                (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "1"))
-            ;; When debug backtrace is requested, don't provide restarts - let errors go to debugger
-            (handler-bind ((error #'friendly-tty-debugger))
-              ,@body))
+        (if (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+            ;; When debug backtrace is requested, let errors go to the other debugger
+            ,@body
             ;; Otherwise, provide the normal restart functionality
             (restart-case
                 (unwind-protect
@@ -529,7 +525,7 @@ To see specifics about one command, add its name to the end, e.g.
 If you need more help, ask support@interworldly.com
 
 Copyright © 2016-2024, Bruce-Robert Pocock
-Copyright © 2024-2025, Interworldly Adventuring, LLC
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -543,17 +539,17 @@ See COPYING for details
   (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
          (project-data (json:decode-json-from-source json-path)))
-    (setf *project.json* project-data
-          *game-title* (cdr (assoc :*game project-data))
-          *part-number*  (cdr (assoc :*part-number project-data))
-          *studio* (cdr (assoc :*studio project-data))
-          *publisher* (cdr (assoc :*publisher project-data))
-          *machine* (cdr (assoc :*machine project-data))
-          *sound* (cdr (assoc :*sound project-data))
-          *common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data)))
-          *default-skin-color* (cdr (assoc :*default-skin-color project-data))
-          *default-hair-color* (cdr (assoc :*default-hair-color project-data))
-          *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+         (*project.json* project-data)
+         (*game-title* (cdr (assoc :*game project-data)))
+         (*part-number*  (cdr (assoc :*part-number project-data)))
+         (*studio* (cdr (assoc :*studio project-data)))
+         (*publisher* (cdr (assoc :*publisher project-data)))
+         (*machine* (cdr (assoc :*machine project-data)))
+         (*sound* (cdr (assoc :*sound project-data)))
+         (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
+         (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
+         (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
+         (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data)))
   (format *trace-output* "~&Running for port: ~a" port-label)
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
@@ -596,9 +592,9 @@ Executes the requested command, may exit the process
                      (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
                      (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
-                                         (flatten invocation)))
+                                         invocation))
                    (fresh-line)))
-            (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
+            (if (and #+mcclim (x11-p))
                 #+mcclim
                 (clim-simple-echo:run-in-simple-echo
                  #'runner
