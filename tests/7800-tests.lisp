@@ -97,12 +97,13 @@
           "At least one voice should contain notes")
 
       ;; Check voice structure - each voice is a list of notes
-      (dolist (voice result)
-        (when voice
-          (is (listp voice) "Each voice should be a list")
-          (dolist (note voice)
-            (is (and (listp note) (= (length note) 4))
-                "Each note should have 4 elements: time, key, duration, distortion"))))))
+      (dotimes (i (length result))
+        (let ((voice (aref result i)))
+          (when voice
+            (is (listp voice) "Each voice should be a list")
+            (dolist (note voice)
+              (is (and (listp note) (= (length note) 4))
+                  "Each note should have 4 elements: time, key, duration, distortion")))))))
 
   ;; Test array<-7800-tia-notes-list with detailed validation
   (let ((tia-notes '((:frequency 261.63 :volume 15 :control #x04)  ; Middle C, AUDC value
@@ -170,9 +171,9 @@
     (let ((row0-pattern '(0 1 0 2 0 3 0 1))
           (row1-pattern '(2 0 3 0 1 0 2 0)))
       (dotimes (x 8)
-        (setf (aref test-image x 0) (aref test-palette (nth x row0-pattern))))
+        (setf (aref test-image x 0) (nth x row0-pattern)))
       (dotimes (x 8)
-        (setf (aref test-image x 1) (aref test-palette (nth x row1-pattern)))))
+        (setf (aref test-image x 1) (nth x row1-pattern))))
 
     ;; Test 160A conversion (4 pixels = 1 byte, 2 bits per pixel)
     ;; Row 0: pixels 0-3 (BG, FG1, BG, FG2) -> indices 0,1,0,2 -> packed as (0<<6)|(1<<4)|(0<<2)|2 = 0|16|0|2 = 18
@@ -228,7 +229,13 @@
 ;; Test 7800 parse-object method
 (test 7800-parse-object-method
   "Test 7800 object parsing"
-  (let ((test-pixels (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element 0)))
+  (let ((test-pixels (make-array '(8 9) :element-type '(unsigned-byte 32) :initial-element 0)))
+    ;; Add palette data to the bottom row
+    (dotimes (x 8)
+      (setf (aref test-pixels x 8) 0))  ; transparent color
+    (dotimes (x 4)
+      (setf (aref test-pixels (+ 1 (* x 4)) 8) (1+ x)))  ; palette colors
+
     ;; Test 160A mode returns proper data structure
     (let ((result (skyline-tool::parse-7800-object :160a test-pixels :width 8 :height 8)))
       (is (listp result) "parse-7800-object :160a should return a list")
@@ -274,7 +281,7 @@
 (test 7800-music-compilation-basic
   "Test basic 7800 music compilation functionality"
   ;; Test array<-7800-tia-notes-list
-  (let ((result (skyline-tool::array<-7800-tia-notes-list '((60 100 480) (62 100 480)) :ntsc)))
+  (let ((result (skyline-tool::array<-7800-tia-notes-list '((0 0 60 480 0) (0 100 62 480 0)) :ntsc)))
     (is (vectorp result) "array<-7800-tia-notes-list should return a vector")
     (is (= (length result) 2) "vector should contain both input notes"))
 
