@@ -22,11 +22,12 @@
            "parse-7800-object should exist")
 
   ;; Test basic functionality with minimal input
-  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0))
-        (palette (vector #(0 0 0) #(255 255 255))))
-    (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 1 :height 1 :palette palette))
-    (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
-    (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette))))
+  (let ((skyline-tool::*machine* 7800))
+    (let ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8) :initial-element 0))
+          (palette (vector 0 1)))  ; Use indices into machine palette
+      (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 2 :height 1 :palette palette))
+      (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
+      (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 2 :height 1 :palette palette)))))
 
 ;; Test 7800 binary functions existence and basic functionality
 (test 7800-binary-functions-existence
@@ -668,10 +669,11 @@
     (let ((result (skyline-tool::array<-7800-tia-notes-list test-notes :ntsc)))
       (is-true (arrayp result) "Should return array")
       (is (= (length result) 2) "Should process all notes")
-      (dolist (note result)
-        (is (= (length note) 2) "Each note should have AUDF and AUDC")
-        (is (every #'integerp note) "All values should be integers")
-        (is (every (lambda (x) (<= 0 x 255)) note) "All values should be valid bytes")))))
+      (dotimes (i (length result))
+        (let ((note (aref result i)))
+          (is (= (length note) 2) "Each note should have AUDF and AUDC")
+          (is (every #'integerp note) "All values should be integers")
+          (is (every (lambda (x) (<= 0 x 255)) note) "All values should be valid bytes"))))))
 
 (test 7800-binary-processing-edge-cases
   "Test binary processing functions with edge cases and boundary conditions"
@@ -688,7 +690,7 @@
         (is (= (file-length stream) (* 10 256)) "Should handle large data sets"))))
 
   ;; Test interleave-7800-bytes edge cases
-  (is (equal (skyline-tool::interleave-7800-bytes nil) nil) "Empty input should return nil")
+  (is (equal (skyline-tool::interleave-7800-bytes '()) '()) "Empty input should return empty list")
 
   (let ((single-item '((42))))
     (let ((result (skyline-tool::interleave-7800-bytes single-item)))
@@ -699,21 +701,23 @@
 
 (test 7800-graphics-fuzz-testing
   "Fuzz testing for 7800 graphics functions with random and boundary inputs"
-  ;; Test with extreme palette sizes
-  (let ((large-palette (make-array 256 :initial-element #xFF000000)))
-    (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0)))
-      (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 1 :height 1 :palette large-palette))))
+  (let ((skyline-tool::*machine* 7800))
+    ;; Test with extreme palette sizes
+    (let ((large-palette (coerce (loop for i from 0 to 255 collect i) 'vector)))  ; Indices 0-255
+      (let ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8) :initial-element 0)))
+        (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 2 :height 1 :palette large-palette)))))
 
   ;; Test with zero-sized inputs
   (let ((empty-image (make-array '(0 0) :element-type '(unsigned-byte 8))))
     (signals error (skyline-tool::7800-image-to-160a empty-image :byte-width 0 :height 0)))
 
   ;; Test with maximum reasonable sizes
-  (let ((large-image (make-array '(1024 768) :element-type '(unsigned-byte 8) :initial-element 128)))
-    (finishes (skyline-tool::7800-image-to-160a large-image :byte-width 256 :height 768))))
+  (let ((skyline-tool::*machine* 7800))
+    (let ((large-image (make-array '(1024 768) :element-type '(unsigned-byte 8) :initial-element 128)))
+      (finishes (skyline-tool::7800-image-to-160a large-image :byte-width 256 :height 768)))))
 
 (test 7800-coverage-summary
-  "Summary test ensuring 75%+ coverage of 7800 compilation functions"
+  "Summary test ensuring 100% coverage of 7800 compilation functions"
   ;; List of all major 7800 functions that should be covered
   (let ((required-functions '(7800-image-to-160a
                               7800-image-to-320a
@@ -737,9 +741,188 @@
         (incf tested-functions-count)))
 
     (let ((coverage-percentage (* 100.0 (/ tested-functions-count (length required-functions)))))
-      (is (>= coverage-percentage 75.0)
-          (format nil "7800 function coverage should be >= 75%, currently ~,1f% (~d/~d functions)"
+      (is (>= coverage-percentage 99.99999999999999999)
+          (format nil "7800 function coverage should be 100%, currently ~,1f% (~d/~d functions)"
                   coverage-percentage tested-functions-count (length required-functions))))))
+
+;; Test internal function outputs for meaningful validation
+
+;; Test extract-region function outputs
+(test extract-region-output-validation
+  "Test that extract-region produces correct pixel data"
+  (let ((test-image (make-array '(6 4) :element-type '(unsigned-byte 8)
+                                :initial-contents '((1 2 3 4 5 6)
+                                                   (7 8 9 10 11 12)
+                                                   (13 14 15 16 17 18)
+                                                   (19 20 21 22 23 24)))))
+    ;; Extract region from (1,1) to (3,2) - should be 3x2 region
+    (let ((result (skyline-tool::extract-region test-image 1 1 3 2)))
+      (is (= (array-dimension result 0) 3) "Width should be 3")
+      (is (= (array-dimension result 1) 2) "Height should be 2")
+      (is (= (aref result 0 0) 8) "Top-left pixel should be correct")
+      (is (= (aref result 1 0) 9) "Top-middle pixel should be correct")
+      (is (= (aref result 2 0) 10) "Top-right pixel should be correct")
+      (is (= (aref result 0 1) 14) "Bottom-left pixel should be correct")
+      (is (= (aref result 1 1) 15) "Bottom-middle pixel should be correct")
+      (is (= (aref result 2 1) 16) "Bottom-right pixel should be correct"))))
+
+;; Test pixel-into-palette function outputs
+(test pixel-into-palette-output-validation
+  "Test that pixel-into-palette correctly maps pixels to palette indices"
+  (let ((skyline-tool::*machine* 7800))
+    (let ((palette #(0 1 2 3)))  ; Simple palette with indices 0,1,2,3
+      ;; Test exact matches
+      (is (= (skyline-tool::pixel-into-palette 0 palette) 0) "Pixel 0 should map to index 0")
+      (is (= (skyline-tool::pixel-into-palette 1 palette) 1) "Pixel 1 should map to index 1")
+      (is (= (skyline-tool::pixel-into-palette 2 palette) 2) "Pixel 2 should map to index 2")
+      (is (= (skyline-tool::pixel-into-palette 3 palette) 3) "Pixel 3 should map to index 3")
+
+      ;; Test out-of-palette pixels (should signal error)
+      (signals error (skyline-tool::pixel-into-palette 4 palette) "Out-of-palette pixel should signal error"))))
+
+;; Test pixels-into-palette function outputs
+(test pixels-into-palette-output-validation
+  "Test that pixels-into-palette correctly processes pixel arrays"
+  (let ((skyline-tool::*machine* 7800))
+    (let ((pixels (make-array '(4 1) :element-type '(unsigned-byte 8)
+                              :initial-contents '((0) (1) (2) (3)))))
+      (let ((palette #(0 1 2 3)))
+        (let ((result (skyline-tool::pixels-into-palette pixels palette)))
+          (is (= (length result) 4) "Result should have same length as input")
+          (is (= (aref result 0) 0) "First pixel should map correctly")
+          (is (= (aref result 1) 1) "Second pixel should map correctly")
+          (is (= (aref result 2) 2) "Third pixel should map correctly")
+          (is (= (aref result 3) 3) "Fourth pixel should map correctly"))))))
+
+;; Test 7800-image-to-160a internal processing
+(test 7800-image-to-160a-internal-processing
+  "Test that 7800-image-to-160a correctly processes pixels through internal functions"
+  (let ((skyline-tool::*machine* 7800))
+    (let ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8)
+                                  :initial-element 0))  ; All pixels are 0
+          (palette #(0 1)))  ; Palette with 0->0, 1->1
+      ;; This should use extract-region and pixels-into-palette internally
+      (let ((result (skyline-tool::7800-image-to-160a test-image :byte-width 2 :height 1 :palette palette)))
+        (is (= (length result) 1) "Should return 1 row")
+        (is (= (length (first result)) 2) "Row should contain 2 bytes")
+        ;; All pixels are 0, so all palette indices are 0
+        ;; 160A packs 4 pixels per byte: 0000 = 0
+        (is (= (nth 0 (first result)) 0) "First byte should be 0")
+        (is (= (nth 1 (first result)) 0) "Second byte should be 0")))))
+
+;; Test interleave-7800-bytes with detailed output validation
+(test interleave-7800-bytes-detailed-output
+  "Test interleave-7800-bytes produces correct interleaved output"
+  (let ((test-data '((1 2 3) (4 5 6) (7 8 9))))
+    (let ((result (skyline-tool::interleave-7800-bytes test-data)))
+      ;; Should interleave: first elements (1,4,7), second elements (2,5,8), third elements (3,6,9)
+      (is (equal result '(1 4 7 2 5 8 3 6 9)) "Should correctly interleave columns into rows")
+      (is (= (length result) 9) "Should contain all 9 elements"))))
+
+;; Test midi->7800-tia internal processing
+(test midi-to-7800-tia-internal-processing
+  "Test midi->7800-tia internal note processing"
+  (let ((test-tracks '(((:note :time 0 :key 60 :duration 100)    ; Middle C
+                        (:note :time 100 :key 64 :duration 100)  ; E above
+                        (:note :time 200 :key 67 :duration 100))))) ; G above
+    (let ((result (skyline-tool::midi->7800-tia test-tracks :ntsc)))
+      (is (arrayp result) "Should return array")
+      (is (= (length result) 2) "Should have 2 TIA voices")
+      ;; Each voice should be a list of notes with (time key duration distortion)
+      (dotimes (voice-index 2)
+        (let ((voice (aref result voice-index)))
+          (when voice
+            (is (listp voice) "Voice should be a list")
+            (dolist (note voice)
+              (is (= (length note) 4) "Each note should have 4 elements")
+              (is (integerp (first note)) "Time should be integer")
+              (is (integerp (second note)) "Key should be integer")
+              (is (integerp (third note)) "Duration should be integer")
+              (is (integerp (fourth note)) "Distortion should be integer"))))))))
+
+;; Test array<-7800-tia-notes-list detailed output
+(test array-7800-tia-notes-detailed-output
+  "Test array<-7800-tia-notes-list produces correct TIA register values"
+  (let ((test-notes '((0 0 60 480 4) (1 100 64 480 8))))  ; Voice, time, key, duration, distortion
+    (let ((result (skyline-tool::array<-7800-tia-notes-list test-notes :ntsc)))
+      (is (arrayp result) "Should return array")
+      (is (= (length result) 2) "Should process 2 notes")
+      ;; Each element should be AUDF/AUDC pair
+      (dotimes (i (length result))
+        (let ((note (aref result i)))
+          (is (= (length note) 2) "Each note should be AUDF/AUDC pair")
+          (is (integerp (aref note 0)) "AUDF should be integer")
+          (is (integerp (aref note 1)) "AUDC should be integer")
+          (is (<= 0 (aref note 0) 31) "AUDF should be 0-31")
+          (is (<= 0 (aref note 1) 255) "AUDC should be 0-255"))))))
+
+;; Test write-7800-binary internal processing
+(test write-7800-binary-internal-processing
+  "Test write-7800-binary produces correct binary output format"
+  (uiop:with-temporary-file (:pathname temp-file :type "bin")
+    (let ((test-data '((#xAA #xBB) (#xCC #xDD))))
+      (skyline-tool::write-7800-binary temp-file test-data)
+      ;; Check file was created and has correct size
+      (is-true (probe-file temp-file) "File should be created")
+      (with-open-file (stream temp-file :element-type '(unsigned-byte 8))
+        (let ((bytes (loop for byte = (read-byte stream nil nil)
+                          while byte collect byte)))
+          (is (= (length bytes) 512) "File should be 512 bytes (2 pages × 256 bytes)")
+          ;; Check first page content
+          (is (= (nth 0 bytes) #xAA) "First byte of first page should be correct")
+          (is (= (nth 1 bytes) #xBB) "Second byte of first page should be correct")
+          ;; Check second page content (after 256 padding bytes)
+          (is (= (nth 256 bytes) #xCC) "First byte of second page should be correct")
+          (is (= (nth 257 bytes) #xDD) "Second byte of second page should be correct"))))))
+
+;; Test parse-into-7800-bytes output validation
+(test parse-into-7800-bytes-output-validation
+  "Test parse-into-7800-bytes produces correct byte sequences"
+  ;; This function likely processes image data into 7800 format
+  (is-true (fboundp 'skyline-tool::parse-into-7800-bytes) "Function should exist")
+  ;; Test with nil input (should handle gracefully or signal error)
+  (signals error (skyline-tool::parse-into-7800-bytes nil) "Should handle nil input"))
+
+;; Test read-7800-art-index output validation
+(test read-7800-art-index-output-validation
+  "Test read-7800-art-index produces correct index data"
+  (is-true (fboundp 'skyline-tool::read-7800-art-index) "Function should exist")
+  ;; Test error handling
+  (signals error (skyline-tool::read-7800-art-index nil) "Should handle nil input"))
+
+;; Test grab-7800-palette output validation
+(test grab-7800-palette-output-validation
+  "Test grab-7800-palette extracts correct palette data"
+  (is-true (fboundp 'skyline-tool::grab-7800-palette) "Function should exist")
+  ;; Test error handling
+  (signals error (skyline-tool::grab-7800-palette :invalid-mode nil) "Should reject invalid modes"))
+
+;; Test extract-regions output validation
+(test extract-regions-output-validation
+  "Test extract-regions produces correct region array"
+  (let ((test-pixels (make-array '(12 8) :element-type '(unsigned-byte 8) :initial-element 42)))
+    (let ((result (skyline-tool::extract-regions test-pixels 4 4)))  ; 4x4 regions
+      (is (listp result) "Should return list of regions")
+      (is (= (length result) 6) "Should extract 6 regions from 12x8 image")  ; 3 across × 2 down
+      (dolist (region result)
+        (is (= (array-dimension region 0) 4) "Each region should be 4 pixels wide")
+        (is (= (array-dimension region 1) 4) "Each region should be 4 pixels high")
+        (is (= (aref region 0 0) 42) "Region pixels should match original")))))
+
+;; Test machine-palette output validation
+(test machine-palette-7800-output-validation
+  "Test machine-palette returns correct 7800 color palette"
+  (let ((palette (skyline-tool::machine-palette 7800)))
+    (is (listp palette) "7800 palette should be a list")
+    (is (> (length palette) 0) "Palette should not be empty")
+    ;; Each color should be a list of 3 integers (RGB)
+    (dolist (color palette)
+      (is (= (length color) 3) "Each color should have 3 components")
+      (is (every #'integerp color) "Color components should be integers")
+      (is (every (lambda (x) (<= 0 x 255)) color) "Color components should be 0-255"))
+    ;; Test specific known 7800 colors (first few)
+    (is (equal (nth 0 palette) '(0 0 0)) "First color should be black")
+    (is (equal (nth 1 palette) '(18 18 18)) "Second color should be dark gray")))
 
 (defun run-7800-tests ()
   "Run all 7800 tests including comprehensive functionality tests"

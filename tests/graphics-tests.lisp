@@ -1,26 +1,7 @@
 ;;; Phantasia SkylineTool/tests/graphics-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
-(defpackage :skyline-tool/graphics-test
-  (:use :cl :fiveam)
-  (:import-from :skyline-tool
-                #:stamp-is-monochrome-p
-                #:check-height+width-for-blob
-                #:check-height+width-for-blob-320ac
-                #:blob-rip-7800
-                #:blob-rip-7800-160a
-                #:blob-rip-7800-320ac
-                #:7800-image-to-320a
-                #:7800-image-to-320c
-                #:extract-4×16-stamps
-                #:blob/write-span-to-stamp-buffer-320ac
-                #:blob/write-spans-320ac
-                #:extract-tileset-palette
-                #:tty-xterm-p
-                #:x11-p)
-  (:export #:graphics-tests))
-
-(in-package :skyline-tool/graphics-test)
+(in-package :skyline-tool/test)
 
 (def-suite graphics-tests
   :description "Tests for graphics BLOB compilation functionality")

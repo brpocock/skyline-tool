@@ -1,27 +1,7 @@
 ;;; Phantasia SkylineTool/tests/interface-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
-(defpackage :skyline-tool/interface-test
-  (:use :cl :fiveam)
-  (:import-from :skyline-tool
-                #:command
-                #:blob-rip-7800
-                #:compile-art-7800
-                #:compile-map
-                #:compile-script
-                #:compile-tileset
-                #:extract-tileset-palette
-                #:labels-to-forth
-                #:labels-to-mame
-                #:prepend-fundamental-mode
-                #:write-actor-prototypes
-                #:write-asset-ids
-                #:write-character-ids
-                #:write-gimp-palettes
-                #:write-master-makefile)
-  (:export #:interface-tests #:conversion-tests))
-
-(in-package :skyline-tool/interface-test)
+(in-package :skyline-tool/test)
 
 (def-suite interface-tests
   :description "Tests for command-line interface functions")
@@ -247,8 +227,9 @@
     (dolist (func-name functions-to-check)
       (let ((func (find-symbol (string-upcase (string func-name)) :skyline-tool)))
         (when (and func (fboundp func))
-          (is (documentation func 'function)
-              "~A should have documentation" func-name))))))
+          (is-true (and (documentation func 'function)
+                        (> (length (documentation func 'function)) 120))
+                   "~A should have documentation" func-name))))))
 
 ;; =============================================================================
 ;; COMPREHENSIVE CONVERSION FUNCTION TESTS

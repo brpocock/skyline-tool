@@ -1,22 +1,7 @@
 ;;; Phantasia SkylineTool/tests/display-list-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
-(defpackage :skyline-tool/display-list-test
-  (:use :cl :fiveam)
-  (:import-from :skyline-tool
-                #:decode-header
-                #:header->string
-                #:string->hex
-                #:decode-dll-entry
-                #:decode-dll-hex
-                #:decode-display-list
-                #:decode-dll-deeply
-                #:detect-active-dll
-                #:dl-contains-entry-p
-                #:dll-can-reach-dl-entry-p)
-  (:export #:display-list-tests))
-
-(in-package :skyline-tool/display-list-test)
+(in-package :skyline-tool/test)
 
 (def-suite display-list-tests
   :description "Tests for display list generation, decoding, and validation")
