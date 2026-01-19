@@ -46,7 +46,6 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
 (finish-output)
 (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :cl-plumbing)
 (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :clim)
-(funcall (intern "QUICKLOAD" (find-package :quicklisp)) :ironclad)
 #+()(load (merge-pathnames (make-pathname :directory (list :relative)
 			        :name "clim-simple-interactor" :type "lisp")
 		   (or *compile-file-pathname*

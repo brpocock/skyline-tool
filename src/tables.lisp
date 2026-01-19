@@ -568,8 +568,8 @@ GameFlag: .block~2%"
                              :release-subtrahend (parse-number (getf row :release-subtrahend))
                              :tia-distortion (parse-number (getf row :tia-distortion))))))
 
-(defun write-orchestration (&optional (input #p"Source/Tables/Orchestration.ods")
-                                      (output (format nil "Source/Generated/~a/Orchestration.s" (machine-directory-name))))
+(defun write-orchestration (&optional (input (merge-pathnames "Source/Tables/Orchestration.ods" (project-root)))
+                                      (output (merge-pathnames (format nil "Source/Generated/~a/Orchestration.s" (machine-directory-name)) (project-root))))
   "Write the orchestration tables to a source code file.
 
 INPUT & OUTPUT pathnames can be given."
@@ -641,20 +641,19 @@ INPUT & OUTPUT pathnames can be given."
           (format out "~%~10t.fi"))
         (format out "~2%InstrumentDecayFraction:")
         (dolist (row table)
-          (dolist (row table)
-            (format out "~%~10t.if TV == NTSC")
-            (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                    (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
-                    (title-case (getf row :instrument)))
-            (format out "~%~10t.else")
-            (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                    (multiple-value-bind (int fract)
-                        (floor (/ 60.0 50.0))
-                      (declare (ignore int))
-                      (getf row :decay-subtrahend)
-                      (floor (* #x100 fract)))
-                    (title-case (getf row :instrument)))
-            (format out "~%~10t.fi")))
+          (format out "~%~10t.if TV == NTSC")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.else")
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore int))
+                    (getf row :decay-subtrahend)
+                    (floor (* #x100 fract)))
+                  (title-case (getf row :instrument)))
+          (format out "~%~10t.fi"))
         (format out "~2%InstrumentDecayDuration:")
         (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"

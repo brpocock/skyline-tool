@@ -3164,7 +3164,7 @@ FadeColor~:(~a~) FadingTarget C!"
      (format t "~2&( End of Forth sources. )~%")))
 
 (defun compile-script (from forth)
-  "Compile Fountain screenplay file into Forth source code.
+  "Compile Fountain screenplay file FROM into FORTH source code.
 
 Processes Fountain-formatted screenplay files, converting dialogue,
 stage directions, and scene information into Forth-compatible source

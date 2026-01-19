@@ -1624,21 +1624,14 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
         (t (write-asset-bank-makefile *bank*))))))
 
 (defun write-master-makefile ()
-  "Write  out   Source/Generated/Makefile  for  building   everything  not
+  "Write  out   Source/Generated/{platform}/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
   (let ((platform-dir (machine-directory-name)))
-    (format *trace-output* "~&Platform dir: ~a" platform-dir)
-    (ensure-directories-exist (make-pathname :directory (list :relative "Source" "Generated" platform-dir)))
-    (format *trace-output* "~&Directory ensured")
     (let ((pathname (make-pathname :directory (list :relative "Source" "Generated" platform-dir)
                                    :name "Makefile")))
-      (format *trace-output* "~&Writing to pathname: ~a" pathname)
-      (with-open-file (*standard-output* pathname :direction :output :if-exists :supersede)
-        (format *trace-output* "~&Calling write-master-makefile-for-machine with *machine*=~a" *machine*)
-        (write-master-makefile-for-machine *machine*)
-        (format *trace-output* "~&File written to ~a" pathname)
-        (finish-output *standard-output*)))
-    (format *trace-output* " … done writing master Makefile.~%")))
+      (ensure-directories-exist (make-pathname :directory (list :relative "Source" "Generated" platform-dir)))
+      (with-output-to-file (*standard-output* pathname :if-exists :supersede)
+        (write-master-makefile-for-machine *machine*)))))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"
