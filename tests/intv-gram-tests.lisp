@@ -360,21 +360,21 @@
   "Test that Intellivision functions handle errors appropriately"
   ;; Graphics functions should signal errors for missing implementations
   (signals error (skyline-tool::compile-art-intv "/nonexistent.in"
-                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
+                   (format nil "Object/~a/test-~a.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
            "compile-art-intv should signal error (not implemented)")
   ;; Sprite function is now implemented, so test with proper machine setting
   (let ((skyline-tool::*machine* 2609))
     (signals error (skyline-tool::compile-intv-sprite "/nonexistent.png"
-                     (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
+                     (format nil "Object/~a/test-~a.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
              "compile-intv-sprite should signal error for nonexistent file"))
 
   ;; Music functions
   (signals error (skyline-tool::compile-music-2609
-                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
+                   (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
                    "/nonexistent.mid" :ay-3-8910)
            "compile-music-2609 should signal error for missing MIDI file")
   (signals error (skyline-tool::compile-speech-2609
-                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
+                   (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
                    "/nonexistent.txt")
            "compile-speech-2609 should signal error (not implemented)"))
 

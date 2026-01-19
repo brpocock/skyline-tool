@@ -113,7 +113,7 @@ Property list with column names as keys and arrays as values
                                                        'list))))))))
 
 (defun number? (value)
-  "Parse a value as a number if possible.
+  "Parse a VALUE as a number if possible.
 
 Attempts to convert various input types to numbers, returning NIL for
 non-numeric inputs.
@@ -398,7 +398,7 @@ ProjectionTables:~20t.block")
                                     theta-i
                                     (mapcar (lambda (n) (first (fixed-8.8 n)))
                                             values))))))))
-  (format *trace-output* " Done.~%"))
+    (format *trace-output* " Done.~%")))
 
 (defun debug-projection (dx dz cx cz theta-brads)
   (let ((theta (* 2.0d0 pi (/ theta-brads #x100)))
@@ -423,41 +423,40 @@ ProjectionTables:~20t.block")
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
 (defun write-inventory-tables (&optional (source-text "Source/Tables/Inventory.txt")
-                                         (source-code (format nil "Source/Generated/~a/InventoryLabels.s" (machine-directory-name))))
+                                         (source-code (format nil "Source/Generated/~a/InventoryLabels.s" (machine-directory-name)))
                                          (label "Item"))
   "Collect the names of all inventory items and write them out"
   (format *trace-output* "~&Reading inventory ~(~a~) names from ~a…"
           label (enough-namestring source-text))
   (finish-output *trace-output*)
-  (with-output-to-file (code source-code :if-exists :supersede)
-    (format code ";;; Generated from ~a
+  (let ((counter 0))
+    (with-output-to-file (code source-code :if-exists :supersede)
+      (format code ";;; Generated from ~a
 
 ~aNames: .block~2%"
-            (enough-namestring source-text)
-            label)
-    (with-input-from-file (text source-text)
-      (loop for counter from 0 below (* 16 8)
-            for line = (read-line text nil nil)
-            while (and line (not (emptyp line)))
-            do (format code "~&~a~x:~10t.text ~s~60t; ~d (~{~d.~d~})"
-                       label
-                       counter
-                       (subseq line 0 (position #\; line))
-                       counter
-                       (multiple-value-list (floor counter 8)))
-            finally
-               (progn
-                 (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
-                         (1+ counter) label (* 16 8))
-                 (format code (format nil "
-~~10tEndOf~0@*~aNames := *
-~~10tAll~0@*~aNames=(~~{~0@*~a~~x~~^,~~})
-Low:~~10t.byte <(All~0@*~aNames), <EndOf~0@*~aNames
-High:~~10t.byte >(All~0@*~aNames), >EndOf~0@*~aNames
-~~10t.bend
-;;; end of file~~%" label)
-                         (loop for i from 0 below counter
-                               collecting i)))))))
+              (enough-namestring source-text)
+              label)
+      (with-input-from-file (text source-text)
+        (loop for line = (read-line text nil nil)
+              while (and line (not (emptyp line)) (< counter (* 16 8)))
+              do (format code "~&~a~x:~10t.text ~s~60t; ~d (~{~d.~d~})"
+                         label
+                         counter
+                         (subseq line 0 (position #\; line))
+                         counter
+                         (multiple-value-list (floor counter 8)))
+                 (incf counter)))
+      (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
+              counter label (* 16 8))
+      (format code "~10tEndOf~aNames := *
+~10tAll~aNames=(~{~a~x~^,~})
+Low:~10t.byte <(All~aNames), <EndOf~aNames
+High:~10t.byte >(All~aNames), >EndOf~aNames
+~10t.bend
+;;; end of file~%"
+              label label
+              (loop for i from 0 below counter collecting i)
+              label label label label))))
 
 (defun write-keys-tables ()
   "Write the file out with the enumerated key names"
@@ -686,10 +685,9 @@ INPUT & OUTPUT pathnames can be given."
           (format out "~%~10t.fi"))
         (format out "~2%;;; End of Orchestration~2%")))))
 
-(defun write-equipment-index (&optional pathname)
+(defun write-equipment-index (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/EquipmentIndex.s" (machine-directory-name)) (project-root))))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
-  (let ((pathname (or pathname (merge-pathnames (format nil "Source/Generated/~a/EquipmentIndex.s" (machine-directory-name)) (project-root)))))
-    (format *trace-output* "~&Machine: ~a, Directory: ~a, Pathname: ~a, Full: ~s~%" *machine* (machine-directory-name) pathname (namestring pathname))
+  (format *trace-output* "~&Machine: ~a, Directory: ~a, Pathname: ~a, Full: ~s~%" *machine* (machine-directory-name) pathname (namestring pathname))
     (format *trace-output* "~&Reading equipment attributes from ~a…" #p"Source/Tables/EquipmentIndex.ods")
     (finish-output *trace-output*)
     (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
@@ -760,4 +758,4 @@ INPUT & OUTPUT pathnames can be given."
                                  (funcall validator format value)
                                  (cons value nil)
                                  (title-case (getf item :item-name)))))))
-        (format output "~2%~10t.bend~%")))))
+          (format output "~2%~10t.bend~%")))))

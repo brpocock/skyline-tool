@@ -1830,8 +1830,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
         (note-name (string-upcase note-name)))
     ;; Simple parsing: find the note part and octave part
     (let* ((len (length note-name))
-           (note-part (if (and (>= len 2) (or (char= (char note-name 1) #\#)
-                                                  (char= (char note-name 1) #\♯)))
+           (note-part (if (and (>= len 2)  (char= (char note-name 1) #\♯))
                          (subseq note-name 0 2)
                          (subseq note-name 0 1)))
            (octave-part (subseq note-name (length note-part)))

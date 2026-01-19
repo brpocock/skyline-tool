@@ -25,6 +25,7 @@
                :cserial-port
                :dufy
                :fiveam
+               :ironclad
                :mcclim
                :lparallel
                :local-time
@@ -90,6 +91,7 @@
   :author "Bruce-Robert Pocock"
   :version "0.9.0"
   :depends-on (:skyline-tool :fiveam)
+  :defsystem-depends-on (:asdf)
   :components ((:module "tests"
                 :components ((:file "display-list-tests")
                              (:file "action-tests")

@@ -1130,7 +1130,7 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (define-constant +minifont-punctuation+
   " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0"
-  :test 'string-equal)
+  :test 'string=)
 
 (defun char->minifont (char)
   ;; Treat pilcrow (¶) as a space for minifont encoding. The pilcrow is a
@@ -1145,7 +1145,7 @@ range is 0 - #xffffffff (4,294,967,295)"
     ((char= char #\¶)
      #xd2)
     ((char= char #\apostrophe)
-     (if-let (n #.(position #\’ +minifont-punctuation+ :test #'char=))
+     (if-let (n (position #\’ +minifont-punctuation+ :test #'char=))
        (+ 36 n)
        (error "I hate apostrophes, really.")))
     (t (if-let (pos (position (char-downcase char) +minifont-punctuation+ :test #'char=))

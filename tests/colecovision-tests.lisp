@@ -17,7 +17,7 @@
            "compile-music-colecovision should exist")
   ;; Test with invalid inputs
   (signals error (skyline-tool::compile-music-colecovision
-                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
+                   (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
                    "/nonexistent.mid")
            "compile-music-colecovision should signal error for missing MIDI file"))
 
@@ -28,7 +28,7 @@
            "compile-art-colecovision should exist")
   ;; Test with invalid inputs
   (signals error (skyline-tool::compile-art-colecovision "/nonexistent.in"
-                   (format nil "Object/~a/test-~x.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
+                   (format nil "Object/~a/test-~a.out" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
            "compile-art-colecovision should signal error for missing input"))
 
 ;; Test ColecoVision blob ripping functions

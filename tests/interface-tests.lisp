@@ -98,7 +98,7 @@
                              :push-7800gd :write-actor-prototypes :write-asset-ids :write-character-ids
                              :write-gimp-palettes :write-master-makefile :help :--help :-h)))
     (dolist (cmd expected-commands)
-      (is-true (getf invocation cmd)
+     (is-true (getf invocation cmd)
                "~A should be registered in *invocation*" cmd))))
 
 ;; Test error handling for unknown commands

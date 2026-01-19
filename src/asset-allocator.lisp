@@ -631,9 +631,8 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
                          (list :relative "Source" "Generated" machine-dir)
                          (list :relative "Source" "Generated" machine-dir "Assets"))))
     (when cwd (appendf includes (list (pathname-directory cwd))))
-    (when testp (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))
-    ;; also include platform tests when testing
-    (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))
+    (when testp
+      (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))  ;; Platform-specific tests
     (when (probe-file (make-pathname :directory (list :relative "Source" "Code" machine-dir "Banks" bank)
                                      :name bank :type "s"))
       (appendf includes (list (list :relative "Source" "Code" machine-dir "Banks" bank))))
@@ -777,13 +776,9 @@ file ~a.s in bank $~(~2,'0x~)~
           (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
-    (let ((possible-file (make-pathname
-                          :directory (list :relative "Source" "Maps" "Tiles" (machine-directory-name))
-                          :name (subseq name 8) :type "tsx")))
-      (when (probe-file possible-file)
-        (return-from find-included-binary-file
-          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
-                         :name name :type "o")))))
+    (return-from find-included-binary-file
+      (make-pathname :directory (list :relative "Object" (machine-directory-name))
+                     :name name :type "o")))
   (when (eql 0 (search "Blob." name))
     (let ((possible-file (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
                                         :name (subseq name 5) :type "xcf")))
@@ -811,7 +806,7 @@ file ~a.s in bank $~(~2,'0x~)~
     (with-input-from-file (source source-file)
        (let* ((testp (or testp
                         (when (search "Tests" (namestring source-file)) t)))
-             (includes (loop for line = (read-line source nil nil)
+              (includes (loop for line = (read-line source nil nil)
                              while line
                              for included = (included-file line)
                              for binary = (included-binary-file line)
@@ -866,7 +861,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
   (and (member (pathname-type pathname) '("s" "forth") :test #'string=)
        (member "Generated" (pathname-directory pathname) :test #'string=)
        (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
-                                    :test #'string=))
+                                    :test #'equal))
                      (second found))
            (when (search "Palette" (pathname-name pathname))
              (lambda () (extract-palette pathname))))))
@@ -1638,7 +1633,8 @@ mentioned in the top-level Makefile."
       (with-open-file (*standard-output* pathname :direction :output :if-exists :supersede)
         (format *trace-output* "~&Calling write-master-makefile-for-machine with *machine*=~a" *machine*)
         (write-master-makefile-for-machine *machine*)
-        (format *trace-output* "~&File written")))
+        (format *trace-output* "~&File written to ~a" pathname)
+        (finish-output *standard-output*)))
     (format *trace-output* " … done writing master Makefile.~%")))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)

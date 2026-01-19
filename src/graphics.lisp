@@ -442,7 +442,9 @@ Second color as RGB triple (R G B)
 Perceptual color distance (ΔE*ab value)
 @end table
 
-@xref{fun:find-nearest-in-palette}."
+This is meant to discover the actual perception-relative color distance
+more accurately to the human eye than a linear distance in RGB space
+can do."
   (destructuring-bind (r1 g1 b1) rgb1
     (multiple-value-bind (l0 a0 b0)
         (multiple-value-call #'dufy:xyz-to-lab (dufy:rgb-to-xyz r0 g0 b0))

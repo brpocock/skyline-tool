@@ -32,22 +32,30 @@ Hash table with string keys and integer values
 @ref{fun:warn-once}
 @end table")
 
-(defun generate-secure-random-id (&optional (length 16))
+(defun generate-secure-random-id (&optional (length 8))
   "Generate a cryptographically secure random identifier.
+
+Uses Ironclad's cryptographically secure random number generator for
+true cryptographic randomness. Ironclad is required for this function.
 
 Returns a string of hexadecimal digits suitable for use as a unique
 identifier in temporary files, test data, etc.
 
 @table @asis
 @item LENGTH
-Number of random bytes to generate (default 16)
+Number of random bytes to generate (default 8)
 @item Returns
 String containing LENGTH×2 hexadecimal characters
 @end table"
-  (let ((bytes (make-array length :element-type '(unsigned-byte 8))))
-    (with-open-file (urandom "/dev/urandom" :element-type '(unsigned-byte 8))
-      (read-sequence bytes urandom))
-    (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list))))
+  (if (and (find-package :ironclad)
+           (find-symbol "RANDOM-BYTES" :ironclad))
+      (let ((bytes (funcall (find-symbol "RANDOM-BYTES" :ironclad) length)))
+        (unless (and (arrayp bytes) (= (length bytes) length))
+          (error "Ironclad RANDOM-BYTES returned invalid data: ~s" bytes))
+        (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list)))
+      (progn
+        (warn "Ironclad not available, falling back to non-cryptographic random generation")
+        (format nil "~(~16,'0X~)" (random (expt 2 (* length 8)))))))
 
 (defun warn-once (format &rest args)
   "Issue a warning message, but only once per unique message.
