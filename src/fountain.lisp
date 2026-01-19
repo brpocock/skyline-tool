@@ -3164,7 +3164,18 @@ FadeColor~:(~a~) FadingTarget C!"
      (format t "~2&( End of Forth sources. )~%")))
 
 (defun compile-script (from forth)
-  "Compile Fountain file with pathname FROM into Forth-alike source code file with pathname FORTH"
+  "Compile Fountain screenplay file into Forth source code.
+
+Processes Fountain-formatted screenplay files, converting dialogue,
+stage directions, and scene information into Forth-compatible source
+code for the game's scripting engine.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: from (pathname to Fountain file), forth (pathname for output)
+@item Returns: nil
+@item Side Effects: Generates Forth source code file
+@end table"
   (let (victoryp)
     (unwind-protect
          (tagbody top

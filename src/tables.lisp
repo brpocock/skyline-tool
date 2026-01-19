@@ -460,11 +460,14 @@ High:~10t.byte >(All~aNames), >EndOf~aNames
 
 (defun write-keys-tables ()
   "Write the file out with the enumerated key names"
-  (write-inventory-tables #p"Source/Tables/Keys.txt" (format nil "Source/Generated/~a/KeyLabels.s" (machine-directory-name)) "Key"))
+  (write-inventory-tables #p"Source/Tables/Keys.txt"
+                          (format nil "Source/Generated/~a/KeyLabels.s" (machine-directory-name))
+                          "Key"))
 
-(defun write-flags-tables (&optional (source-text #p"Source/Tables/Flags.txt")
-                                     (source-code (format nil "Source/Generated/~a/FlagLabels.s" (machine-directory-name)))
-                                     (forth-code (format nil "Source/Generated/~a/FlagLabels.forth" (machine-directory-name))))
+(defun write-flags-tables
+    (&optional (source-text #p"Source/Tables/Flags.txt")
+               (source-code (format nil "Source/Generated/~a/FlagLabels.s" (machine-directory-name)))
+               (forth-code (format nil "Source/Generated/~a/FlagLabels.forth" (machine-directory-name))))
   "Write the file out with the enumerated flag names"
   (format *trace-output* "~&Reading game flag names from ~a…" (enough-namestring source-text))
   (finish-output *trace-output*)
@@ -489,8 +492,9 @@ GameFlag: .block~2%"
                    (format code "~%~10t.bend~% ;;; end of file~%")
                    (format forth "~%( end of file )~%")))))))
 
-(defun write-characters-tables (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
-                                          (source-pathname (format nil "Source/Generated/~a/CharacterTables.s" (machine-directory-name))))
+(defun write-characters-tables
+    (&optional (spreadsheet-pathname "Source/Tables/NPCStats.ods")
+               (source-pathname (format nil "Source/Generated/~a/CharacterTables.s" (machine-directory-name))))
   (format *trace-output* "~&Reading NPC stats from ~a … "
           (enough-namestring spreadsheet-pathname))
   (finish-output *trace-output*)
@@ -530,7 +534,10 @@ GameFlag: .block~2%"
                                   (getf char :name)))))
       (format *trace-output* " done."))))
 
-(defun write-docks-index (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/DocksIndex.s" (machine-directory-name)) (project-root))))
+(defun write-docks-index
+    (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/DocksIndex.s"
+                                                  (machine-directory-name))
+                                          (project-root))))
   "Write the dock IDs from the maps index to PATHNAME"
   (read-map-ids-table)
   (let ((max-dock-id (loop for dock-id being the hash-keys of *dock-ids-maps*

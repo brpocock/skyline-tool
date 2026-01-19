@@ -776,9 +776,13 @@ file ~a.s in bank $~(~2,'0x~)~
           (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
-    (return-from find-included-binary-file
-      (make-pathname :directory (list :relative "Object" (machine-directory-name))
-                     :name name :type "o")))
+    (let ((possible-file (make-pathname
+                          :directory (list :relative "Source" "Maps" "Tiles")
+                          :name (subseq name 8) :type "tsx")))
+      (when (probe-file possible-file)
+        (return-from find-included-binary-file
+          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
+                         :name name :type "o")))))
   (when (eql 0 (search "Blob." name))
     (let ((possible-file (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
                                         :name (subseq name 5) :type "xcf")))
@@ -909,8 +913,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
              (subseq
               (enough-namestring
                (make-pathname :directory
-                              (append (list :relative "Source")
-                                      (machine-directory-name)
+                              (append (list :relative "Source" (machine-directory-name))
                                       (subseq (pathname-directory
                                                (merge-pathnames pathname))
                                               source-prefix-length))

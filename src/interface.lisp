@@ -85,7 +85,6 @@ Loads test system, runs tests, exits the Lisp process
         ;; Run all tests and exit with appropriate code
         (let ((results (fiveam:run-all-tests)))
           (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
-            (declare (ignore skipped))
             (if (and passed (zerop failed) (zerop skipped))
                 (progn
                   (format t "~&All tests passed~%")
@@ -541,7 +540,6 @@ See COPYING for details
     (launcher)))
 
 (defun run-for-port (port-label &rest subcommand)
-
   (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
          (project-data (json:decode-json-from-source json-path)))
@@ -556,7 +554,6 @@ See COPYING for details
           *default-skin-color* (cdr (assoc :*default-skin-color project-data))
           *default-hair-color* (cdr (assoc :*default-hair-color project-data))
           *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
-
   (format *trace-output* "~&Running for port: ~a" port-label)
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
@@ -595,11 +592,11 @@ Executes the requested command, may exit the process
       (destructuring-bind (self verb &rest invocation) argv
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
-                   (apply fun (remove-if (curry #'string= self)
-                                         invocation))
-                   (unless (char= #\- (char argv 0))
+                   (unless (char= #\- (char (first argv) 0))
                      (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
                      (finish-output *trace-output*))
+                   (apply fun (remove-if (curry #'string= self)
+                                         (flatten invocation)))
                    (fresh-line)))
             (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
                 #+mcclim

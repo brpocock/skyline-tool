@@ -1271,6 +1271,17 @@ range is 0 - #xffffffff (4,294,967,295)"
     s))
 
 (defun compile-map (pathname)
+  "Compile a Tiled map (TMX) file into game-ready format.
+
+Processes TMX XML files from the Tiled map editor, extracting tile data,
+collision information, and object placements for use in the game engine.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: pathname (pathname designator to TMX file)
+@item Returns: nil
+@item Side Effects: Generates compiled map data files
+@end table"
   (format *trace-output* "~&Loading tile map from ~a" (enough-namestring pathname))
   (read-map-ids-table)
   (let ((canon-name (format nil "~a.~a"

@@ -47,15 +47,13 @@ Number of random bytes to generate (default 8)
 @item Returns
 String containing LENGTH×2 hexadecimal characters
 @end table"
-  (if (and (find-package :ironclad)
-           (find-symbol "RANDOM-BYTES" :ironclad))
-      (let ((bytes (funcall (find-symbol "RANDOM-BYTES" :ironclad) length)))
-        (unless (and (arrayp bytes) (= (length bytes) length))
-          (error "Ironclad RANDOM-BYTES returned invalid data: ~s" bytes))
-        (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list)))
-      (progn
-        (warn "Ironclad not available, falling back to non-cryptographic random generation")
-        (format nil "~(~16,'0X~)" (random (expt 2 (* length 8)))))))
+  (unless (and (find-package :ironclad)
+               (find-symbol "RANDOM-BYTES" :ironclad))
+    (error "Ironclad is required for cryptographically secure random generation"))
+  (let ((bytes (funcall (find-symbol "RANDOM-BYTES" :ironclad) length)))
+    (unless (and (arrayp bytes) (= (length bytes) length))
+      (error "Ironclad RANDOM-BYTES returned invalid data: ~s" bytes))
+    (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list))))
 
 (defun warn-once (format &rest args)
   "Issue a warning message, but only once per unique message.

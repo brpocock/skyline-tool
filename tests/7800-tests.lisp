@@ -22,11 +22,10 @@
            "parse-7800-object should exist")
 
   ;; Test basic functionality with minimal input
-  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0))
-        (palette (vector #(0 0 0) #(255 255 255))))
-    (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 1 :height 1 :palette palette))
-    (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
-    (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette))))
+  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0)))
+    (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 1 :height 1))
+    (finishes (skyline-tool::7800-image-to-320a test-image :byte-width 1 :height 1))
+    (finishes (skyline-tool::7800-image-to-320c test-image :byte-width 1 :height 1))))
 
 ;; Test 7800 binary functions existence and basic functionality
 (test 7800-binary-functions-existence
@@ -330,7 +329,7 @@
            "Core 7800 graphics function should be available")
   (is-true (fboundp 'skyline-tool::write-7800-binary)
            "Binary output function should be available")
-  (is-true (fboundp 'skyline-tool::compile-music-7800)
+  (is-true (fboundp 'skyline-tool::compile-music)
            "Music compilation should be available"))
 
 ;; Scrolling subsystem tests

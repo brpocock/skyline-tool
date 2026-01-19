@@ -2298,6 +2298,17 @@ Used internally by BLOB ripping for color stamp conversion."
     (reverse png-list)))
 
 (defun compile-art-7800 (index-out index-in)
+  "Compile 7800 graphics from INDEX-IN to INDEX-OUT.
+
+Processes 7800-specific graphics data, interleaving bytes and writing
+binary output for the Atari 7800 platform.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: index-out (pathname), index-in (pathname)
+@item Returns: nil
+@item Side Effects: Generates 7800 graphics binary files
+@end table"
   (let ((*machine* 7800))
     (write-7800-binary index-out
                        (interleave-7800-bytes
