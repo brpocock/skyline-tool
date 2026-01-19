@@ -131,7 +131,7 @@ Returns a list where each element is a property list representing a row."
 
 (defun compile-enemies (&optional (pathname (merge-pathnames "Source/Tables/EnemyStats.ods" (project-root)))
                                   (output-pathname (merge-pathnames (format nil "Source/Generated/~a/EnemyTables.s" (skyline-tool::machine-directory-name))
-                                                                   (project-root)))
+                                                                    (project-root)))
                                   index-pathname)
   "Compile the stats sheets for enemies from PATHNAME into OUTPUT-PATHNAME. List to INDEX-PATHNAME."
   (unless index-pathname
@@ -143,8 +143,7 @@ Returns a list where each element is a property list representing a row."
   (let ((sheet (read-ods-into-lists pathname)))
     (let* ((enemy-stats (first sheet))
            (enemy-art (second sheet))
-           (data (ss->lol enemy-stats))
-           (art (ss->lol enemy-art)))
+           (data (ss->lol enemy-stats)))
       (with-output-to-file (output output-pathname :if-exists :supersede)
         (with-output-to-file (index index-pathname :if-exists :supersede)
           (format *trace-output* "writing ~a and ~a …"
