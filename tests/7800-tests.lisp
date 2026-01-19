@@ -103,7 +103,7 @@
             (is (listp voice) "Each voice should be a list")
             (dolist (note voice)
               (is (and (listp note) (= (length note) 4))
-                  "Each note should have 4 elements: time, key, duration, distortion")))))))
+                  "Each note should have 4 elements: time, key, duration, distortion"))))))
 
   ;; Test array<-7800-tia-notes-list with detailed validation
   (let ((tia-notes '((0 0 60 480 4)  ; Voice 0, time 0, key 60, duration 480, distortion 4
