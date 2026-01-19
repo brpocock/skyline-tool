@@ -259,7 +259,7 @@
 ;; Helper functions for conversion tests
 (defun create-temp-file (content &optional (extension "tmp"))
   "Create a temporary file with CONTENT and return its pathname."
-  (let ((pathname (make-pathname :name (format nil "test-~A-~A" (get-universal-time) (random 1000))
+  (let ((pathname (make-pathname :name (format nil "test-~A" (skyline-tool::generate-secure-random-id))
                                  :type extension
                                  :directory '(:absolute "tmp"))))
     (ensure-directories-exist pathname)

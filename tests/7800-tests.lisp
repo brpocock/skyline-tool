@@ -106,9 +106,9 @@
                   "Each note should have 4 elements: time, key, duration, distortion")))))))
 
   ;; Test array<-7800-tia-notes-list with detailed validation
-  (let ((tia-notes '((:frequency 261.63 :volume 15 :control #x04)  ; Middle C, AUDC value
-                     (:frequency 329.63 :volume 10 :control #x08)  ; E4, different AUDC
-                     (:frequency 0 :volume 0 :control #x00))))     ; Silence
+  (let ((tia-notes '((0 0 60 480 4)  ; Voice 0, time 0, key 60, duration 480, distortion 4
+                     (1 100 64 480 8)  ; Voice 1, time 100, key 64, duration 480, distortion 8
+                     (0 200 0 0 0))))   ; Voice 0, time 200, silence
     (let ((result (skyline-tool::array<-7800-tia-notes-list tia-notes :ntsc)))
       (is (arrayp result)
           "array<-7800-tia-notes-list should return an array")
@@ -142,8 +142,8 @@
 ;; Test 7800 music compilation output validation
 (test 7800-music-compilation-output-validation
   "Test that 7800 music compilation produces valid binary output"
-  (let ((temp-file (format nil "Object/7800/7800-test-music-~x.bin"
-                           (sxhash (get-universal-time)))))
+  (let ((temp-file (format nil "Object/7800/7800-test-music-~a.bin"
+                           (skyline-tool::generate-secure-random-id 8))))
     (let ((skyline-tool::*machine* 7800))
       ;; Create a minimal mock MIDI file for testing
       ;; This would normally be done with actual MIDI data, but for testing
@@ -258,8 +258,8 @@
 (test 7800-binary-file-io
   "Test that 7800 binary file writing produces readable data"
   (let ((skyline-tool::*machine* 7800)
-        (test-file (format nil "Object/7800/test-7800-data-~x.bin"
-                           (sxhash (get-universal-time))))
+        (test-file (format nil "Object/7800/test-7800-data-~a.bin"
+                           (skyline-tool::generate-secure-random-id 8))))
         (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
     ;; Write test data
     (skyline-tool::write-7800-binary test-file test-data)
@@ -293,7 +293,7 @@
 
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
   (signals error (skyline-tool::compile-music-7800
-                   (format nil "Object/~a/test-~x.s" (skyline-tool::machine-directory-name) (sxhash (get-universal-time)))
+                   (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
                    "/nonexistent.mid" :tia :binary)
             "compile-music-7800 should signal error for missing MIDI file"))
 

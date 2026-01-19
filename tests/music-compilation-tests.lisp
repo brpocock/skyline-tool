@@ -34,7 +34,7 @@
 
 (test 2600-music-compilation-validation
   "Test that Atari 2600 music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/2600/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/2600/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -56,7 +56,7 @@
 
 (test 5200-music-compilation-validation
   "Test that Atari 5200 music compilation produces correct binary output"
-  (let ((output-file (format nil "Object/5200/test-music-~a.bin" (random 1000)))
+  (let ((output-file (format nil "Object/5200/test-music-~a.bin" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -95,7 +95,7 @@
 
 (test 2609-music-compilation-validation
   "Test that Intellivision music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/2609/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/2609/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -115,7 +115,7 @@
 
 (test 64-c64-music-compilation-validation
   "Test that Commodore 64 music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/64/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/64/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -137,7 +137,7 @@
 
 (test 128-c128-music-compilation-validation
   "Test that Commodore 128 music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/128/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/128/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -159,7 +159,7 @@
 
 (test 8-apple2-music-compilation-validation
   "Test that Apple II music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/8/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/8/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -181,7 +181,7 @@
 
 (test 10-apple2gs-music-compilation-validation
   "Test that Apple IIGS music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/10/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/10/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -203,7 +203,7 @@
 
 (test 81-zx81-music-compilation-validation
   "Test that ZX81 music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/81/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/81/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -225,7 +225,7 @@
 
 (test 2068-spectrum-music-compilation-validation
   "Test that ZX Spectrum music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/2068/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/2068/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -249,7 +249,7 @@
 
 (test unimplemented-platform-error-signaling
   "Test that unimplemented platforms signal appropriate errors"
-  (let ((output-file (format nil "Object/3/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/3/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
@@ -292,7 +292,7 @@
 
 (test platform-parameter-validation
   "Test that platforms receive correct parameters and validate inputs"
-  (let ((output-file (format nil "Object/2600/test-music-~a.s" (random 1000)))
+  (let ((output-file (format nil "Object/2600/test-music-~a.s" (skyline-tool::generate-secure-random-id 4)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file

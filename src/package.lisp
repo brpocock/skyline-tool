@@ -47,6 +47,7 @@
            #:speech-supported-p
            #:simple-animation-sequence
            #:machine-directory-name
+           #:generate-secure-random-id
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences

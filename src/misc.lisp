@@ -14,8 +14,12 @@ Error if *region* is not one of :ntsc, :pal, or :secam
 @end table
 
 @xref{var:*region*}."
+  (assert (member *region* '(:ntsc :pal :secam)) (*region*)
+          "For some systems, the TV standard (region) must be set to one
+ of (the keywords) NTSC, PAL, SECAM"))
 
 (defvar *warned*
+  (make-hash-table :test 'equal)
   "Hash table tracking warnings that have been issued.
 
 Used by warn-once to avoid repeating the same warning message.
@@ -26,8 +30,24 @@ Keys are warning strings, values are counts of how many times issued.
 Hash table with string keys and integer values
 @item Used by
 @ref{fun:warn-once}
+@end table")
+
+(defun generate-secure-random-id (&optional (length 16))
+  "Generate a cryptographically secure random identifier.
+
+Returns a string of hexadecimal digits suitable for use as a unique
+identifier in temporary files, test data, etc.
+
+@table @asis
+@item LENGTH
+Number of random bytes to generate (default 16)
+@item Returns
+String containing LENGTH×2 hexadecimal characters
 @end table"
-  (make-hash-table :test 'equal))
+  (let ((bytes (make-array length :element-type '(unsigned-byte 8))))
+    (with-open-file (urandom "/dev/urandom" :element-type '(unsigned-byte 8))
+      (read-sequence bytes urandom))
+    (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list))))
 
 (defun warn-once (format &rest args)
   "Issue a warning message, but only once per unique message.
@@ -228,22 +248,6 @@ Machine identifier number (e.g., 7800, 2600) or 5200 as default
      (* 40 (/ (logand index #xc0) 32))))
 
 (define-constant +unicode->petscii-ish+
-    "Unicode to PETSCII character mapping table.
-
-Property list mapping Unicode characters to their closest PETSCII equivalents
-for Commodore systems. Includes special mappings for characters that don't
-have direct equivalents in PETSCII.
-
-@table @asis
-@item Structure
-Property list with Unicode characters as keys and PETSCII codes as values
-@item Purpose
-Character conversion for Commodore PETSCII text encoding
-@item Used by
-Text processing and font rendering functions
-@end table
-
-@xref{fun:char->petscii-font}."
     '(;; ASCII not found in PETSCII
       #\| #x5d
       #\\ #x5f
@@ -315,7 +319,7 @@ Text processing and font rendering functions
       #\☉ #xa9
       #\✝ #x69
       #\≈ #x67
-      #\⁂ #x6f; actually ∴
+      #\⁂ #x6f ; actually ∴
       #\★ #x8f
       #\λ #x6a
       #\∕ #\/  ; fraction solidus
@@ -323,7 +327,23 @@ Text processing and font rendering functions
       #\∴ #x70
       #\␢ #x76
       #\␣ #x75)
-  :test 'equalp)
+  :test 'equalp
+  :documentation "Unicode to PETSCII character mapping table.
+
+Property list mapping Unicode characters to their closest PETSCII equivalents
+for Commodore systems. Includes special mappings for characters that don't
+have direct equivalents in PETSCII.
+
+@table @asis
+@item Structure
+Property list with Unicode characters as keys and PETSCII codes as values
+@item Purpose
+Character conversion for Commodore PETSCII text encoding
+@item Used by
+Text processing and font rendering functions
+@end table
+
+@xref{fun:char->petscii-font}.")
 
 (defun char->petscii-font (char)
   "Convert a character to a PETSCII-like code … deprecated in favour of directly using screen codes in future, though."
