@@ -170,7 +170,7 @@ User input string with whitespace trimmed
     (finish-output *query-io*)))
 
 (defun prompt-function ()
-  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
+  (if (and (tty-xterm-p) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
@@ -178,7 +178,7 @@ User input string with whitespace trimmed
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
-  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (tty-xterm-p) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)
@@ -538,23 +538,23 @@ See COPYING for details
 (defun run-for-port (port-label &rest subcommand)
   (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
-         (project-data (json:decode-json-from-source json-path)))
+         (project-data (json:decode-json-from-source json-path))
          (*project.json* project-data)
          (*game-title* (cdr (assoc :*game project-data)))
          (*part-number*  (cdr (assoc :*part-number project-data)))
          (*studio* (cdr (assoc :*studio project-data)))
-         (*publisher* (cdr (assoc :*publisher project-data)))
-         (*machine* (cdr (assoc :*machine project-data)))
-         (*sound* (cdr (assoc :*sound project-data)))
-         (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
-         (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
-         (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
-         (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data)))
-  (format *trace-output* "~&Running for port: ~a" port-label)
-  (destructuring-bind (verb &rest args) subcommand
-    (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-      (apply fun args)
-      (error "Command not recognized: “~a” (try “help”)" verb))))
+          (*publisher* (cdr (assoc :*publisher project-data)))
+          (*machine* (cdr (assoc :*machine project-data)))
+          (*sound* (cdr (assoc :*sound project-data)))
+          (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
+          (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
+          (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
+          (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+    (format *trace-output* "~&Running for port: ~a" port-label)
+    (destructuring-bind (verb &rest args) subcommand
+      (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+        (apply fun args)
+        (error "Command not recognized: \"~a\" (try \"help\")" verb)))))
 
 (defun command (argv)
   "Main entry point for Skyline-Tool command-line interface.
@@ -571,7 +571,7 @@ Executes the requested command, may exit the process
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
   (format t "~&Skyline tool (© 2026) invoked:
-(Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
+(Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
   (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
   (finish-output *trace-output*)
@@ -590,14 +590,8 @@ Executes the requested command, may exit the process
       (destructuring-bind (self verb &rest invocation) argv
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
-                   (unless (char= #\- (char (first argv) 0))
-                     (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-                     (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
                                          invocation))
-                   (unless (char= #\- (char argv 0))
-                     (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-                     (finish-output *trace-output*))
                    (fresh-line)))
             (if (and #+mcclim (x11-p))
                 #+mcclim
