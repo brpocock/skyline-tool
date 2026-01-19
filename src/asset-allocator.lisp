@@ -585,14 +585,13 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (16 "TG16")
     (20 "VIC20")
     (23 "A2e")
-    (64 "CBM")
+    ((64 128) "CBM")
     (81 "ZX81")
     (88 "SNES")
-    (128 "CBM")
     (200 "Lynx")
     (222 "2gs")
     (223 "BBC")
-    (264 "C=16")
+    (264 "C16")
     (837 "GG")
     (1000 "SG1000")
     (1601 "SMD")
@@ -777,7 +776,7 @@ file ~a.s in bank $~(~2,'0x~)~
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
     (let ((possible-file (make-pathname
-                          :directory (list :relative "Source" "Maps" "Tiles" (machine-directory-name))
+                          :directory (list :relative "Source" "Maps" "Tiles")
                           :name (subseq name 8) :type "tsx")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
@@ -1477,9 +1476,9 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
       (write-blob-generation blob))))
 
 (defun write-makefile-for-art ()
-  (dolist (art (directory (make-pathname :directory (list :relative "Source" "Art" (machine-directory-name))
-                                         :name :wild
-                                         :type "art")))
+  (dolist (art (recursive-directory (make-pathname :directory (list :relative "Source" "Art")
+                                                    :name :wild
+                                                    :type "art")))
     (write-art-generation art)))
 
 (defun write-makefile-for-tilesets ()
@@ -1627,17 +1626,11 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
   "Write  out   Source/Generated/{platform}/Makefile  for  building   everything  not
 mentioned in the top-level Makefile."
   (let ((platform-dir (machine-directory-name)))
-    (format *trace-output* "~&Platform dir: ~a" platform-dir)
     (ensure-directories-exist (make-pathname :directory (list :relative "Source" "Generated" platform-dir)))
-    (format *trace-output* "~&Directory ensured")
     (let ((pathname (make-pathname :directory (list :relative "Source" "Generated" platform-dir)
                                    :name "Makefile")))
-      (format *trace-output* "~&Writing to pathname: ~a" pathname)
       (with-open-file (*standard-output* pathname :direction :output :if-exists :supersede)
-        (format *trace-output* "~&Calling write-master-makefile-for-machine with *machine*=~a" *machine*)
-        (write-master-makefile-for-machine *machine*)
-        (format *trace-output* "~&File written")))
-    (format *trace-output* " … done writing master Makefile.~%")))
+        (write-master-makefile-for-machine *machine*)))))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FROM-XML'"
@@ -2041,6 +2034,12 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
   "Stub function for collect-assets command"
   (format t "collect-assets called with args: ~A~%" args))
 
+(defun all-encoded-asset-names ()
+  "Return a list of all encoded asset names for the current machine."
+  (let ((assets (read-assets-list)))
+    (loop for asset being the hash-keys of assets
+          collect (format nil "~a" asset))))
+
 (defun prepend-fundamental-mode (&rest args)
   "Stub function for prepend-fundamental-mode command"
-  (format *standard-output* "prepend-fundamental-mode called with args: ~A~%" args))
+  (format *standard_output* "prepend-fundamental-mode called with args: ~A~%" args))

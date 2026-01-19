@@ -290,7 +290,7 @@ User input string with whitespace trimmed
 
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+  (when (string-equal "t" (or (uiop:getenv "SKYLINE_DEBUG_BACKTRACE") ""))
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
@@ -452,7 +452,7 @@ effective for next time, you should run Make (which will run Buildapp).
             (go do-over))
           (quit-completely ()
             :report "Quit completely from Skyline-Tool"
-            (bye))))))
+            (bye)))))))
 
 (defun about-skyline-tool (&rest commands)
   "Display help and version information.
@@ -543,13 +543,13 @@ See COPYING for details
          (*game-title* (cdr (assoc :*game project-data)))
          (*part-number*  (cdr (assoc :*part-number project-data)))
          (*studio* (cdr (assoc :*studio project-data)))
-          (*publisher* (cdr (assoc :*publisher project-data)))
-          (*machine* (cdr (assoc :*machine project-data)))
-          (*sound* (cdr (assoc :*sound project-data)))
-          (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
-          (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
-          (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
-          (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+         (*publisher* (cdr (assoc :*publisher project-data)))
+         (*machine* (cdr (assoc :*machine project-data)))
+         (*sound* (cdr (assoc :*sound project-data)))
+         (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
+         (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
+         (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
+         (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
     (format *trace-output* "~&Running for port: ~a" port-label)
     (destructuring-bind (verb &rest args) subcommand
       (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
