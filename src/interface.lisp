@@ -529,7 +529,7 @@ See COPYING for details
 (defun set-port (port-label &rest argv)
   (let ((*machine* (machine-number-by-tag port-label)))
     (format *trace-output* "~& Switched to machine ~a" (machine-long-name))
-    (run-for-port port-label argv)))
+    (apply #'run-for-port port-label port-label argv)))
 
 (defun run-for-port (port-label &rest argv)
   (let* ((json-path (when port-label
@@ -553,24 +553,22 @@ See COPYING for details
       (declare (ignore _self))
       (format t "~&verb ~s invocation ~s" verb invocation)
       (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-        (progn
-          (format t " = ~s" fun)
-          (flet ((runner ()
-                   (format t "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                           (substitute #\Space #\- verb)
-                           invocation)
-                   (finish-output)
-                   (run-for-port fun invocation)
-                   (fresh-line)))
-            (if #+mcclim (x11-p) #-mcclim nil
-                #+mcclim (clim-simple-echo:run-in-simple-echo
-                          #'runner
-                          :process-name
-                          (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                                  (substitute #\Space #\- verb)
-                                  invocation))
-                #-mcclim nil
-                (runner))))
+        (flet ((runner ()
+                 (format t "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                         (substitute #\Space #\- verb)
+                         invocation)
+                 (finish-output)
+                 (apply fun invocation)
+                 (finish-output)))
+          (if #+mcclim (x11-p) #-mcclim nil
+              #+mcclim (clim-simple-echo:run-in-simple-echo
+                        #'runner
+                        :process-name
+                        (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                                (substitute #\Space #\- verb)
+                                invocation))
+              #-mcclim nil
+              (runner)))
         (error "Command not recognized: “~a” (try “help”)" verb))
       (fresh-line))))
 

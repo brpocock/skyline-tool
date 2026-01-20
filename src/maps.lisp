@@ -643,13 +643,12 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
   (setf *maps-ids* (make-hash-table :test 'equal)
         *maps-display-names* (make-hash-table :test 'equal)
         *maps-dock-ids* (make-hash-table :test 'equal)
-        *dock-ids-maps* (make-hash-table :test 'equal)) 
+        *dock-ids-maps* (make-hash-table :test 'equal))
   (let* ((page (ss->lol (first (read-ods-into-lists table)))))
     (dolist (row page)
       (destructuring-bind (&key island full-name display-name id dock-id
                            &allow-other-keys)
           row
-        (format t "~& island full name ~a id ~s" full-name id)
         (when full-name
           (let ((segment-name
                   (remove #\_ (concatenate 'string

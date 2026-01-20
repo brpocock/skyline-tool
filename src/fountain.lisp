@@ -3424,21 +3424,21 @@ code for the game's scripting engine.
   (member *machine* '(2600 7800 2609))) ; VCS (2600), 7800, Intellivision (2609)
 
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
-  (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
+  (format nil "~10t.byte $~2,'0x" (parse-number (getf actor :character-id))))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
+      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-pitch)) 90))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
+      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-bend)) 5))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
+      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-speed)) 90))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))
