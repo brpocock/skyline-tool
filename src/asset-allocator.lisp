@@ -634,7 +634,8 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (:|CGB| 359020)
     (:|5200| 5200)
     (:|7800| 7800)
-    (:|ClcV| 9918)))
+    (:|ClcV| 9918)
+    ((:nil :|nil|) nil)))
 
 (defun include-paths-for-current-bank (&key cwd testp)
   "Return a list of directories to search for included files in the current bank.
@@ -965,7 +966,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
                     :type "xcf")))
    (all-portable-assets)))
 
-(defun asset->object-name (asset-indicator &key (video *region*))
+(defun asset->object-name (asset-indicator &key (video (when (boundp *region*) *region*)))
   (let ((machine-dir (machine-directory-name)))
     (ecase *machine*
       (7800 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
@@ -1462,7 +1463,7 @@ exit
         (when (= *bank* *last-bank*)
           (format t "~%
 Object/Bank~(~2,'0x~).Test.o.LABELS.txt: Object/Bank~(~:*~2,'0x~).Test.o
-	$(MAKE) -f Source/Generated/Makefile $<
+	$(MAKE) -f Source/Generated/${PORT}/Makefile $<
 
 Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt
 	bin/skyline-tool --port ${PORT} labels-to-include Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt \\
@@ -1667,17 +1668,19 @@ mentioned in the top-level Makefile."
                          :directory (list :relative "Source" "Generated" (machine-directory-name))
                          :name "Makefile")
                         :if-exists :supersede)
-    (write-makefile-header)
-    (write-makefile-for-bare-assets)
-    (write-makefile-for-tilesets)
-    (write-makefile-for-art)
-    (write-makefile-for-blobs)
-    (write-makefile-test-target)
-    (write-test-header-script)
-    (write-makefile-test-banks)
+    (let ((*region* nil))
+      (write-makefile-header)
+      (write-makefile-for-bare-assets)
+      (write-makefile-for-tilesets)
+      (write-makefile-for-art)
+      (write-makefile-for-blobs)
+      (write-makefile-test-target)
+      (write-test-header-script)
+      (write-makefile-test-banks))
     (dolist (build +all-builds+)
       (dolist (video (supported-video-types))
-        (let ((*last-bank* (1- (number-of-banks build video))))
+        (let ((*region* video)
+              (*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
           (write-header-script :build build :video video)
           (dotimes (*bank* (1+ *last-bank*))

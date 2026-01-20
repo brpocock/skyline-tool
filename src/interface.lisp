@@ -535,40 +535,44 @@ See COPYING for details
   (let* ((json-path (when port-label
                       (merge-pathnames (format nil "Project.~a.json" port-label)
                                        (project-root))))
-         (project-data (and json-path (json:decode-json-from-source json-path)))
+         (project-data (and json-path (probe-file json-path) (json:decode-json-from-source json-path)))
          (*project.json* project-data)
-         (*game-title* (cdr (assoc :*game project-data)))
-         (*part-number*  (cdr (assoc :*part-number project-data)))
-         (*studio* (cdr (assoc :*studio project-data)))
-         (*publisher* (cdr (assoc :*publisher project-data)))
-         (*machine* (or (cdr (assoc :*machine project-data)) *machine*))
-         (*sound* (cdr (assoc :*sound project-data)))
-         (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
-         (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
-         (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
-         (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+         (*game-title* (when project-data (cdr (assoc :*game project-data))))
+         (*part-number* (when project-data (cdr (assoc :*part-number project-data))))
+         (*studio* (when project-data (cdr (assoc :*studio project-data))))
+         (*publisher* (when project-data (cdr (assoc :*publisher project-data))))
+         (*machine* (or (when project-data (cdr (assoc :*machine project-data))) *machine*))
+         (*sound* (when project-data (cdr (assoc :*sound project-data))))
+         (*common-palette* (mapcar #'intern (when project-data
+                                              (cdr (assoc :*common-palette project-data)))))
+         (*default-skin-color* (when project-data
+                                 (cdr (assoc :*default-skin-color project-data))))
+         (*default-hair-color* (when project-data
+                                 (cdr (assoc :*default-hair-color project-data))))
+         (*default-clothes-color* (when project-data
+                                    (cdr (assoc :*default-clothes-color project-data)))))
     (when port-label
       (format *trace-output* "~&Running for port: ~a" port-label))
     (destructuring-bind (_self verb &rest invocation) argv
       (declare (ignore _self))
-      (format t "~&verb ~s invocation ~s" verb invocation)
       (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
         (flet ((runner ()
-                 (format t "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                         (substitute #\Space #\- verb)
+                 (format t "Skyline-Tool: running ~:(~a~)~{ ~a~}~%"
+                         (title-case (string verb))
                          invocation)
                  (finish-output)
                  (apply fun invocation)
+                 (format t "~&End of line.~%")
                  (finish-output)))
-          (if #+mcclim (x11-p) #-mcclim nil
-              #+mcclim (clim-simple-echo:run-in-simple-echo
+          #+mcclim (if (and nil (x11-p))
+                       (clim-simple-echo:run-in-simple-echo
                         #'runner
                         :process-name
                         (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
                                 (substitute #\Space #\- verb)
                                 invocation))
-              #-mcclim nil
-              (runner)))
+                       (runner))
+          #-mcclim (runner))
         (error "Command not recognized: “~a” (try “help”)" verb))
       (fresh-line))))
 

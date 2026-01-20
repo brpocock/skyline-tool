@@ -1,5 +1,5 @@
 ;;; Phantasia SkylineTool/tests/package.lisp
-;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+;;;; Copyright © 2026 Interworldly Adventuring, LLC.
 
 (defpackage :skyline-tool/test
   (:use :cl :skyline-tool :fiveam)
@@ -22,20 +22,18 @@
            #:make-test-stamp))
 
 (defparameter *test-file*
-  (let* ((platform-dir (if (and (boundp 'skyline-tool:*machine*)
-                                skyline-tool:*machine*)
+  (let* ((platform-dir (if (and (boundp 'skyline-tool::*machine*)
+                                skyline-tool::*machine*)
                            (skyline-tool::machine-directory-name)
                            "test"))
-        ;; Use cryptographically secure random identifier
-        (random-id (format nil "~16,'0x"
-                          (or (ignore-errors
-                                (with-open-file (urandom "/dev/urandom" :element-type '(unsigned-byte 8))
-                                  (let ((bytes (make-array 8 :element-type '(unsigned-byte 8))))
-                                    (read-sequence bytes urandom)
-                                    (loop for i from 0 below 8
-                                          sum (ash (aref bytes i) (* i 8))))))
-                              (random (expt 2 64)))))
-         (path (format nil "Object/~a/tmpnam-~a.bin" platform-dir random-id)))
+         ;; Use cryptographically secure random identifier
+         (random-id (format nil "~16,'0x"
+                            (with-open-file (urandom "/dev/urandom" :element-type '(unsigned-byte 8))
+                              (let ((bytes (make-array 8 :element-type '(unsigned-byte 8))))
+                                (read-sequence bytes urandom)
+                                (loop for i from 0 below 8
+                                      sum (ash (aref bytes i) (* i 8)))))))
+         (path (format nil "Object/~a/tmp.~a.o" platform-dir random-id)))
     (ensure-directories-exist path)
     path)
   "Default test file path for file I/O tests")

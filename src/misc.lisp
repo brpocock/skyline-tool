@@ -996,7 +996,7 @@ inventory_end = *
     (9918 "ColecoVision")))
 
 (defun machine-long-name ()
-  (ecase *machine*
+  (case *machine*
     (1 "Oric-1")
     (2 "Apple ][ (][plus, //c, //e)")
     (8 "Nintendo Entertainment System")
@@ -1017,7 +1017,8 @@ inventory_end = *
     (3010 "Sega Master System")
     (5200 "Atari Video SuperSystem CX-5200")
     (7800 "Atari Video ProSystem CX-7800")
-    (9918 "ColecoVision")))
+    (9918 "ColecoVision")
+    (otherwise "no particular system at all")))
 
 (defun machine-valid-p (&optional (machine *machine* machine-provided-p))
   "Check if MACHINE is a valid machine type.
