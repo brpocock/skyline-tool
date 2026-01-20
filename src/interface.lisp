@@ -7,8 +7,8 @@
 (defvar *invocation*
   (list :--help 'about-skyline-tool
         :-h 'about-skyline-tool
-        :--port 'run-for-port
-        :-p 'run-for-port
+        :--port 'set-port
+        :-p 'set-port
         :help 'about-skyline-tool
         :allocate-assets 'allocate-assets
         :atari800-label-file 'atari800-label-file
@@ -79,23 +79,16 @@ Loads test system, runs tests, exits the Lisp process
 
 @xref{function:command}, @xref{function:run-repl}."
   (declare (ignore args))
-  (handler-case
-      (progn
-          (asdf:load-system :skyline-tool/test)
-        ;; Run all tests and exit with appropriate code
-        (let ((results (fiveam:run-all-tests)))
-          (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
-            (format *error-output* "~&Results: ~d passed, ~d failed, ~d skipped"
-                    passed failed skipped)
-            (if (and passed (zerop failed) (zerop skipped))
-                (progn
-                  (format t "~&All tests passed~%")
-                  (sb-ext:exit :code 0))
-                (progn
-                  (format t "~&Tests failed: ~d test(s) failed~%" failed)
-                  (sb-ext:exit :code 1))))))
-    (error (e)
-      (format t "~&Failed to load or run tests: ~a~%" e)
+  (asdf:load-system :skyline-tool/test)
+  ;; Run all tests and exit with appropriate code
+  (let ((results (fiveam:run-all-tests)))
+    (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+      (format *error-output* "~&Results: ~d passed, ~d failed, ~d skipped"
+              passed failed skipped)
+      (when (and passed (zerop failed) (zerop skipped))
+        (format t "~&All tests passed~%")
+        (sb-ext:exit :code 0))
+      (format t "~&Tests failed: ~d test(s) failed~%" failed)
       (sb-ext:exit :code 1))))
 
 (defun run-repl ()
@@ -382,19 +375,17 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
 
 (defmacro with-happy-restarts (&body body)
   `(tagbody do-over
-      (let ((*system-debugger* *debugger-hook*)
-            (*debugger-hook* (or
-                              #+mcclim (when  (x11-p) #'clim-debugger:debugger)
-                              (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
-                              *debugger-hook*)))
-        (if (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-            ;; When debug backtrace is requested, let errors go to the other debugger
-            ,@body
-            ;; Otherwise, provide the normal restart functionality
-            (restart-case
-                (unwind-protect
-                     (progn ,@body)
-                  (force-output *trace-output*))
+      (let* ((*system-debugger* *debugger-hook*)
+             (*debugger-hook* (or
+                               (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+                                 *system-debugger*)
+                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
+                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
+                               *debugger-hook*)))
+        (restart-case
+            (unwind-protect
+                 (progn ,@body)
+              (force-output *trace-output*))
           (do-over ()
             :report "Try again, from the top"
             (go do-over))
@@ -452,7 +443,7 @@ effective for next time, you should run Make (which will run Buildapp).
             (go do-over))
           (quit-completely ()
             :report "Quit completely from Skyline-Tool"
-            (bye)))))))
+            (bye))))))
 
 (defun about-skyline-tool (&rest commands)
   "Display help and version information.
@@ -535,26 +526,53 @@ See COPYING for details
   (clim-debugger:with-debugger ()
     (launcher)))
 
-(defun run-for-port (port-label &rest subcommand)
-  (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
-                                     (project-root)))
-         (project-data (json:decode-json-from-source json-path))
+(defun set-port (port-label &rest argv)
+  (let ((*machine* (machine-number-by-tag port-label)))
+    (format *trace-output* "~& Switched to machine ~a" (machine-long-name))
+    (run-for-port port-label argv)))
+
+(defun run-for-port (port-label &rest argv)
+  (let* ((json-path (when port-label
+                      (merge-pathnames (format nil "Project.~a.json" port-label)
+                                       (project-root))))
+         (project-data (and json-path (json:decode-json-from-source json-path)))
          (*project.json* project-data)
          (*game-title* (cdr (assoc :*game project-data)))
          (*part-number*  (cdr (assoc :*part-number project-data)))
          (*studio* (cdr (assoc :*studio project-data)))
          (*publisher* (cdr (assoc :*publisher project-data)))
-         (*machine* (cdr (assoc :*machine project-data)))
+         (*machine* (or (cdr (assoc :*machine project-data)) *machine*))
          (*sound* (cdr (assoc :*sound project-data)))
          (*common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data))))
          (*default-skin-color* (cdr (assoc :*default-skin-color project-data)))
          (*default-hair-color* (cdr (assoc :*default-hair-color project-data)))
          (*default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
-    (format *trace-output* "~&Running for port: ~a" port-label)
-    (destructuring-bind (verb &rest args) subcommand
+    (when port-label
+      (format *trace-output* "~&Running for port: ~a" port-label))
+    (destructuring-bind (_self verb &rest invocation) argv
+      (declare (ignore _self))
+      (format t "~&verb ~s invocation ~s" verb invocation)
       (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-        (apply fun args)
-        (error "Command not recognized: \"~a\" (try \"help\")" verb)))))
+        (progn
+          (format t " = ~s" fun)
+          (flet ((runner ()
+                   (format t "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                           (substitute #\Space #\- verb)
+                           invocation)
+                   (finish-output)
+                   (run-for-port fun invocation)
+                   (fresh-line)))
+            (if #+mcclim (x11-p) #-mcclim nil
+                #+mcclim (clim-simple-echo:run-in-simple-echo
+                          #'runner
+                          :process-name
+                          (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                                  (substitute #\Space #\- verb)
+                                  invocation))
+                #-mcclim nil
+                (runner))))
+        (error "Command not recognized: “~a” (try “help”)" verb))
+      (fresh-line))))
 
 (defun command (argv)
   "Main entry point for Skyline-Tool command-line interface.
@@ -573,11 +591,9 @@ Executes the requested command, may exit the process
   (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
-  (finish-output *trace-output*)
-  (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
-                                           "?"))
-  (finish-output)
+  (unless (or (and (< 1 (length argv)) (string-equal "--port" (second argv)))
+              (and (boundp *machine*) *machine*))
+    (error "No --port specified in ~s and no *MACHINE* value set" argv))
   (let ((sb-impl::*default-external-format* :utf-8)
         (*command-line* (and (< 1 (length argv)) (subseq argv 1))))
     (with-happy-restarts
@@ -587,24 +603,14 @@ Executes the requested command, may exit the process
           (help () :report "Explain how this tool works"
             (print-useful-help)
             (bye))))
-      (destructuring-bind (self verb &rest invocation) argv
-        (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-          (flet ((runner ()
-                   (apply fun (remove-if (curry #'string= self)
-                                         invocation))
-                   (fresh-line)))
-            (if (and #+mcclim (x11-p))
-                #+mcclim
-                (clim-simple-echo:run-in-simple-echo
-                 #'runner
-                 :process-name
-                 (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                         (substitute #\Space #\- verb)
-                         invocation))
-                #-mcclim nil
-                (funcall #'runner)))
-          (error "Command not recognized: “~a” (try “help”)" verb))
-        (fresh-line)))))
+      (when (and (boundp *machine*) *machine*)
+        (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+        (finish-output *trace-output*))
+      (format t "]2;~a — Skyline-Tool" (or (and (< 1 (length argv)) (second argv))
+                                               "?"))
+      (finish-output)
+      (apply #'run-for-port nil argv)
+      (mapcar (curry #'fresh-line) (list *standard-output* *error-output* *trace-output* *query-io*)))))
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))

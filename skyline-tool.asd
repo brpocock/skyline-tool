@@ -42,9 +42,7 @@
                :yacc
                :zip
                )
-
   :encoding :utf-8
-
   :components
   ((:module "src"
     :components ((:file "package")

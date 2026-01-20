@@ -1,7 +1,11 @@
 (in-package :skyline-tool)
 
 (defun make-classes-for-oops (&optional
-                                (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
+                                (class-defs-pathname
+                                 (make-pathname :directory (list :relative "Source" "Code"
+                                                                 (machine-directory-name)
+                                                                 "Classes")
+                                                :name "Classes" :type "Defs")))
   "Generate OOPS class definitions from class specification file.
 
 Processes the Classes.Defs file to generate various output files containing
@@ -241,8 +245,8 @@ Method~aDestroy: .proc
                         finally
                            (when current-class
                              (finalize-oops-class current-class slot-offset))))
-              (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
-                                                :if-exists :supersede)
+                (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
+                                                  :if-exists :supersede)
                   (format inheritance ";;; Class inheritances derived from ~s~2%"
                           (enough-namestring class-defs-pathname))
                   (format inheritance

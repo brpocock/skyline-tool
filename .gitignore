@@ -20,3 +20,4 @@ DEADJOE
 *.mscz.autosave
 .~lock.*
 
+lib/system-index.txt

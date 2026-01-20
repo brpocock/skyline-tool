@@ -637,18 +637,19 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defvar *maps-dock-ids* (make-hash-table :test 'equal))
 (defvar *dock-ids-maps* (make-hash-table :test 'equal))
 
-(defun read-map-ids-table (&optional (table #p"Source/Tables/MapsIndex.ods"))
+(defun read-map-ids-table (&optional (table (merge-pathnames #p"./Source/Tables/MapsIndex.ods"
+                                                             (project-root))))
   (format *trace-output* "~&Reading maps table from “~a”… " (enough-namestring table))
-  (unless (hash-table-p *maps-ids*)
-    (setf *maps-ids* (make-hash-table :test 'equal)
-          *maps-display-names* (make-hash-table :test 'equal)
-          *maps-dock-ids* (make-hash-table :test 'equal)
-          *dock-ids-maps* (make-hash-table :test 'equal)))
+  (setf *maps-ids* (make-hash-table :test 'equal)
+        *maps-display-names* (make-hash-table :test 'equal)
+        *maps-dock-ids* (make-hash-table :test 'equal)
+        *dock-ids-maps* (make-hash-table :test 'equal)) 
   (let* ((page (ss->lol (first (read-ods-into-lists table)))))
     (dolist (row page)
       (destructuring-bind (&key island full-name display-name id dock-id
                            &allow-other-keys)
           row
+        (format t "~& island full name ~a id ~s" full-name id)
         (when full-name
           (let ((segment-name
                   (remove #\_ (concatenate 'string
@@ -660,6 +661,8 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
             (when (not (emptyp dock-id))
               (setf (gethash segment-name *maps-dock-ids*) (parse-integer dock-id)
                     (gethash (parse-integer dock-id) *dock-ids-maps*) segment-name)))))))
+  (unless (plusp (hash-table-count *maps-ids*))
+    (error "~a does not seem to define any maps" (enough-namestring table)))
   (format *trace-output* " … now I know about ~:d map~:p" (hash-table-count *maps-ids*)))
 
 (defun find-locale-id-from-xml (xml)

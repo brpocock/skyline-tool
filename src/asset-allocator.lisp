@@ -605,6 +605,36 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (7800 "7800")
     (9918 "ClcV")))
 
+(defun machine-number-by-tag (tag)
+  (ecase (make-keyword tag)
+    (:|Oric| 1)
+    (:|A2| 2)
+    (:|A3| 3)
+    (:|NES| 8)
+    (:|TG16| 16)
+    (:|VIC20| 20)
+    (:|A2e| 23)
+    (:|C64| 64)
+    (:|ZX81| 81)
+    (:|SNES| 88)
+    (:|C128| 128)
+    (:|Lynx| 200)
+    (:|2gs| 222)
+    (:|BBC| 223)
+    (:|C16| 264)
+    (:|GG| 837)
+    (:|SG1000| 1000)
+    (:|SMD| 1601)
+    (:|Spc| 2068)
+    (:|2600| 2600)
+    (:|Intv| 2609)
+    (:|SMS| 3010)
+    (:|DMG| 35902)
+    (:|CGB| 359020)
+    (:|5200| 5200)
+    (:|7800| 7800)
+    (:|ClcV| 9918)))
+
 (defun include-paths-for-current-bank (&key cwd testp)
   "Return a list of directories to search for included files in the current bank.
 
@@ -629,9 +659,9 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
                          (list :relative "Object" machine-dir "Assets")
                          (list :relative "Source" "Generated" machine-dir)
                          (list :relative "Source" "Generated" machine-dir "Assets"))))
-    (when cwd (appendf includes (list (pathname-directory cwd))))
+    (when cwd (appendf includes (list cwd)))
     (when testp
-      (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests"))))  ;; Platform-specific tests
+      (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))) ;; Platform-specific tests
     (when (probe-file (make-pathname :directory (list :relative "Source" "Code" machine-dir "Banks" bank)
                                      :name bank :type "s"))
       (appendf includes (list (list :relative "Source" "Code" machine-dir "Banks" bank))))

@@ -107,6 +107,8 @@ May issue a warning to *error-output*
 (defun machine-from-filename (file-name)
   "Extract machine identifier from object file pathname FILE-NAME.
 
+FIXME does not work at all correctly
+
 Parses a file path to determine which target machine the file belongs to,
 based on the directory structure convention.
 
