@@ -996,7 +996,7 @@ inventory_end = *
     (9918 "ColecoVision")))
 
 (defun machine-long-name ()
-  (case *machine*
+  (ecase *machine*
     (1 "Oric-1")
     (2 "Apple ][ (][plus, //c, //e)")
     (8 "Nintendo Entertainment System")
@@ -1320,5 +1320,3 @@ then use $f9 (512kiB) banking."
                   (format t "~&~4,'0x ~a" (parse-integer value) label))
                  (t (format *error-output* "~&Can't understand “~a” in line ~d" line line-number))))))
   (fresh-line *error-output*))
-;; Minifont punctuation characters for text processing
-(define-constant +MINIFONT-PUNCTUATION+ " ,.?!/&+-×÷=“”’;:…@❓‘♪©•↑↓←→áâàäāãçčđéêèëēíîìïīłñóôòöōõŕšúûùüūþæœýÿøå¿¡«»ß()000°ªﬁ0ąężćń0ź0" :test #'string=)

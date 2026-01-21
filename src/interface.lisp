@@ -19,8 +19,12 @@
         :compile-index 'compile-index
         :compile-animation-sequences 'compile-animation-sequences
         :compile-art 'compile-art
+        :compile-chaos-character 'compile-chaos-character
         :compile-enemies 'compile-enemies
         :compile-font 'compile-font-command
+        :compile-2600-font-8x16 'compile-2600-font-8x16
+        :compile-2600-playfield 'compile-2600-playfield
+        :compile-batari-48px 'compile-batari-48px-command
         :compile-forth 'compile-forth
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
@@ -62,6 +66,7 @@
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile
+        :write-batari-song 'write-batari-song
         :self-test 'run-self-test))
 
 (defun run-self-test (&rest args)
@@ -163,7 +168,7 @@ User input string with whitespace trimmed
     (finish-output *query-io*)))
 
 (defun prompt-function ()
-  (if (and (tty-xterm-p) #+mcclim (x11-p) #-mcclim nil)
+  (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
        (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
@@ -171,7 +176,7 @@ User input string with whitespace trimmed
       (prompt "provide a value for this restart")))
 
 (defun dialog (title message &rest args)
-  (if (and (tty-xterm-p) (x11-p) #+:mcclim t #-mcclim nil)
+  (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
                       (apply #'format *query-io* message args)

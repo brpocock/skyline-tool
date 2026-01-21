@@ -327,7 +327,24 @@ Used for NES graphics conversion and palette matching on PAL systems
                (161 183 47) (179 200 65) (197 218 82) (214 236 100) (232 254 118) (250 255 136) (255 255 154))
   :test 'equalp)
 
-(define-constant +vcs-pal-palette+ '()) ;; TODO: #1243: #1225
+(define-constant +vcs-pal-palette+
+    '((11 11 11) (51 51 51) (89 89 89) (123 123 123) (153 153 153) (182 182 182) (207 207 207) (230 230 230)
+      (11 11 11) (51 51 51) (89 89 89) (123 123 123) (153 153 153) (182 182 182) (207 207 207) (230 230 230)
+      (59 36 0) (102 71 0) (139 112 0) (172 146 0) (197 174 54) (222 200 94) (247 226 127) (255 241 158)
+      (0 69 0) (0 111 0) (59 146 0) (101 176 9) (133 202 61) (163 227 100) (191 252 132) (213 255 165)
+      (89 0 0) (128 39 0) (161 87 0) (188 121 55) (214 152 95) (238 179 129) (255 206 158) (255 220 189)
+      (0 73 0) (0 114 0) (22 146 22) (69 175 69) (107 201 107) (139 227 139) (169 251 169) (197 255 197)
+      (100 0 18) (137 8 33) (167 61 77) (194 100 114) (220 132 145) (244 163 174) (255 190 202) (255 218 224)
+      (0 61 41) (0 106 72) (4 142 99) (60 170 132) (98 197 162) (131 223 190) (161 248 217) (190 255 233)
+      (85 0 70) (136 0 110) (165 49 141) (193 89 170) (218 124 197) (243 154 223) (255 185 243) (255 212 246)
+      (0 54 81) (0 90 125) (17 126 156) (66 156 184) (104 183 210) (136 210 235) (166 235 255) (195 255 255)
+      (76 0 124) (117 0 157) (147 46 184) (175 87 210) (202 122 235) (228 153 255) (236 183 255) (243 212 255)
+      (0 45 131) (0 62 164) (45 101 191) (86 133 218) (121 162 242) (153 191 255) (183 219 255) (211 245 255)
+      (34 0 150) (82 0 182) (117 56 207) (148 95 232) (177 129 255) (197 160 255) (214 189 255) (232 218 255)
+      (0 0 154) (36 29 182) (80 74 208) (116 111 233) (146 142 255) (177 173 255) (206 202 255) (233 229 255)
+      (11 11 11) (51 51 51) (89 89 89) (123 123 123) (153 153 153) (182 182 182) (207 207 207) (230 230 230)
+      (11 11 11) (51 51 51) (89 89 89) (123 123 123) (153 153 153) (182 182 182) (207 207 207) (230 230 230))
+  :test 'equalp)
 (define-constant +vcs-secam-palette+
     '((0 0 0) (0 0 255) (0 255 0) (0 255 255)
       (255 0 0) (255 0 255) (255 255 0) (255 255 255))
@@ -411,7 +428,7 @@ List of color name strings for the current machine's palette
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-        (2609 +intv-color-names+)))
+    (2609 +intv-color-names+)))
 
 (defun square (n)
   "Calculate the square of N.
@@ -550,6 +567,21 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
              (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
           use))))
 
+(defun find-nearest-palette-color (rgb-color)
+  "Find the nearest Atari 2600 palette color to the given RGB color using DUFY.
+   
+   RGB-COLOR should be a list (r g b) where each component is 0-255.
+   Returns the palette index (0-127 for NTSC, 0-127 for PAL, 0-7 for SECAM).
+   Uses machine-palette which properly handles *region*."
+  (destructuring-bind (r g b) rgb-color
+    (check-type r (integer 0 #xff))
+    (check-type g (integer 0 #xff))
+    (check-type b (integer 0 #xff))
+    (destructuring-bind (nearest-r nearest-g nearest-b)
+        (find-nearest-in-palette (machine-palette) r g b)
+      (or (position (list nearest-r nearest-g nearest-b) (machine-palette) :test 'equalp)
+          0))))
+
 (defun png->palette (height width rgb &optional α)
   (check-type height (integer 0 *))
   (check-type width (integer 0 *))
@@ -572,6 +604,334 @@ PNG image in an unsuitable format:
                                                 (aref rgb x y 1)
                                                 (aref rgb x y 2))))))
       image)))
+
+(define-constant +chaos-repeat-patterns+
+    #(#()
+      #(1 1 1 1 1 1 1 1)
+      #(1 2 1 2 1 2 1 2)
+      #(1 2 3 2 1 2 3 2)
+      #(1 2 3 4 1 2 3 4)
+      #(1 2 3 4 5 2 3 4)
+      #(1 2 3 4 5 6 3 4)
+      #(1 2 3 4 5 6 7 4)
+      #(1 2 3 4 5 6 7 8))
+  :test 'equalp)
+
+(defun chaos-frame->key (frame-vector)
+  (with-output-to-string (stream)
+    (loop for byte across frame-vector
+          do (format stream "~2,'0X" byte))))
+
+(defun chaos-byte->binary-string (byte)
+  (concatenate 'string "%" (format nil "~8,'0B" byte)))
+
+(defun chaos-extract-frame (palette frame-index pose-index)
+  (let ((frame (make-array 16 :element-type '(unsigned-byte 8)))
+        (nonzero nil))
+    (loop for row from 0 below 16
+          for destination = (- 15 row)
+          for global-y = (+ (* pose-index 16) row)
+          do (let ((byte 0))
+               (loop for column from 0 below 8
+                     for global-x = (+ (* frame-index 8) column)
+                     for palette-value = (and (< global-x (array-dimension palette 0))
+                                               (< global-y (array-dimension palette 1))
+                                               (aref palette global-x global-y))
+                     do (when (and palette-value (plusp palette-value))
+                          (setf nonzero t)
+                          (setf byte (logior byte (ash 1 (- 7 column))))))
+               (setf (aref frame destination) byte)))
+    (values frame nonzero)))
+
+(defun ensure-chaos-frame-index (frame-vector frame-cache frames)
+  (let* ((key (chaos-frame->key frame-vector))
+         (existing (gethash key frame-cache)))
+    (if existing
+        existing
+        (let ((index (vector-push-extend (copy-seq frame-vector) frames)))
+          (setf (gethash key frame-cache) index)
+          index))))
+
+(defun chaos-previous-value (row position)
+  (loop for idx downfrom (1- position) downto 0
+        for value = (aref row idx)
+        when value do (return value)))
+
+(defun fill-chaos-row-indices (row)
+  (let* ((length (length row))
+         (leading-count (loop for idx from 0 below length
+                              while (aref row idx)
+                              count 1)))
+    (dotimes (position length)
+      (when (null (aref row position))
+        (let* ((pattern (and (plusp leading-count)
+                             (< leading-count (length +chaos-repeat-patterns+))
+                             (aref +chaos-repeat-patterns+ leading-count)))
+               (value (cond
+                        ((and pattern (< position (length pattern)))
+                         (let* ((reference (1- (aref pattern position)))
+                                (lookup (and (<= 0 reference)
+                                             (< reference length)
+                                             (aref row reference))))
+                           (or lookup (chaos-previous-value row position))))
+                        (t (chaos-previous-value row position)))))
+          (unless value
+            (error "Unable to infer ChaosFight frame index for column ~d" position))
+          (setf (aref row position) value))))
+    row))
+
+(defun playfield-row->string (palette width y)
+  (let ((chars (make-string width)))
+    (dotimes (x width)
+      (let ((value (and (< x (array-dimension palette 0))
+                        (< y (array-dimension palette 1))
+                        (aref palette x y))))
+        (setf (aref chars x)
+              (if (and value (not (zerop value)))
+                  #\X
+                  #\.))))
+    chars))
+
+(defun dominant-playfield-color (palette width y)
+  (let ((counts (make-hash-table :test 'eql))
+        (best-color 0)
+        (best-count 0))
+    (dotimes (x width)
+      (let ((value (and (< x (array-dimension palette 0))
+                        (< y (array-dimension palette 1))
+                        (aref palette x y))))
+        (when (and value (not (zerop value)))
+          (let* ((count (incf (gethash value counts 0))))
+            (when (> count best-count)
+              (setf best-count count
+                    best-color value))))))
+    (if (plusp best-count) best-color 0)))
+
+(defun format-playfield-color (color)
+  (format nil "$~2,'0X" color))
+
+(defun playfield-color-byte (color region)
+  (let ((byte (logand color #xff)))
+    (ecase region
+      (:secam (let* ((index (mod byte 8))
+                     (nybble (* 2 index)))
+                (logior (ash nybble 4) nybble)))
+      (:ntsc byte)
+      (:pal byte))))
+
+(defun compile-2600-font-8x16 (output-bas png-path)
+  (let* ((input-path (uiop:ensure-pathname png-path))
+         (png (progn
+                (with-open-file (stream input-path :if-does-not-exist :error)
+                  (declare (ignore stream)))
+                (png-read:read-png-file input-path)))
+         (width (png-read:width png))
+         (height (png-read:height png)))
+    (unless (and (> width 0) (zerop (mod width 8)))
+      (error "Fonts must be a positive multiple of 8 pixels wide; got ~a" width))
+    (unless (and (> height 0) (zerop (mod height 16)))
+      (error "Fonts must be a positive multiple of 16 pixels tall; got ~a" height))
+    (let* ((*machine* 2600)
+           (*region* :ntsc)
+           (palette (png->palette height width (png-read:image-data png)
+                                   (png-read:transparency png)))
+           (chars-per-row (/ width 8))
+           (char-rows (/ height 16))
+           (char-count (* chars-per-row char-rows))
+           (output-path (uiop:ensure-pathname output-bas))
+           (base-name (pathname-base-name input-path))
+           (label-root (cl-change-case:pascal-case base-name))
+           (font-label (format nil "SetFont~a" label-root))
+           (data-label "FontData"))
+      (ensure-directories-exist output-path)
+      (with-open-file (stream output-path
+                              :direction :output
+                              :if-exists :supersede
+                              :if-does-not-exist :create)
+        (format stream "~a" font-label)
+        (format stream "~%~10tdata ~a" data-label)
+        (loop for char from 0 below char-count
+              for char-x = (mod char chars-per-row)
+              for char-y = (floor char chars-per-row)
+              do (loop for row from 15 downto 0
+                       for y = (+ (* char-y 16) row)
+                       do (let ((value 0))
+                            (dotimes (col 8)
+                              (let* ((x (+ (* char-x 8) col))
+                                     (pixel (and (< x (array-dimension palette 0))
+                                                 (< y (array-dimension palette 1))
+                                                 (aref palette x y))))
+                                (when (and pixel (not (zerop pixel)))
+                                  (setf value (logior value (ash 1 (- 7 col)))))))
+                            (format stream "~%~12t%~8,'0B" value))))
+        (format stream "~%end")
+        (format stream "~%~%"))
+      output-bas)))
+
+(defun write-chaos-character-output (stream character-name frames frame-map output-path source-path)
+  (let* ((target-path (uiop:ensure-pathname output-path))
+         (source-pathname (uiop:ensure-pathname source-path))
+         (file-name (enough-namestring target-path))
+         (source-name (enough-namestring source-pathname))
+         (label (format nil "~@[~a~]" character-name))
+         (frame-label (format nil "~aFrames" label))
+         (map-label (format nil "~aFrameMap" label)))
+    (format stream "~10trem =================================================")
+    (format stream "~%~10trem File: ~a" file-name)
+    (format stream "~%~10trem Source: ~a" source-name)
+    (format stream "~%~10trem DO NOT EDIT. Generated by compile-chaos-character.")
+    (format stream "~%~10tasm")
+    (format stream "~%~a:" frame-label)
+    (let ((frame-count (length frames)))
+      (dotimes (frame-index frame-count)
+        (let ((frame-vector (aref frames frame-index)))
+          (dotimes (row 16)
+            (format stream "~%~12tBYTE ~a"
+                    (chaos-byte->binary-string (aref frame-vector row)))))
+        (when (< (1+ frame-index) frame-count)
+          (format stream "~%"))))
+    (format stream "~%end")
+    (format stream "~%~10tasm")
+    (format stream "~%~a:" map-label)
+    (dotimes (pose 16)
+      (let ((pose-values (aref frame-map pose)))
+        (format stream "~%~12tBYTE ~{~d~^, ~}" (coerce pose-values 'list))))
+    (format stream "~%end")
+    (format stream "~%~%")))
+
+(defun compile-2600-playfield (output-bas png-path &optional tv-standard)
+  (declare (ignore tv-standard))
+  (let* ((input-path (uiop:ensure-pathname png-path))
+         (png (progn
+                (with-open-file (stream input-path :if-does-not-exist :error)
+                  (declare (ignore stream)))
+                (png-read:read-png-file input-path)))
+         (width (png-read:width png))
+         (height (png-read:height png))
+         (rgb (png-read:image-data png))
+         (alpha (png-read:transparency png)))
+    (unless (member width '(16 32))
+      (error "Playfields must be 16 or 32 pixels wide; got ~a" width))
+    (unless (<= 6 height 32)
+      (error "Playfields must be between 6 and 32 rows; got ~a" height))
+    (let* ((target-path (uiop:ensure-pathname output-bas))
+           (name (pathname-name target-path))
+           (segments (uiop:split-string name :separator "."))
+           (maybe-region (when segments (string-upcase (car (last segments)))))
+           (has-explicit-region (member maybe-region '("NTSC" "PAL" "SECAM") :test #'string=))
+           (base-segments (if has-explicit-region
+                              (butlast segments)
+                              segments))
+           (base-name (if base-segments
+                          (format nil "~{~a~^.~}" base-segments)
+                          name))
+           (type (or (pathname-type target-path) "bas"))
+           (directory (pathname-directory target-path))
+           (host (pathname-host target-path))
+           (device (pathname-device target-path))
+           (label-root (cl-change-case:pascal-case (pathname-base-name input-path))))
+      (loop for region in '(:ntsc :pal :secam)
+            for conversion-region = (if (and (eq region :pal)
+                                             (or (null +vcs-pal-palette+)
+                                                 (null (machine-palette 2600 :pal))))
+                                         :ntsc
+                                         region)
+            for output-path = (if has-explicit-region
+                                   (make-pathname :host host
+                                                  :device device
+                                                  :directory directory
+                                                  :name (format nil "~a.~a" base-name (string-upcase (symbol-name region)))
+                                                  :type type)
+                                   (if (eq region :ntsc)
+                                       target-path
+                                       (make-pathname :host host
+                                                      :device device
+                                                      :directory directory
+                                                      :name (format nil "~a.~a" base-name (string-upcase (symbol-name region)))
+                                                      :type type)))
+            for label = (format nil "SetPlayfield~a~a"
+                                 label-root
+                                 (string-upcase (symbol-name region)))
+            do (let* ((*machine* 2600)
+                      (*region* conversion-region)
+                      (palette (png->palette height width rgb alpha))
+                      (rows (loop for y from 0 below height
+                                  collect (playfield-row->string palette width y)))
+                      (color-indices (loop for y from 0 below height
+                                           collect (dominant-playfield-color palette width y)))
+                      (color-bytes (mapcar (lambda (idx)
+                                             (playfield-color-byte idx region))
+                                           color-indices)))
+                 (ensure-directories-exist output-path)
+                 (with-open-file (stream output-path
+                                         :direction :output
+                                         :if-exists :supersede
+                                         :if-does-not-exist :create)
+                   (format stream "~a" label)
+                   (format stream "~%~10tplayfield:")
+                   (dolist (row rows)
+                     (format stream "~%~10t~a" row))
+                   (format stream "~%end")
+                   (format stream "~%~10tpfcolors:")
+                   (dolist (byte color-bytes)
+                     (format stream "~%~10t~a" (format-playfield-color byte)))
+                   (format stream "~%end")
+                   (format stream "~%~10treturn~%~%"))))
+      output-bas)))
+
+(defun compile-chaos-character (output-bas png-path)
+  (let* ((png-pathname (uiop:ensure-pathname png-path))
+         (png (progn
+                (with-open-file (stream png-pathname :if-does-not-exist :error)
+                  (declare (ignore stream)))
+                (png-read:read-png-file png-pathname)))
+         (width (png-read:width png))
+         (height (png-read:height png)))
+    (unless (= width 64)
+      (error "ChaosFight character sprites must be 64 pixels wide; got ~a" width))
+    (unless (= height 256)
+      (error "ChaosFight character sprites must be 256 pixels tall; got ~a" height))
+    (let* ((palette (png->palette height width (png-read:image-data png)
+                                  (png-read:transparency png)))
+           (frames (make-array 0 :adjustable t :fill-pointer 0))
+           (frame-cache (make-hash-table :test 'equal))
+           (frame-map (make-array 16)))
+      (dotimes (pose 16)
+        (let ((row (make-array 8 :initial-element nil)))
+          (dotimes (frame 8)
+            (multiple-value-bind (frame-vector nonzero-p)
+                (chaos-extract-frame palette frame pose)
+              (when nonzero-p
+                (setf (aref row frame)
+                      (ensure-chaos-frame-index frame-vector frame-cache frames)))))
+          (cond
+            ((every #'null row)
+             (if (plusp pose)
+                 (setf row (copy-seq (aref frame-map (1- pose))))
+                 (let ((blank-index (ensure-chaos-frame-index
+                                     (make-array 16 :element-type '(unsigned-byte 8)
+                                                 :initial-element 0)
+                                     frame-cache frames)))
+                   (dotimes (idx 8)
+                     (setf (aref row idx) blank-index)))))
+            (t
+             (fill-chaos-row-indices row)))
+          (setf (aref frame-map pose) (copy-seq row))))
+      (let ((first-frame (aref frames 0)))
+        (when (every #'zerop first-frame)
+          (error "ChaosFight sprite ~a has blank action 0 frame 0"
+                 (pathname-name (uiop:ensure-pathname png-path)))))
+      (let* ((base-name (or (pathname-name (uiop:ensure-pathname png-path)) "Character"))
+             (character-name (cl-change-case:pascal-case base-name))
+             (output-path (uiop:ensure-pathname output-bas)))
+        (ensure-directories-exist output-path)
+        (with-open-file (stream output-path
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          (write-chaos-character-output stream character-name frames frame-map output-path png-path)))
+      output-bas)))
+
 
 (defun extract-region (original left top right bottom)
   (let ((copy (make-array (list (1+ (- right left)) (1+ (- bottom top)))
@@ -998,6 +1358,204 @@ Shape:~{~{~a~}~2%~}
                           (mapcar #'atari-colu-string palette))
                         colors)))
       (format *trace-output* "~% Done writing to ~A" out-file-name))))
+
+(defun compile-batari-48px-command (png-file output-bas &rest args)
+  "Command-line wrapper for compile-batari-48px.
+   Arguments: PNG-FILE OUTPUT-BAS [titlescreen-kernel-p] [tv-standard]
+   If third arg is 't' or 'T', enables titlescreen kernel mode.
+   If fourth arg exists, uses it as TV standard (:ntsc, :pal, :secam)."
+  (let* ((titlescreen-kernel-p (and args (string-equal (first args) "t")))
+         (tv-standard (cond ((and args (>= (length args) 2))
+                            (let ((std (string-upcase (second args))))
+                              (cond ((string= std "NTSC") :ntsc)
+                                    ((string= std "PAL") :pal)
+                                    ((string= std "SECAM") :secam)
+                                    (t :ntsc))))
+                           (t :ntsc))))
+    (compile-batari-48px png-file output-bas
+                        :titlescreen-kernel-p titlescreen-kernel-p
+                        :tv-standard tv-standard)))
+
+(defun compile-batari-48px (png-file output-bas &key (titlescreen-kernel-p nil) (tv-standard :ntsc))
+  "Compile a 48×42 pixel PNG bitmap to batariBASIC data format.
+   Output format: 6 columns × 42 bytes, inverted-y (bottom-to-top),
+   one byte per row, then double-newline before next column.
+   Binary format: %00000000 with NO remarks inside data block.
+   
+   When TITLESCREEN-KERNEL-P is T:
+   - Extracts color-per-line data from source PNG
+   - Uses ×2 drawing style (double-height mode, 42 rows → 84 scanlines)
+   - Outputs color data for each row (each row becomes 2 scanlines)
+   - Output format suitable for titlescreen kernel minikernel
+   - Determines minikernel slot (1, 2, or 3) from output filename:
+     * Art.AtariAge.s → 48x2_1 (AtariAge logo)
+     * Art.AtariAgeText.s → 48x2_2 (AtariAge text, replaces Interworldly on Publisher)
+     * Art.Interworldly.s → 48x2_2 (Interworldly, conflicts with AtariAgeText - not currently used)
+     * Art.ChaosFight.s → 48x2_3 (ChaosFight logo)
+   
+   Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
+  (let* ((input-path (uiop:ensure-pathname png-file))
+         (png (progn
+                (with-open-file (stream input-path :if-does-not-exist :error)
+                  (declare (ignore stream)))
+                (png-read:read-png-file input-path)))
+         (width (png-read:width png))
+         (height (png-read:height png))
+         (rgb (png-read:image-data png))
+         (alpha (png-read:transparency png))
+         (output-path (uiop:ensure-pathname output-bas))
+         (output-name (pathname-name output-path))
+         ;; Determine minikernel slot from output filename
+         (kernel-slot (cond ((search "AtariAgeText" output-name :test #'string-equal)
+                            2)  ; AtariAgeText uses slot 2
+                           ((or (search "AtariAge" output-name :test #'string-equal)
+                                (search "Publisher" output-name :test #'string-equal))
+                            1)  ; AtariAge logo uses slot 1
+                           ((or (search "Interworldly" output-name :test #'string-equal)
+                                (search "Author" output-name :test #'string-equal))
+                            4)  ; Interworldly uses slot 4
+                           ((or (search "ChaosFight" output-name :test #'string-equal)
+                                (search "Title" output-name :test #'string-equal))
+                            3)  ; ChaosFight uses slot 3
+                           (t 1)))  ; Default to slot 1
+         (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot))
+         ;; Determine page address for bitmap data (pack four bitmaps on adjacent pages)
+         (page-address (cond ((= kernel-slot 1)
+                             "$f100")  ; AtariAge at $f100
+                            ((= kernel-slot 2)
+                             "$f200")  ; AtariAgeText at $f200
+                            ((= kernel-slot 3)
+                             "$f300")  ; ChaosFight at $f300
+                            ((= kernel-slot 4)
+                             "$f400")  ; Author at $f400
+                            (t
+                             "$f100"))))  ; Default to $f100
+    (unless (= width 48)
+      (error "Bitmap must be 48 pixels wide; got ~a" width))
+    (unless (= height 42)
+      (error "Bitmap must be 42 pixels tall; got ~a" height))
+    (let* ((*machine* 2600)
+           (*region* tv-standard)
+           (palette (png->palette height width rgb alpha))
+           (pixels (make-array (list width height)
+                              :element-type '(unsigned-byte 8)))
+           (label-name (cl-change-case:pascal-case (pathname-base-name input-path))))
+      ;; Convert RGB to 1bpp bitmap (black/white) for shape data
+      (loop for y from 0 below height
+            do (loop for x from 0 below width
+                     do (let ((r (aref rgb x y 0))
+                              (g (aref rgb x y 1))
+                              (b (aref rgb x y 2))
+                              (a (if alpha (aref alpha x y) 255)))
+                          (setf (aref pixels x y)
+                                (if (and (>= a 128)
+                                         (> (+ r g b) (* 3 128)))
+                                    1 0)))))
+      ;; Extract color-per-line data if titlescreen kernel mode
+      (let* ((shape (48px-array-to-bytes pixels))
+             (colors-per-line (when titlescreen-kernel-p
+                                (loop for y from 0 below height
+                                      collect (dominant-playfield-color palette width y))))
+             ;; Create color output path: Art.Name.s -> Art.Name.colors.s
+             (color-output-path (when titlescreen-kernel-p
+                                  (make-pathname :directory (pathname-directory output-path)
+                                                 :name (format nil "~a.colors" (pathname-name output-path))
+                                                 :type (pathname-type output-path)))))
+        (ensure-directories-exist output-path)
+        (when color-output-path
+          (ensure-directories-exist color-output-path))
+        (if titlescreen-kernel-p
+            ;; Titlescreen kernel assembly format (×2 drawing style)
+            ;; Colors are written to a separate file to allow bitmap data to be page-aligned
+            (progn
+              ;; Write bitmap data file (without colors)
+              (with-open-file (stream output-path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+                ;; Header banner
+                (format stream ";;; Chaos Fight - ~a~%" (namestring output-path))
+                (format stream "~%")
+                (format stream ";;;; This is a generated file, do not edit.~%")
+                (format stream ";;;; Color tables are in separate .colors.s files~%")
+                (format stream ";;;; Bitmap data is packed at page-aligned address ~a (CPU/RORG space)~%" page-address)
+                (format stream "~%")
+                ;; Set relocatable CPU address for bitmap data (titlescreen kernel always runs in bank 9)
+                ;; NOTE: We must *not* change the assembler's file offset here, or we blow past Bank 9's file space.
+                ;;       Using RORG keeps the CPU address correct ($F100/$F200/…) without seeking the output file.
+                (format stream "   rorg ~a~%" page-address)
+                (format stream "~%")
+                ;; Essential data without verbose comments
+                (format stream "~a_window = ~d~%" kernel-prefix height)
+                (format stream "~%")
+                (format stream "~a_height = ~d~%" kernel-prefix height)
+                (format stream "~%")
+                (format stream " BYTE 0 ; leave this here!~%")
+                (format stream "~%~%")
+                ;; Note: Color table, PF1, PF2, and background are in separate .colors.s file at $f500
+                ;; Output bitmap columns (6 columns: 00-05)
+                ;; Alignment only at beginning (line above), not between strips
+                (loop for column from 0 below 6
+                      do (format stream "~%~%")
+                      do (format stream "~a_~2,'0D~%" kernel-prefix column)
+                      ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
+                      (loop for row from (1- height) downto 0
+                            for byte = (elt (elt shape column) row)
+                            for binary = (format nil "~8,'0b" byte)
+                            do (format stream "~tBYTE %~a~%" binary))
+                      (format stream "~%~%")))
+              ;; Write color table, PF1, PF2, and background to separate file
+              ;; These will be combined into titlescreen_colors.s at $f500
+              (with-open-file (color-stream color-output-path
+                                            :direction :output
+                                            :if-exists :supersede
+                                            :if-does-not-exist :create)
+                ;; Header banner
+                (format color-stream ";;; Chaos Fight - ~a~%" (namestring color-output-path))
+                (format color-stream "~%")
+                (format color-stream ";;;; This is a generated file, do not edit.~%")
+                (format color-stream ";;;; Color table, PF1, PF2, and background for ~a bitmap~%" kernel-prefix)
+                (format color-stream ";;;; This file will be included in titlescreen_colors.s at $f500~%")
+                (format color-stream "~%")
+                (format color-stream "~a_colors ~%" kernel-prefix)
+                ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
+                (loop for y from (1- height) downto 0
+                      for color-idx = (elt colors-per-line y)
+                      for color-byte = (playfield-color-byte color-idx tv-standard)
+                      do (format color-stream "~tBYTE $~2,'0X~%" color-byte))
+                (format color-stream "~%")
+                ;; PF1, PF2, and background (will be at $f500 with colors)
+                ;; PF1 and PF2 must be defined unconditionally for ifconst checks in kernel
+                (format color-stream "~a_PF1~%" kernel-prefix)
+                (format color-stream "~tBYTE %00000000~%")
+                (format color-stream "~a_PF2~%" kernel-prefix)
+                (format color-stream "~tBYTE %00000000~%")
+                (format color-stream " ifnconst ~a_background~%" kernel-prefix)
+                (format color-stream "~a_background~%" kernel-prefix)
+                (format color-stream " endif~%")
+                (format color-stream "~tBYTE $00~%")
+                (format color-stream "~%"))
+              (format *trace-output* "~% Done writing titlescreen kernel bitmap to ~A~%" output-path)
+              (format *trace-output* "~% Done writing color table to ~A~%" color-output-path)
+              (values output-path color-output-path))
+            ;; Basic batariBASIC data format (backward compatibility)
+            (progn
+              (with-open-file (stream output-path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+                (format stream "rem Generated bitmap data from ~a~%" (pathname-name png-file))
+                (format stream "rem Do not edit - regenerate from source artwork~%~%")
+                (format stream "data Bitmap~a~%" label-name)
+                (loop for column below 6
+                      do (loop for row from 41 downto 0
+                               for byte = (elt (elt shape column) row)
+                               for binary = (format nil "~8,'0b" byte)
+                               do (format stream "~%        %~a" binary))
+                      do (format stream "~%~%"))
+                (format stream "end~%"))
+              (format *trace-output* "~% Done writing batariBASIC bitmap to ~A~%" output-path)
+              output-path))))))
 
 (defun reverse-7-or-8 (shape)
   (let* ((height (length shape))
@@ -3576,7 +4134,7 @@ Columns: ~d
 (defun write-gimp-palettes ()
   "Write out Gimp palettes for those I know"
   (write-gimp-palette "Atari-2600-NTSC" +vcs-ntsc-palette+ (vcs-ntsc-color-names))
-  ;; (write-gimp-palette "Atari-2600-PAL" +vcs-pal-palette+ (vcs-pal-color-names))
+  (write-gimp-palette "Atari-2600-PAL" +vcs-pal-palette+ (vcs-pal-color-names))
   (write-gimp-palette "Atari-2600-SECAM" +vcs-secam-palette+
                       (mapcar (lambda (s) (cl-change-case:title-case (subseq (string s) 3)))
                               +vcs-secam-color-names+))
