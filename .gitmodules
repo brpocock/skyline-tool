@@ -5,3 +5,6 @@
 [submodule "zpb-ttf"]
 	path = lib/zpb-ttf
 	url = git@github.com:xach/zpb-ttf.git
+[submodule "eightbol"]
+	path = eightbol
+	url = git@github.com:adventuring/eightbol
