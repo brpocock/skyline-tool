@@ -5,7 +5,7 @@
 (require :asdf)
 
 ;; Load setup script (sets up Quicklisp and loads ASDF system)
-(load "SkylineTool/setup.lisp")
+(load "setup.lisp")
 
 ;; Ensure ASDF can find the system
 (asdf:load-asd "SkylineTool/skyline-tool.asd")

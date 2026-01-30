@@ -34,6 +34,14 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
      ,@body))
 
 (format t "~&Loading latest ZPB-TTF …")
+;; Load eightbol system first
+(asdf:load-asd (merge-pathnames (make-pathname :directory '(:relative "eightbol")
+                                               :name "eightbol"
+                                               :type "asd")
+                                (or *compile-file-pathname*
+                                    *load-pathname*))
+               :name :eightbol)
+;; Load skyline-tool system
 (asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool"
                                                :type "asd")
                                 (or *compile-file-pathname*

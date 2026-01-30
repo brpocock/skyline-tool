@@ -297,7 +297,39 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
     (+
      #|LoadMap|# 1024 #| approx XXX |#
      #| end of table |# 1
-     #|per record|# (* record-count 3))))
+     #|per record|# (* record-count 3)))
+  ;; Atari 400/800 delegate to 5200
+  (:method ((kind (eql :overhead)) record-count (machine (eql 400)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :song)) record-count (machine (eql 400)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :script)) record-count (machine (eql 400)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :blob)) record-count (machine (eql 400)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :map)) record-count (machine (eql 400)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :overhead)) record-count (machine (eql 800)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :song)) record-count (machine (eql 800)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :script)) record-count (machine (eql 800)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :blob)) record-count (machine (eql 800)))
+    (asset-loader-size kind record-count 5200))
+  (:method ((kind (eql :map)) record-count (machine (eql 800)))
+    (asset-loader-size kind record-count 5200))
+  ;; Game Boy Color (359020) - similar to DMG but with color capabilities
+  (:method ((kind (eql :overhead)) record-count (machine (eql 359020)))
+    12)  ;; Overhead for Game Boy Color (larger than DMG due to color)
+  (:method ((kind (eql :song)) record-count (machine (eql 359020)))
+    192)  ;; Song loader for Game Boy Color (enhanced audio)
+  (:method ((kind (eql :script)) record-count (machine (eql 359020)))
+    (+ 96 (* (1+ record-count) 3)))  ;; Script loader for Game Boy Color
+  (:method ((kind (eql :blob)) record-count (machine (eql 359020)))
+    (+ 256 1 (* record-count 4)))  ;; Blob loader for Game Boy Color (larger for color data)
+  (:method ((kind (eql :map)) record-count (machine (eql 359020)))
+    (+ 768 1 (* record-count 4))))  ;; Map loader for Game Boy Color (larger for color tiles)
 
 (defun bank-size (asset-size-hash)
   "The size of the ROM bank indicated by ASSET-SIZE-HASH plus overhead."
@@ -409,6 +441,27 @@ Returns the size in bytes required for the asset in ROM."
     n))
 
 (defun find-best-allocation (assets &key build video)
+  "Finds the optimal allocation of ASSETS into ROM banks for BUILD and VIDEO mode.
+
+@table @asis
+@item ASSETS
+List of asset identifiers to allocate
+@item BUILD
+Build target (e.g., \"Public\", \"Demo\", \"AA\")
+@item VIDEO
+Video standard (e.g., :ntsc, :pal)
+@end table
+
+@table @asis
+@item Returns
+Two values: hash table mapping assets to bank numbers, and file sizes hash table
+@end table
+
+@table @asis
+@item Behavior
+Tries all permutations of asset ordering to find one that fits within
+available ROM banks. Uses brute-force search for optimal packing.
+@end table"
   (format *trace-output*
           "~&Finding best allocation for ~:d asset~:p (build ~s, video ~s)"
           (length assets) build video)
@@ -450,14 +503,15 @@ Returns the size in bytes required for the asset in ROM."
   "Return the list of video types supported by MACHINE.
    Filters out unsupported video types for specific machines."
   (case machine
+    ;; Atari 400/800: same as 5200 - NTSC only, no PAL or SECAM
+    (400 '(:ntsc))
+    (800 '(:ntsc))
     ;; Atari 5200: NTSC only, no PAL or SECAM
     (5200 '(:ntsc))
     ;; Atari 7800: NTSC and PAL, no SECAM
     (7800 '(:ntsc :pal))
-    ;; ZX81/T/S-1000
-    (81 '(:ntsc :pal))
-    ;; ZX Spectrum/T/S-2068
-    (2068 '(:ntsc :pal))
+    ;; Game Boy Color: NTSC and PAL support
+    (359020 '(:ntsc :pal))
     ;; Most other machines support NTSC and PAL
     (t +all-video+)))
 
@@ -547,19 +601,26 @@ Returns the size in bytes required for the asset in ROM."
 (defun number-of-banks (build video)
   (declare (ignore video))
   (ecase *machine*
+    (16 ; TurboGrafx-16/PC Engine
+     (cond
+       ((equal build "Demo") 32)
+       ((equal build "Test") 32)
+       (t 64)))
     (7800 (cond
             ((equal build "Demo") 64)
             ((equal build "Test") 64)
-            (t 64)))))
+            (t 64)))
+    (9918 1)   ;; ColecoVision: no banking, single 32KB ROM
+    (359020 2))) ;; Game Boy Color: 2 banks (64KB total)
 
 (defun included-file (line)
-  "Extract the filename from an assembler .include directive in LINE.
+  "Extract the filename from an assembler .include directive or COBOL COPY statement in LINE.
 
 @table @asis
 @item Input
 @table @asis
 @item LINE
-A string containing an assembler directive like @samp{.include \"Filename.s\"}.
+A string containing an assembler directive like @samp{.include \"Filename.s\"} or COBOL @samp{COPY Filename.cob.}.
 @end table
 @end table
 
@@ -567,9 +628,15 @@ A string containing an assembler directive like @samp{.include \"Filename.s\"}.
 @item Output
 Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
 @end table"
-  (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\.include \"(.*)\\.s\"" line))))
-    (when (and match (plusp (array-dimension match 0)))
-      (aref match 0))))
+  (or
+   ;; Check for assembler .include directive
+   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\.include \"(.*)\\.s\"" line))))
+     (when (and match (plusp (array-dimension match 0)))
+       (aref match 0)))
+   ;; Check for COBOL COPY statement
+   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\s+COPY ([^\\.\\s]+)" line))))
+     (when (and match (plusp (array-dimension match 0)))
+       (aref match 0)))))
 
 (defun included-binary-file (line)
   (let ((match (nth-value 1 (cl-ppcre:scan-to-strings "\\.binary \"(.*)\\.o\"" line))))
@@ -583,8 +650,10 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (2 "A2")
     (3 "A3")
     (8 "NES")
+    (9 "NG")
+    (15 "F")
     (16 "TG16")
-    (20 "VIC20")
+    (20 "VIC")
     (23 "A2e")
     ((64 128) "CBM")
     (81 "ZX81")
@@ -593,18 +662,35 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (222 "2gs")
     (223 "BBC")
     (264 "C16")
+    (400 "400")
+    (800 "800")
+    (810 "VB")
     (837 "GG")
-    (1000 "SG1000")
+    (920 "NNG")
+    (1000 "1000")
+    (1080 "ST")
+    (1200 "1200")
     (1601 "SMD")
+    (1624 "32X")
     (2068 "Spc")
+    (2110 "GG")
     (2600 "2600")
     (2609 "Intv")
+    (3000 "Vx")
     (3010 "SMS")
-    (35902 "DMG")
-    (359020 "CGB")
+    (3296 "GBA")
+    (4386 "HS")
+    (4800 "WS")
     (5200 "5200")
+    (6122 "Vs")
+    (6800 "WSC")
+    (7600 "O2")
     (7800 "7800")
-    (9918 "ClcV")))
+    (7801 "SC")
+    (8011 "Jag")
+    (9001 "PSX")
+    (9918 "ClcV")
+    (2416 "CDR")))
 
 (defun machine-number-by-tag (tag)
   (ecase (make-keyword tag)
@@ -612,7 +698,10 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (:|A2| 2)
     (:|A3| 3)
     (:|NES| 8)
+    (:|NG| 9)
+    (:|F| 15)
     (:|TG16| 16)
+    (:|VIC| 20)
     (:|VIC20| 20)
     (:|A2e| 23)
     (:|C64| 64)
@@ -623,18 +712,36 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
     (:|2gs| 222)
     (:|BBC| 223)
     (:|C16| 264)
-    (:|GG| 837)
-    (:|SG1000| 1000)
+    (:|400| 400)
+    (:|800| 800)
+    (:|VB| 810)
+    (:|GG| 2110) ; Use GG for 2110 as requested (defer to SMS where possible)
+    (:|NNG| 920)
+    (:|1000| 1000)
+    (:|ST| 1080)
+    (:|1200| 1200)
     (:|SMD| 1601)
+    (:|32X| 1624)
     (:|Spc| 2068)
     (:|2600| 2600)
     (:|Intv| 2609)
+    (:|Vx| 3000)
     (:|SMS| 3010)
+    (:|GBA| 3296)
+    (:|HS| 4386)
+    (:|WS| 4800)
+    (:|5200| 5200)
+    (:|Vs| 6122)
+    (:|WSC| 6800)
+    (:|O2| 7600)
+    (:|7800| 7800)
+    (:|SC| 7801)
+    (:|Jag| 8011)
+    (:|PSX| 9001)
+    (:|ClcV| 9918)
+    (:|CDR| 2416)
     (:|DMG| 35902)
     (:|CGB| 359020)
-    (:|5200| 5200)
-    (:|7800| 7800)
-    (:|ClcV| 9918)
     ((:nil :|nil|) nil)))
 
 (defun include-paths-for-current-bank (&key cwd testp)
@@ -660,7 +767,8 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
                          (list :relative "Object" machine-dir)
                          (list :relative "Object" machine-dir "Assets")
                          (list :relative "Source" "Generated" machine-dir)
-                         (list :relative "Source" "Generated" machine-dir "Assets"))))
+                         (list :relative "Source" "Generated" machine-dir "Assets")
+                         (list :relative "Source" "Generated" "Classes" "6502"))))
     (when cwd (appendf includes (list cwd)))
     (when testp
       (appendf includes (list (list :relative "Source" "Code" machine-dir "Tests")))) ;; Platform-specific tests
@@ -695,9 +803,43 @@ Source/Generated/Lynx/Assets/Blob.Lynx/~a.s: ~a \\
 Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	bin/skyline-tool --port 7800 blob-rip-7800 $<"
-               machine-dir blob-name blob-path machine-dir)))))
+               machine-dir blob-name blob-path machine-dir))
+      ((35902 359020) ; Game Boy (DMG) and Game Boy Color
+       ;; Check if this is an SGB frame
+       (if (search "SGB" (string-upcase blob-name))
+           (format t "~%
+Source/Generated/~a/Assets/Blob.SGB.~a.s: ~a~%	bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	bin/skyline-tool --port ~a compile-sgb-frame $@ $<"
+                   machine-dir blob-name blob-path machine-dir
+                   (if (= *machine* 359020) "CGB" "DMG"))
+           ;; Regular blob processing
+           (format t "~%
+Source/Generated/~a/Assets/Blob.~a.s: ~a~%	bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	bin/skyline-tool --port ~a dispatch-png $< Source/Generated/~a/Assets"
+                   machine-dir blob-name blob-path machine-dir
+                   (if (= *machine* 359020) "CGB" "DMG") machine-dir))))))
 
 (defun write-art-generation (pathname)
+  "Generates Makefile rules for compiling art assets for the current platform.
+
+@table @asis
+@item PATHNAME
+Path to the art asset file (.xcf, .png, etc.)
+@end table
+
+@table @asis
+@item Output
+@table @asis
+@item Makefile Rules
+Printed to standard output for inclusion in Makefiles
+@end table
+
+@item Behavior
+Examines the target platform and generates appropriate compilation commands
+for art assets. Different platforms may require different preprocessing
+or compilation steps for graphics conversion."
   (let ((art-name (pathname-name pathname))
         (art-path (enough-namestring pathname))
         (machine-dir (machine-directory-name)))
@@ -717,7 +859,34 @@ Object/~a/Assets/Art.~a.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))
                machine-dir))
-      ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200) ; Other supported machines without art support
+      (2609 ; Intellivision
+       (format t "~%
+Object/~a/Assets/Art.~a.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
+	mkdir -p Object/~a/Assets
+	bin/skyline-tool --port 2609 compile-art-intv $@ $<"
+               machine-dir art-name art-path
+               (mapcar (compose #'enough-namestring #'first)
+                       (skyline-tool::read-intv-art-index pathname))
+               machine-dir))
+      (359020 ; Game Boy Color
+       (format t "~%
+Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
+	mkdir -p Object/~a/Assets
+	bin/skyline-tool --port CGB compile-art-cgb $@ $<"
+               machine-dir art-name art-path machine-dir))
+      (35902 ; Game Boy (DMG)
+       (format t "~%
+Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
+	mkdir -p Object/~a/Assets
+	bin/skyline-tool --port DMG compile-art-dmg $@ $<"
+               machine-dir art-name art-path machine-dir))
+      (264 ; Commodore 16/Plus4 (TED)
+       (format t "~%
+Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
+	mkdir -p Object/~a/Assets
+	bin/skyline-tool --port 264 compile-art-264 $@ $<"
+               machine-dir art-name art-path machine-dir))
+      ((1 2 8 16 20 64 88 128 223 1601 2600 3010 5200) ; Other supported machines without art support
        (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
 
 (defun write-tsx-generation (pathname)
@@ -756,7 +925,7 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
 
 @table @asis
 @item NAME
-The base name of the file to find (without .s extension).
+The base name of the file to find (without extension).
 @item CWD
 Current working directory (optional).
 @item TESTP
@@ -764,6 +933,13 @@ If true, include test directories in search.
 @end table
 
 Returns the pathname of the found file, or signals an error if not found."
+  ;; Check for COBOL copybooks first
+  (when (or (search "Slots" name) (search "WorkingStorage" name))
+    (let ((cobol-file (make-pathname :directory (list :relative "Source" "Classes")
+                                     :name name :type "cob")))
+      (when (probe-file cobol-file)
+        (return-from find-included-file cobol-file))))
+
   (let ((generated-asset-pathname
           (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name) "Assets")
                          :name name :type "s")))
@@ -829,31 +1005,6 @@ file ~a.s in bank $~(~2,'0x~)~
   (error "Cannot find a possible source for included binary file ~a.o in bank ~(~2,'0x~)"
          name *bank*))
 
-(defun recursive-read-deps (source-file &key testp)
-  (unless (equal (pathname-type source-file) "o")
-    (unless (probe-file source-file)
-      (if (skyline-tool-writes-p source-file)
-          (write-source-file source-file)
-          (error "Can't find “~a” and don't know how to make it~2%(~s)"
-                 (enough-namestring source-file) source-file)))
-    (with-input-from-file (source source-file)
-       (let* ((testp (or testp
-                        (when (search "Tests" (namestring source-file)) t)))
-             (includes (loop for line = (read-line source nil nil)
-                             while line
-                             for included = (included-file line)
-                             for binary = (included-binary-file line)
-                             for file = (cond
-                                          (included (find-included-file included :cwd (pathname-directory source-file) :testp testp))
-                                          (binary (find-included-binary-file binary))
-                                          (t nil))
-                             when file collect file)))
-        (remove-duplicates
-         (flatten (append (list source-file) includes
-                          (mapcar (lambda (file) (recursive-read-deps file :testp testp))
-                                  includes)))
-         :test #'equal)))))
-
 (defun extract-palette (palette-file)
   (let* ((base-name (subseq (pathname-name palette-file)
                             0
@@ -885,19 +1036,35 @@ file ~a.s in bank $~(~2,'0x~)~
           "Orchestration" 'write-orchestration)
   :test 'equalp)
 
-(defun skyline-tool-writes-p (pathname)
-  "Check if PATHNAME is a file that Skyline-Tool can generate.
-
-PATHNAME: A pathname object.
-Returns a function to generate the file if Skyline-Tool handles it, otherwise NIL.
-Checks for files in Generated directories with specific names or containing 'Palette'."
-  (and (member (pathname-type pathname) '("s" "forth") :test #'string=)
-       (member "Generated" (pathname-directory pathname) :test #'string=)
-       (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
-                                    :test #'string=))
-                     (second found))
-           (when (search "Palette" (pathname-name pathname))
-             (lambda () (extract-palette pathname))))))
+;; (defun skyline-tool-writes-p (pathname)
+;;   "Check if PATHNAME is a file that Skyline-Tool can generate.
+;; 
+;; PATHNAME: A pathname object.
+;; Returns a function to generate the file if Skyline-Tool handles it, otherwise NIL.
+;; Checks for files in Generated directories with specific names or containing 'Palette',
+;; or COBOL class files that need to be compiled to assembly."
+;;   (or (and (member (pathname-type pathname) '("s" "forth") :test #'string=)
+;;            (member "Generated" (pathname-directory pathname) :test #'string=)
+;;            (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
+;;                                         :test #'string=))
+;;                          (second found))
+;;                (when (search "Palette" (pathname-name pathname))
+;;                  (lambda () (extract-palette pathname)))
+;;                ;; Check for COBOL-generated class files
+;;                (when (and (find-package :eightbol)
+;;                          (member "Classes" (pathname-directory pathname) :test #'string=)
+;;                          (member "6502" (pathname-directory pathname) :test #'string=))
+;;                  (lambda ()
+;;                    (let ((cobol-source (make-pathname
+;;                                        :directory (append (butlast (pathname-directory pathname) 2)
+;;                                                         '("Classes"))
+;;                                        :name (pathname-name pathname)
+;;                                        :type "cob")))
+;;                      (when (probe-file cobol-source)
+;;                        (format *trace-output* "~&Compiling COBOL class ~a to ~a"
+;;                                (enough-namestring cobol-source)
+;;                                (enough-namestring pathname))
+;;                        (funcall (intern "COMPILE-FILE" :eightbol) cobol-source :cpu 6502)))))))
 
 (defun write-source-file (pathname)
   (when-let (f (skyline-tool-writes-p pathname))
@@ -992,6 +1159,19 @@ Checks for files in Generated directories with specific names or containing 'Pal
                    ((equal kind "Blobs")
                     (format nil "Source/Generated/~a/Assets/Blob.~a.CBM.s" machine-dir name))
                    (t
+                    (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
+      (9918 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
+             (cond ((equal kind "Songs")
+                    (assert (not (null video)))
+                    (format nil "Object/~a/Assets/Song.~a.~a.ClcV.o" machine-dir name video))
+                   ((equal kind "Maps")
+                    (assert (not (null video)))
+                    (format nil "Object/~a/Assets/Map.~a.~a.ClcV.o" machine-dir (substitute #\. #\/ name) video))
+                   ((equal kind "Scripts")
+                    (format nil "Source/Generated/~a/Assets/Script.~a.ClcV.s" machine-dir (substitute #\. #\/ name)))
+                   ((equal kind "Blobs")
+                    (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s" machine-dir name))
+                   (t
                     (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
 
 (defun asset->deps-list (asset-indicator build)
@@ -1032,6 +1212,23 @@ Checks for files in Generated directories with specific names or containing 'Pal
                   (t (error "Asset kind ~a not known" kind)))))))
 
 (defun asset-compilation-line (asset-indicator &key video)
+  "Generates the shell command line for compiling an ASSET-INDICATOR for VIDEO mode.
+
+@table @asis
+@item ASSET-INDICATOR
+Asset identifier in format 'Kind/Name' (e.g., 'Songs/Title', 'Maps/Level1')
+@item VIDEO
+Video standard (:ntsc, :pal, etc.) for video-specific assets
+@end table
+
+@table @asis
+@item Returns
+String containing the compilation command for make
+@end table
+
+@item Behavior
+Determines the appropriate compilation tool and parameters based on asset type
+and target platform. Handles special cases for different machines and video modes."
   (let ((machine-dir (machine-directory-name)))
     (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
       (cond
@@ -1039,8 +1236,14 @@ Checks for files in Generated directories with specific names or containing 'Pal
          (format nil "bin/skyline-tool --port ${PORT} compile-map $<"))
         ((equal kind "Songs")
          (cond
+           ((= *machine* 16) ; TG16
+            (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HUC6280 ~a $@" video))
+           ((= *machine* 222) ; Apple IIGS
+            (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DOC ~a $@" video))
            ((= *machine* 7800)
             (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
+           ((= *machine* 35902) ; DMG
+            (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DMG ~a $@" video))
            (t
             (format nil "bin/skyline-tool --port ${PORT} compile-midi $< T ~a $@" video))))
         ((equal kind "Scripts")
@@ -1112,11 +1315,11 @@ Checks for files in Generated directories with specific names or containing 'Pal
            (write-asset-compilation/music asset-indicator))
           ((map-asset-p asset-indicator)
            (write-asset-compilation/map asset-indicator))
-          ((blob-asset-p asset-indicator)
-           (ecase *machine*
-             (200 ; Lynx platform
-              (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
-              (write-asset-compilation/blob-lynx asset-indicator))
+           ((blob-asset-p asset-indicator)
+            (ecase *machine*
+              (200 ; Lynx platform
+               (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
+               (write-asset-compilation/blob-lynx asset-indicator))
              ((1 2 8 16 20 64 88 128 222 223 264 2609 1601 2600 3010 5200 7800) ; Other machines - ignore blobs for now
               (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)" asset-indicator *machine*))))
           ((script-asset-p asset-indicator)
@@ -1530,15 +1733,13 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
   (format t "# Makefile (generated)~%# -*- makefile -*-~%"))
 
 (defun bank-source-pathname ()
-  (make-pathname
-                        :directory (list :relative "Source" "Code" (machine-directory-name) "Banks"
-                                         (format nil "Bank~(~2,'0x~)" *bank*))
-                        :name (format nil "Bank~(~2,'0x~)" *bank*)
-                        :type "s"))
+  (make-pathname :directory (list :relative "Source" "Code" (machine-directory-name) "Banks"
+                                  (format nil "Bank~(~2,'0x~)" *bank*))
+                 :name (format nil "Bank~(~2,'0x~)" *bank*)
+                 :type "s"))
 
 (defun last-bank-source-pathname ()
-  (make-pathname
-                        :directory (list :relative "Source" "Code" (machine-directory-name) "Banks" "LastBank")
+  (make-pathname :directory (list :relative "Source" "Code" (machine-directory-name) "Banks" "LastBank")
                         :name "LastBank" :type "s"))
 
 (defgeneric write-master-makefile-for-machine (machine)
@@ -1546,6 +1747,8 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
 
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
+  ;; COBOL class compilation rules are now in common.mak
+
   (dolist (build +all-builds+)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
@@ -1598,6 +1801,16 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
         ((probe-file bank-source)
          (write-bank-makefile bank-source))
         (t (write-asset-bank-makefile *bank*))))))
+
+(defmethod write-master-makefile-for-machine ((machine (eql 400)))
+  "Write makefile content for Atari 400 - delegates to 5200"
+  (let ((*machine* 5200)) ; Temporarily change machine to 5200 for delegation
+    (write-master-makefile-for-machine 5200)))
+
+(defmethod write-master-makefile-for-machine ((machine (eql 800)))
+  "Write makefile content for Atari 800 - delegates to 5200"
+  (let ((*machine* 5200)) ; Temporarily change machine to 5200 for delegation
+    (write-master-makefile-for-machine 5200)))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 5200)))
   "Write makefile content for Atari 5200"
@@ -1657,9 +1870,46 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
          (write-bank-makefile bank-source))
         (t (write-asset-bank-makefile *bank*))))))
 
+(defmethod write-master-makefile-for-machine ((machine (eql 359020)))
+  "Write makefile content for Game Boy Color"
+  (dolist (build +all-builds+)
+    (dolist (video (supported-video-types machine))
+      (let ((*last-bank* (1- (number-of-banks build video))))
+        (write-makefile-top-line :build build :video video)
+        (write-header-script :build build :video video)
+        (dotimes (*bank* (1+ *last-bank*))
+          (let ((bank-source (bank-source-pathname)))
+            (cond
+              ((= *bank* *last-bank*)
+               (write-bank-makefile (last-bank-source-pathname)
+                                    :build build :video video))
+              ((probe-file bank-source)
+               (write-bank-makefile bank-source
+                                    :build build :video video))
+              (t (write-asset-bank-makefile *bank*
+                                            :build build :video video)))))))))
+
+
 (defun write-master-makefile ()
-  "Write  out   Source/Generated/{platform}/Makefile  for  building   everything  not
-mentioned in the top-level Makefile."
+  "Generates the master Makefile for the current platform in Source/Generated/{platform}/Makefile.
+
+@table @asis
+@item Input
+@table @asis
+@item *MACHINE*
+Global variable specifying the target platform/machine
+@end table
+
+@item Output
+@table @asis
+@item File
+Source/Generated/{platform}/Makefile with all build rules
+@end table
+
+@item Behavior
+Creates a comprehensive Makefile containing rules for building all assets,
+generating bank allocations, and compiling platform-specific code.
+This Makefile handles everything not covered by the top-level Makefile."
   (ensure-directories-exist (merge-pathnames (machine-directory-name)
                                              #p"Source/Generated/"))
   (format *trace-output* "~&Writing master Makefile content …")
@@ -2094,6 +2344,7 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Object/~a/Assets"
             object-name source-name machine-dir machine-dir)))
+
 
 (defun collect-assets (&rest args)
   "Stub function for collect-assets command"

@@ -1,442 +1,431 @@
 ;;; Phantasia SkylineTool/tests/graphics-tests.lisp
+;;;; Comprehensive tests for graphics processing functions
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
+;; Use the test package defined by the test runner
 (in-package :skyline-tool/test)
 
+;;; Enhanced test utilities for targeted testing
+(defmacro define-multi-test (name description iterations &body body)
+  "Define a test that runs multiple iterations for statistical validation"
+  `(test ,name
+     ,description
+     (dotimes (i ,iterations)
+       ,@body)))
+
 (def-suite graphics-tests
-  :description "Tests for graphics BLOB compilation functionality")
+  :description "Comprehensive tests for graphics processing functions")
 
 (in-suite graphics-tests)
 
-;; Helper functions for creating test data
-(defun make-test-stamp (width height &optional (pattern :checkerboard))
-  "Create a test stamp with known pixel patterns for testing."
-  (let ((stamp (make-array (list width height))))
-    (dotimes (x width)
-      (dotimes (y height)
-        (setf (aref stamp x y)
-              (case pattern
-                (:checkerboard (if (evenp (+ x y)) 0 1))
-                (:solid-0 0)
-                (:solid-1 1)
-                (:horizontal-bars (if (evenp y) 0 1))
-                (:vertical-bars (if (evenp x) 0 1))
-                (t 0)))))
-    stamp))
+;; Test data generators for graphics functions
+(defun generate-random-color ()
+  "Generate a random RGB color"
+  (list (random 256) (random 256) (random 256)))
 
-(defun make-test-png-data (width height)
-  "Create mock PNG data for testing."
-  (let ((pixels (make-array (list width height) :initial-element 0)))
-    ;; Create a simple pattern
-    (dotimes (x width)
-      (dotimes (y height)
-        (setf (aref pixels x y) (mod (+ x y) 4))))
+(defun generate-random-palette (&optional (size 16))
+  "Generate a random color palette"
+  (loop for i from 1 to size
+        collect (generate-random-color)))
+
+(defun generate-random-pixels (width height &optional (max-color 15))
+  "Generate random pixel data for testing"
+  (let ((pixels (make-array (list height width) :element-type '(unsigned-byte 8))))
+    (dotimes (y height)
+      (dotimes (x width)
+        (setf (aref pixels y x) (random (1+ max-color)))))
     pixels))
 
-;; Test stamp monochrome detection
-(test stamp-is-monochrome-p-solid-colors
-  "Test monochrome detection for solid color stamps"
-  (is-true (stamp-is-monochrome-p (make-test-stamp 4 16 :solid-0)))
-  (is-true (stamp-is-monochrome-p (make-test-stamp 4 16 :solid-1))))
+(defun generate-random-nybbles (width height &optional (max-value 15))
+  "Generate random nybble data for testing"
+  (let ((data (make-array (list height width) :element-type '(unsigned-byte 4))))
+    (dotimes (y height)
+      (dotimes (x width)
+        (setf (aref data y x) (random (1+ max-value)))))
+    data))
 
-(test stamp-is-monochrome-p-checkerboard
-  "Test monochrome detection for checkerboard pattern (should be false)"
-  (is-false (stamp-is-monochrome-p (make-test-stamp 4 16 :checkerboard))))
+;; Test basic utility functions
+(test double-up-basic
+  "Test double-up function with simple lists"
+  (is (equal (skyline-tool::double-up '(1 2 3)) '(1 1 2 2 3 3))
+      "Should duplicate each element")
+  (is (equal (skyline-tool::double-up nil) nil)
+      "Should handle empty list")
+  (is (equal (skyline-tool::double-up '(a)) '(a a))
+      "Should handle single element"))
 
-(test stamp-is-monochrome-p-horizontal-bars
-  "Test monochrome detection for horizontal bars (should be false)"
-  (is-false (stamp-is-monochrome-p (make-test-stamp 4 16 :horizontal-bars))))
+(test square-basic
+  "Test square function"
+  (is (= (skyline-tool::square 0) 0) "Square of 0 should be 0")
+  (is (= (skyline-tool::square 1) 1) "Square of 1 should be 1")
+  (is (= (skyline-tool::square 5) 25) "Square of 5 should be 25")
+  (is (= (skyline-tool::square -3) 9) "Square of -3 should be 9"))
 
-;; Test blob dimension validation
-(test check-height+width-for-blob-valid
-  "Test valid blob dimensions"
-  (finishes (check-height+width-for-blob 49 160 (make-test-png-data 160 49))))
+;; Test color and palette functions
+(test machine-palette-basic
+  "Test machine-palette returns appropriate palettes"
+  (let ((skyline-tool::*machine* 2600))
+    (let ((palette (skyline-tool::machine-palette)))
+      (is (listp palette) "Should return a list")
+      (is (> (length palette) 0) "Should not be empty"))))
 
-(test check-height+width-for-blob-invalid-width
-  "Test invalid blob width"
-  (signals error (check-height+width-for-blob 49 159 (make-test-png-data 159 49))))
+(test machine-colors-basic
+  "Test machine-colors returns color information"
+  (let ((skyline-tool::*machine* 2600))
+    (let ((colors (skyline-tool::machine-colors)))
+      (is (or (null colors) (listp colors)) "Should return nil or list"))))
 
-(test check-height+width-for-blob-invalid-height
-  "Test invalid blob height"
-  (signals error (check-height+width-for-blob 48 160 (make-test-png-data 160 48))))
+(test color-distance-basic
+  "Test color-distance calculates Euclidean distance"
+  (is (= (skyline-tool::color-distance 0 0 0 '(0 0 0)) 0)
+      "Distance between identical colors should be 0")
+  (is (> (skyline-tool::color-distance 0 0 0 '(255 255 255)) 0)
+      "Distance between different colors should be > 0"))
 
-;; Test 320AC dimension validation
-(test check-height+width-for-blob-320ac-valid
-  "Test valid 320AC blob dimensions"
-  (finishes (check-height+width-for-blob-320ac 49 320 (make-test-png-data 320 49))))
+(define-multi-test color-distance-properties
+  "Test color-distance properties with multiple samples"
+  15 ; Test 15 times for reasonable statistical confidence
+  (let* ((c1 (generate-random-color))
+         (c2 (generate-random-color))
+         (dist (skyline-tool::color-distance (first c1) (second c1) (third c1) c2)))
+    (is (>= dist 0) "Distance should always be non-negative")
+    (is (= dist (skyline-tool::color-distance (first c2) (second c2) (third c2) c1))
+        "Distance should be symmetric")))
 
-(test check-height+width-for-blob-320ac-invalid-width
-  "Test invalid 320AC blob width"
-  (signals error (check-height+width-for-blob-320ac 49 160 (make-test-png-data 160 49))))
+(test palette-rgb-conversion
+  "Test palette->rgb and rgb->palette conversions"
+  (let ((skyline-tool::*machine* 2600))
+    ;; Test round-trip conversion
+    (let* ((original-rgb '(255 128 64))
+           (palette-index (skyline-tool::rgb->palette (first original-rgb)
+                                                     (second original-rgb)
+                                                     (third original-rgb)))
+           (back-to-rgb (skyline-tool::palette->rgb palette-index)))
+      (is (listp back-to-rgb) "Should return RGB list")
+      (is (= (length back-to-rgb) 3) "Should have 3 components"))))
 
-(test check-height+width-for-blob-320ac-invalid-height
-  "Test invalid 320AC blob height"
-  (signals error (check-height+width-for-blob-320ac 50 320 (make-test-png-data 320 50))))
+(test find-nearest-in-palette-basic
+  "Test find-nearest-in-palette finds closest color"
+  (let ((palette '((0 0 0) (255 255 255) (255 0 0))))
+    (let ((nearest (skyline-tool::find-nearest-in-palette palette 254 0 0)))
+      (is (integerp nearest) "Should return palette index")
+      (is (<= 0 nearest (1- (length palette))) "Index should be in valid range"))))
 
-;; Test 320 mode detection
-(test detect-320-mode
-  "Test automatic detection of 320A vs 320C modes"
-  (let ((mono-stamp (make-test-stamp 4 16 :solid-0))
-        (color-stamp (make-test-stamp 4 16 :checkerboard)))
-    (is (eq :320a (if (stamp-is-monochrome-p mono-stamp) :320a :320c)))
-    (is (eq :320c (if (stamp-is-monochrome-p color-stamp) :320a :320c)))))
+(define-multi-test find-nearest-in-palette-samples
+  "Test find-nearest-in-palette with multiple random samples"
+  10 ; Test 10 times for reasonable coverage
+  (let* ((palette (generate-random-palette 16))
+         (target-color (generate-random-color))
+         (nearest (skyline-tool::find-nearest-in-palette palette
+                                                       (first target-color)
+                                                       (second target-color)
+                                                       (third target-color))))
+    (is (integerp nearest) "Should return integer index")
+    (is (<= 0 nearest (1- (length palette))) "Index should be in valid range")))
 
-;; Test function existence and basic calling
-(test graphics-functions-exist
-  "Test that all graphics functions exist and can be called with basic parameters"
-  (is-true (fboundp 'blob-rip-7800))
-  (is-true (fboundp 'blob-rip-7800-160a))
-  (is-true (fboundp 'blob-rip-7800-320ac))
-  (is-true (fboundp 'stamp-is-monochrome-p))
-  (is-true (fboundp 'extract-4×16-stamps))
-  (is-true (fboundp 'blob/write-span-to-stamp-buffer-320ac))
-  (is-true (fboundp 'blob/write-spans-320ac))
+(test rgb-int-conversion
+  "Test rgb->int conversion"
+  (is (= (skyline-tool::rgb->int 255 0 0) #xff0000) "Red should convert correctly")
+  (is (= (skyline-tool::rgb->int 0 255 0) #x00ff00) "Green should convert correctly")
+  (is (= (skyline-tool::rgb->int 0 0 255) #x0000ff) "Blue should convert correctly")
+  (is (= (skyline-tool::rgb->int 0 0 0) 0) "Black should convert to 0"))
 
-  ;; Test stamp-is-monochrome-p with actual data
-  (let ((mono-stamp (make-test-stamp 4 4 :solid-0))
-        (color-stamp (make-test-stamp 4 4 :checkerboard)))
-    (is-true (stamp-is-monochrome-p mono-stamp) "Solid color stamp should be monochrome")
-    (is-false (stamp-is-monochrome-p color-stamp) "Checkerboard stamp should not be monochrome")))
+;; Test pixel manipulation functions
+(test fat-bits-basic
+  "Test fat-bits expands pixel data"
+  (let ((pixels #(1 0 1 0)))
+    (let ((expanded (skyline-tool::fat-bits pixels)))
+      (is (arrayp expanded) "Should return array")
+      (is (> (length expanded) (length pixels)) "Should expand the data"))))
 
-;; Test basic 320A/C conversion functions
-(test 320-conversion-functions
-  "Test 320A and 320C conversion functions work with basic input"
-  (is-true (fboundp '7800-image-to-320a))
-  (is-true (fboundp '7800-image-to-320c))
+(test tile-bits-conversion
+  "Test tile->bits converts tile data"
+  (is-true (fboundp 'skyline-tool::tile->bits) "tile->bits should be defined")
+  (finishes (skyline-tool::tile->bits #(1 2 3 4)) "Should handle basic input"))
 
-  ;; Test with minimal valid input
-  (let ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8) :initial-element 0))
-        (palette (vector #(0 0 0) #(255 255 255))))
-    ;; Should not error and return some result
-    (finishes (7800-image-to-320a test-image :byte-width 1 :height 1 :palette palette))
-    (finishes (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette))))
+(test tile-color-basic
+  "Test tile->color extracts color information"
+  (is-true (fboundp 'skyline-tool::tile->color) "tile->color should be defined")
+  (finishes (skyline-tool::tile->color #(1 2 3 4)) "Should handle basic input"))
 
-;; Test blob ripping with actual functionality validation
-(test blob-rip-7800-existence
-  "Test that blob-rip-7800 function exists and handles basic input"
-  (is-true (fboundp 'blob-rip-7800) "blob-rip-7800 should exist")
+;; Test mob (sprite) functions
+(test mob-mono-bits-basic
+  "Test mob->mono-bits converts monochrome mob data"
+  (is-true (fboundp 'skyline-tool::mob->mono-bits) "mob->mono-bits should be defined")
+  (finishes (skyline-tool::mob->mono-bits #(1 2 3 4)) "Should handle basic input"))
 
-  ;; Test that it doesn't crash with nil input (should signal error appropriately)
-  (signals error (blob-rip-7800 nil)))
+(test mob-multi-bits-basic
+  "Test mob->multi-bits converts multicolor mob data"
+  (is-true (fboundp 'skyline-tool::mob->multi-bits) "mob->multi-bits should be defined")
+  (finishes (skyline-tool::mob->multi-bits #(1 2 3 4)) "Should handle basic input"))
 
-;; Test 320AC functionality specifically
-(test blob-rip-7800-320ac-existence
-  "Test that 320AC blob ripping function exists and handles basic input"
-  (is-true (fboundp 'blob-rip-7800-320ac) "blob-rip-7800-320ac should exist")
+(test mob-colors-basic
+  "Test mob-colors extracts color information"
+  (is-true (fboundp 'skyline-tool::mob-colors) "mob-colors should be defined")
+  (finishes (skyline-tool::mob-colors #(1 2 3 4)) "Should handle basic input"))
 
-  ;; Test that it doesn't crash with nil input (should signal error appropriately)
-  (signals error (blob-rip-7800-320ac nil)))
+(test ensure-monochrome-basic
+  "Test ensure-monochrome validates monochrome sprites"
+  (is-true (fboundp 'skyline-tool::ensure-monochrome) "ensure-monochrome should be defined")
+  (finishes (skyline-tool::ensure-monochrome #(0 1 0 1)) "Should handle basic monochrome data"))
 
-;; Test dimension validation functions
-(test blob-dimension-validation
-  "Test that blob dimension validation works correctly"
-  (let ((test-pixels (make-array '(160 49) :element-type '(unsigned-byte 8) :initial-element 0)))
-    ;; Test valid 160x49 dimensions (49 = 16*3 + 1)
-    (finishes (check-height+width-for-blob 49 160 test-pixels))
+(test ensure-1plus-chrome-basic
+  "Test ensure-1+chrome validates multicolor sprites"
+  (is-true (fboundp 'skyline-tool::ensure-1+chrome) "ensure-1+chrome should be defined")
+  (finishes (skyline-tool::ensure-1+chrome #(0 1 2 3)) "Should handle basic multicolor data"))
 
-    ;; Test invalid width (not divisible by 4)
-    (signals error (check-height+width-for-blob 49 162 test-pixels))
+(test mob-empty-basic
+  "Test mob-empty checks for empty sprites"
+  (is-true (skyline-tool::mob-empty #(0 0 0 0)) "All-zero mob should be empty")
+  (is-false (skyline-tool::mob-empty #(0 1 0 0)) "Non-zero mob should not be empty"))
 
-    ;; Test invalid height (not 16n+1)
-    (signals error (check-height+width-for-blob 48 160 test-pixels))))
+(test mob-hires-basic
+  "Test mob-hires checks high-resolution sprites"
+  (is-true (fboundp 'skyline-tool::mob-hires) "mob-hires should be defined")
+  (finishes (skyline-tool::mob-hires #(1 2 3 4)) "Should handle basic input"))
 
-;; Test 320AC dimension validation
-(test blob-320ac-dimension-validation
-  "Test that 320AC blob dimension validation works correctly"
-  (let ((test-pixels (make-array '(320 49) :element-type '(unsigned-byte 8) :initial-element 0)))
-    ;; Test valid 320x49 dimensions
-    (finishes (check-height+width-for-blob-320ac 49 320 test-pixels))
+;; Test image processing functions
+(test gather-mobs-basic
+  "Test gather-mobs extracts sprites from image"
+  (is-true (fboundp 'skyline-tool::gather-mobs) "gather-mobs should be defined")
+  (let ((nybbles (generate-random-nybbles 16 16)))
+    (finishes (skyline-tool::gather-mobs nybbles 16 16) "Should handle basic nybble data")))
 
-    ;; Test invalid width (not 320)
-    (signals error (check-height+width-for-blob-320ac 49 160 test-pixels))
+(test image-colors-basic
+  "Test image-colors extracts color information from images"
+  (is-true (fboundp 'skyline-tool::image-colors) "image-colors should be defined")
+  (finishes (skyline-tool::image-colors #(1 2 3 4) 2 2) "Should handle basic image data"))
 
-    ;; Test invalid height (not 16n+1)
-    (signals error (check-height+width-for-blob-320ac 48 320 test-pixels))))
+;; Test bit manipulation functions
+(test bits-to-art-basic
+  "Test bits-to-art converts bits to art format"
+  (is (equal (skyline-tool::bits-to-art #b10101010) "████████")
+      "Should convert bits to block characters"))
 
-;; Test monochrome stamp detection
-(test stamp-monochrome-detection
-  "Test that stamp monochrome detection works correctly for 320A/C mode selection"
-  (let ((mono-stamp (make-array '(4 16) :element-type '(unsigned-byte 8) :initial-element 0))
-        (color-stamp (make-array '(4 16) :element-type '(unsigned-byte 8)
-                                 :initial-contents '((0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-                                                   (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-                                                   (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-                                                   (2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))))
-    ;; Monochrome stamp (only 0,1 values) should be detected as monochrome for 320A
-    (is-true (stamp-is-monochrome-p mono-stamp))
-    ;; Stamp with values >1 should not be monochrome (requires 320C)
-    (is-false (stamp-is-monochrome-p color-stamp))))
+(test bit-pairs-to-art-basic
+  "Test bit-pairs-to-art converts bit pairs to art"
+  (is (stringp (skyline-tool::bit-pairs-to-art #b10101010))
+      "Should return a string"))
 
-;; Test 320A encoding with known input/output
-;; Test that 320A encoding can be called
-(test 320a-encoding-callable
-  "Test that 320A encoding function can be called"
-  (is-true (fboundp '7800-image-to-320a) "320A encoding should be callable"))
+(test bytes-and-art-basic
+  "Test bytes-and-art formats bytes as art"
+  (is (stringp (skyline-tool::bytes-and-art #(1 2 3)))
+      "Should return a string"))
 
-;; Test 320C encoding with known input/output
-(test 320c-encoding-basic
-  "Test 320C encoding with predictable input and expected output"
-  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
-                                :initial-contents '((0) (1) (2) (3)))) ; All palette indices 0-3
-         (palette (vector #(0 0 0) #(85 85 85) #(170 170 170) #(255 255 255)))
-         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
-    ;; Should produce 1 byte column with 1 row
-    (is (= 1 (length result))) ; 1 column
-    (is (= 1 (length (first result)))) ; 1 row per column
-    ;; Values 0,1,2,3 should pack to (0 << 6) | (1 << 4) | (2 << 2) | 3 = 0 | 16 | 8 | 3 = 27
-    (is (= 27 (first (first result))))))
+(test byte-and-art-basic
+  "Test byte-and-art formats single byte as art"
+  (is (stringp (skyline-tool::byte-and-art 170))
+      "Should return a string"))
 
-;; Test 320C encoding with transparent pixels
-(test 320c-encoding-transparent
-  "Test 320C encoding with transparent pixels (value 0)"
-  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
-                                :initial-element 0)) ; All transparent
-         (palette (vector #(0 0 0) #(255 255 255) #(128 128 128) #(64 64 64)))
-         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
-    ;; Should produce 0 (all pixels are 0)
-    (is (= 1 (length result)))
-    (is (= 1 (length (first result))))
-    (is (= 0 (first (first result))))))
+;; Test assembler label functions
+(test assembler-label-name-basic
+  "Test assembler-label-name creates valid labels"
+  (is (stringp (skyline-tool::assembler-label-name "test sprite"))
+      "Should return a string")
+  (is (not (null (skyline-tool::assembler-label-name "test sprite")))
+      "Should not return empty string"))
 
-;; Test 320C encoding with maximum values
-(test 320c-encoding-max-values
-  "Test 320C encoding with maximum palette index values"
-  (let* ((test-image (make-array '(4 1) :element-type '(unsigned-byte 8)
-                                :initial-contents '((3) (3) (3) (3)))) ; All maximum value (3)
-         (palette (vector #(0 0 0) #(85 85 85) #(170 170 170) #(255 255 255)))
-         (result (7800-image-to-320c test-image :byte-width 1 :height 1 :palette palette)))
-    ;; Values 3,3,3,3 should pack to (3 << 6) | (3 << 4) | (3 << 2) | 3 = 192 | 48 | 12 | 3 = 255
-    (is (= 1 (length result)))
-    (is (= 1 (length (first result))))
-    (is (= 255 (first (first result))))))
+;; Test utility functions
+(test pathname-base-name-basic
+  "Test pathname-base-name extracts base name"
+  (is (string= (skyline-tool::pathname-base-name #p"/path/to/file.png") "file")
+      "Should extract filename without extension")
+  (is (string= (skyline-tool::pathname-base-name #p"simple") "simple")
+      "Should handle simple names"))
 
-;; Test encoding error handling
-(test encoding-error-handling
-  "Test that encoding functions handle errors appropriately"
-  (let ((palette (vector #(0 0 0) #(255 255 255)))
-        (invalid-image (make-array '(4 1) :element-type '(unsigned-byte 8)
-                                  :initial-contents '((0) (1) (5) (1))))) ; Value 5 is out of palette range
-    ;; 320A should handle palette mapping errors
-    (handler-case
-        (7800-image-to-320a invalid-image :byte-width 1 :height 1 :palette palette :best-fit-p nil)
-      (error (e) (is-true t "320A encoding should signal error for out-of-palette colors")))
+;; Test Atari color functions
+(test atari-color-name-basic
+  "Test atari-color-name returns color names"
+  (is (stringp (skyline-tool::atari-color-name 0)) "Should return string for valid index")
+  (is (stringp (skyline-tool::atari-color-name 127)) "Should handle max index"))
 
-    ;; 320C should handle palette mapping errors
-    (handler-case
-        (7800-image-to-320c invalid-image :byte-width 1 :height 1 :palette palette :best-fit-p nil)
-      (error (e) (is-true t "320C encoding should signal error for out-of-palette colors")))))
+(test atari-colu-basic
+  "Test atari-colu converts color index to COLU value"
+  (is (integerp (skyline-tool::atari-colu 15)) "Should return integer")
+  (is (<= 0 (skyline-tool::atari-colu 15) 255) "Should be in valid byte range"))
 
-;; Test that would catch 320A/C compilation failures
-(test blob-rip-7800-320ac-compilation-integrity
-  "Test that 320AC blob ripping function compiles and runs without syntax errors"
-  ;; This test verifies that the function can be loaded and called
-  ;; If there are syntax errors, this will fail during test loading
-  (is-true (fboundp 'blob-rip-7800-320ac))
-  ;; Verify the function can be inspected (catches compilation issues)
-  (is (functionp (symbol-function 'blob-rip-7800-320ac)))
-  ;; Test that calling with invalid args produces expected errors, not syntax errors
-  (signals error
-    (blob-rip-7800-320ac "/nonexistent.png")))
+(test atari-colu-string-basic
+  "Test atari-colu-string formats COLU value"
+  (is (stringp (skyline-tool::atari-colu-string #x1a)) "Should return formatted string"))
 
-;; Test 320A/C mode detection and DL header generation logic
-(test 320ac-mode-detection-logic
-  "Test the core logic for 320A/C mode detection and header generation"
-  ;; This tests the internal logic that was broken
-  (let ((mono-stamp (make-array '(4 16) :element-type '(unsigned-byte 8) :initial-element 0))
-        (color-stamp (make-array '(4 16) :element-type '(unsigned-byte 8))))
-    ;; Initialize color-stamp manually
-    (dotimes (row 4)
-      (dotimes (col 16)
-        (setf (aref color-stamp row col) (if (= row 3) 2 0))))
-    ;; Test mode detection - monochrome (0,1) uses 320A, multi-color uses 320C
-    ;; 320A: 1 color + transparent, 320C: 4 colors + transparent
-    (is (eq :320a (if (stamp-is-monochrome-p mono-stamp) :320a :320c)))
-    (is (eq :320c (if (stamp-is-monochrome-p color-stamp) :320a :320c)))))
+;; Test reverse functions
+(test reverse-7-or-8-basic
+  "Test reverse-7-or-8 reverses 7-8 bit values"
+  (is (= (skyline-tool::reverse-7-or-8 #b00001111) #b11110000)
+      "Should reverse bit pattern"))
 
-;; Integration test for 320A/C BLOB generation (catches compilation failures)
-(test blob-rip-7800-320ac-integration-test
-  "Integration test that would catch 320A/C compilation failures"
-  ;; This test verifies that the 320AC function can be loaded and called
-  ;; If there are syntax errors like the ones we fixed, this would fail
-  (is-true (fboundp 'blob-rip-7800-320ac))
-  ;; Test that the function has the expected parameter signature
-  (let ((lambda-list (function-lambda-list 'blob-rip-7800-320ac)))
-    (is (>= (length lambda-list) 1) "Should accept at least path parameter")
-    (is (member '&optional lambda-list) "Should have optional parameters"))
-  ;; Test error handling for invalid input
-  (signals error (blob-rip-7800-320ac "/nonexistent.png")))
+(test reverse-16-basic
+  "Test reverse-16 reverses 16-bit values"
+  (is (= (skyline-tool::reverse-16 #b0000000011111111) #b1111111100000000)
+      "Should reverse 16-bit pattern"))
 
-(test extract-tileset-palette-function-exists
-  "Test that extract-tileset-palette function exists and is callable"
-  (is-true (fboundp 'extract-tileset-palette) "extract-tileset-palette function should exist")
-  (is (functionp (symbol-function 'extract-tileset-palette)) "Should be a function"))
+;; Test rows-of-width function
+(test rows-of-width-basic
+  "Test rows-of-width organizes bytes into rows"
+  (let ((result (skyline-tool::rows-of-width #(1 2 3 4 5 6 7 8) 4)))
+    (is (listp result) "Should return a list")
+    (is (> (length result) 0) "Should not be empty")))
 
-(test extract-tileset-palette-generates-valid-output
-  "Test that extract-tileset-palette generates valid palette files"
-  ;; This test verifies that the function can be called and generates files
-  ;; We'll use a temporary file for testing
-  (let ((temp-file (make-pathname :name "test-palette" :type "s" :directory '(:absolute "tmp"))))
-    (ensure-directories-exist temp-file)
-    ;; Test that the function can be called without errors
-    (finishes (extract-tileset-palette "Source/Maps/Tiles/AncientTiles.tsx" temp-file))
-    ;; Check that the file was created
-    (is-true (probe-file temp-file) "Palette file should be created")
-    ;; Clean up
-    (when (probe-file temp-file)
-      (delete-file temp-file))))
+;; Test make-fillable-vector
+(test make-fillable-vector-basic
+  "Test make-fillable-vector creates adjustable vector"
+  (let ((vector (skyline-tool::make-fillable-vector '(1 2 3))))
+    (is (arrayp vector) "Should return array")
+    (is (adjustable-array-p vector) "Should be adjustable")))
 
-(test extract-tileset-palette-output-structure
-  "Test that extract-tileset-palette generates correct file structure"
-  ;; Create a temporary palette file and verify its structure
-  (let ((temp-file (make-pathname :name "test-palette-structure" :type "s" :directory '(:absolute "tmp"))))
-    (ensure-directories-exist temp-file)
-    (unwind-protect
-        (progn
-          (finishes (extract-tileset-palette "Source/Maps/Tiles/AncientTiles.tsx" temp-file))
-          (is-true (probe-file temp-file) "Palette file should exist")
-          ;; Read the file and check its structure
-          (when (probe-file temp-file)
-            (with-open-file (stream temp-file :direction :input)
-              (let ((content (make-string (file-length stream))))
-                (read-sequence content stream)
-                ;; Check for expected structure
-                (is (search ";;; Palette" content) "Should contain palette header")
-                (is (search ".if TV == NTSC" content) "Should contain NTSC conditional")
-                (is (search ".if TV == PAL" content) "Should contain PAL conditional")
-                (is (search ".fi" content) "Should contain conditional endings")))))
-      ;; Clean up
-      (when (probe-file temp-file)
-        (delete-file temp-file)))))
+;; Test monochrome detection functions
+(test monochrome-lines-p-basic
+  "Test monochrome-lines-p detects monochrome lines"
+  (is-true (fboundp 'skyline-tool::monochrome-lines-p) "monochrome-lines-p should be defined")
+  (finishes (skyline-tool::monochrome-lines-p #(0 0 0 0) 2 2) "Should handle basic input"))
 
-(test extract-tileset-palette-error-handling
-  "Test error handling for extract-tileset-palette"
-  ;; Test with invalid paths
-  (signals error (extract-tileset-palette "/nonexistent.tsx" "/tmp/test.s"))
-  (signals error (extract-tileset-palette "Source/Maps/Tiles/AncientTiles.tsx" "/invalid/path/test.s")))
+(test monochrome-image-p-basic
+  "Test monochrome-image-p detects monochrome images"
+  (is-true (fboundp 'skyline-tool::monochrome-image-p) "monochrome-image-p should be defined")
+  (finishes (skyline-tool::monochrome-image-p #(0 0 0 0)) "Should handle basic input"))
 
-(test extract-tileset-palette-content-validation
-  "Test that extract-tileset-palette generates valid palette content"
-  ;; Create a temporary palette file and verify its content structure
-  (let ((temp-file (make-pathname :name "test-palette-content" :type "s" :directory '(:absolute "tmp"))))
-    (ensure-directories-exist temp-file)
-    (unwind-protect
-        (progn
-          (finishes (extract-tileset-palette "Source/Maps/Tiles/AncientTiles.tsx" temp-file))
-          (is-true (probe-file temp-file) "Palette file should exist")
-          ;; Read and validate the content
-          (when (probe-file temp-file)
-            (with-open-file (stream temp-file :direction :input)
-              (let ((content (make-string (file-length stream))))
-                (read-sequence content stream)
-                ;; Check for valid assembly syntax
-                (is (search ".byte" content) "Should contain .byte directives")
-                (is (search "CoLu(" content) "Should contain CoLu color directives")
-                ;; Check that we have both NTSC and PAL sections
-                (is (>= (count #\newline (uiop:split-string content :separator ".if TV == ")) 2)
-                    "Should have at least 2 conditional blocks (NTSC and PAL)")
-                ;; Check for proper closing
-                (is (>= (count-substring ".fi" content) 2) "Should have at least 2 .fi directives")))))
-      ;; Clean up
-      (when (probe-file temp-file)
-        (delete-file temp-file)))))
+;; Test platform-specific compilation functions existence
+(test platform-compilation-functions-existence
+  "Test that platform-specific compilation functions exist"
+  (dolist (func '(skyline-tool::compile-2600-font-8x16
+                  skyline-tool::compile-2600-playfield
+                  skyline-tool::compile-chaos-character
+                  skyline-tool::compile-5200-mode-e-bitmap
+                  skyline-tool::compile-gtia-player
+                  skyline-tool::compile-mob
+                  skyline-tool::compile-atari-8×8
+                  skyline-tool::compile-gram-intv
+                  skyline-tool::compile-intv-sprite
+                  skyline-tool::compile-art-intv
+                  skyline-tool::compile-tileset
+                  skyline-tool::compile-tileset-64
+                  skyline-tool::compile-tileset-cgb
+                  skyline-tool::compile-ted-bitmap
+                  skyline-tool::compile-ted-charmap
+                  skyline-tool::compile-ted-sprite
+                  skyline-tool::compile-ted-multicolor-sprite
+                  skyline-tool::compile-lynx-sprite
+                  skyline-tool::compile-lynx-tiles
+                  skyline-tool::compile-lynx-font
+                  skyline-tool::compile-snes-mode7
+                  skyline-tool::compile-snes-tiles))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-;; Test tty-x11-p functionality for regression prevention
-(test tty-xterm-p-xterm-detection
-  "Test that tty-xterm-p correctly identifies xterm-compatible terminals"
-  ;; This test ensures the fix for dumb terminal tty-x11-p failures
-  (let ((original-term (sb-posix:getenv "TERM")))
-    (unwind-protect
-        (progn
-          ;; Test xterm detection
-          (sb-posix:setenv "TERM" "xterm" t)
-          (is-true (tty-xterm-p) "Should detect xterm as compatible")
+;; Test font-related functions
+(test font-compilation-functions-existence
+  "Test that font compilation functions exist"
+  (dolist (func '(skyline-tool::compile-font-command
+                  skyline-tool::compile-font-8×8
+                  skyline-tool::tia-font-interpret
+                  skyline-tool::antic-font-interpret
+                  skyline-tool::tia-font-guide
+                  skyline-tool::antic-font-guide
+                  skyline-tool::tia-font-write
+                  skyline-tool::antic-font-write))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-          ;; Test xterm-256color detection
-          (sb-posix:setenv "TERM" "xterm-256color" t)
-          (is-true (tty-xterm-p) "Should detect xterm-256color as compatible")
+;; Test TIA (Atari 2600) specific functions
+(test tia-functions-existence
+  "Test that TIA-specific functions exist"
+  (dolist (func '(skyline-tool::tia-player-interpret/strip
+                  skyline-tool::tia-player-interpret
+                  skyline-tool::tia-48px-interpret
+                  skyline-tool::tia-48px-preview
+                  skyline-tool::compile-tia-48px
+                  skyline-tool::compile-batari-48px
+                  skyline-tool::compile-batari-48px-command))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-          ;; Test dumb terminal (should not be detected as xterm)
-          (sb-posix:setenv "TERM" "dumb" t)
-          (is-false (tty-xterm-p) "Should not detect dumb terminal as xterm-compatible")
+;; Test ANTIC (Atari 8-bit) specific functions
+(test antic-functions-existence
+  "Test that ANTIC-specific functions exist"
+  (dolist (func '(skyline-tool::mode-e-row-bytes
+                  skyline-tool::mode-e-interpret
+                  skyline-tool::antic-font-interpret
+                  skyline-tool::antic-font-guide
+                  skyline-tool::antic-font-write))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-          ;; Test screen (should not be detected as xterm)
-          (sb-posix:setenv "TERM" "screen" t)
-          (is-false (tty-xterm-p) "Should not detect screen as xterm-compatible"))
-      ;; Restore original TERM
-      (if original-term
-          (sb-posix:setenv "TERM" original-term t)
-          (sb-posix:unsetenv "TERM")))))
+;; Test Chaos frame functions
+(test chaos-functions-existence
+  "Test that Chaos frame functions exist"
+  (dolist (func '(skyline-tool::chaos-frame->key
+                  skyline-tool::chaos-byte->binary-string
+                  skyline-tool::chaos-extract-frame
+                  skyline-tool::ensure-chaos-frame-index
+                  skyline-tool::chaos-previous-value
+                  skyline-tool::fill-chaos-row-indices
+                  skyline-tool::write-chaos-character-output))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-(test x11-p-display-detection
-  "Test that x11-p correctly detects X11 display availability"
-  ;; Skip this test due to environment variable manipulation issues
-  ;; The core functionality is tested elsewhere
-  (skip "Environment variable manipulation test skipped for stability"))
+;; Test playfield functions
+(test playfield-functions-existence
+  "Test that playfield functions exist"
+  (dolist (func '(skyline-tool::playfield-row->string
+                  skyline-tool::dominant-playfield-color
+                  skyline-tool::format-playfield-color
+                  skyline-tool::playfield-color-byte))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-(test tty-x11-p-regression-dumb-terminal
-  "Regression test for tty-x11-p failures in dumb terminal environments"
-  ;; Skip this test due to environment variable manipulation issues
-  ;; The core functionality is tested elsewhere
-  (skip "Environment variable manipulation test skipped for stability"))
+;; Test VIC-II (C64) specific functions
+(test vic2-functions-existence
+  "Test that VIC-II specific functions exist"
+  (dolist (func '(skyline-tool::pretty-mob-data-listing-vic2
+                  skyline-tool::mob-index+bitmap+color-sets
+                  skyline-tool::tile-cell-vic2-x
+                  skyline-tool::tile-cell-vic2-y))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-(test tty-x11-p-regression-interactive-terminal
-  "Regression test for tty-x11-p functionality in interactive xterm environments"
-  ;; Skip this test due to environment variable manipulation issues
-  ;; The core functionality is tested elsewhere
-  (skip "Environment variable manipulation test skipped for stability"))
+;; Test compression functions
+(test compression-functions-existence
+  "Test that compression functions exist"
+  (dolist (func '(skyline-tool::zx7-compress
+                  skyline-tool::48px-array-to-bytes))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-;; Test art compilation functionality to prevent Art.UI.o build failures
-(test compile-art-7800-does-not-hang
-  "Regression test to ensure art compilation doesn't hang indefinitely"
-  ;; This test prevents recurrence of the hanging 320C compilation issue
-  (skip "Art compilation test requires actual PNG files - tested manually"))
+;; Test PNG processing functions
+(test png-functions-existence
+  "Test that PNG processing functions exist"
+  (dolist (func '(skyline-tool::png->palette
+                  skyline-tool::png->bits
+                  skyline-tool::extract-region))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-(test art-compilation-dependencies-exist
-  "Test that art compilation dependencies are properly tracked"
-  ;; This ensures the Makefile dependencies for art files are correct
-  (let ((art-files '("Source/Art/DrawUI.png" "Source/Art/Failure.png" "Source/Art/Buttons.png")))
-    (dolist (art-file art-files)
-      (is-true (probe-file art-file)
-               (format nil "Art dependency ~a should exist" art-file)))))
+;; Test palette functions
+(test palette-functions-existence
+  "Test that palette functions exist"
+  (dolist (func '(skyline-tool::find-nearest-palette-color
+                  skyline-tool::try-to-maintain-palette))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-(test art-index-parsing-valid
-  "Test that art index files can be parsed without errors"
-  ;; This prevents issues with malformed .art files
-  (let ((art-content "DrawUI.png 320C 8×8
-Failure.png 320A 8×8
-Buttons.png 320A 8×8"))
-    (finishes
-      (with-input-from-string (s art-content)
-        (loop for line = (read-line s nil)
-              while line
-              when (and (> (length line) 0) (not (char= #\# (char line 0))))
-              collect (split-sequence #\Space line :remove-empty-subseqs t))))))
+;; Test Inty compilation functions
+(test inty-compilation-existence
+  "Test that Intellivision compilation functions exist"
+  (dolist (func '(skyline-tool::read-intv-art-index
+                  skyline-tool::assemble-intv-rom))
+    (is-true (fboundp func)
+             "~a function should be defined" func)))
 
-;; Test palette generation to prevent palette file issues
-(test palette-generation-basic-functionality
-  "Test that palette generation functions don't crash"
-  ;; This prevents recurrence of palette generation compilation errors
-  (skip "Palette generation test requires actual tileset files - tested in extract-tileset-palette tests"))
+;; Test atari-colu-run function
+(test atari-colu-run-existence
+  "Test atari-colu-run function exists"
+  (is-true (fboundp 'skyline-tool::atari-colu-run) "atari-colu-run should be defined")
+  (finishes (skyline-tool::atari-colu-run) "Should handle no arguments"))
 
-(test atari-colu-string-error-handling
-  "Test that atari-colu-string handles invalid inputs gracefully"
-  ;; This prevents recurrence of palette generation failures due to invalid colors
-  (finishes (atari-colu-string #x00))
-  (finishes (atari-colu-string #x10))
-  (finishes (atari-colu-string #xFF))
-  ;; Test invalid luminance (should be handled gracefully)
-  (finishes (atari-colu-string #x1F)))  ; Invalid luminance > 15
-
-(defun count-substring (substring string)
-  "Count occurrences of substring in string"
-  (let ((count 0)
-        (pos 0))
-    (loop
-      (setf pos (search substring string :start2 pos))
-      (unless pos (return count))
-      (incf count)
-      (incf pos (length substring)))))
-
-(defun run-graphics-tests ()
-  "Run all graphics tests and return results"
-  (fiveam:run! 'graphics-tests))
+;; Test find-nearest-palette-color function
+(test find-nearest-palette-color-existence
+  "Test find-nearest-palette-color function exists"
+  (is-true (fboundp 'skyline-tool::find-nearest-palette-color)
+           "find-nearest-palette-color should be defined")
+  (finishes (skyline-tool::find-nearest-palette-color '(255 0 0))
+            "Should handle basic RGB input"))

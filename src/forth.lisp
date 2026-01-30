@@ -36,17 +36,24 @@
         (destructuring-bind (&key source source-file) meta
           (warn "redefining ~a (now from ~a, previously from ~a~@[ ~a~])"
                 name *forth-file* source source-file))))
-    (loop for word = (read-forth-word)
-          with def = (list)
-          do (cond ((null word)
-                    (error "End of file while trying to define ~a" name))
-                   ((string-equal ";" (princ-to-string word))
-                    (setf (gethash name *words*) (list def nil
-                                                       (list :source :file :source-file *forth-file*)))
-                    (return-from forth/colon name))
-                   (t
-                    (appendf def (cons word nil)))))
-    (error "colon-definition : ~a did not terminate properly with ;" word)))
+    ;; Check for [inline] directive
+    (let ((inline-p nil))
+      (let ((next-word (read-forth-word)))
+        (when (and next-word (string-equal "[inline]" (princ-to-string next-word)))
+          (setf inline-p t)
+          (setf next-word (read-forth-word))))
+      (loop for word = next-word then (read-forth-word)
+            with def = (list)
+            do (cond ((null word)
+                      (error "End of file while trying to define ~a" name))
+                     ((string-equal ";" (princ-to-string word))
+                      (setf (gethash name *words*) (list def nil
+                                                         (list :source :file :source-file *forth-file*
+                                                               :inline inline-p)))
+                      (return-from forth/colon name))
+                     (t
+                      (appendf def (cons word nil)))))
+      (error "colon-definition : ~a did not terminate properly with ;" word))))
 
 (defun forth/c-quote ()
   (loop for char = (read-char *standard-input* nil nil)
@@ -163,7 +170,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     (with-input-from-file (*standard-input* pathname)
       (let ((*forth-file* pathname))
         (setf *words* (compile-forth-script :dictionary *words*))
-        (format *trace-output* " ( done with ~a ) " (enough-namestring pathname))))))
+        (format *trace-output* " ( done with ~a ) " (enough-namestring pathname)))))
 
 (defun forth/comment-parens ()
   (loop for word = (read-forth-word)
@@ -306,17 +313,19 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                           (logand #xff num)
                           (ash (logand #xff00 num) -8)
                           (logand #xffff num)
-                          word))
-              (let (*forth-input-stuffing*)
-                (when (< 1 (length run))
-                  (format t "~%;;; start of ~a from ~a~@[ ~a~]"
-                          word (getf metadata :source "?") (getf metadata :source-file nil)))
-                (dolist (w (reverse (copy-list run)))
-                  (push w *forth-input-stuffing*))
-                (loop while *forth-input-stuffing*
-                      do (forth-interpret (read-forth-word)))
-                (when (< 1 (length run))
-                  (format t "~%;;; end of ~a" word))))
+                          word)))
+              ;; Handle inline vs regular word definitions
+              (let ((inline-p (getf metadata :inline)))
+                (let (*forth-input-stuffing*)
+                  (when (< 1 (length run))
+                    (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
+                            word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
+                  (dolist (w (reverse (copy-list run)))
+                    (push w *forth-input-stuffing*))
+                  (loop while *forth-input-stuffing*
+                        do (forth-interpret (read-forth-word)))
+                  (when (< 1 (length run))
+                    (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p ""))))))
             (force-output *standard-output*))
           (forth-eval compile)))
     ;; else: No def
@@ -356,7 +365,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                    (clim-simple-echo:run-in-simple-echo
                     (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
                     :process-name "Forth Words")))
-               (go top))))))))
+               (go top))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
@@ -370,5 +379,5 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     #+ () (dolist (word (hash-table-keys *words*))
             (format *trace-output* "~% : ~a ~{~a~^ ~} ;" word (car (gethash word *words*))))
     (force-output *trace-output*)
-    *words*))
+    *words*))))
 

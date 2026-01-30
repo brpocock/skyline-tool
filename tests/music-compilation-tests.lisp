@@ -157,24 +157,46 @@
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
 
-(test 8-apple2-music-compilation-validation
-  "Test that Apple II music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/8/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+(test 2-apple2-mockingboard-music-compilation-validation
+  "Test that Apple II Mockingboard music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/2/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
         (input-file "test-input.mid"))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
           (write *test-midi-data* :stream out :readably t))
 
-        ;; Test compilation
-        (finishes (skyline-tool::compile-music output-file input-file "8" "Mockingboard" "NTSC"))
+        ;; Test Mockingboard compilation
+        (finishes (skyline-tool::compile-music output-file input-file "2" "Mockingboard" "NTSC"))
 
         ;; Validate output
-        (validate-music-output-file output-file 8
-                                  '(";;; Mockingboard Music compiled from"
-                                    "Apple ][ Mockingboard"
-                                    "mock_init:"
-                                    "sta AY_REG"))
+        (validate-music-output-file output-file 2
+                                  '(";;; Apple II Mockingboard Music compiled from"
+                                    "Apple II Mockingboard (AY-3-8910 PSG)"
+                                    "mock_write_register:"
+                                    "MOCK_REG_SELECT"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file)))))
+
+(test 2-apple2-beeper-music-compilation-validation
+  "Test that Apple II beeper music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/2/test-beeper-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        ;; Create a minimal test input file
+        (with-open-file (out input-file :direction :output :if-exists :supersede)
+          (write *test-midi-data* :stream out :readably t))
+
+        ;; Test beeper compilation
+        (finishes (skyline-tool::compile-music output-file input-file "2" "Beeper" "NTSC"))
+
+        ;; Validate output
+        (validate-music-output-file output-file 2
+                                  '(";;; Apple II Beeper Music compiled from"
+                                    "Apple II built-in speaker (1-bit audio)"
+                                    "beeper_init:"
+                                    "sta SPEAKER"))
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
@@ -311,3 +333,184 @@
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
+
+(test nes-music-compilation-validation
+  "Test that NES music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/8/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-nes output-file input-file))
+
+           ;; Validate output contains expected NES APU code
+           (validate-music-output-file output-file 8
+                                     '(";;; NES APU Music compiled from"
+                                       "APU_PULSE1 = $4000"
+                                       "APU_PULSE2 = $4004"
+                                       "APU_TRIANGLE = $4008"
+                                       "apu_init:"
+                                       "note_periods:"
+                                       "play_note_pulse1:"
+                                       "apu_stop:"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file))))))
+
+(test snes-music-compilation-validation
+  "Test that SNES music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/88/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-snes output-file input-file))
+
+           ;; Validate output contains expected SNES DSP code
+           (validate-music-output-file output-file 88
+                                     '(";;; SNES SPC700 Music compiled from"
+                                       "DSP_VOL_L = $00"
+                                       "DSP_PITCH_L = $02"
+                                       "DSP_KON = $4C"
+                                       "dsp_init:"
+                                       "note_pitches:"
+                                       "play_note:"
+                                       "stop_channel:"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file))))))
+
+(test sms-music-compilation-validation
+  "Test that SMS music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/3010/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-sms output-file input-file))
+
+           ;; Validate output contains expected SMS PSG code
+           (validate-music-output-file output-file 3010
+                                     '(";;; SN76489 PSG Music compiled from"
+                                       "PSG_PORT = $7F"
+                                       "psg_init:"
+                                       "note_freqs:"
+                                       "psg_write:"
+                                       "psg_stop:"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file))))))
+
+(test colecovision-music-compilation-validation
+  "Test that ColecoVision music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/264/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-colecovision output-file input-file))
+
+           ;; Validate output contains expected ColecoVision PSG code
+           (validate-music-output-file output-file 264
+                                     '(";;; ColecoVision SN76489 PSG Music compiled from"
+                                       "PSG_PORT = $FF"
+                                       "psg_init:"
+                                       "note_freqs:"
+                                       "play_tone:"
+                                       "psg_stop:"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file))))))
+
+(test sg1000-music-compilation-validation
+  "Test that SG-1000 music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/1000/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-sg1000 output-file input-file))
+
+           ;; Validate output contains expected SG-1000 PSG code
+           (validate-music-output-file output-file 1000
+                                     '(";;; SG-1000 SN76489 PSG Music compiled from"
+                                       "PSG_PORT = $7F"
+                                       "psg_init:"
+                                       "note_freqs:"
+                                       "play_tone:"
+                                       "psg_stop:"))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file)))))
+
+(test 200-lynx-music-compilation-validation
+  "Test that Atari Lynx music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/200/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-lynx output-file input-file))
+
+           ;; Validate output contains expected Lynx audio code
+           (validate-music-output-file output-file 200
+                                     '(";;; Atari Lynx Music compiled from"
+                                       "AUD0_VOL"
+                                       "AUD0_FEEDBACK"
+                                       "AUD0_OUTPUT"
+                                       "AUD0_SHIFT"
+                                       "AUD0_BACKUP"
+                                       "AUD0_CONTROL"
+                                       "AUD0_COUNT"
+                                       "AUD0_OTHER")))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file)))))
+
+(test 264-c16-music-compilation-validation
+  "Test that Commodore 16/Plus4 music compilation produces correct assembly output"
+  (let ((output-file (format nil "Object/264/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+        (input-file "test-input.mid"))
+    (unwind-protect
+        (progn
+           ;; Create a minimal test input file
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write *test-midi-data* :stream out :readably t))
+
+           ;; Test compilation
+           (finishes (skyline-tool::compile-music-c16 output-file input-file))
+
+           ;; Validate output contains expected TED audio code
+           (validate-music-output-file output-file 264
+                                     '(";;; Commodore 16 Music compiled from"
+                                       "TED_SOUND"
+                                       "TED_VOLUME"
+                                       "TED_ADSR"
+                                       "TED_WAVEFORM")))
+      ;; Cleanup
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file))))))

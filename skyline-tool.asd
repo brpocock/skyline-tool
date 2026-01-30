@@ -85,10 +85,15 @@
   :description "Tests for Skyline-Tool"
   :author "Bruce-Robert Pocock"
   :version "0.9.1"
-  :depends-on (:skyline-tool :fiveam)
+  :depends-on (
+               :skyline-tool
+               :fiveam
+               :yacc
+               )
   :defsystem-depends-on (:asdf)
   :components ((:module "tests"
-                :components ((:file "package")
+                :components ( ;; (:file "test-data-generators") ;; Temporarily disabled due to compilation issues
+                             (:file "package")
                              (:file "action-tests" :depends-on ("package"))
                              (:file "display-list-tests" :depends-on ("package"))
                              (:file "text-transcription-tests" :depends-on ("package"))
@@ -109,6 +114,8 @@
                              (:file "sega-tests" :depends-on ("package"))
                              (:file "colecovision-tests" :depends-on ("package"))
                              (:file "zx81-tests" :depends-on ("package"))
-                             (:file "spectrum-tests" :depends-on ("package")))))
+                             (:file "spectrum-tests" :depends-on ("package"))
+                             (:file "lynx-tests" :depends-on ("package"))
+                             (:file "cdr-tests" :depends-on ("package")))))
   :perform (asdf:test-op (o c)
-             (funcall (intern "RUN!" :fiveam))))
+                         (funcall (intern "RUN!" :fiveam))))

@@ -55,6 +55,51 @@
   (is-true (skyline-tool::check-machine-valid 8)
            "NES (machine 8) should be a valid machine"))
 
+;; Test NES dispatch-png% method exists and works
+(test nes-dispatch-method
+  "Test that NES has a dispatch-png% method"
+  (is-true (find-method #'skyline-tool::dispatch-png% '() (list (list 'eql 8) t t t t t t t) nil)
+           "NES should have a dispatch-png% method specialized for machine 8"))
+
+;; Test NES CHR tile compilation
+(test nes-chr-tile-compilation
+  "Test NES CHR tile compilation with mock data"
+  ;; Test that the compilation function exists
+  (is-true (fboundp 'skyline-tool::compile-nes-chr-tiles)
+           "compile-nes-chr-tiles function should exist")
+
+  ;; Test with mock 8x8 pixel data
+  (let ((mock-pixels (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element 0))
+        (temp-dir (uiop:ensure-directory-pathname "/tmp/nes-test/")))
+    (ensure-directories-exist temp-dir)
+    ;; This test verifies the function can be called without errors
+    (finishes (skyline-tool::compile-nes-chr-tiles "mock.png" temp-dir 8 8 mock-pixels)
+              "compile-nes-chr-tiles should complete without errors")))
+
+;; Test NES nametable compilation
+(test nes-nametable-compilation
+  "Test NES nametable compilation"
+  (is-true (fboundp 'skyline-tool::compile-nes-nametable)
+           "compile-nes-nametable function should exist")
+
+  (let ((mock-pixels (make-array '(240 256) :element-type '(unsigned-byte 32) :initial-element 0))
+        (temp-dir (uiop:ensure-directory-pathname "/tmp/nes-test/")))
+    (ensure-directories-exist temp-dir)
+    (finishes (skyline-tool::compile-nes-nametable "mock.png" temp-dir 240 256 mock-pixels)
+              "compile-nes-nametable should complete without errors")))
+
+;; Test NES sprite compilation
+(test nes-sprite-compilation
+  "Test NES sprite compilation"
+  (is-true (fboundp 'skyline-tool::compile-nes-sprite)
+           "compile-nes-sprite function should exist")
+
+  (let ((mock-pixels (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element 0))
+        (temp-dir (uiop:ensure-directory-pathname "/tmp/nes-test/")))
+    (ensure-directories-exist temp-dir)
+    (finishes (skyline-tool::compile-nes-sprite "mock.png" temp-dir 8 8 mock-pixels)
+              "compile-nes-sprite should complete without errors")))
+
 ;; Test NES palette usage in graphics
 (test nes-palette-integration
   "Test NES palette integration in graphics system"

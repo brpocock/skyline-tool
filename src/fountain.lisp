@@ -701,18 +701,16 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   :test 'equalp
   :documentation "Words recognized specially by the stage directions parser")
 
-(setf *stage-direction-parser* nil)
-
 (eval
- `(yacc:define-parser *stage-direction-parser*
-    (:start-symbol directions)
+ `(yacc:define-parsrer *stage-direction-parser*
+      (:start-symbol directions)
     (:terminals #.(concatenate 'list +stage-direction-words+
                                '(number quoted actor variable)
                                *common-palette*))
     (:precedence ((:right -) (:left + -) (:left * /)
-                  (:left directions)
-                  (:left statement)
-                  (:left preparation-paragraph)))
+                             (:left directions)
+                             (:left statement)
+                             (:left preparation-paragraph)))
     (directions (statement #'identity)
                 (directions statement #'list))
     (someone actor

@@ -5,7 +5,7 @@
 (in-package :skyline-tool/test)
 
 (def-suite intv-gram-tests
-  :description "Tests for Intellivision GRAM card compilation")
+  :description "Tests for Intellivision graphics and music compilation")
 
 (in-suite intv-gram-tests)
 
@@ -282,7 +282,145 @@
             ;; Verify each DECLE is a valid 16-bit hex value
             (dolist (line decle-lines)
               (is-true (cl-ppcre:scan "^DECLE \\$[0-9A-F]{4}$" line)
-                       "Each DECLE should be valid 16-bit hex: ~A" line)))))))))
+                       "Each DECLE should be valid 16-bit hex: ~A" line))))))))
+
+;; Test 10: Binary data validation for known patterns
+(test gram-compiler-binary-validation
+  "Test that GRAM compiler produces correct binary data for known pixel patterns"
+  (with-temp-gram-output (output-path "binary-test.s")
+    ;; Test pattern: checkerboard (alternating black/white pixels)
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      ;; Create checkerboard: even sum of coordinates = white (7), odd = black (0)
+      (dotimes (x 8)
+        (dotimes (y 8)
+          (setf (aref test-array x y)
+                (if (evenp (+ x y)) 7 0))))
+
+      (let ((test-png (make-pathname :name "binary-test" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        ;; Parse the output and validate binary data
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; For checkerboard, each row should be alternating bits: 10101010 ($AA) or 01010101 ($55)
+            ;; Since we're packing 2 bytes per DECLE in big-endian format
+            (is (= 8 (length decle-values))
+                "Should generate 8 DECLE values for 8x8 checkerboard")
+
+            ;; Each DECLE should be either $AAAA (AA AA) or $5555 (55 55) for checkerboard
+            ;; AA = 10101010, 55 = 01010101
+            (dolist (hex-value decle-values)
+              (let ((numeric-value (parse-integer hex-value :start 1 :radix 16)))
+                (is-true (or (= numeric-value #xAAAA) (= numeric-value #x5555))
+                         "Each DECLE should be $AAAA or $5555 for checkerboard: ~A" hex-value)))))))))
+
+;; Test 11: All-black GRAM card validation
+(test gram-compiler-all-black-validation
+  "Test GRAM compiler with all-black pixel pattern"
+  (with-temp-gram-output (output-path "all-black.s")
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 0)))
+      (let ((test-png (make-pathname :name "all-black" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; All black pixels should result in all $0000 DECLE values
+            (is (= 8 (length decle-values))
+                "Should generate 8 DECLE values for 8x8 all-black card")
+            (dolist (hex-value decle-values)
+              (is (string= hex-value "$0000")
+                  "All-black card should have $0000 values: ~A" hex-value))))))))
+
+;; Test 12: All-white GRAM card validation
+(test gram-compiler-all-white-validation
+  "Test GRAM compiler with all-white pixel pattern"
+  (with-temp-gram-output (output-path "all-white.s")
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 7)))
+      (let ((test-png (make-pathname :name "all-white" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; All white pixels should result in all $FFFF DECLE values
+            (is (= 8 (length decle-values))
+                "Should generate 8 DECLE values for 8x8 all-white card")
+            (dolist (hex-value decle-values)
+              (is (string= hex-value "$FFFF")
+                  "All-white card should have $FFFF values: ~A" hex-value))))))))
+
+;; Test 13: Multi-card GRAM compilation validation
+(test gram-compiler-multi-card-validation
+  "Test GRAM compiler with multiple cards (16x16 image = 4 cards)"
+  (with-temp-gram-output (output-path "multi-card.s")
+    (let ((test-array (make-array '(16 16) :element-type '(unsigned-byte 8))))
+      ;; Create distinct patterns for each card
+      (dotimes (x 16)
+        (dotimes (y 16)
+          (let ((card-x (floor x 8))
+                (card-y (floor y 8)))
+            ;; Different pattern for each card based on its position
+            (setf (aref test-array x y)
+                  (cond ((and (= card-x 0) (= card-y 0)) 7) ; Top-left: white
+                        ((and (= card-x 1) (= card-y 0)) 0) ; Top-right: black
+                        ((and (= card-x 0) (= card-y 1)) 7) ; Bottom-left: white
+                        (t 0)))))) ; Bottom-right: black
+
+      (let ((test-png (make-pathname :name "multi-card" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; 16x16 = 4 cards × 8 DECLE each = 32 DECLE total
+            (is (= 32 (length decle-values))
+                "Should generate 32 DECLE values for 16x16 image (4 cards)")
+
+            ;; First card (top-left) should be all $FFFF (white)
+            (dotimes (i 8)
+              (is (string= (nth i decle-values) "$FFFF")
+                  "First card DECLE ~D should be $FFFF (white): ~A" i (nth i decle-values)))
+
+            ;; Second card (top-right) should be all $0000 (black)
+            (dotimes (i 8)
+              (is (string= (nth (+ i 8) decle-values) "$0000")
+                  "Second card DECLE ~D should be $0000 (black): ~A" (+ i 8) (nth (+ i 8) decle-values)))))))))
+
+;; Test 14: Sprite compilation binary validation
+(test intv-sprite-binary-validation
+  "Test that Intellivision sprite compiler produces correct binary data"
+  (with-temp-gram-output (output-path "sprite-test.s")
+    ;; Test pattern: 8x8 sprite with diagonal pattern
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      ;; Create diagonal pattern: pixels where x = y are white
+      (dotimes (x 8)
+        (dotimes (y 8)
+          (setf (aref test-array x y)
+                (if (= x y) 7 0))))
+
+      (let ((test-png (make-pathname :name "sprite-test" :type "png")))
+        (skyline-tool::compile-intv-sprite test-png *test-gram-dir*
+                                          :palette-pixels test-array)
+
+        ;; Parse the output and validate binary data
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; Should generate 8 DECLE values for 8x8 sprite
+            (is (= 8 (length decle-values))
+                "Should generate 8 DECLE values for 8x8 sprite")
+
+            ;; For diagonal pattern, each DECLE should have specific bit patterns
+            ;; Row 0: pixel 0 white, others black -> $0080 (bit 7 set)
+            ;; Row 1: pixel 1 white, others black -> $0040 (bit 6 set)
+            ;; etc.
+            (let ((expected-patterns '("$0080" "$0040" "$0020" "$0010"
+                                       "$0008" "$0004" "$0002" "$0001")))
+              (dotimes (i 8)
+                (is (string= (nth i decle-values) (nth i expected-patterns))
+                    "Sprite DECLE ~D should be ~A for diagonal pattern: ~A"
+                    i (nth i expected-patterns) (nth i decle-values)))))))))))
 
 ;; Test 9: Regression test - single card output
 (test gram-compiler-regression-single-card
@@ -377,6 +515,116 @@
                    "/nonexistent.txt")
            "compile-speech-2609 should signal error (not implemented)"))
 
+;; Test 15: GRAM compiler error conditions
+(test gram-compiler-error-conditions
+  "Test GRAM compiler error handling for invalid inputs"
+  (with-temp-gram-output (output-path "error-test.s")
+    (let ((test-png (make-pathname :name "error-test" :type "png"))
+          (test-array (make-test-palette-array 16 16)))
+
+      ;; Test dimension too small (width < 8)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 4 :height 8
+                                        :palette-pixels test-array)
+        "Should error when width < 8")
+
+      ;; Test dimension too small (height < 8)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 8 :height 4
+                                        :palette-pixels test-array)
+        "Should error when height < 8")
+
+      ;; Test zero dimensions
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 0 :height 8
+                                        :palette-pixels test-array)
+        "Should error when width = 0")
+
+      ;; Test negative dimensions
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width -8 :height 8
+                                        :palette-pixels test-array)
+        "Should error when width negative")
+
+      ;; Test dimension exceeds array bounds
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :width 32 :height 16
+                                        :palette-pixels test-array)
+        "Should error when requested width exceeds array width"))))
+
+;; Test 16: Sprite compiler error conditions
+(test intv-sprite-error-conditions
+  "Test sprite compiler error handling for invalid inputs"
+  (with-temp-gram-output (output-path "sprite-error-test.s")
+    (let ((test-png (make-pathname :name "sprite-error-test" :type "png"))
+          (test-array (make-test-palette-array 16 16)))
+
+      ;; Test dimension too small (width < 8)
+      (signals error
+        (skyline-tool::compile-intv-sprite test-png *test-gram-dir*
+                                          :width 4 :height 8
+                                          :palette-pixels test-array)
+        "Should error when sprite width < 8")
+
+      ;; Test dimension too small (height < 8)
+      (signals error
+        (skyline-tool::compile-intv-sprite test-png *test-gram-dir*
+                                          :width 8 :height 4
+                                          :palette-pixels test-array)
+        "Should error when sprite height < 8")
+
+      ;; Test non-integer dimensions (should be floored but still work)
+      (finishes
+        (skyline-tool::compile-intv-sprite test-png *test-gram-dir*
+                                          :width 8.7 :height 8.9
+                                          :palette-pixels test-array)
+        "Should accept non-integer dimensions (floored)"))))
+
+;; Test 17: Invalid palette index handling
+(test gram-compiler-invalid-palette-handling
+  "Test GRAM compiler handles invalid palette indices gracefully"
+  (with-temp-gram-output (output-path "invalid-palette.s")
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      ;; Set some pixels to invalid palette indices (> 7)
+      (dotimes (x 8)
+        (dotimes (y 8)
+          (setf (aref test-array x y)
+                (if (and (< x 4) (< y 4)) 15 7)))) ; Invalid index 15, valid 7
+
+      (let ((test-png (make-pathname :name "invalid-palette" :type "png")))
+        ;; Should warn but not crash
+        (finishes
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :palette-pixels test-array)
+          "Should handle invalid palette indices gracefully")
+
+        ;; Verify output was generated
+        (is-true (probe-file output-path)
+                 "Output file should exist despite invalid palette indices"))))
+
+;; Test 18: Empty and malformed input handling
+(test gram-compiler-empty-input-handling
+  "Test GRAM compiler handles edge cases in input data"
+  (with-temp-gram-output (output-path "empty-input.s")
+    ;; Test with minimum valid input
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 0))
+          (test-png (make-pathname :name "empty-input" :type "png")))
+      (finishes
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+        "Should handle minimum valid input")
+
+      ;; Test with nil palette-pixels (should fail gracefully)
+      (signals error
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels nil)
+        "Should error with nil palette-pixels"))))
+
 ;; Test Intellivision dispatch functionality
 (test intv-dispatch-functionality
   "Test Intellivision PNG dispatch works"
@@ -413,6 +661,275 @@
   (is-true (and (boundp 'skyline-tool::+intv-palette+)
                 (arrayp skyline-tool::+intv-palette+))
            "Intellivision palette system is ready"))
+
+;; Test 19: Asset allocation pipeline integration
+(test intv-asset-allocation-pipeline
+  "Test the complete asset allocation pipeline for Intellivision assets"
+  (let ((skyline-tool::*machine* 2609))
+    ;; Test that dispatch-png% correctly routes Intellivision images
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 7)))
+      ;; Test GRAM-sized image (8x8, should be routed to compile-gram-intv)
+      (finishes
+        (skyline-tool::dispatch-png% 2609 "test-gram.png" *test-gram-dir*
+                                    nil 8 8 nil test-array)
+        "Should dispatch 8x8 image to GRAM compilation")
+
+      ;; Test non-GRAM-sized image (should error as per current implementation)
+      (signals error
+        (skyline-tool::dispatch-png% 2609 "test-invalid.png" *test-gram-dir*
+                                    nil 4 4 nil test-array)
+        "Should error for non-GRAM-sized image"))))
+
+;; Test 20: Music compilation integration test
+(test intv-music-compilation-integration
+  "Test music compilation pipeline for Intellivision"
+  (let ((skyline-tool::*machine* 2609))
+    ;; Test the compile-music-for-machine method exists and can be called
+    (is-true (fboundp (find-symbol "COMPILE-MUSIC-FOR-MACHINE" :skyline-tool))
+             "compile-music-for-machine generic function should exist")
+
+    ;; Test method specialization for machine 2609
+    (let ((method (find-method #'skyline-tool::compile-music-for-machine
+                              '() (list (find-class 'eql)
+                                       (find-class t)
+                                       (find-class t)
+                                       (find-class t)
+                                       (find-class t))
+                              nil)))
+      (is-true method "Should have method specialized for machine 2609"))))
+
+;; Test 21: Palette validation and usage
+(test intv-palette-validation
+  "Test Intellivision palette system integration"
+  ;; Test palette constants exist
+  (is-true (boundp (find-symbol "+INTV-PALETTE+" :skyline-tool))
+           "+intv-palette+ should be defined")
+  (is-true (boundp (find-symbol "+INTV-COLOR-NAMES+" :skyline-tool))
+           "+intv-color-names+ should be defined")
+
+  ;; Test palette has correct structure
+  (let ((palette (symbol-value (find-symbol "+INTV-PALETTE+" :skyline-tool))))
+    (is-true (arrayp palette) "+intv-palette+ should be an array")
+    (is (= 16 (length palette)) "+intv-palette+ should have 16 colors"))
+
+  ;; Test color names array
+  (let ((color-names (symbol-value (find-symbol "+INTV-COLOR-NAMES+" :skyline-tool))))
+    (is-true (arrayp color-names) "+intv-color-names+ should be an array")
+    (is (= 16 (length color-names)) "+intv-color-names+ should have 16 color names")))
+
+;; Test 22: File I/O error handling
+(test intv-file-io-error-handling
+  "Test error handling for file I/O operations"
+  ;; Test with non-existent output directory
+  (let ((test-png (make-pathname :name "io-test" :type "png"))
+        (test-array (make-test-palette-array 8 8))
+        (bad-dir "/nonexistent/directory/path/"))
+    ;; Should create directories and succeed
+    (finishes
+      (skyline-tool::compile-gram-intv test-png bad-dir
+                                      :palette-pixels test-array)
+      "Should create output directories as needed"))
+
+  ;; Test with read-only output (would require special setup)
+  ;; This is hard to test reliably across different systems
+
+  ;; Test with very long path names
+  (let ((long-name (make-string 200 :initial-element #\a))
+        (test-array (make-test-palette-array 8 8)))
+    (finishes
+      (skyline-tool::compile-gram-intv (make-pathname :name long-name :type "png")
+                                      *test-gram-dir*
+                                      :palette-pixels test-array)
+      "Should handle long filenames")))
+
+;; Test 23: Memory and performance validation
+(test intv-memory-performance-validation
+  "Test memory usage and performance characteristics"
+  ;; Test with large arrays (within reasonable limits)
+  (let ((large-array (make-test-palette-array 256 256))) ; 64 cards
+    (with-temp-gram-output (output-path "large-test.s")
+      (let ((test-png (make-pathname :name "large-test" :type "png")))
+        (finishes
+          (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                          :palette-pixels large-array)
+          "Should handle large images (256x256 = 1024 cards)")
+
+        ;; Verify correct number of DECLE statements generated
+        ;; 256x256 = 32x32 cards = 1024 cards × 8 DECLE = 8192 DECLE
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-count (count-if (lambda (line)
+                                        (search "DECLE" line))
+                                      (split-sequence:split-sequence #\newline content))))
+            (is (= 8192 decle-count)
+                "Large image should generate 8192 DECLE statements: ~D" decle-count)))))))
+
+;; Test 24: Regression test for bit ordering
+(test gram-compiler-bit-ordering-regression
+  "Regression test for correct bit ordering in GRAM cards"
+  (with-temp-gram-output (output-path "bit-order.s")
+    ;; Create a test pattern where each row has a single white pixel
+    ;; at position X (0-7 from left to right)
+    (let ((test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
+      (dotimes (y 8)
+        (dotimes (x 8)
+          (setf (aref test-array x y)
+                (if (= x y) 7 0)))) ; White pixel on diagonal
+
+      (let ((test-png (make-pathname :name "bit-order" :type "png")))
+        (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                        :palette-pixels test-array)
+
+        (let ((content (uiop:read-file-string output-path)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+            ;; Each row should have exactly one bit set
+            ;; Row 0: bit 7 set ($0080), Row 1: bit 6 set ($0040), etc.
+            (let ((expected-values '("$0080" "$0040" "$0020" "$0010"
+                                     "$0008" "$0004" "$0002" "$0001")))
+              (dotimes (i 8)
+                (is (string= (nth i decle-values) (nth i expected-values))
+                    "DECLE ~D should be ~A for single-bit pattern: ~A"
+                    i (nth i expected-values) (nth i decle-values))))))))))
+
+;; Test 25: End-to-end integration test
+(test intv-end-to-end-integration
+  "Complete end-to-end test of Intellivision asset conversion pipeline"
+  (let ((skyline-tool::*machine* 2609)
+        (test-assets '((:type :gram :width 8 :height 8 :name "test-gram")
+                       (:type :gram :width 16 :height 16 :name "test-multi-gram")
+                       (:type :sprite :width 8 :height 8 :name "test-sprite"))))
+
+    (dolist (asset-spec test-assets)
+      (destructuring-bind (&key type width height name) asset-spec
+        (let ((test-array (make-test-palette-array width height))
+              (test-png (make-pathname :name name :type "png")))
+          (ecase type
+            (:gram
+             (finishes
+               (skyline-tool::compile-gram-intv test-png *test-gram-dir*
+                                               :palette-pixels test-array)
+               "End-to-end GRAM compilation should succeed"))
+            (:sprite
+             (finishes
+               (skyline-tool::compile-intv-sprite test-png *test-gram-dir*
+                                                 :palette-pixels test-array)
+               "End-to-end sprite compilation should succeed")))
+
+          ;; Verify output file exists and has content
+          (let ((output-path (merge-pathnames (make-pathname :name name :type "s")
+                                            *test-gram-dir*)))
+            (is-true (probe-file output-path)
+                     "Output file should exist: ~A" output-path)
+            (let ((content (uiop:read-file-string output-path)))
+              (is-true (> (length content) 0)
+                       "Output file should have content")
+              (is-true (search ";;; Generated for Intellivision" content)
+                       "Output should identify as Intellivision format"))))))))
+
+;; Test Intellivision art index parsing
+(test intv-art-index-parsing
+  "Test Intellivision art index file parsing"
+  (let ((temp-index (format nil "/tmp/intv-test-index-~X.txt" (sxhash (get-universal-time)))))
+    (unwind-protect
+         (progn
+           ;; Write test index file
+           (with-open-file (out temp-index :direction :output :if-exists :supersede)
+             (format out "# Intellivision Art Index Test~%")
+             (format out "test-sprite.png 8×8~%")
+             (format out "test-background.png 16×16~%")
+             (format out "; Comment line~%"))
+           ;; Test parsing
+           (let ((art-index (skyline-tool::read-intv-art-index temp-index)))
+             (is (= 2 (length art-index)) "Should parse 2 art entries")
+             ;; Check first entry
+             (destructuring-bind (png-name width height) (first art-index)
+               (is (= 8 width) "First entry should have width 8")
+               (is (= 8 height) "First entry should have height 8"))
+             ;; Check second entry
+             (destructuring-bind (png-name width height) (second art-index)
+               (is (= 16 width) "Second entry should have width 16")
+               (is (= 16 height) "Second entry should have height 16"))))
+      ;; Clean up
+      (when (probe-file temp-index)
+        (delete-file temp-index)))))
+
+;; Test Intellivision art compilation pipeline
+(test intv-art-compilation-pipeline
+  "Test complete Intellivision art compilation pipeline"
+  (let ((temp-index (format nil "/tmp/intv-test-index-~X.txt" (sxhash (get-universal-time))))
+        (temp-output (format nil "/tmp/intv-test-output-~X.s" (sxhash (get-universal-time)))))
+    (unwind-protect
+         (progn
+           ;; Create test index file
+           (with-open-file (out temp-index :direction :output :if-exists :supersede)
+             (format out "# Test art index~%")
+             (format out "test-art.png 8×8~%"))
+
+           ;; Test compilation (will fail on PNG processing but should create valid structure)
+           (let ((skyline-tool::*machine* 2609)) ; Set Intellivision machine
+             (finishes (skyline-tool::compile-art-intv temp-output temp-index)
+                      "Art compilation should complete without crashing")
+
+             ;; Check that output file was created
+             (is-true (probe-file temp-output) "Output file should be created")
+
+             ;; Check basic content
+             (when (probe-file temp-output)
+               (with-open-file (in temp-output)
+                 (let ((content (read-line in)))
+                   (is-true (search "Intellivision Art Assets" content)
+                           "Output should contain Intellivision header"))))))
+      ;; Clean up
+      (when (probe-file temp-index)
+        (delete-file temp-index))
+      (when (probe-file temp-output)
+        (delete-file temp-output)))))
+
+;; Test Intellivision ROM assembly
+(test intv-rom-assembly
+  "Test Intellivision ROM assembly functionality"
+  (let ((temp-output (format nil "/tmp/intv-rom-test-~X.bin" (sxhash (get-universal-time))))
+        (temp-source1 (format nil "/tmp/source1-~X.bin" (sxhash (get-universal-time))))
+        (temp-source2 (format nil "/tmp/source2-~X.bin" (sxhash (get-universal-time)))))
+    (unwind-protect
+         (progn
+           ;; Create test source files
+           (with-open-file (out temp-source1 :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+             (write-byte #xAA out)
+             (write-byte #xBB out))
+           (with-open-file (out temp-source2 :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+             (write-byte #xCC out)
+             (write-byte #xDD out))
+
+           ;; Test assembly
+           (let ((skyline-tool::*machine* 2609)) ; Set Intellivision machine
+             (finishes (skyline-tool::assemble-intv-rom (list temp-source1 temp-source2) temp-output)
+                      "ROM assembly should complete without error")
+
+             ;; Check output file
+             (is-true (probe-file temp-output) "ROM output file should be created")
+             (when (probe-file temp-output)
+               (with-open-file (in temp-output :element-type '(unsigned-byte 8))
+                 (is (= 4 (file-length in)) "ROM should be 4 bytes (concatenation of 2x2 byte files)")
+                 (is (= #xAA (read-byte in)) "First byte should be from first source")
+                 (is (= #xBB (read-byte in)) "Second byte should be from first source")
+                 (is (= #xCC (read-byte in)) "Third byte should be from second source")
+                 (is (= #xDD (read-byte in)) "Fourth byte should be from second source")))))
+      ;; Clean up
+      (dolist (file (list temp-output temp-source1 temp-source2))
+        (when (probe-file file)
+          (delete-file file))))))
+
+;; Test Intellivision art compilation error handling
+(test intv-art-compilation-errors
+  "Test Intellivision art compilation error handling"
+  (let ((temp-output (format nil "/tmp/intv-error-test-~X.s" (sxhash (get-universal-time)))))
+    (unwind-protect
+         ;; Test with missing input file
+         (signals error (skyline-tool::compile-art-intv temp-output "/nonexistent.txt")
+                  "Should signal error for missing input file")
+      ;; Clean up
+      (when (probe-file temp-output)
+        (delete-file temp-output)))))
 
 (defun run-intv-gram-tests ()
   "Run all Intellivision GRAM compiler tests and return results"

@@ -1,18 +1,8 @@
 (cl:defpackage :skyline-tool
-  (:use :cl :alexandria :split-sequence :parse-number :bordeaux-threads)
+  (:use :cl :alexandria)
   (:import-from :uiop
                 uiop:run-program
                 uiop:split-string)
-  (:import-from :cl-change-case
-                cl-change-case:camel-case 	cl-change-case:constant-case
-                cl-change-case:dot-case 	cl-change-case:header-case
-                cl-change-case:lower-case 	cl-change-case:lower-case-first
-                cl-change-case:no-case  	cl-change-case:param-case
-                cl-change-case:pascal-case 	cl-change-case:path-case
-                cl-change-case:sentence-case 	cl-change-case:snake-case
-                cl-change-case:string-lower-case-p 	cl-change-case:string-upper-case-p
-                cl-change-case:swap-case 	cl-change-case:title-case
-                cl-change-case:upper-case 	cl-change-case:upper-case-first)
   (:export #:compile-index
            #:collect-assets
            #:compile-art
@@ -27,12 +17,20 @@
            #:bye
            #:about-skyline-tool
            #:allocate-assets
+           #:generate-all-copybooks
+           #:generate-constants-copybook
+           #:generate-variables-copybook
+           #:generate-class-copybook
            #:atari800-label-file
            #:blob-rip-7800
+           #:blob-rip-400-tile
+           #:blob-rip-800-tile
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
            #:compile-art-7800
+           #:compile-art-400
+           #:compile-art-800
            #:compile-code
            #:compile-enemies
            #:compile-font-command
@@ -105,6 +103,7 @@
 (defparameter *default-clothes-color* (cdr (assoc :*default-clothes-color *project.json*)))
 
 (defvar *region*)
+
 
 (defun generated-file-path (filename)
   "Return the platform-specific path for a generated file."

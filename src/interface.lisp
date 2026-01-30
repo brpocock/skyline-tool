@@ -15,6 +15,8 @@
         :build-banking 'build-banking
         :burn-rom 'click.adventuring.skyline.eprom::burn-rom
         :blob-rip-7800 'blob-rip-7800
+        :blob-rip-400 'blob-rip-400-tile
+        :blob-rip-800 'blob-rip-800-tile
         :check-for-absent-assets 'check-for-absent-assets
         :compile-index 'compile-index
         :compile-animation-sequences 'compile-animation-sequences
@@ -39,6 +41,12 @@
         :collect-assets 'collect-assets
         :compile-critters 'compile-critters
         :compile-art-7800 'compile-art-7800
+        :compile-art-400 'compile-art-400
+        :compile-art-800 'compile-art-800
+        :compile-cobol-class (if (find-package :eightbol)
+                                 (intern "COMPILE-COBOL-CLASS" :eightbol)
+                                 (lambda (&rest args)
+                                   (error "EightBol COBOL compiler not available. Load the :eightbol system first.")))
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
@@ -618,6 +626,7 @@ Executes the requested command, may exit the process
       (finish-output)
       (apply #'run-for-port nil argv)
       (mapcar (curry #'fresh-line) (list *standard-output* *error-output* *trace-output* *query-io*)))))
+
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))

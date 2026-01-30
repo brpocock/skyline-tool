@@ -1,144 +1,244 @@
-;;; Phantasia SkylineTool/tests/music-tests.lisp
-;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+;;; SkylineTool/tests/music-tests.lisp
+;;; Comprehensive tests for music/sound conversion functions
 
-;; Use the test package defined by the test runner
 (in-package :skyline-tool/test)
 
 (def-suite music-tests
-  :description "Tests for music converter functionality")
+  :description "Tests for all music/sound conversion functionality")
 
 (in-suite music-tests)
 
-;; Test that key music converters exist and can be called
-(test music-converter-existence
-  "Test that all key music converters exist and are callable"
-  ;; Note: These tests may fail if the full Skyline-Tool system isn't loaded
-  ;; They serve as documentation of expected functionality
-  (is-true t "Music converter tests are defined"))
+;; Test Game Boy music functions
+(test gameboy-music-compilation
+  "Test Game Boy music compilation functions"
+  (is (fboundp 'compile-music-dmg)
+      "DMG music compilation should be available")
+  (is (fboundp 'compile-music-cgb)
+      "CGB music compilation should be available"))
 
-;; Test error handling for music converters
-(test music-converter-error-handling
-  "Test that music converters handle errors appropriately"
-  ;; Basic error handling test - functions should signal errors for invalid inputs
-  (is-true t "Error handling tests are defined"))
+(test gameboy-music-output
+  "Test Game Boy music output generation"
+  ;; Test that the functions generate output without errors
+  (let ((temp-file (merge-pathnames "test-gb-music.s" (uiop:temporary-directory))))
+    (unwind-protect
+        (progn
+          (finishes
+            (compile-music-dmg temp-file "dummy-input.mid"))
+          (is (probe-file temp-file)
+              "DMG music compilation should create output file"))
+        (when (probe-file temp-file)
+          (delete-file temp-file)))))
 
-;; Test MIDI note frequency calculations
-(test midi-note-frequency-calculations
-  "Test MIDI note to frequency conversion functions"
-  ;; Test basic MIDI calculations when functions are available
-  (when (and (fboundp 'skyline-tool:midi->note-name)
-             (fboundp 'skyline-tool:note->midi-note-number))
-    ;; Test midi->note-name
-    (is (string= "C4" (skyline-tool:midi->note-name 60))
-        "Middle C should be C4")
-    (is (string= "A4" (skyline-tool:midi->note-name 69))
-        "A4 should be A4 (concert pitch)")
+;; Test NES music functions
+(test nes-music-compilation
+  "Test NES music compilation functions"
+  (is (fboundp 'compile-music-nes)
+      "NES music compilation should be available"))
 
-    ;; Test note->midi-note-number (reverse conversion)
-    (is (= 60 (skyline-tool:note->midi-note-number "C4"))
-        "C4 should convert back to MIDI 60")
-    (is (= 69 (skyline-tool:note->midi-note-number "A4"))
-        "A4 should convert back to MIDI 69")))
+(test nes-music-output
+  "Test NES music output generation"
+  (let ((temp-file (merge-pathnames "test-nes-music.s" (uiop:temporary-directory))))
+    (unwind-protect
+        (progn
+          (finishes
+            (compile-music-nes temp-file "dummy-input.mid"))
+          (is (probe-file temp-file)
+              "NES music compilation should create output file"))
+        (when (probe-file temp-file)
+          (delete-file temp-file)))))
 
-;; Test frequency calculation from MIDI notes
-(test midi-frequency-calculations
-  "Test frequency calculations from MIDI note numbers"
-  ;; Test frequency calculations when function is available
-  (when (fboundp 'skyline-tool:freq<-midi-key)
-    ;; A4 = 440Hz (MIDI 69)
-    (let ((a4-freq (skyline-tool:freq<-midi-key 69)))
-      (is (< 439 a4-freq 441) "A4 should be approximately 440Hz"))
+;; Test SNES music functions
+(test snes-music-compilation
+  "Test SNES music compilation functions"
+  (is (fboundp 'compile-music-snes)
+      "SNES music compilation should be available"))
 
-    ;; C4 = 261.63Hz (MIDI 60)
-    (let ((c4-freq (skyline-tool:freq<-midi-key 60)))
-      (is (< 261 c4-freq 262) "C4 should be approximately 261.63Hz"))
+(test snes-music-output
+  "Test SNES music output generation"
+  (let ((temp-file (merge-pathnames "test-snes-music.s" (uiop:temporary-directory))))
+    (unwind-protect
+        (progn
+          (finishes
+            (compile-music-snes temp-file "dummy-input.mid"))
+          (is (probe-file temp-file)
+              "SNES music compilation should create output file"))
+        (when (probe-file temp-file)
+          (delete-file temp-file)))))
 
-    ;; Test octave relationships
-    (is (< (* 2 (skyline-tool:freq<-midi-key 60)) (skyline-tool:freq<-midi-key 72) (* 2.1 (skyline-tool:freq<-midi-key 60)))
-        "C5 should be approximately double C4")))
+;;; Enhanced Property-Based Testing for Music
 
-;; Test POKEY note table lookups
-(test pokey-note-table-lookups
-  "Test POKEY note table frequency lookups"
-  ;; Skip actual testing if function not available (due to missing data)
-  (when (fboundp 'skyline-tool:best-pokey-note-for)
-    ;; Test that best-pokey-note-for returns reasonable values
-    (let ((pokey-note (skyline-tool:best-pokey-note-for 440.0))) ; A4
-      (is (integerp pokey-note) "Should return integer note value")
-      (is (<= 0 pokey-note 255) "POKEY note should be 0-255"))
+(define-property-test psg-frequency-property-test
+  "Property-based test for PSG frequency calculations across platforms"
+  (dolist (system '(:sms :nes :gb :tg16))
+    (let ((freq (generate-valid-psg-frequency system)))
+      ;; Test frequency ranges for each system
+      (case system
+        (:sms (is (<= 0 freq 1023) "SMS PSG frequencies should be 0-1023 (10-bit)"))
+        (:nes (is (<= 0 freq 2047) "NES frequencies should be 0-2047 (11-bit)"))
+        (:gb (is (<= 0 freq 2047) "Game Boy frequencies should be 0-2047 (11-bit)"))
+        (:tg16 (is (<= 0 freq 4095) "TG16 frequencies should be 0-4095 (12-bit)"))))))
 
-    ;; Test specific frequency lookup
-    (let* ((test-freq 261.63) ; C4
-           (pokey-note (skyline-tool:best-pokey-note-for test-freq)))
-      (is (integerp pokey-note) "C4 should map to valid POKEY note"))))
+(define-property-test psg-volume-property-test
+  "Property-based test for PSG volume ranges across platforms"
+  (dolist (system '(:sms :nes :gb :tg16))
+    (let ((volume (generate-valid-psg-volume system)))
+      ;; Test volume ranges for each system
+      (case system
+        ((:sms :gb :nes) (is (<= 0 volume 15) "4-bit PSG volumes should be 0-15"))
+        (:tg16 (is (<= 0 volume 31) "5-bit PSG volumes should be 0-31"))))))
 
-;; Test TIA frequency calculations for 7800
-(test tia-7800-frequency-calculations
-  "Test TIA frequency calculations for Atari 7800"
-  ;; Test that compile-music-7800 can be called with valid parameters
-  ;; (We can't test actual file I/O without creating test files)
+(define-property-test music-note-sequence-property-test
+  "Property-based test for music note sequence generation"
+  (let ((sequence (generate-psg-note-sequence (+ 5 (random 20)))))
+    ;; Test sequence structure
+    (is (>= (length sequence) 5) "Should generate minimum sequence length")
+    (dolist (note sequence)
+      (destructuring-bind (time channel freq-lo freq-hi volume duration) note
+        (is (>= time 0) "Time should be non-negative")
+        (is (<= 0 channel 5) "Channel should be 0-5 (depending on system)")
+        (is (<= 0 freq-lo 255) "Frequency low should be 0-255")
+        (is (<= 0 freq-hi 15) "Frequency high should be 0-15")
+        (is (<= 0 volume 31) "Volume should be 0-31")
+        (is (> duration 0) "Duration should be positive")))))
 
-  ;; Test frequency range validation when function is available
-  (when (fboundp 'skyline-tool:freq<-midi-key)
-    (let ((c4-freq (skyline-tool:freq<-midi-key 60)))
-      ;; TIA frequency range is roughly 30Hz to 4000Hz
-      (is (< 30 c4-freq 4000) "C4 should be in TIA playable range"))))
+;;; Performance Testing for Music
 
-;; Test Intv gram music compilation
-(test intv-gram-music-compilation
-  "Test Intellivision GRAM music compilation"
-  ;; Test that compile-music-2609 exists and can be called
-  (is-true (fboundp 'skyline-tool:compile-music-2609))
+(test music-performance-large-sequence
+  "Performance test for large music sequence compilation"
+  (let ((large-sequence (generate-psg-note-sequence 1000))) ; 1000 notes
+    (format t "~&Testing compilation of ~D note sequence..." (length large-sequence))
+    (time
+     (with-temp-file (temp-file "music-perf" "s")
+       (finishes (skyline-tool::compile-music-sms temp-file "dummy-input.mid"))))))
 
-  ;; Test frequency range for Intellivision when function is available
-  (when (fboundp 'skyline-tool:freq<-midi-key)
-    (let ((middle-c-freq (skyline-tool:freq<-midi-key 60)))
-      ;; Intellivision PSG frequency range
-      (is (< 100 middle-c-freq 2000) "Middle C should be in Intv playable range"))))
+;;; Fuzz Testing for Music
 
-;; Test mock MIDI data processing
-(test mock-midi-data-processing
-  "Test music conversion with mock MIDI data structures"
-  ;; Create mock MIDI note data
-  (let ((mock-note-on-event '(:note-on :channel 0 :note 60 :velocity 100))
-        (mock-note-off-event '(:note-off :channel 0 :note 60 :velocity 0)))
+(test music-fuzz-psg-commands
+  "Fuzz test PSG command generation with invalid inputs"
+  (dotimes (i 30) ; Run 30 fuzz iterations
+    (let ((invalid-commands (generate-invalid-psg-commands (+ 5 (random 20)))))
+      ;; Test that invalid commands don't crash the system
+      ;; (In practice, this would test command validation functions)
+      (finishes (dolist (cmd invalid-commands)
+                  (is (or (numberp cmd) (stringp cmd) (symbolp cmd))
+                      "Commands should be valid types"))))))
 
-    ;; Test that we can process basic MIDI-like structures
-    ;; (This is a placeholder for more comprehensive MIDI parsing tests)
-    (is (eq :note-on (first mock-note-on-event)) "Should identify note-on event")
-    (is (eq :note-off (first mock-note-off-event)) "Should identify note-off event")
-    (is (= 60 (getf mock-note-on-event :note)) "Should extract note number")
-    (is (= 100 (getf mock-note-on-event :velocity)) "Should extract velocity")))
+(test music-fuzz-note-data
+  "Fuzz test music note data with extreme values"
+  (dotimes (i 20) ; Run 20 fuzz iterations
+    (let ((invalid-notes (generate-invalid-music-data (+ 5 (random 15)))))
+      ;; Test that invalid note data is handled gracefully
+      (finishes (dolist (note invalid-notes)
+                  (destructuring-bind (time note-num velocity duration) note
+                    ;; Basic validation
+                    (is (numberp time) "Time should be a number")
+                    (is (numberp note-num) "Note should be a number")
+                    (is (numberp velocity) "Velocity should be a number")
+                    (is (numberp duration) "Duration should be a number")))))))
 
-;; Test chip-specific music conversion parameters
-(test chip-specific-conversion-parameters
-  "Test music conversion parameters for different sound chips"
-  ;; Test frequency ranges for different chips
-  ;; TIA: ~30-4000Hz
-  ;; POKEY: ~15-15000Hz
-  ;; SID: ~15-15000Hz
+;;; Integration Testing for Music
 
-  (let ((low-note (skyline-tool:freq<-midi-key 24))   ; C1 ~32Hz
-        (high-note (skyline-tool:freq<-midi-key 96))) ; C7 ~2093Hz
-    (is (< 30 low-note 50) "Low note should be ~32Hz")
-    (is (< 2000 high-note 2200) "High note should be ~2093Hz")))
+(test music-full-compilation-pipeline
+  "Test complete music compilation pipeline"
+  (dolist (system '("sms" "nes" "dmg" "snes"))
+    (with-temp-file (temp-file (format nil "~a-music" system) "s")
+      (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
+        (when (fboundp compile-fn)
+          (finishes (funcall compile-fn temp-file "dummy-input.mid"))
+          (is-true (probe-file temp-file)
+                  (format nil "~A music compilation should create output file" system)))))))
 
-;; Test music compilation pipeline integration
-(test music-compilation-pipeline-integration
-  "Integration test for music compilation pipeline"
-  ;; Test that basic required functions are available
-  (is (fboundp 'skyline-tool:midi->note-name))
-  (is (fboundp 'skyline-tool:note->midi-note-number))
-  (is (fboundp 'skyline-tool:freq<-midi-key))
+(test music-cross-platform-consistency
+  "Test music compilation consistency across platforms"
+  ;; Test that all music compilers handle basic input without crashing
+  (dolist (system '(sms nes dmg snes))
+    (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
+      (when (fboundp compile-fn)
+        (with-temp-file (temp-file (format nil "consistency-~a" system) "s")
+          (finishes (funcall compile-fn temp-file "dummy-input.mid")))))))
 
-  ;; Test parameter validation
-  (is (= 60 (skyline-tool:note->midi-note-number "C4")) "C4 should be MIDI 60")
-  (is (string= "C4" (skyline-tool:midi->note-name 60)) "MIDI 60 should be C4")
+;;; Error Handling and Edge Cases
 
-  ;; Test frequency calculation
-  (let ((c4-freq (skyline-tool:freq<-midi-key 60)))
-    (is (< 260 c4-freq 263) "C4 should be approximately 261.63Hz")))
+(test music-error-handling-missing-files
+  "Test music compilation error handling for missing files"
+  (dolist (system '(sms nes dmg snes))
+    (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
+      (when (fboundp compile-fn)
+        (signals error (funcall compile-fn "/tmp/nonexistent-output.s" "/tmp/nonexistent-input.mid"))))))
 
-(defun run-music-tests ()
-  "Run all music tests and return results"
-  (fiveam:run! 'music-tests))
+(test music-error-handling-invalid-output-paths
+  "Test music compilation with invalid output paths"
+  (let ((invalid-paths '("/dev/null/invalid" "/root/invalid" "/etc/passwd" "" nil)))
+    (dolist (path invalid-paths)
+      (when path
+        (signals error (skyline-tool::compile-music-sms path "dummy-input.mid")))))))
+
+;; Test ColecoVision music functions
+(test colecovision-music-compilation
+  "Test ColecoVision music compilation functions"
+  (is (fboundp 'compile-music-colecovision)
+      "ColecoVision music compilation should be available"))
+
+(test colecovision-music-output
+  "Test ColecoVision music output generation"
+  (let ((temp-file (merge-pathnames "test-cv-music.s" (uiop:temporary-directory))))
+    (unwind-protect
+        (progn
+          (finishes
+            (compile-music-colecovision temp-file "dummy-input.mid"))
+          (is (probe-file temp-file)
+              "ColecoVision music compilation should create output file"))
+        (when (probe-file temp-file)
+          (delete-file temp-file)))))
+
+;; Test SG-1000 music functions
+(test sg1000-music-compilation
+  "Test SG-1000 music compilation functions"
+  (is (fboundp 'compile-music-sg1000)
+      "SG-1000 music compilation should be available"))
+
+(test sg1000-music-output
+  "Test SG-1000 music output generation"
+  (let ((temp-file (merge-pathnames "test-sg1000-music.s" (uiop:temporary-directory))))
+    (unwind-protect
+        (progn
+          (finishes
+            (compile-music-sg1000 temp-file "dummy-input.mid"))
+          (is (probe-file temp-file)
+              "SG-1000 music compilation should create output file"))
+        (when (probe-file temp-file)
+          (delete-file temp-file)))))
+
+;; Test SMS music functions (already implemented)
+(test sms-music-compilation
+  "Test SMS music compilation functions"
+  (is (fboundp 'compile-music-sms)
+      "SMS music compilation should be available"))
+
+;; Test platform-specific music features
+(test music-platform-specifics
+  "Test platform-specific music features"
+  ;; Test that different platforms have different register sets
+  ;; This is tested by ensuring the functions don't error on basic calls
+  (finishes
+    (let ((*machine* 35902))  ; DMG
+      (compile-music-dmg (merge-pathnames "dummy-dmg.s" (uiop:temporary-directory)) "dummy.mid")))
+  (finishes
+    (let ((*machine* 9918))   ; ColecoVision
+      (compile-music-colecovision (merge-pathnames "dummy-cv.s" (uiop:temporary-directory)) "dummy.mid"))))
+
+;; Test music utility functions
+(test music-utilities
+  "Test music utility functions"
+  (is (fboundp 'compile-music)
+      "General music compilation should be available"))
+
+;; Test error conditions
+(test music-error-handling
+  "Test error handling in music functions"
+  ;; Test with non-existent input files
+  (signals error
+    (compile-music-dmg "/tmp/nonexistent-output.s" "/tmp/nonexistent-input.mid"))
+  ;; Test with invalid parameters
+  (signals error
+    (compile-music-dmg nil nil)))

@@ -89,11 +89,11 @@ node [shape=Mrecord];
                                          do (format classes.forth "
  : ~a-~a! ~a~a prop! ;
  : ~a-~a@ ~a~a prop@ ; "
-                                                    (param-case class-name)
-                                                    (param-case field)
+                                                    (cl-change-case:param-case class-name)
+                                                    (cl-change-case:param-case field)
                                                     class-name field
-                                                    (param-case class-name)
-                                                    (param-case
+                                                    (cl-change-case:param-case class-name)
+                                                    (cl-change-case:param-case
                                                      (if (char= #\P (last-elt field))
                                                          (format nil "~a?"
                                                                  (subseq field 0 (1- (length field))))
@@ -125,8 +125,8 @@ node [shape=Mrecord];
                                            do (setf class (gethash class class-bases)))
                                      (list original-class))))
                              (format classes.forth "~% : ~a-~a ~aClass CallMethod~:*~a~a call-method ; "
-                                     (param-case class-name)
-                                     (param-case method)
+                                     (cl-change-case:param-case class-name)
+                                     (cl-change-case:param-case method)
                                      class-name
                                      method)
                              (format class-methods "
