@@ -816,7 +816,7 @@ PNG image in an unsuitable format:
                                                  (aref palette x y))))
                                 (when (and pixel (not (zerop pixel)))
                                   (setf value (logior value (ash 1 (- 7 col)))))))
-                            (format stream "~%~12t%~8,'0B" value))))
+                            (format stream "~%~12t.byte %~8,'0B" value))))
         (format stream "~%end")
         (format stream "~%~%"))
       output-bas)))

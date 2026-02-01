@@ -12,7 +12,6 @@
   :depends-on ( ;; broken into lines for easier sorting
                :alexandria
                :bordeaux-threads
-               :cl-6502
                :cl-base64
                :cl-change-case
                :cl-json
