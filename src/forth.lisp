@@ -365,7 +365,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                    (clim-simple-echo:run-in-simple-echo
                     (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
                     :process-name "Forth Words")))
-               (go top))))))
+               (go top)))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
@@ -379,5 +379,5 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     #+ () (dolist (word (hash-table-keys *words*))
             (format *trace-output* "~% : ~a ~{~a~^ ~} ;" word (car (gethash word *words*))))
     (force-output *trace-output*)
-    *words*))))
+    *words*))
 

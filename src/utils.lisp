@@ -248,20 +248,18 @@ parameters."
 
 
 (defun first-line (text)
-  (let ((newline-pos (position #\Newline text)))
-    (if newline-pos
-        (let ((to-newline (subseq text 0 newline-pos)))
-          (if (< 80 (length to-newline))
-              (first-line to-newline)
-              to-newline))
-        (if (> 72 (length text))
-            text
-            (concatenate 'string
-                         (let ((space (position #\Space text :from-end t :start 40 :end 72)))
-                           (if space
-                               (subseq text 0 space)
-                               (subseq text 0 72)))
-                         "…")))))
+  (if-let (line-end (position #\Newline text))
+    (let ((to-newline (subseq text 0 line-end)))
+      (if (< 80 (length to-newline))
+          (first-line to-newline)
+          to-newline))
+    (if (> 72 (length text))
+        text
+        (concatenate 'string
+                     (if-let (space (position #\Space text :from-end t :start 40 :end 72))
+                       (subseq text 0 space)
+                       (subseq text 0 72))
+                     "…"))))
 
 (assert (equal (first-line "Now is the time for all good men to come to the aid of their country")
                "Now is the time for all good men to come to the aid of their country"))

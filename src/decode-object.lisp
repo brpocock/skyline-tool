@@ -18,6 +18,7 @@
                        (setf (gethash address classes-table) class-name)))))
             finally (return-from read-class-methods-from-file classes-table)))))
 
+;;; FIXME make-pathname
 (defun read-class-ids-from-file (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/ClassConstants.s" (skyline-tool::machine-directory-name))
                                                                           (project-root))))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
@@ -43,7 +44,8 @@
     (gethash id ids-classes)))
 
 (defun read-class-fields-from-defs (class-name &optional
-                                                 (pathname (merge-pathnames "Source/Classes/Classes.Defs" (project-root))))
+                                                (pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
+                                                                           (project-root))))
   (when (string= "BasicObject" class-name)
     (return-from read-class-fields-from-defs
       (list (cons (cons "BasicObjectClassID" 0) nil) 1)))
@@ -95,7 +97,7 @@
 
 (defvar *inventory-items* nil)
 
-(defun load-inventory-items (&optional (pathname (merge-pathnames "Source/Tables/Inventory.txt" (project-root))))
+(defun load-inventory-items (&optional (pathname #p"Source/Tables/Inventory.txt"))
   (with-input-from-file (names pathname)
     (setf *inventory-items* (loop for line = (read-line names nil nil)
                                   while line collect line))))
@@ -121,7 +123,7 @@
   (:method ((field (eql :boat-id)) value s)
     (load-boats)
     (format s " = ")
-    (clim:with-output-as-presentation (s (merge-pathnames "Source/Tables/Boats.ods" (project-root)) 'ext-file-link)
+    (clim:with-output-as-presentation (s #p"Source/Tables/Boats.ods" 'ext-file-link)
       (format s "The “~a”" (getf (reverse (hash-table-plist *boat-ids*)) (elt value 0)))))
   (:method ((field (eql :stab-course-limit)) value s)
     (format s " = ~dpx" (first value)))
@@ -280,7 +282,7 @@
               (4 "Potion") (#x12 "Chalice")
               (otherwise "(invalid value)"))))
   (:method ((field (eql :character-character-id)) value s)
-    (clim:with-output-as-presentation (s (merge-pathnames "Source/Tables/NPCStats.ods" (project-root)) 'ext-file-link)
+    (clim:with-output-as-presentation (s #p"Source/Tables/NPCStats.ods" 'ext-file-link)
       (format s " = ~:(~a~)"
               (cond
                 ((= #xff (first value)) "Narrator")
@@ -329,7 +331,7 @@
       (format t "Instance of ~a" class-name))
     (when offset
       (format t " at $~4,'0x" offset))
-    (destructuring-bind (class-fields class-size) (read-class-fields-from-defs class-name)
+    (destructuring-bind (class-fields class-size) (read-class-fields-from-defs class-name) 
       (format t "~%~5t~:d field~:p using ~:d byte~:p (reserves ~:d byte~:p)~%"
               (length class-fields) class-size (* 8 (ceiling class-size 8)))
       (when everything

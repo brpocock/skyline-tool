@@ -49,12 +49,6 @@
       gray cyan orange brown pink violet bright-green magenta)
   :test 'equalp)
 
-(define-constant +ted-color-names+
-    '(black white red cyan purple green blue yellow
-      orange brown light-red dark-grey medium-grey light-green
-      light-blue light-grey)
-  :test 'equalp)
-
 (define-constant +apple-hires-palette+
     '((#x00 #x00 #x00)  ; Black
       (#xb6 #x3d #xff)  ; Purple (artifact color)
@@ -82,6 +76,7 @@
       (#x22 #xdd #x44)  ; Green
       (#x66 #xff #x88)) ; Light Green
   :test 'equalp)
+
 (define-constant +nes-palette-ntsc+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
       (#x73 #x00 #x76) (#x80 #x00 #x24) (#x73 #x0b #x00) (#x52 #x28 #x00)
@@ -480,8 +475,7 @@ List of color name strings for the current machine's palette
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-    (2609 +intv-color-names+)
-    (264 +ted-color-names+)))
+    (2609 +intv-color-names+)))
 
 (defun square (n)
   "Calculate the square of N.
@@ -3336,10 +3330,10 @@ Convert image data to 320A mode bytes for monochrome graphics display.
 @strong{320A Mode Characteristics:}
 @itemize
 @item 8 pixels per byte (1 bit per pixel)
-@item Monochrome display (1 background/foreground color + transparent)
+@item Monochrome display (foreground over transparent)
 @item 320 pixels horizontal resolution
 @item 1 bit per pixel = 1/8 byte per pixel
-@item Pixel value 0 = transparent, value 1 = background/foreground color
+@item Pixel value 0 = transparent, value 1 = foreground color
 @end itemize
 
 @strong{Conversion Process:}
@@ -4216,14 +4210,14 @@ but world “~a” needs ~:d for the ~r level~:p
 @item Side Effects: none
 @end table
 
-Determine if a 8×8 pixel stamp uses only monochrome values (0,1), making it suitable for 320A mode.
+Determine if a 4×16 pixel stamp contains only 2 colors, making it suitable for 320A monochrome mode.
 
 @strong{Detection Logic:}
 @itemize
 @item Counts unique palette indices in the stamp
-@item Returns true if only values 0,1 are used (monochrome)
-@item Suitable for 320A mode (1 color + transparent)
-@item False indicates 320C mode needed (4 colors + transparent)
+@item Returns true if ≤ 2 unique colors found
+@item Suitable for 320A mode (1 bit per pixel)
+@item False indicates 320C mode needed (4 colors + transparency)
 @end itemize
 
 Used by 320A/C mode ripping to automatically select appropriate graphics mode per stamp."
@@ -4446,8 +4440,21 @@ Signals assertion errors for invalid dimensions."
                   (elt bytes (- 15 byte)))))))))
 
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
-  "Rip a Bitmap Large Object Block from PNG-FILE, automatically selecting the appropriate Atari 7800 graphics mode based on image width.
+  "Rip a Bitmap Large Object Block from PNG-FILE
 
+automatically selecting the appropriate Atari 7800 graphics mode based on image width.
+
+@cindex BLOB ripping
+@cindex graphics mode auto-detection
+@cindex 160A mode
+@cindex 320A/C mode
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string), &optional imperfectp$ (boolean)
+@item Returns: nil
+@item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
+@end table
 @strong{Mode Selection:}
 @itemize
 @item 320px width → 320A/C mixed mode (navigation charts)
@@ -4750,28 +4757,6 @@ Blob_~a:~10t.block~2%"
           (blob/write-spans-320ac spans output :imperfectp imperfectp)
           (format output "~2%~10t.bend~%")))
       (format *trace-output* " … done!~%"))))
-
-(defun blob-rip-5200-tile (png-file)
-  "Extract tile data from PNG for Atari 5200"
-  (error "Atari 5200 tile blob ripping not yet implemented"))
-
-;; Atari 400/800 blob ripping functions - delegate to 5200
-(defun blob-rip-400-tile (png-file)
-  "Extract tile data from PNG for Atari 400 - delegates to 5200"
-  (blob-rip-5200-tile png-file))
-
-(defun blob-rip-800-tile (png-file)
-  "Extract tile data from PNG for Atari 800 - delegates to 5200"
-  (blob-rip-5200-tile png-file))
-
-;; Atari 400/800 art compilation functions - delegate to 5200
-(defun compile-art-400 (index-out index-in)
-  "Compile art for Atari 400 - delegates to 5200 art compilation"
-  (error "Atari 400 art compilation not yet implemented (delegates to 5200)"))
-
-(defun compile-art-800 (index-out index-in)
-  "Compile art for Atari 800 - delegates to 5200 art compilation"
-  (error "Atari 800 art compilation not yet implemented (delegates to 5200)"))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10

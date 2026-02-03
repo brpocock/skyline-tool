@@ -554,7 +554,7 @@
 (dolist (tileset (all-tilesets))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
-                             (string-upcase (cl-change-case:param-case tileset)))
+                             (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
               :menu t :tester anim-seq-editing-background-p
               :documentation ,(format nil "Switch to tile sheet ~a" tileset))
@@ -564,7 +564,7 @@
 (dolist (tileset (all-scenery-decals))
   (eval `(clim:define-presentation-to-command-translator
              ,(format-symbol :skyline-tool "switch-to-tileset-~a"
-                             (string-upcase (cl-change-case:param-case tileset)))
+                             (string-upcase (param-case tileset)))
              (simple-animation-sequence-tile-sheet-name com-switch-tileset anim-seq-editor-frame
               :menu t :tester anim-seq-editing-scenery-p
               :documentation ,(format nil "Switch to tile sheet ~a" tileset))

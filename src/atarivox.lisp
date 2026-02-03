@@ -235,43 +235,6 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
   (format *trace-output* "~&Loaded ~:d words into IntelliVoice dictionary~%"
           (hash-table-count *intellivoice-dictionary*)))
 
-(defun intellivoice-basic-pronunciation (word)
-  "Basic pronunciation rules for unknown words"
-  ;; Very simple rules - this could be greatly enhanced
-  (let ((phonemes nil))
-    (loop for char across (string-upcase word)
-          do (push
-              (case char
-                (#\A "AE")
-                (#\E "EH")
-                (#\I "IH")
-                (#\O "AO")
-                (#\U "UH")
-                (#\B "BB1")
-                (#\C "KK1")
-                (#\D "DD1")
-                (#\F "FF")
-                (#\G "GG1")
-                (#\H "HH1")
-                (#\J "JJ")
-                (#\K "KK1")
-                (#\L "LL")
-                (#\M "MM")
-                (#\N "NN1")
-                (#\P "PP1")
-                (#\Q "KK1")
-                (#\R "RR1")
-                (#\S "SS")
-                (#\T "TT1")
-                (#\V "VV")
-                (#\W "WW")
-                (#\X "KK1 SS")
-                (#\Y "YY1")
-                (#\Z "ZZ")
-                (otherwise "PA1")) ; Unknown character
-              phonemes))
-    (reverse phonemes)))
-
 (defvar *read-script-frame* nil)
 
 (clim:define-application-frame read-script-frame ()
@@ -341,7 +304,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
     (:intellivoice
      ;; For IntelliVoice, we would need different hardware interface
      ;; This is a placeholder implementation
-     (format t "~&IntelliVoice script reading not yet implemented for: ~a" script-pathname))))
+     (error "~&IntelliVoice script reading not yet implemented for: ~a" script-pathname))))
 
 (defun play-script-with-speech (&optional script-to-read)
   "Choose a script from a menu, and read it out loud using the appropriate speech system for the current platform"

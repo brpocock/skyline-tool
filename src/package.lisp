@@ -1,5 +1,5 @@
 (cl:defpackage :skyline-tool
-  (:use :cl :alexandria)
+  (:use :cl :alexandria :split-sequence :cl-change-case :parse-number :bordeaux-threads)
   (:import-from :uiop
                 uiop:run-program
                 uiop:split-string)
@@ -10,6 +10,14 @@
            #:compile-map
            #:compile-sound
            #:compile-music
+           #:compile-music-for-machine
+           #:freq<-midi-key
+           #:key<-midi-key
+           #:midi-key<-freq
+           #:midi->note-name
+           #:note->midi-note-number
+           #:midi->7800-tia
+           #:array<-7800-tia-notes-list
            #:compile-script
            #:command
            #:build-banking
@@ -22,15 +30,22 @@
            #:generate-variables-copybook
            #:generate-class-copybook
            #:atari800-label-file
+           #:blob-rip-5200-tile
            #:blob-rip-7800
-           #:blob-rip-400-tile
-           #:blob-rip-800-tile
+           #:7800-image-to-160a
+           #:7800-image-to-320a
+           #:7800-image-to-320c
+           #:parse-7800-object
+           #:write-7800-binary
+           #:interleave-7800-bytes
+           #:speech-supported-p
+           #:simple-animation-sequence
+           #:machine-directory-name
+           #:generate-secure-random-id
            #:burn-rom
            #:check-for-absent-assets
            #:compile-animation-sequences
            #:compile-art-7800
-           #:compile-art-400
-           #:compile-art-800
            #:compile-code
            #:compile-enemies
            #:compile-font-command
@@ -68,7 +83,6 @@
            #:write-projection-tables.s
            #:write-sound-effects-file
            #:write-master-makefile
-           #:write-batari-song
            #:run-for-port
            #:run-gui
            #:run-repl
@@ -89,7 +103,10 @@
   "Return the project root directory as a pathname"
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
-(defvar *project.json* nil)
+(defvar *project.json*
+  '#.(json:decode-json-from-source
+      (asdf:system-relative-pathname
+       :skyline-tool (make-pathname :directory '(:relative :up) :name "Project" :type "json" ))))
 
 (defparameter *game-title* (cdr (assoc :*game *project.json*)))
 (defparameter *part-number*  (cdr (assoc :*part-number *project.json*)))

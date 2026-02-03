@@ -12,6 +12,7 @@
   :depends-on ( ;; broken into lines for easier sorting
                :alexandria
                :bordeaux-threads
+               :cl-6502
                :cl-base64
                :cl-change-case
                :cl-json
@@ -77,21 +78,21 @@
                  (:file "threed" :depends-on ("package"))
                  (:file "asset-allocator" :depends-on ("package"))
                  (:file "atarivox" :depends-on ("package"))
-                 (:file "interface" :depends-on ("package"))))))
+                 (:file "interface" :depends-on ("package")))))
+  :in-order-to ((asdf:test-op (asdf:test-op #:skyline-tool/tests))))
 
 ;; Separate test system
-(asdf:defsystem :skyline-tool/test
+(asdf:defsystem #:skyline-tool/test
   :description "Tests for Skyline-Tool"
   :author "Bruce-Robert Pocock"
   :version "0.9.1"
   :depends-on (
                :skyline-tool
                :fiveam
-               :yacc
                )
   :defsystem-depends-on (:asdf)
   :components ((:module "tests"
-                :components ( ;; (:file "test-data-generators") ;; Temporarily disabled due to compilation issues
+                :components ((:file "test-data-generators" :depends-on ("package"))
                              (:file "package")
                              (:file "action-tests" :depends-on ("package"))
                              (:file "display-list-tests" :depends-on ("package"))
@@ -108,6 +109,7 @@
                              (:file "tileset-tests" :depends-on ("package"))
                              (:file "intv-gram-tests" :depends-on ("package"))
                              (:file "7800-tests" :depends-on ("package"))
+                             (:file "intv-gram-tests" :depends-on ("package"))
                              (:file "nes-tests" :depends-on ("package"))
                              (:file "snes-tests" :depends-on ("package"))
                              (:file "sega-tests" :depends-on ("package"))
@@ -117,4 +119,4 @@
                              (:file "lynx-tests" :depends-on ("package"))
                              (:file "cdr-tests" :depends-on ("package")))))
   :perform (asdf:test-op (o c)
-                         (funcall (intern "RUN!" :fiveam))))
+             (uiop:symbol-call :fiveam :run! :skyline-tool/test)))

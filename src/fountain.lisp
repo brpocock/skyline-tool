@@ -702,15 +702,15 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   :documentation "Words recognized specially by the stage directions parser")
 
 (eval
- `(yacc:define-parsrer *stage-direction-parser*
-      (:start-symbol directions)
+ `(yacc:define-parser *stage-direction-parser*
+    (:start-symbol directions)
     (:terminals #.(concatenate 'list +stage-direction-words+
                                '(number quoted actor variable)
                                *common-palette*))
     (:precedence ((:right -) (:left + -) (:left * /)
-                             (:left directions)
-                             (:left statement)
-                             (:left preparation-paragraph)))
+                  (:left directions)
+                  (:left statement)
+                  (:left preparation-paragraph)))
     (directions (statement #'identity)
                 (directions statement #'list))
     (someone actor
@@ -3193,7 +3193,7 @@ code for the game's scripting engine.
                 (reload-script ()
                   :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
                   (go top))
-                (reload-npc-stats () :report "Reload NPC stats"
+                (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
                   (load-npc-stats)
                   (go top))))))
     (unless victoryp
@@ -3229,16 +3229,10 @@ code for the game's scripting engine.
 
 (defun find-npc-stats (name)
   (unless *npc-stats* (load-npc-stats))
-  ;; For testing, also check for common test names
-  (or (loop for npc in *npc-stats*
-            when (or (string-equal (getf npc :name) name)
-                     (member name (getf npc :nicks) :test #'string-equal))
-              do (return npc))
-      ;; Fallback for test names
-      (when (string-equal name "NORVILLE")
-        (list :name "Norville" :character-id 1 :decal "human" :body "male" :head "male" :hair "brown" :skin "fair" :clothing "chef" :gender "male" :class "human" :nicks nil))
-      (when (string-equal name "PARROT")
-        (list :name "Parrot" :character-id 2 :decal "bird" :body "bird" :head "bird" :hair "none" :skin "feathers" :clothing "none" :gender "unknown" :class "animal" :nicks nil))))
+  (loop for npc in *npc-stats*
+        when (or (string-equal (getf npc :name) name)
+                 (member name (getf npc :nicks) :test #'string-equal))
+          do (return npc)))
 
 (defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root))))
   "Load the NPC stats table from PATHNAME"
@@ -3254,11 +3248,6 @@ code for the game's scripting engine.
                                       (split-sequence #\,
                                                       (getf (elt lol i) :nicks))))))
     (setf *npc-stats* (remove-if (lambda (char) (emptyp (getf char :name))) lol))
-    ;; If no NPCs found, add some test data for testing
-    (when (null *npc-stats*)
-      (setf *npc-stats*
-            (list (list :name "Norville" :character-id 1 :decal "human" :body "male" :head "male" :hair "brown" :skin "fair" :clothing "chef" :gender "male" :class "human" :nicks nil)
-                  (list :name "Parrot" :character-id 2 :decal "bird" :body "bird" :head "bird" :hair "none" :skin "feathers" :clothing "none" :gender "unknown" :class "animal" :nicks nil))))
     (format *trace-output* " … now I know about ~:d non-player character~:p"
             (length *npc-stats*))
     *npc-stats*))
@@ -3422,21 +3411,21 @@ code for the game's scripting engine.
   (member *machine* '(2600 7800 2609))) ; VCS (2600), 7800, Intellivision (2609)
 
 (defmethod output-actor-value (actor (column (eql :character-character-i-d)))
-  (format nil "~10t.byte $~2,'0x" (parse-number (getf actor :character-id))))
+  (format nil "~10t.byte $~2,'0x" (getf actor :character-id)))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-pitch)) 90))
+      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-bend)) 5))
+      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (parse-number (getf actor :speech-speed)) 90))
+      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))

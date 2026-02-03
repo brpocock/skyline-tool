@@ -637,8 +637,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defvar *maps-dock-ids* (make-hash-table :test 'equal))
 (defvar *dock-ids-maps* (make-hash-table :test 'equal))
 
-(defun read-map-ids-table (&optional (table (merge-pathnames #p"./Source/Tables/MapsIndex.ods"
-                                                             (project-root))))
+(defun read-map-ids-table (&optional (table #p"Source/Tables/MapsIndex.ods"))
   (format *trace-output* "~&Reading maps table from “~a”… " (enough-namestring table))
   (setf *maps-ids* (make-hash-table :test 'equal)
         *maps-display-names* (make-hash-table :test 'equal)
@@ -1065,23 +1064,23 @@ Tileset object containing image data, tile dimensions, and palette information."
               (length source)
               (length options)
               (reduce #'min (mapcar #'cdr options))
-              (reduce #'max (mapcar #'cdr options)))
-      (dolist (option options)
-        (destructuring-bind (rle . expanded-length) option
-          (when (zerop (random 1000))
-            (format *trace-output* "~&(RLE compressor: ~:d segment options considered)" *rle-options*))
-          (cond
-            ((and (not recursive-p) (> (length rle) *rle-best-full*))
-             ;; no op, drop that option
-             )
-            ((= expanded-length total-length)
-             (push rle fully))
-            (t
-             (let ((rest (rle-compress-fully (subseq source expanded-length) t)))
-               (when rest
-                 (push (concatenate 'vector rle rest) fully)))))))
-      (when fully
-        (reduce #'shorter fully)))))
+              (reduce #'max (mapcar #'cdr options))))
+    (dolist (option options)
+      (destructuring-bind (rle . expanded-length) option
+        (when (zerop (random 1000))
+          (format *trace-output* "~&(RLE compressor: ~:d segment options considered)" *rle-options*))
+        (cond
+          ((and (not recursive-p) (> (length rle) *rle-best-full*))
+           ;; no op, drop that option
+           )
+          ((= expanded-length total-length)
+           (push rle fully))
+          (t
+           (let ((rest (rle-compress-fully (subseq source expanded-length) t)))
+             (when rest
+               (push (concatenate 'vector rle rest) fully)))))))
+    (when fully
+      (reduce #'shorter fully))))
 
 (defparameter *rle-fast-mode* 1)
 
@@ -1334,7 +1333,7 @@ with appropriate naming for the game engine to load.
 
 @strong{Example:}
 @example
-(compile-map #p\"Source/Maps/Island1/Island1.tmx\")
+ (compile-map #p\"Source/Maps/Island1/Island1.tmx\")
 @end example"
   (format *trace-output* "~&Loading tile map from ~a" (enough-namestring pathname))
   (read-map-ids-table)

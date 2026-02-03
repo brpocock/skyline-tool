@@ -34,13 +34,6 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
      ,@body))
 
 (format t "~&Loading latest ZPB-TTF …")
-;; Load eightbol system first
-(asdf:load-asd (merge-pathnames (make-pathname :directory '(:relative "eightbol")
-                                               :name "eightbol"
-                                               :type "asd")
-                                (or *compile-file-pathname*
-                                    *load-pathname*))
-               :name :eightbol)
 ;; Load skyline-tool system
 (asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool"
                                                :type "asd")
@@ -48,16 +41,9 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                                     *load-pathname*))
                :name :skyline-tool)
 (pushnew (asdf:system-relative-pathname :skyline-tool #p"./lib/") ql:*local-project-directories*)
-(funcall (intern "QUICKLOAD" (find-package :quicklisp)) :zpb-ttf)
 
 (format t "~&Quickloading Skyline-Tool System … ")
 (finish-output)
-(funcall (intern "QUICKLOAD" (find-package :quicklisp)) :cl-plumbing)
-(funcall (intern "QUICKLOAD" (find-package :quicklisp)) :clim)
-#+()(load (merge-pathnames (make-pathname :directory (list :relative)
-			        :name "clim-simple-interactor" :type "lisp")
-		   (or *compile-file-pathname*
-		       *load-pathname*)))
 (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :skyline-tool)
 (format t "… done with Quickload.~2%")
 

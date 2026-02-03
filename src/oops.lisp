@@ -1,11 +1,7 @@
 (in-package :skyline-tool)
 
 (defun make-classes-for-oops (&optional
-                                (class-defs-pathname
-                                 (make-pathname :directory (list :relative "Source" "Code"
-                                                                 (machine-directory-name)
-                                                                 "Classes")
-                                                :name "Classes" :type "Defs")))
+                                (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
   "Generate OOPS class definitions from class specification file.
 
 Processes the Classes.Defs file to generate various output files containing
@@ -89,11 +85,11 @@ node [shape=Mrecord];
                                          do (format classes.forth "
  : ~a-~a! ~a~a prop! ;
  : ~a-~a@ ~a~a prop@ ; "
-                                                    (cl-change-case:param-case class-name)
-                                                    (cl-change-case:param-case field)
+                                                    (param-case class-name)
+                                                    (param-case field)
                                                     class-name field
-                                                    (cl-change-case:param-case class-name)
-                                                    (cl-change-case:param-case
+                                                    (param-case class-name)
+                                                    (param-case
                                                      (if (char= #\P (last-elt field))
                                                          (format nil "~a?"
                                                                  (subseq field 0 (1- (length field))))
@@ -125,8 +121,8 @@ node [shape=Mrecord];
                                            do (setf class (gethash class class-bases)))
                                      (list original-class))))
                              (format classes.forth "~% : ~a-~a ~aClass CallMethod~:*~a~a call-method ; "
-                                     (cl-change-case:param-case class-name)
-                                     (cl-change-case:param-case method)
+                                     (param-case class-name)
+                                     (param-case method)
                                      class-name
                                      method)
                              (format class-methods "
@@ -245,8 +241,8 @@ Method~aDestroy: .proc
                         finally
                            (when current-class
                              (finalize-oops-class current-class slot-offset))))
-                (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
-                                                  :if-exists :supersede)
+              (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
+                                                :if-exists :supersede)
                   (format inheritance ";;; Class inheritances derived from ~s~2%"
                           (enough-namestring class-defs-pathname))
                   (format inheritance
