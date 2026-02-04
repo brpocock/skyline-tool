@@ -43,10 +43,7 @@
         :compile-art-7800 'compile-art-7800
         :compile-art-400 'compile-art-400
         :compile-art-800 'compile-art-800
-        :compile-cobol-class (if (find-package :eightbol)
-                                 (intern "COMPILE-COBOL-CLASS" :eightbol)
-                                 (lambda (&rest args)
-                                   (error "EightBol COBOL compiler not available. Load the :eightbol system first.")))
+        :compile-cobol-class 'eightbol:compile-cobol-class
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth

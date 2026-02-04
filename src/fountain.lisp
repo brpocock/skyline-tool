@@ -701,6 +701,8 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   :test 'equalp
   :documentation "Words recognized specially by the stage directions parser")
 
+(defvar *stage-direction-parser* nil)
+
 (eval
  `(yacc:define-parser *stage-direction-parser*
     (:start-symbol directions)
@@ -730,7 +732,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                               (declare (ignore _stop))
                               clauses))
                (repeat numeric times skyline-tool::|:| clauses
-                       #'stage/repeat)
+                 #'stage/repeat)
                preparation-paragraph)
     (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
                           	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
@@ -805,12 +807,6 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
      (confused (lambda (_confused)
                  (declare (ignore _confused))
                  (list 'emote '?)))
-     (surprised (lambda (_surprised)
-                  (declare (ignore _surprised))
-                  (list 'emote '!)))
-     (puzzled (lambda (_surprised)
-                (declare (ignore _surprised))
-                (list 'emote '?)))
      (gesturing (lambda (_gesturing)
                   (declare (ignore _gesturing))
                   (list 'gesture)))
@@ -825,8 +821,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                   (list 'panic)))
      (waving (lambda (_waving)
                (declare (ignore _waving))
-               (list 'wave-arms))))
-
+               (list 'wave-arms)))
+     actor-condition)
+    
     (actor-condition
      (sweating (lambda (_sweating)
                  (declare (ignore _sweating))
@@ -2444,10 +2441,8 @@ PlaySong EXECUTE "  song))))
       (cerror "Continue, ignoring sleep request"
               "Actor ~:(~a~) asked to go to sleep, but they are not in the scene" actor)
       (return))
-    (let ((ok-label (genlabel "FoundCharacter"))
-          (done-label (genlabel "DoneSleep")))
-      (format t "~% ActionSleep CharacterID_~a character-action!"
-              (pascal-case (string name))))))
+    (format t "~% ActionSleep CharacterID_~a character-action!"
+            (pascal-case (string name)))))
 
 (defun perform-character-action (actor action-verb action-enum)
   "Base function for character actions that sets the action enum and generates character-action! call"
@@ -2457,11 +2452,9 @@ PlaySong EXECUTE "  song))))
       (cerror "Continue, ignoring ~a request"
               "Actor ~:(~a~) asked to ~a, but they are not in the scene" actor action-verb)
       (return-from perform-character-action))
-    (let ((ok-label (genlabel (string-capitalize action-verb)))
-          (done-label (genlabel (format nil "Done~a" (string-capitalize action-verb)))))
-      (format t "~% CharacterID_~a ~a character-action!"
-              (pascal-case (string name))
-              action-enum))))
+    (format t "~% CharacterID_~a ~a character-action!"
+            (pascal-case (string name))
+            action-enum)))
 
 (defstage dance (actor)
   "ACTOR should perform the “dance” action."
@@ -2495,10 +2488,8 @@ PlaySong EXECUTE "  song))))
       (cerror "Continue, ignoring awakening request"
               "Actor ~:(~a~) asked to awaken, but they are not in the scene" actor)
       (return))
-    (let ((ok-label (genlabel "WakeUp"))
-          (done-label (genlabel "DoneWaking")))
-      (format t "~% ActionIdle CharacterID_~a character-action!"
-              (pascal-case (string name))))))
+    (format t "~% ActionIdle CharacterID_~a character-action!"
+            (pascal-case (string name)))))
 
 (defstage fade-in (from-color &optional (speed 'normal))
   (format t "~% FadeSpeed~a FadeActualColor~:(~a~) fade-in"
@@ -2556,16 +2547,14 @@ PlaySong EXECUTE "  song))))
             (subseq hash (- (length hash) l) (length hash)))))
 
 (defstage exit (who)
-  (let ((not-found-character-label
-          (genlabel "CharacterNotFound")))
-    (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
-        (require-actor who)
-      (unless found-in-scene-p
-        (cerror "Continue, ignoring “exit” direction"
-                "Asked for ~:(~a~) to exit the scene, which they were not in" name)
-        (return))
-      (format t "~% CharacterID_~a exit-character"
-              (pascal-case (string name))))))
+  (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
+      (require-actor who)
+    (unless found-in-scene-p
+      (cerror "Continue, ignoring “exit” direction"
+              "Asked for ~:(~a~) to exit the scene, which they were not in" name)
+      (return))
+    (format t "~% CharacterID_~a exit-character"
+            (pascal-case (string name)))))
 
 (defstage enter (who where)
   (destructuring-bind (actor found-in-scene-p) (find-or-load-actor who)
@@ -2770,7 +2759,7 @@ PlaySong EXECUTE "  song))))
            (t
             (stage-directions->acc a)
             (stage-directions->acc b)
-            (princ forth)))))))
+            (princ ,forth*)))))))
 
 (define-simple-math (+) "+")
 (define-simple-math (-) "-")
@@ -3153,14 +3142,6 @@ FadeColor~:(~a~) FadingTarget C!"
                                       (length string))))
       (compile-fountain-stream fountain))))
 
-(defmacro with-forth-file-wrappers (() &body body)
-  `(prog2
-       (format t "~% ( -*- forth -*- )
-( This file is compiled from Fountain sources. )
-( Alterations to this generated file will be discarded. ) ")
-       (progn ,@body)
-     (format t "~2&( End of Forth sources. )~%")))
-
 (defun compile-script (from forth)
   "Compile Fountain screenplay file FROM into FORTH source code.
 
@@ -3198,32 +3179,6 @@ code for the game's scripting engine.
                   (go top))))))
     (unless victoryp
       (ignore-errors (delete-file forth)))))
-
-(defun compile-forth (forth to)
-  "Compile the Forth program FORTH into the assembly sources TO"
-  (let (victoryp)
-    (unwind-protect
-         (progn (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
-                        (enough-namestring forth)
-                        (enough-namestring to))
-                (force-output *trace-output*)
-                (with-output-to-file (*standard-output* to :if-does-not-exist :create
-                                                           :if-exists :supersede)
-                  (format t ";;; This is a generated file, from ~s
-~10t.enc \"minifont\"
-
-~{~a~^_~}: .block~2%"
-                          (enough-namestring forth)
-                          (split-sequence #\. (pathname-name to)))
-                  (with-input-from-file (*standard-input* forth)
-                    (let ((*forth-file* forth))
-                      (compile-forth-script)))
-                  (format t "~2%~10t.bend~%"))
-                (format *trace-output* " Assembly source ready to compile.")
-                (force-output *trace-output*)
-                (setf victoryp t))
-      (unless victoryp
-        (ignore-errors (delete-file to))))))
 
 (defvar *npc-stats* nil)
 

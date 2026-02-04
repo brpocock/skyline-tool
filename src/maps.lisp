@@ -410,18 +410,17 @@
           (tileset-gid tileset)
           (array-dimension (tile-attributes tileset) 0)))
 
-(defun load-tileset-image (pathname$)
-  "Load the “sprite sheet” image for a tile set from PATHNAME$"
+(defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
+  (load-tileset-image
+   (make-pathname :directory (list :relative "Source" "Maps" "Tiles" (machine-directory-name))
+                  :name (pathname-name pathname$)
+                  :type "png")))
+
+(defun load-tileset-image (pathname)
+  "Load the “sprite sheet” image for a tile set from PATHNAME"
   (format *trace-output* "~&Loading tileset image from “~a”"
-          (enough-namestring pathname$))
-  (unless (find #\/ pathname$)
-    (setf pathname$ (concatenate 'string "Source/Art/Tiles/" pathname$)))
-  (let* ((png (png-read:read-png-file
-               (let ((pathname (parse-namestring pathname$)))
-                 (make-pathname
-                  :name (pathname-name pathname)
-                  :type (pathname-type pathname)
-                  :defaults #p"./Source/Maps/Tiles/"))))
+          (enough-namestring pathname))
+  (let* ((png (png-read:read-png-file pathname))
          (height (png-read:height png))
          (width (png-read:width png))
          (α (png-read:transparency png))
@@ -677,13 +676,15 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                (when (or (null *maps-ids*) (zerop (hash-table-count *maps-ids*)))
                  (read-map-ids-table))
                (setf id-prop (gethash *current-scene* *maps-ids*))))
-           (assert id-prop (id-prop) "Cannot find a locale ID property from map data or the maps index spreadsheet.
+           (assert id-prop (id-prop) "No Scene ID~@[ for “~a”~]
+Cannot find a locale ID property from map data or the maps index spreadsheet.
 ~@[Searched the properties of “~a”~%~]~
 There should be an ID property on the map itself
 \(Map → Map Properties, name: ID, type: int)
 with the locale's unique ID, or an entry in Source/Tables/MapsIndex.ods.
 To CONTINUE, look up the unique ID and provide it now,
-or correct the TMX file (add the ID) and DO-OVER."
+or add it to the spreadsheet and RELOAD-MAP-IDS-TABLE."
+                   *current-scene*
                    *current-scene*)
            (return-from find-locale-id-from-xml
              (etypecase id-prop
@@ -928,7 +929,7 @@ Tileset object containing image data, tile dimensions, and palette information."
     (assert (equal "tileset" (first xml)))
     (assert (member (assocdr "tilecount" (second xml)) '("64" "128") :test 'string-equal))
     (let* ((image (xml-match "image" xml))
-           (image-data (load-tileset-image (assocdr "source" (second image))))
+           (image-data (load-tileset-image-for-machine (assocdr "source" (second image))))
            (palette-data (split-images-to-palettes image-data)))
       (setf (tileset-image tileset) image-data
             (tileset-palettes tileset) palette-data)

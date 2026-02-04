@@ -622,12 +622,12 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
       "6502")
     ((9 1080 1601 8011) "m68k")
     ((15) "F8")
-    ((81 1000 2068 2110 3010) "Z80")
-    ((88) "65816")
+    ((81 1000 2068 2110 3010 9918) "Z80")
+    ((88 222 2416) "65816")
     ((821) "V810")
     ((1624) "SH2")
     ((2609) "cp1610")
-    ((3296) "ARM7"))
+    ((3296) "ARM7")))
 
 (defun machine-directory-name (&optional (machine *machine*))
   "Return the directory name for the current machine platform"
@@ -1793,16 +1793,6 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
          (write-bank-makefile bank-source))
         (t (write-asset-bank-makefile *bank*))))))
 
-(defmethod write-master-makefile-for-machine ((machine (eql 400)))
-  "Write makefile content for Atari 400 - delegates to 5200"
-  (let ((*machine* 5200)) ; Temporarily change machine to 5200 for delegation
-    (write-master-makefile-for-machine 5200)))
-
-(defmethod write-master-makefile-for-machine ((machine (eql 800)))
-  "Write makefile content for Atari 800 - delegates to 5200"
-  (let ((*machine* 5200)) ; Temporarily change machine to 5200 for delegation
-    (write-master-makefile-for-machine 5200)))
-
 (defmethod write-master-makefile-for-machine ((machine (eql 5200)))
   "Write makefile content for Atari 5200"
   (dolist (build +all-builds+)
@@ -1881,7 +1871,7 @@ Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastB
                                             :build build :video video)))))))))
 
 
-(defun write-master-makefile ()
+(defun write-master-makefile (&optional (*machine* *machine*))
   "Generates the master Makefile for the current platform
 
 in Source/Generated/{platform}/Makefile.

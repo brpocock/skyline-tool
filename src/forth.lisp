@@ -5,11 +5,11 @@
 (defun read-forth-word ()
   (when *forth-input-stuffing*
     (return-from read-forth-word (pop *forth-input-stuffing*)))
-  (when (member (peek-char nil *standard-input* nil)
-                '(#\Space #\Page #\Tab #\Newline))
+  (when (find (peek-char nil *standard-input* nil)
+              #(#\Space #\Page #\Tab #\Newline))
     (loop for char = (read-char *standard-input* nil nil)
-          while (member (peek-char nil *standard-input* nil)
-                        '(#\Space #\Page #\Tab #\Newline))))
+          while (find (peek-char nil *standard-input* nil)
+                      #(#\Space #\Page #\Tab #\Newline))))
   (let ((char (peek-char nil *standard-input* nil)))
     (when (char= #\\ char)
       ;; Skip backslash comment to end of line
@@ -19,10 +19,9 @@
   (loop for char = (read-char *standard-input* nil nil)
         with word = (make-array 16 :element-type 'character
                                    :adjustable t :fill-pointer 0)
-        if (or (null char) (member char '(#\Space #\Page #\Tab #\Newline)))
+        if (or (null char) (find char #(#\Space #\Page #\Tab #\Newline)))
           do (return-from read-forth-word (presence word))
-        else do (vector-push-extend char word)
-        finally (return-from read-forth-word (presence word))))
+        else do (vector-push-extend char word)))
 
 (defvar *words* nil)
 (defparameter *forth-bootstrap-pathname* #p"Source/Scripts/Forth/Bootstrap.forth")
@@ -33,15 +32,16 @@
   (let ((name (read-forth-word)))
     (when-let (def (gethash name *words*))
       (destructuring-bind (runtime compiler meta) def
+        (declare (ignore runtime compiler))
         (destructuring-bind (&key source source-file) meta
           (warn "redefining ~a (now from ~a, previously from ~a~@[ ~a~])"
                 name *forth-file* source source-file))))
     ;; Check for [inline] directive
-    (let ((inline-p nil))
-      (let ((next-word (read-forth-word)))
-        (when (and next-word (string-equal "[inline]" (princ-to-string next-word)))
-          (setf inline-p t)
-          (setf next-word (read-forth-word))))
+    (let ((inline-p nil)
+          (next-word (read-forth-word)))
+      (when (and next-word (string-equal "[inline]" (princ-to-string next-word)))
+        (setf inline-p t)
+        (setf next-word (read-forth-word)))
       (loop for word = next-word then (read-forth-word)
             with def = (list)
             do (cond ((null word)
@@ -52,8 +52,7 @@
                                                                :inline inline-p)))
                       (return-from forth/colon name))
                      (t
-                      (appendf def (cons word nil)))))
-      (error "colon-definition : ~a did not terminate properly with ;" word))))
+                      (appendf def (cons word nil))))))))
 
 (defun forth/c-quote ()
   (loop for char = (read-char *standard-input* nil nil)
@@ -152,14 +151,16 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
         else do (appendf string (cons word nil))))
 
 (defun forth/include (&optional (name (read-forth-word)))
-  (let* ((script-pathname (merge-pathnames (parse-namestring name)
-                                           (make-pathname
-                                            :directory (list :relative "Source" "Scripts" "Forth")
-                                            :type "forth")))
-         (generated-pathname (merge-pathnames (parse-namestring name)
-                                              (make-pathname
-                                               :directory (list :relative "Source" "Generated")
-                                               :type "forth")))
+  (let* ((script-pathname
+           (merge-pathnames (parse-namestring name)
+                            (make-pathname
+                             :directory (list :relative "Source" "Scripts" "Forth")
+                             :type "forth")))
+         (generated-pathname
+           (merge-pathnames (parse-namestring name)
+                            (make-pathname
+                             :directory (list :relative "Source" "Generated" (machine-directory-name))
+                             :type "forth")))
          (pathname (cond ((probe-file script-pathname) script-pathname)
                          ((probe-file generated-pathname) generated-pathname)
                          (t (error "Can't find “~a” to include,~%tried ~a~%and ~a"
@@ -170,7 +171,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     (with-input-from-file (*standard-input* pathname)
       (let ((*forth-file* pathname))
         (setf *words* (compile-forth-script :dictionary *words*))
-        (format *trace-output* " ( done with ~a ) " (enough-namestring pathname)))))
+        (format *trace-output* " ( done with ~a ) " (enough-namestring pathname))))))
 
 (defun forth/comment-parens ()
   (loop for word = (read-forth-word)
@@ -279,11 +280,12 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     dict))
 
 (defun forth-eval (expr)
-  (if (function expr)
+  (handler-case 
       (let ((value (funcall expr)))
         (when value
           (format nil "~%~10t.word ~a" value)))
-      (error "Can't eval Forth in compile-time context yet: ~a" expr)))
+    (undefined-function (e)
+      (error "Can't eval Forth in compile-time context yet: ~a~%(~s)" expr e))))
 
 (defun mangle-word-for-internals (word)
   "Mangle WORD into the form that an internal (assembly) implementation of a word would appear as"
@@ -314,58 +316,59 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                           (ash (logand #xff00 num) -8)
                           (logand #xffff num)
                           word)))
-              ;; Handle inline vs regular word definitions
-              (let ((inline-p (getf metadata :inline)))
-                (let (*forth-input-stuffing*)
-                  (when (< 1 (length run))
-                    (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
-                            word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
-                  (dolist (w (reverse (copy-list run)))
-                    (push w *forth-input-stuffing*))
-                  (loop while *forth-input-stuffing*
-                        do (forth-interpret (read-forth-word)))
-                  (when (< 1 (length run))
-                    (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p ""))))))
-            (force-output *standard-output*))
-          (forth-eval compile)))
-    ;; else: No def
-    (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
-      (destructuring-bind (run _compile &optional metadata) asm-def
-        (if run
-            (let ((num (parse-integer (first run))))
-              (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
-                      (logand #xff num)
-                      (ash (logand #xff00 num) -8)
-                      (logand #xffff num)
-                      word (mangle-word-for-internals word)))
-            (forth-eval compile)))
-      (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
-        (if (< num #x100)
-            (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
-                    (logand #xff num)
-                    (logand #xff num))
-            (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+            ;; Handle inline vs regular word definitions
+            (let ((inline-p (getf metadata :inline)))
+              (let (*forth-input-stuffing*)
+                (when (< 1 (length run))
+                  (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
+                          word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
+                (dolist (w (reverse (copy-list run)))
+                  (push w *forth-input-stuffing*))
+                (loop while *forth-input-stuffing*
+                      do (forth-interpret (read-forth-word)))
+                (when (< 1 (length run))
+                  (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p ""))))))
+          (force-output *standard-output*))
+      (forth-eval compile)))
+  ;; else: No def
+  (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
+    (destructuring-bind (run compile &optional metadata) asm-def
+      (declare (ignore metadata))
+      (if run
+          (let ((num (parse-integer (first run))))
+            (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
                     (logand #xff num)
                     (ash (logand #xff00 num) -8)
-                    (logand #xffff num)))
-        (tagbody top
-           (restart-case
-               (error "Unknown word: ~a~%(mangles to: ~a)"
-                      word (mangle-word-for-internals word))
-             (continue ()
-               :report "Continue, using a literal zero"
-               (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
-                       word
-                       (mangle-word-for-internals word)))
-             (words ()
-               :report "Review the list of words in the Forth environment"
-               (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
-               (when (x11-p)
-                 (let ((words *words*))
-                   (clim-simple-echo:run-in-simple-echo
-                    (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
-                    :process-name "Forth Words")))
-               (go top)))))))
+                    (logand #xffff num)
+                    word (mangle-word-for-internals word)))
+          (forth-eval compile)))
+    (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
+      (if (< num #x100)
+          (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
+                  (logand #xff num)
+                  (logand #xff num))
+          (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+                  (logand #xff num)
+                  (ash (logand #xff00 num) -8)
+                  (logand #xffff num)))
+      (tagbody top
+         (restart-case
+             (error "Unknown word: ~a~%(mangles to: ~a)"
+                    word (mangle-word-for-internals word))
+           (continue ()
+             :report "Continue, using a literal zero"
+             (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
+                     word
+                     (mangle-word-for-internals word)))
+           (words ()
+             :report "Review the list of words in the Forth environment"
+             (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
+             (when (x11-p)
+               (let ((words *words*))
+                 (clim-simple-echo:run-in-simple-echo
+                  (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
+                  :process-name "Forth Words")))
+             (go top)))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
@@ -381,3 +384,36 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     (force-output *trace-output*)
     *words*))
 
+(defmacro with-forth-file-wrappers (() &body body)
+  `(prog2
+       (format t "~% ( -*- forth -*- )
+( This file is compiled from Fountain sources. )
+( Alterations to this generated file will be discarded. ) ")
+       (progn ,@body)
+     (format t "~2&( End of Forth sources. )~%")))
+
+(defun compile-forth (forth to)
+  "Compile the Forth program FORTH into the assembly sources TO"
+  (let (victoryp)
+    (unwind-protect
+         (progn (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
+                        (enough-namestring forth)
+                        (enough-namestring to))
+                (force-output *trace-output*)
+                (with-output-to-file (*standard-output* to :if-does-not-exist :create
+                                                           :if-exists :supersede)
+                  (format t ";;; This is a generated file, from ~s
+~10t.enc \"minifont\"
+
+~{~a~^_~}: .block~2%"
+                          (enough-namestring forth)
+                          (split-sequence #\. (pathname-name to)))
+                  (let ((*forth-file* forth))
+                    (with-input-from-file (*standard-input* *forth-file*)
+                      (compile-forth-script)))
+                  (format t "~2%~10t.bend~%"))
+                (format *trace-output* " Assembly source ready to compile.")
+                (force-output *trace-output*)
+                (setf victoryp t))
+      (unless victoryp
+        (ignore-errors (delete-file to))))))
