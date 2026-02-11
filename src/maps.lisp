@@ -35,21 +35,8 @@
         (push (aref tiles x y) list)))
     (nreverse list)))
 
-(defun assocdr (key alist &optional (errorp t))
-  (or (second (assoc key alist :test #'equalp))
-      (when errorp
-        (error "Could not find ~a in ~s" key alist))))
-
 (defun pin (n min max)
   (min max (max min n)))
-
-(defun plist-keys (plist)
-  (loop for (key value) on plist by #'cddr
-        collecting key))
-
-(defun plist-values (plist)
-  (loop for (key value) on plist by #'cddr
-        collecting value))
 
 (defun parse-tile-animation-set (&rest tilesets)
   (let ((animations (list)))
@@ -163,8 +150,8 @@
   "Returns generally true if the OBJECT is over tile at X, Y"
   (let* ((obj-x1 (parse-number (assocdr "x" (second object))))
          (obj-y1 (parse-number (assocdr "y" (second object))))
-         (obj-x2 (1- (+ obj-x1 (parse-number (or (assocdr "width" (second object) nil) "1")))))
-         (obj-y2 (1- (+ obj-y1 (parse-number (or (assocdr "height" (second object) nil) "1")))))
+         (obj-x2 (1- (+ obj-x1 (parse-number (or (assocdr "width" (second object)) "1")))))
+         (obj-y2 (1- (+ obj-y1 (parse-number (or (assocdr "height" (second object)) "1")))))
          (cell-x1 (* x tile-width)) (cell-x2 (+ cell-x1 (1- tile-width)))
          (cell-y1 (* y 16)) (cell-y2 (+ cell-y1 15)))
     (and (<= cell-x1 obj-x2)
@@ -262,14 +249,14 @@
   (declare (ignore enemies)) ; TODO: #1238
   (let ((x (floor (parse-number (assocdr "x" (second object))) tile-width))
         (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
-        (name (or (assocdr "name" (second object) nil) "(Unnamed decal)")))
-    (when-let (gid$ (assocdr "gid" (second object) nil))
+        (name (or (assocdr "name" (second object)) "(Unnamed decal)")))
+    (when-let (gid$ (assocdr "gid" (second object)))
       (let ((gid (let ((n (parse-integer gid$)))
                    (assert (<= 0 n 1023) (n)
                            "GID of decal object is insane, got ~d ($~x) from “~a”"
                            n n gid$)
                    n))
-            (type (or (assocdr "type" (second object) nil) "rug"))
+            (type (or (assocdr "type" (second object)) "rug"))
             (decal-props (logior-numbers (decal-properties->binary object))))
         (multiple-value-bind (id attrs tileset) (find-tile-by-number gid base-tileset
                                                                      :decal-tileset decal-tileset)
@@ -285,7 +272,7 @@
                                       (ash tile-default-palette 24))))
           (when (plusp tileset)         ; XXX ref #109 ?
             (setf decal-props (logior decal-props #x1000)))
-          (when-let (pal$ (assocdr "Palette" (second object) nil))
+          (when-let (pal$ (assocdr "Palette" (second object)))
             #+ () (format *trace-output* "~2&//% tile $~2,'0x override palette ~s" id pal$)
             (assert (typep (parse-integer pal$) '(integer 0 7)) (pal$)
                     "Expected a palette index from 0 to 7, not ~s" pal$)
@@ -589,7 +576,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                      (remove-if (lambda (el)
                                   (or (not (equal "object" (car el)))
                                       (when-let (type-name (assocdr "type"
-                                                                    (second el) nil))
+                                                                    (second el)))
                                         (not (equalp "Wall" type-name)))))
                                 (subseq object-group 2)))))
       (dolist (object objects)
@@ -847,7 +834,7 @@ Update map/s or script to agree with one another and DO-OVER."
         (warn "Locked tile without Lock code")))
     (if-let (switch (tile-property-value "Switch" xml))
       (set-bit 4 (ash (logand #x03 (parse-integer switch :radix 16)) 3)))
-    (when-let (tile-id (or tile-id (assocdr "id" (second xml) nil)))
+    (when-let (tile-id (or tile-id (assocdr "id" (second xml))))
       (when (and tile-palettes tile-id (zerop (logand (ash 7 5) (elt bytes 4))))
         (clear-bit 4 (ash 7 5))
         (set-bit 4 (ash (mod (aref tile-palettes (ensure-number tile-id)) 8) 5))))
@@ -1025,10 +1012,6 @@ Tileset object containing image data, tile dimensions, and palette information."
     (or matches
         (list (cons (rle-encode source (make-byte-array-with-fill-pointer) 0)
                     (length source))))))
-
-(defun shorter (a b)
-  (if (< (length a) (length b))
-      a b))
 
 (defun only-best-options (options)
   (let ((best-expanded-length (make-hash-table))

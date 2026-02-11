@@ -58,12 +58,12 @@
   (let ((alist '((:key1 . "value1") (:key2 . "value2") (:key3 . 42))))
     (is (string= (skyline-tool::assocdr :key1 alist) "value1") "Should find string value")
     (is (= (skyline-tool::assocdr :key3 alist) 42) "Should find numeric value")
-    (signals error (skyline-tool::assocdr :missing alist) "Should signal error for missing key")))
+    (is (null (skyline-tool::assocdr :missing alist)) "Should return nil for missing key")))
 
 (test assocdr-no-error
-  "Test assocdr with errorp nil"
+  "Test assocdr returns nil for missing key (serapeum behavior)"
   (let ((alist '((:key1 . "value1"))))
-    (is (null (skyline-tool::assocdr :missing alist nil)) "Should return nil when errorp is nil")))
+    (is (null (skyline-tool::assocdr :missing alist)) "Should return nil when key is missing")))
 
 (test pin-basic
   "Test pin function clamps values to range"
