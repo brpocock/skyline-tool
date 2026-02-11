@@ -50,32 +50,18 @@
   :test 'equalp)
 
 (define-constant +apple-hires-palette+
-    '((#x00 #x00 #x00)  ; Black
-      (#xb6 #x3d #xff)  ; Purple (artifact color)
-      (#xea #x5d #x15)  ; Orange (artifact color)
-      (#x10 #xa4 #xe3)  ; Light Blue (artifact color)
-      (#x43 #xc3 #x00)  ; Light Green (artifact color)
-      (#xff #xff #xff)) ; White
+    '((#x00 #x00 #x00)
+      (#xb6 #x3d #xff)
+      (#xea #x5d #x15)
+      (#xff #xff #xff)
+      (#x00 #x00 #x00)
+      (#x10 #xa4 #xe3)
+      (#x43 #xc3 #x00)
+      (#xff #xff #xff))
   :test 'equalp)
 
-(define-constant +apple-double-hires-palette+
-    '((#x00 #x00 #x00)  ; Black
-      (#x22 #x22 #x22)  ; Dark Gray
-      (#x55 #x55 #x55)  ; Medium Gray
-      (#x77 #x77 #x77)  ; Light Gray
-      (#x99 #x99 #x99)  ; Light Gray 2
-      (#xbb #xbb #xbb)  ; Very Light Gray
-      (#xdd #xdd #xdd)  ; Very Light Gray 2
-      (#xff #xff #xff)  ; White
-      (#xdd #x22 #x22)  ; Red
-      (#xff #x66 #x44)  ; Light Red
-      (#xdd #x44 #xdd)  ; Magenta
-      (#xff #x88 #xff)  ; Light Magenta
-      (#x22 #x44 #xdd)  ; Blue
-      (#x44 #x88 #xff)  ; Light Blue
-      (#x22 #xdd #x44)  ; Green
-      (#x66 #xff #x88)) ; Light Green
-  :test 'equalp)
+(define-constant +apple-hires-color-names+
+    '(black purple orange white black blue green white))
 
 (define-constant +nes-palette-ntsc+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
@@ -442,7 +428,6 @@ List of RGB color triples for the machine's palette
                (200 +lynx-palette+)
                ((64 128) +c64-palette+)
                (2 +apple-hires-palette+)
-               (23 +apple-double-hires-palette+)
                (8 (ecase region
                     (:ntsc +nes-palette-ntsc+)
                     (:pal +nes-palette-pal+)))
@@ -3027,8 +3012,8 @@ compilation but for sprites that can be positioned anywhere on screen."
             (let* ((src-x (min (1- image-width) (floor (* x (/ image-width 256.0)))))
                    (src-y (min (1- image-height) (floor (* y (/ image-height 256.0)))))
                    (color-index (if (and (< src-x image-width) (< src-y image-height))
-                                  ;; Get palette index from actual image data
-                                  (png->palette-pixel image-data src-x src-y image-width transparency)
+                                  ;; Get palette index from palette-pixels (pre-converted from image)
+                                  (aref palette-pixels src-x src-y)
                                   0)))
               ;; Write 8-bit palette index
               (write-byte (logand color-index #xFF) out))))))
@@ -3864,24 +3849,6 @@ Used internally by BLOB ripping for color stamp conversion."
       (dotimes (i 16)
         (write-byte (aref tile i) out))))
   (format *trace-output* "~&Wrote ~:D bytes to ~A" (* (length chr-data) 16) index-out))
-
-(defun compile-art-7800 (index-out index-in)
-  "Compile 7800 graphics from INDEX-IN to INDEX-OUT.
-
-Processes 7800-specific graphics data, interleaving bytes and writing
-binary output for the Atari 7800 platform.
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: index-out (pathname), index-in (pathname)
-@item Returns: nil
-@item Side Effects: Generates 7800 graphics binary files
-@end table"
-  (let ((*machine* 7800))
-    (write-7800-binary index-out
-                       (interleave-7800-bytes
-                        (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))))
 
 (defun compile-art (index-out &rest png-files)
   "Compiles PNG image files into binary graphics data for INDEX-OUT.

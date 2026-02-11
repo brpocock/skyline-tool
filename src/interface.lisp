@@ -43,7 +43,7 @@
         :compile-art-7800 'compile-art-7800
         :compile-art-400 'compile-art-400
         :compile-art-800 'compile-art-800
-        :compile-cobol-class 'eightbol:compile-cobol-class
+        :compile-cobol-class 'eightbol:compile-eightbol-class
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
