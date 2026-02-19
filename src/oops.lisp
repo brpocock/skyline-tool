@@ -1,5 +1,184 @@
 (in-package :skyline-tool)
 
+;;; ---------------------------------------------------------------
+;;; Annotation parsing helpers for Classes.Defs
+;;; ---------------------------------------------------------------
+
+(defun parse-slot-annotation (parts)
+  "Parse the annotation portion of a slot definition (everything after size).
+PARTS is a list of strings (the whitespace-split remainder after name and size).
+Returns one of:
+  NIL                         — no annotation, use default PIC
+  (:object-ref class-name)    — @ClassName pointer
+  (:pic string)               — = PIC-string (verbatim PIC clause)
+  (:varchar n field-name)     — = VARCHAR(n) DEPENDING ON FieldName"
+  (when parts
+    (let ((first (first parts)))
+      (cond
+        ;; @ClassName — object reference
+        ((and (> (length first) 1) (char= #\@ (char first 0)))
+         (list :object-ref (subseq first 1)))
+        ;; = … — explicit PIC or VARCHAR
+        ((string= first "=")
+         (let ((rest (rest parts)))
+           (when rest
+             (let ((spec (format nil "~{~a~^ ~}" rest)))
+               (let ((varchar-match
+                       (cl-ppcre:register-groups-bind (n field)
+                           ("VARCHAR\\((\\d+)\\)\\s+DEPENDING\\s+ON\\s+(\\S+)"
+                            spec)
+                         (list (parse-integer n) field))))
+                 (if varchar-match
+                     (list* :varchar varchar-match)
+                     (list :pic spec)))))))
+        (t nil)))))
+
+(defun slot-annotation-to-cobol-pic (annotation size)
+  "Convert a slot annotation (from PARSE-SLOT-ANNOTATION) and SIZE (bytes)
+to a COBOL PIC clause string suitable for use in a .cpy file.
+Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
+  (cond
+    ((null annotation)
+     ;; Default mapping
+     (cond
+       ((= size 1) "PIC 99 USAGE BINARY")
+       ((= size 2) "PIC 9999 USAGE BINARY")
+       (t          (format nil "OCCURS ~d TIMES PIC 99 USAGE BINARY" size))))
+    ((eq (car annotation) :object-ref)
+     (format nil "OBJECT REFERENCE ~a" (second annotation)))
+    ((eq (car annotation) :varchar)
+     (format nil "PIC X(~d) DEPENDING ON ~a" (second annotation) (third annotation)))
+    ((eq (car annotation) :pic)
+     (second annotation))
+    (t
+     (format nil "PIC 99 USAGE BINARY ;; unknown annotation ~s" annotation))))
+
+;;; ---------------------------------------------------------------
+;;; Copybook generation  (Source/Generated/{ClassName}.cpy)
+;;; ---------------------------------------------------------------
+
+(defun class-ancestry-chain (class-name class-bases-hash)
+  "Return the ancestor chain for CLASS-NAME as a list from root to CLASS-NAME.
+E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor\" \"Character\")"
+  (let (chain)
+    (loop for c = class-name then (gethash c class-bases-hash)
+          while c
+          do (push c chain))
+    chain))
+
+(defun make-cobol-copybooks
+    (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
+  "Generate COBOL copybook (.cpy) files from Classes.Defs.
+
+For each class defined in CLASS-DEFS-PATHNAME, writes
+Source/Generated/{ClassName}.cpy containing all slots (inherited and own)
+in ancestry order (root → leaf), with section comments identifying the
+origin class of each group of slots.
+
+Slot annotation conventions in Classes.Defs:
+  .SlotName size              — default PIC (1→PIC 99, 2→PIC 9999, n→OCCURS n PIC 99)
+  .SlotName size @ClassName   — OBJECT REFERENCE ClassName (2-byte pointer)
+  .SlotName size = PIC-string — verbatim PIC clause
+  .SlotName size = VARCHAR(n) DEPENDING ON Field — variable-length string"
+  (let ((class-slots      (make-hash-table :test 'equal))
+        (class-slots-order (make-hash-table :test 'equal))  ; ordered list of slot names
+        (class-bases      (make-hash-table :test 'equal))
+        (class-size       (make-hash-table :test 'equal))
+        (slot-annotations (make-hash-table :test 'equal))   ; class → hash(name→annotation)
+        (slot-sizes       (make-hash-table :test 'equal))   ; class → hash(name→size)
+        (all-classes      '()))
+    ;; Seed BasicObject
+    (setf (gethash "BasicObject" class-bases) nil
+          (gethash "BasicObject" class-size)  1
+          (gethash "BasicObject" class-slots) (make-hash-table :test 'equal)
+          (gethash "BasicObject" class-slots-order) '("ClassID")
+          (gethash "BasicObject" slot-sizes)  (let ((h (make-hash-table :test 'equal)))
+                                                (setf (gethash "ClassID" h) 1) h)
+          (gethash "BasicObject" slot-annotations) (make-hash-table :test 'equal))
+    (with-input-from-file (class-file class-defs-pathname)
+      (loop with current-class = "BasicObject"
+            with slot-offset   = 1
+            for line = (read-line class-file nil nil) while line do
+            (cond
+              ((emptyp line) nil)
+              ((char= #\; (char line 0)) nil)  ; comment
+              ((char= #\# (char line 0)) nil)  ; method — ignored for copybooks
+              ((char= #\. (char line 0))        ; slot definition
+               (let* ((parts (split-sequence #\Space (subseq line 1)
+                                             :remove-empty-subseqs t))
+                      (name  (first parts))
+                      (size  (if (and (second parts) (char= #\$ (char (second parts) 0)))
+                                 (parse-integer (subseq (second parts) 1) :radix 16)
+                                 (parse-integer (or (second parts) "1"))))
+                      (annotation (parse-slot-annotation (cddr parts))))
+                 (unless (gethash current-class class-slots)
+                   (setf (gethash current-class class-slots)
+                         (make-hash-table :test 'equal)))
+                 (unless (gethash current-class slot-sizes)
+                   (setf (gethash current-class slot-sizes)
+                         (make-hash-table :test 'equal)))
+                 (unless (gethash current-class slot-annotations)
+                   (setf (gethash current-class slot-annotations)
+                         (make-hash-table :test 'equal)))
+                 (setf (gethash name (gethash current-class class-slots))
+                       (cons slot-offset size))
+                 (setf (gethash name (gethash current-class slot-sizes)) size)
+                 (when annotation
+                   (setf (gethash name (gethash current-class slot-annotations))
+                         annotation))
+                 (pushnew name (gethash current-class class-slots-order) :test #'string=)
+                 (incf slot-offset size)))
+              ((find #\< line)              ; class definition
+               (destructuring-bind (new-class old-class)
+                   (mapcar (curry #'string-trim #(#\Space))
+                           (split-sequence #\< line))
+                 (setf (gethash new-class class-bases) old-class
+                       (gethash new-class class-slots) (make-hash-table :test 'equal)
+                       (gethash new-class class-slots-order) '()
+                       (gethash new-class slot-sizes) (make-hash-table :test 'equal)
+                       (gethash new-class slot-annotations) (make-hash-table :test 'equal)
+                       slot-offset (or (gethash old-class class-size)
+                                       (error "Parent class ~s not found" old-class))
+                       current-class new-class)
+                 (push new-class all-classes))))))
+    ;; Finalise sizes
+    (dolist (class-name (reverse all-classes))
+      (let ((own-slots (gethash class-name class-slots-order)))
+        (let* ((parent  (gethash class-name class-bases))
+               (base-sz (or (gethash parent class-size) 0))
+               (own-sz  (reduce #'+ (mapcar (lambda (s)
+                                              (gethash s (gethash class-name slot-sizes) 0))
+                                            own-slots)
+                                :initial-value 0)))
+          (setf (gethash class-name class-size) (+ base-sz own-sz)))))
+    ;; Write one .cpy per class  — canonical path: Source/Generated/Classes/{Name}.cpy
+    (let ((generated-dir #p"./Source/Generated/Classes/"))
+      (ensure-directories-exist generated-dir)
+      (dolist (class-name (reverse all-classes))
+        (let ((cpy-path (merge-pathnames
+                         (make-pathname :name class-name :type "cpy")
+                         generated-dir)))
+          (with-output-to-file (out cpy-path :if-exists :supersede)
+            (format out "* ~a — generated by make-classes-for-oops~%" class-name)
+            (format out "* DO NOT EDIT — regenerated from Classes.Defs~%")
+            (let ((chain (class-ancestry-chain class-name class-bases)))
+              (dolist (ancestor chain)
+                (let ((own-slots   (reverse (gethash ancestor class-slots-order '())))
+                      (sizes-hash  (gethash ancestor slot-sizes))
+                      (annot-hash  (gethash ancestor slot-annotations)))
+                  (when own-slots
+                    (if (string= ancestor class-name)
+                        (format out "* Own slots (~a):~%" ancestor)
+                        (format out "* Inherited from ~a:~%" ancestor))
+                    (dolist (slot-name own-slots)
+                      (let* ((size       (gethash slot-name sizes-hash 1))
+                             (annotation (when annot-hash
+                                           (gethash slot-name annot-hash)))
+                             (pic        (slot-annotation-to-cobol-pic annotation size)))
+                        (format out " 05 ~a ~a.~%" slot-name pic))))))))
+          (format t "~&Generated ~a~%" (enough-namestring cpy-path))))))
+  (values))
+
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
   "Generate OOPS class definitions from class specification file.
@@ -8,22 +187,14 @@ Processes the Classes.Defs file to generate various output files containing
 class constants, Forth definitions, inheritance graphs, and assembly code
 for the OOPS (Object-Oriented Programming System).
 
+Also generates COBOL copybooks in Source/Generated/{ClassName}.cpy via
+MAKE-COBOL-COPYBOOKS.
+
 @table @asis
 @item CLASS-DEFS-PATHNAME
 Path to Classes.Defs file (default: ./Source/Classes/Classes.Defs)
 @item Outputs
-Generates Classes.forth, Classes.dot, ClassConstants.s, ClassInheritance.s, ClassMethods.s, ClassSizes.s
-@end table
-
-@table @asis
-@item Output
-Generates multiple files in Source/Generated/$PORT/:
-- Classes.forth: Forth class accessors
-- Classes.dot: GraphViz class hierarchy diagram
-- ClassMethods.s: Assembly method tables
-- ClassConstants.s: Assembly class constants
-- ClassInheritance.s: Assembly inheritance tables
-- ClassSizes.s: Assembly class sizes
+Generates Classes.forth, Classes.dot, ClassConstants.s, ClassInheritance.s, ClassMethods.s, ClassSizes.s, and {ClassName}.cpy for each class.
 @end table"
   (let ((all-classes-sequentially (list))
         (output-dir (format nil "./Source/Generated/~a/" (machine-directory-name))))
@@ -192,23 +363,24 @@ Method~aDestroy: .proc
                                           "Ignoring method without class: ~s" line)))
                              ((char= #\. (char line 0)) ; slot name & size
                               (if current-class
-                                  (destructuring-bind (name size$)
-                                      (split-sequence #\Space (subseq line 1)
-                                                      :remove-empty-subseqs t)
-                                    (let ((size (if (char= #\$ (char size$ 0))
+                                  (let* ((parts (split-sequence #\Space (subseq line 1)
+                                                                :remove-empty-subseqs t))
+                                         (name  (first parts))
+                                         (size$ (second parts))
+                                         (size  (if (and size$ (char= #\$ (char size$ 0)))
                                                     (parse-integer (subseq size$ 1) :radix 16)
-                                                    (parse-integer size$))))
-                                      (format class-constants "
+                                                    (parse-integer (or size$ "1")))))
+                                    (format class-constants "
 ~10t~a~a = $~2,'0x~@[~32t; … $~2,'0x~]"
-                                              current-class name slot-offset
-                                              (when (/= 1 size)
-                                                (1- (+ slot-offset size))))
-                                      (unless (gethash current-class class-slots)
-                                        (setf (gethash current-class class-slots)
-                                              (make-hash-table :test 'equalp)))
-                                      (setf (gethash name (gethash current-class class-slots))
-                                            (cons slot-offset size))
-                                      (incf slot-offset size)))
+                                            current-class name slot-offset
+                                            (when (/= 1 size)
+                                              (1- (+ slot-offset size))))
+                                    (unless (gethash current-class class-slots)
+                                      (setf (gethash current-class class-slots)
+                                            (make-hash-table :test 'equalp)))
+                                    (setf (gethash name (gethash current-class class-slots))
+                                          (cons slot-offset size))
+                                    (incf slot-offset size))
                                   (cerror "Continue, ignoring"
                                           "Ignoring slot without class: ~s" line)))
                              ((find #\< line) ; class definition
@@ -263,7 +435,7 @@ Method~aDestroy: .proc
               (fresh-line class-constants)
               (terpri class-constants))
             (format class-methods "
-;;; 
+;;; 
 ;;; Set up method dispatch jump table pointers
 
 GenericFunctionTables = (BasicObjectClassMethods, BasicObjectClassMethods, ~{~aClassMethods~^, ~})
@@ -273,4 +445,8 @@ ClassMethodsH: .byte >(GenericFunctionTables)
 
 ;;; Finis.~%"
                     (reverse all-classes-sequentially)))
-          (format class-graph "~&}~%"))))))
+          (format class-graph "~&}~%"))))
+    ;; Generate COBOL copybooks for all classes
+    (make-cobol-copybooks class-defs-pathname)
+    ;; Generate Phantasia-Globals.cpy from assembly sources
+    (make-globals-copybook)))
