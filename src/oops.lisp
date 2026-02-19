@@ -4,37 +4,54 @@
 ;;; Annotation parsing helpers for Classes.Defs
 ;;; ---------------------------------------------------------------
 
+(defun pascal-to-cobol-name (name)
+  "Convert a PascalCase assembly symbol to a COBOL hyphenated name.
+A hyphen is inserted before each uppercase letter that follows a lowercase
+letter (or digit), preserving acronyms as a unit.
+  \"NameLength\"       → \"Name-Length\"
+  \"MaxHP\"            → \"Max-HP\"
+  \"ClassID\"          → \"Class-ID\"
+  \"AbsoluteDeltaX\"   → \"Absolute-Delta-X\"
+  \"HP\"               → \"HP\"   (all-caps acronym unchanged)
+  \"TTL\"              → \"TTL\"  (all-caps acronym unchanged)"
+  (with-output-to-string (out)
+    (loop for i from 0 below (length name)
+          for ch = (char name i)
+          do (when (and (> i 0)
+                        (upper-case-p ch)
+                        (lower-case-p (char name (1- i))))
+               (write-char #\- out))
+             (write-char ch out))))
+
 (defun parse-slot-annotation (parts)
   "Parse the annotation portion of a slot definition (everything after size).
 PARTS is a list of strings (the whitespace-split remainder after name and size).
 Returns one of:
-  NIL                         — no annotation, use default PIC
-  (:object-ref class-name)    — @ClassName pointer
-  (:pic string)               — = PIC-string (verbatim PIC clause)
+  NIL                             — no annotation, use default PIC
+  (:object-ref class-name)        — @ClassName pointer
+  (:varchar n depend-field-name)  — = VARCHAR(n) DEPENDING ON Field
+  (:pic string)                   — = PIC-string (verbatim PIC clause)
 
-Pascal-type strings (leading-byte-length + fixed data area) are declared
-as two separate adjacent slots (.NameLength 1 / .Name 12 = PIC X(12)).
-The DEPENDING ON form is intentionally NOT supported; use separate slots."
+Pascal-type strings use two adjacent slots with a VARCHAR DEPENDING ON:
+  .NameLength 1
+  .Name 12 = VARCHAR(12) DEPENDING ON Name-Length
+The DEPENDING ON field is referenced by its COBOL hyphenated name."
   (when parts
     (let ((first (first parts)))
       (cond
         ;; @ClassName — object reference
         ((and (> (length first) 1) (char= #\@ (char first 0)))
          (list :object-ref (subseq first 1)))
-        ;; = … — explicit PIC clause
+        ;; = … — explicit PIC clause or VARCHAR
         ((string= first "=")
          (let ((rest (rest parts)))
            (when rest
              (let ((spec (format nil "~{~a~^ ~}" rest)))
-               ;; Pascal strings: VARCHAR(n) DEPENDING ON is legacy notation;
-               ;; correct form is two separate slots (.NameLength 1 / .Name n = PIC X(n)).
-               ;; Strip DEPENDING ON and treat as plain PIC X(n) with a warning.
-               (cl-ppcre:register-groups-bind (n)
-                   ("(?i)VARCHAR\\((\\d+)\\).*DEPENDING\\s+ON" spec)
-                 (warn "Classes.Defs: use separate NameLength and Name slots for ~
-Pascal strings. Treating VARCHAR(~a) DEPENDING ON ... as PIC X(~a)." n n)
+               ;; VARCHAR(n) DEPENDING ON Field — Pascal-type variable-length string
+               (cl-ppcre:register-groups-bind (n field)
+                   ("(?i)VARCHAR\\((\\d+)\\)\\s+DEPENDING\\s+ON\\s+(\\S+)" spec)
                  (return-from parse-slot-annotation
-                   (list :pic (format nil "PIC X(~a)" n))))
+                   (list :varchar (parse-integer n) field)))
                (list :pic spec)))))
         (t nil)))))
 
@@ -50,6 +67,8 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
        (t          (format nil "OCCURS ~d TIMES PIC 99 USAGE BINARY" size))))
     ((eq (car annotation) :object-ref)
      (format nil "OBJECT REFERENCE ~a" (second annotation)))
+    ((eq (car annotation) :varchar)
+     (format nil "VARCHAR(~d) DEPENDING ON ~a" (second annotation) (third annotation)))
     ((eq (car annotation) :pic)
      (second annotation))
     (t
@@ -176,8 +195,9 @@ Slot annotation conventions in Classes.Defs:
                       (let* ((size       (gethash slot-name sizes-hash 1))
                              (annotation (when annot-hash
                                            (gethash slot-name annot-hash)))
-                             (pic        (slot-annotation-to-cobol-pic annotation size)))
-                        (format out " 05 ~a ~a.~%" slot-name pic))))))))
+                             (pic        (slot-annotation-to-cobol-pic annotation size))
+                             (cobol-name (pascal-to-cobol-name slot-name)))
+                        (format out " 05 ~a ~a.~%" cobol-name pic))))))))
           (format t "~&Generated ~a~%" (enough-namestring cpy-path))))))
   (values))
 
