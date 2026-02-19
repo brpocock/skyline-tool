@@ -642,6 +642,8 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
             (setf (gethash segment-name *maps-ids*) (parse-integer id)
                   (gethash segment-name *maps-display-names*)
                   (lower-case display-name))
+            (format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer id)
+                    segment-name (lower-case display-name))
             (when (not (emptyp dock-id))
               (setf (gethash segment-name *maps-dock-ids*) (parse-integer dock-id)
                     (gethash (parse-integer dock-id) *dock-ids-maps*) segment-name)))))))
@@ -652,23 +654,29 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defun find-locale-id-from-xml (xml)
   (tagbody top
      (restart-case
-         (let ((id-prop (find-if (lambda (el)
-                                   (some (lambda (kv)
-                                           (destructuring-bind (key value) kv
-                                             (and (equal key "name") (equalp value "id"))))
-                                         (second el)))
-                                 (xml-matches "property" (xml-match "properties" xml nil)))))
-           (when *current-scene*
-             (unless id-prop
-               (when (or (null *maps-ids*) (zerop (hash-table-count *maps-ids*)))
-                 (read-map-ids-table))
-               (setf id-prop (gethash *current-scene* *maps-ids*))))
+         (let ((id-prop (or
+                         (when *current-scene*
+                           (when (or (not (boundp '*maps-ids*))
+                                     (null *maps-ids*)
+                                     (zerop (hash-table-count *maps-ids*)))
+                             (read-map-ids-table))
+                           (prog1 
+                               (gethash *current-scene* *maps-ids*)
+                             (format *trace-output* "~&Loaded maps index, looking for ~a"
+                                     *current-scene*)))
+                         (find-if (lambda (el)
+                                    (some (lambda (kv)
+                                            (destructuring-bind (key value) kv
+                                              (and (equal key "name") (equalp value "id"))))
+                                          (second el)))
+                                  (xml-matches "property" (xml-match "properties" xml nil))))))
            (assert id-prop (id-prop) "No Scene ID~@[ for “~a”~]
 Cannot find a locale ID property from map data or the maps index spreadsheet.
 ~@[Searched the properties of “~a”~%~]~
-There should be an ID property on the map itself
+There should be an entry in Source/Tables/MapsIndex.ods,
+or an ID property on the map itself
 \(Map → Map Properties, name: ID, type: int)
-with the locale's unique ID, or an entry in Source/Tables/MapsIndex.ods.
+with the locale's unique ID.
 To CONTINUE, look up the unique ID and provide it now,
 or add it to the spreadsheet and RELOAD-MAP-IDS-TABLE."
                    *current-scene*
@@ -683,7 +691,7 @@ or add it to the spreadsheet and RELOAD-MAP-IDS-TABLE."
                                                      (second id-prop))))))))
        (reload-map-ids-table ()
          :report "Reload Source/Tables/MapsIndex.ods"
-         (setf *maps-ids* nil)
+         (read-map-ids-table)
          (go top)))))
 
 (defun find-entrance-by-name (xml name locale-name)
@@ -1327,13 +1335,13 @@ with appropriate naming for the game engine to load.
         (xml (xmls:parse-to-list (alexandria:read-file-into-string pathname))))
     (assert (equal "map" (car xml)) ()
             "The XML header does not appear to be for a tiled map (TMX) file")
-    (assert (equal "orthogonal" (assocdr "orientation" (second xml))) ()
+    (assert (equal "orthogonal" (car (assocdr "orientation" (second xml)))) ()
             "The map file must be in orthogonal orientation")
-    (assert (equal "right-down" (assocdr "renderorder" (second xml))) ()
+    (assert (equal "right-down" (car (assocdr "renderorder" (second xml)))) ()
             "The map file must be in right-down render order")
-    (assert (member (assocdr "tilewidth" (second xml)) '("8" "16") :test #'string-equal) ()
+    (assert (member (car (assocdr "tilewidth" (second xml))) '("8" "16") :test #'string-equal) ()
             "The map file must have 8px or 16px wide tiles")
-    (assert (equal "16" (assocdr "tileheight" (second xml))) ()
+    (assert (equal "16" (car (assocdr "tileheight" (second xml)))) ()
             "The map file must have 16px high tiles")
     (let* ((tilesets (mapcar (lambda (tileset) (load-tileset tileset pathname))
                              (xml-matches "tileset" xml)))

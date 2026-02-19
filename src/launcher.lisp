@@ -70,7 +70,7 @@
         (clim:with-text-face (pane :bold)
           (clim:with-text-size (pane :larger)
             (format pane "~2%~a~%"
-                    (cl-change-case:title-case (string (first entry))))))
+                    (title-case (string (first entry))))))
         (clim:with-text-size (pane :smaller)
           (dolist (sub-entry (rest entry))
             (display-launcher-menu-item sub-entry pane))))
@@ -87,7 +87,7 @@
 (clim:define-presentation-method clim:present
     (function-name (type nullary-function-name) stream view &key)
   (clim:with-text-size (stream :larger)
-    (format stream "~%~4t~a" (cl-change-case:title-case (string function-name))))
+    (format stream "~%~4t~a" (title-case (string function-name))))
   (when-let (doc (documentation function-name 'function))
     (format stream "~%~a" (first-line doc)))
   (terpri stream))
@@ -95,7 +95,7 @@
 (define-launcher-frame-command (com-run-nullary-function :menu nil :name t)
     ((function-name 'nullary-function-name :gesture :select))
   (clim-sys:make-process (lambda () (funcall function-name))
-                         :name (cl-change-case:title-case (string function-name))))
+                         :name (title-case (string function-name))))
 
 (defun show-dll-from-dump ()
   "Show the decoded Display List List from the core dump"
@@ -260,8 +260,10 @@ The signal code was ~a" break-code)
   "Open the Skyline Tool launcher (main menu)"
   (let* ((frame (clim:make-application-frame 'launcher-frame))
          (*launcher-frame* frame))
+    (unless (boundp '*machine*)
+      (load-project.json))
     (setf (clim:frame-pretty-name frame) (format nil "Skyline Tool for ~a: Launcher"
-                                                 (cl-change-case:title-case *game-title*))
+                                                 (title-case *game-title*))
           *default-pathname-defaults*
           (let ((skyline-dir (asdf:system-source-directory 
                               (asdf:find-system :skyline-tool))))

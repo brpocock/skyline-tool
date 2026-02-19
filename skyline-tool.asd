@@ -8,40 +8,40 @@
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT" ; if this poses a problem, ask me for a waiver.
   :long-name "The Skyline tools for building ARPG's for various machines"
-
+  
   :depends-on ( ;; broken into lines for easier sorting
+               
                :alexandria
                :bordeaux-threads
-               :cl-6502
                :cl-base64
                :cl-change-case
                :cl-json
                :cl-ppcre
-               :clim-listener
                :clim-debugger
-               :clods-export
+               :clim-listener
                :climacs
+               :clods-export
                :clouseau
                :cserial-port
                :dufy
                :fiveam
                :ironclad
-               :mcclim
-               :lparallel
                :local-time
+               :lparallel
+               :mcclim
                :midi
                :parse-number
                :png-read
                :quicklisp-slime-helper
                :replic
-               :split-sequence
+               :serapeum               
                :swank
                :trivial-backtrace
                :trivial-gray-streams
                :xmls
                :yacc
                :zip
-
+               
                :eightbol
                )
   :encoding :utf-8
@@ -51,7 +51,6 @@
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("7800gd-debug" "eprom" "package"))
                  (:file "animation-editor" :depends-on ("package" "decode-animation-buffers"))
-                 #+ () (:file "assembly" :depends-on ("package"))
                  (:file "asset-allocator" :depends-on ("package"))
                  (:file "atarivox" :depends-on ("package" "runner"))
                  (:file "clim-simple-echo" :depends-on ("package"))
@@ -62,7 +61,7 @@
                  (:file "decode-object" :depends-on ("package"))
                  (:file "eprom" :depends-on ("package"))
                  (:file "forth" :depends-on ("package" "fountain" "interface"))
-                 (:file "fountain" :depends-on ("package"))
+                 (:file "fountain" :depends-on ("package" "maps"))
                  (:file "graphics" :depends-on ("package"))
                  (:file "i18n-l10n" :depends-on ("package"))
                  (:file "interface" :depends-on ("package"))
@@ -75,7 +74,6 @@
                  (:file "package")
                  (:file "peek" :depends-on ("package"))
                  (:file "runner" :depends-on ("package"))
-                 (:file "skylisp" :depends-on ("package"))
                  (:file "tables" :depends-on ("package"))
                  (:file "threed" :depends-on ("package"))
                  (:file "utils" :depends-on ("package"))
@@ -87,10 +85,7 @@
   :description "Tests for Skyline-Tool"
   :author "Bruce-Robert Pocock"
   :version "0.9.1"
-  :depends-on (
-               :skyline-tool
-               :fiveam
-               )
+  :depends-on (:skyline-tool)
   :defsystem-depends-on (:asdf)
   :components ((:module "tests"
                 :components (

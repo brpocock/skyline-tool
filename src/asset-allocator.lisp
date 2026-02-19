@@ -1359,8 +1359,9 @@ Currently just enumerates all four asset loaders."
         (format nil "Source/Code/~a/Routines/LoadSong.s" (machine-directory-name))
         (format nil "Source/Code/~a/Routines/LoadScript.s" (machine-directory-name))))
 
-(defun write-asset-ids (&optional (outfile-pathname (format nil "Source/Generated/~a/AssetIDs.s" (machine-directory-name)))
-                                  (infile-pathname #p"Source/Assets.index"))
+(defun write-asset-ids (&optional
+                          (outfile-pathname (format nil "Source/Generated/~a/AssetIDs.s" (machine-directory-name)))
+                          (infile-pathname #p"Source/Assets.index"))
   "Computes the hashes of assets from INFILE-PATHNAME and writes OUTFILE-PATHNAME.
 
 Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
@@ -1375,7 +1376,7 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
             do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
                      do (format outfile "~%~10t~:(~a~)_~{~a~^_~}_ID = $~2,'0x"
                                 kind (split-sequence #\/ asset-name) asset-hash)))))
-
+  
   (with-output-to-file (outfile (merge-pathnames (make-pathname :type "forth")
                                                  outfile-pathname)
                                 :if-exists :supersede)
@@ -1387,7 +1388,27 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
             do (terpri outfile)
             do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
                      do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;"
-                                kind (split-sequence #\/ asset-name) asset-hash))))))
+                                kind (split-sequence #\/ asset-name) asset-hash)))))
+  (with-output-to-file (outfile (merge-pathnames (make-pathname :type "cpy")
+                                                 outfile-pathname)
+                                :if-exists :supersede)
+    (format outfile "000000* Asset IDs are auto-generated
+000001* This must be COPY:ed into the WORKING-STORAGE SECTION")
+    (multiple-value-bind (asset-builds asset-ids) (read-assets-list infile-pathname)
+      (declare (ignore asset-builds))
+      (format *trace-output* "~&Writing AssetIDs.cpy for ~:d asset~:p" (hash-table-count asset-ids))
+      (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
+            do (terpri outfile)
+            do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
+                     do (format
+                         outfile
+                         (if (eql kind :scripts)
+                             "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC(9999) USAGE IS BINARY VALUE IS CONSTANT x'~2,'0x'"
+                             "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC(99) USAGE IS BINARY VALUE IS CONSTANT x'~2,'0x'")
+                         kind (mapcar #'string-capitalize
+                                      (mapcar #'param-case
+                                              (split-sequence #\/ asset-name)))
+                         asset-hash))))))
 
 (defun write-asset-bank-makefile (bank &key build video)
   "Writes the Makefile for an asset ROM bank"
@@ -1402,7 +1423,7 @@ Source/Generated/Bank~(~2,'0x~).~a.~a.s: Source/Assets.index Source/Generated/Ba
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool --port ${PORT} write-asset-bank ~x ~a ~a
 
-Object/Bank~(~2,'0x~).~a.~a.o \\
+Object/~a/Bank~(~2,'0x~).~a.~a.o \\
   ~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt \\
   ~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: \\
 		Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
@@ -1420,6 +1441,7 @@ Object/Bank~(~2,'0x~).~a.~a.o \\
             bank build video
             asset-objects
             bank build video
+            (machine-directory-name *machine*)
             bank build video
             bank build video
             (append asset-objects (asset-loaders asset-objects))
@@ -1439,7 +1461,7 @@ Object/Bank~(~2,'0x~).~a.~a.o \\
 		c000 ffff ~1@*LastBankDefs.~a.~a"
             *bank* build video))
   (format t "~%
-Object/Bank~(~2,'0x~).~a.~a.o ~
+Object/~a/Bank~(~2,'0x~).~a.~a.o ~
 ~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt ~
 ~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: ~
 ~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
@@ -1459,6 +1481,7 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode \\
                       ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt
 	[ -f $@ ]"
+          (machine-directory-name *machine*)
           *bank* build video (recursive-read-deps bank-source)
           (if (= *bank* *last-bank*)
               "Source/Generated/Orchestration.s"
@@ -1475,11 +1498,11 @@ Object/Bank~(~2,'0x~).~a.~a.o ~
 (defun write-ram-bank-makefile (&key build video)
   "Writes the Makefile entry for the RAM bank used by 7800GD"
   (format t "~%
-Object/Bank3e.~a.~a.o.LABELS.txt:~0@*
+Object/7800/Bank3e.~a.~a.o.LABELS.txt:~0@*
 	mkdir -p Object/
 	echo \";;; nop\" > $@
 
-Object/Bank3e.~a.~a.o:
+Object/7800/Bank3e.~a.~a.o:
 	mkdir -p Object
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "

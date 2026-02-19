@@ -703,12 +703,19 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (defvar *stage-direction-parser* nil)
 
-(eval
- `(yacc:define-parser *stage-direction-parser*
+(setf *common-palette* (let ((json-path (merge-pathnames #p"Project.7800.json"
+                                                         (make-pathname :directory
+                                                                        (append (pathname-directory (asdf:system-source-directory :skyline-tool))
+                                                                                '(:up))))))
+                         (with-input-from-file (input json-path)
+                           (mapcar #'intern (cdr (assoc :*common-palette
+                                                        (json:decode-json-from-source input)))))))
+(eval (let ((terminals (concatenate 'list +stage-direction-words+
+                                   '(number quoted actor variable)
+                                   *common-palette*)))
+        `(yacc:define-parser *stage-direction-parser*
     (:start-symbol directions)
-    (:terminals #.(concatenate 'list +stage-direction-words+
-                               '(number quoted actor variable)
-                               *common-palette*))
+    (:terminals ,terminals)
     (:precedence ((:right -) (:left + -) (:left * /)
                   (:left directions)
                   (:left statement)
@@ -732,7 +739,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                               (declare (ignore _stop))
                               clauses))
                (repeat numeric times skyline-tool::|:| clauses
-                 #'stage/repeat)
+                       #'stage/repeat)
                preparation-paragraph)
     (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
                           	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
@@ -1373,7 +1380,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     (plus* plus +)
     (minus* minus - less)
     (division* (divided by) / ÷)
-    (times* times ✕ ×)))
+    (times* times ✕ ×))))
 
 (defvar *fountain-state* nil)
 
@@ -1806,7 +1813,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
       (setf *atarivox-dictionary*
             (load-atarivox-dictionary))))
 
-(define-constant +all-phonemes+
+(define-constant +speakjet-phonemes+
     '(
       "Pause0" "Pause1" "Pause2" "Pause3" "Pause4" "Pause5" "Pause6"
       "Fast" "Slow" "Stress" "Relax" "Wait" "Soft" "Volume" "Speed" "Pitch" "Bend" "PortCtr"
@@ -1834,7 +1841,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
       "PlayerHonorific" )
   :test #'equalp)
 
-(defun phonemes-from-string (string)
+(defun string->speakjet (string)
   "Convert the AtariVox (SpeakJet) dictionary escape code phonemes in STRING into tokens"
   (when (and (not (eql :nil string))
              (not (string-equal "NIL" string)))
@@ -1848,7 +1855,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                   "M1"))
            do (restart-case
                   (unless (or (numberp (ignore-errors (parse-number (subseq phoneme 1))))
-                              (member (subseq phoneme 1) +all-phonemes+ :test #'string=))
+                              (member (subseq phoneme 1) +speakjet-phonemes+ :test #'string=))
                     (error "Expected SpeakJet phoneme code, but got: ~a" phoneme))
                 (continue () :report "Continue with a gunshot sound"
                   "M1"))
@@ -1878,11 +1885,11 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                           (error "Word defined twice in phonetic dictionary.
 “~a” was previously ~s
 but now also ~s."
-                                 word orig (phonemes-from-string phonemes$)))
+                                 word orig (string->speakjet phonemes$)))
                         (when (string-equal "nil" phonemes$)
                           (setf (gethash word dict) :nil))
                         (setf (gethash word dict)
-                              (phonemes-from-string phonemes$))))
+                              (string->speakjet phonemes$))))
                  finally (progn
                            (format *trace-output* " Done, ~:d word~:p"
                                    (hash-table-count dict))
@@ -2452,7 +2459,7 @@ PlaySong EXECUTE "  song))))
       (cerror "Continue, ignoring ~a request"
               "Actor ~:(~a~) asked to ~a, but they are not in the scene" actor action-verb)
       (return-from perform-character-action))
-    (format t "~% CharacterID_~a ~a character-action!"
+    (format t "~% ~a CharacterID_~a character-action!"
             (pascal-case (string name))
             action-enum)))
 

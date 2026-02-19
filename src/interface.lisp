@@ -540,7 +540,15 @@ See COPYING for details
   (clim-debugger:with-debugger ()
     (launcher)))
 
-(defun run-for-port (port-label &rest subcommand)
+(defun find-default-port ()
+  (with-input-from-file (makefile (merge-pathnames "Makefile" (project-root)))
+    (loop for line = (read-line makefile nil nil)
+          while line
+          when (search "PORT=" line)
+            do (return-from find-default-port (subseq line (1+ (position #\= line))))))
+  "7800")
+
+(defun load-project.json (&optional (port-label (find-default-port)))
   (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
          (project-data (json:decode-json-from-source json-path)))
@@ -554,7 +562,10 @@ See COPYING for details
           *common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data)))
           *default-skin-color* (cdr (assoc :*default-skin-color project-data))
           *default-hair-color* (cdr (assoc :*default-hair-color project-data))
-          *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))
+          *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))))) 
+
+(defun run-for-port (port-label &rest subcommand)
+  (load-project.json)
   (format *trace-output* "~&Running for port: ~a" port-label)
   (destructuring-bind (verb &rest args) subcommand
     (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
@@ -579,7 +590,7 @@ Executes the requested command, may exit the process
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
   (unless (or (and (< 1 (length argv)) (string-equal "--port" (second argv)))
-              (and (boundp *machine*) *machine*))
+              (and (boundp '*machine*) *machine*))
     (error "No --port specified in ~s and no *MACHINE* value set" argv))
   (let ((sb-impl::*default-external-format* :utf-8)
         (*command-line* (and (< 1 (length argv)) (subseq argv 1))))
@@ -593,8 +604,9 @@ Executes the requested command, may exit the process
       (destructuring-bind (self verb &rest invocation) argv
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
-                   (unless (char= #\- (char (first argv) 0))
-                     (format *trace-output* "~&Running for game “~a” for ~a" *game-title* (machine-long-name))
+                   (unless (char= #\- (char verb 0))
+                     (format *trace-output* "~&Running for game “~a” for ~a" 
+                                            *game-title* (machine-long-name))
                      (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
                                          (flatten invocation)))

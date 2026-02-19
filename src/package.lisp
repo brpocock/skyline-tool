@@ -4,6 +4,7 @@
   (:import-from :uiop
                 #:run-program
                 #:split-string)
+  (:shadow #:range)
   (:shadowing-import-from :serapeum #:partition)
   (:export #:compile-index
            #:collect-assets

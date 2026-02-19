@@ -61,7 +61,8 @@
   :test 'equalp)
 
 (define-constant +apple-hires-color-names+
-    '(black purple orange white black blue green white))
+    '(black purple orange white black blue green white)
+  :test 'equal)
 
 (define-constant +nes-palette-ntsc+
     '((#x62 #x62 #x62) (#x00 #x1f #xb2) (#x24 #x04 #xc8) (#x52 #x00 #xb2)
@@ -4702,7 +4703,7 @@ Blob_~a:~10t.block~2%"
                               last-palette palette
                               last-mode mode))
                        ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette)
+                        (emit-span x span last-palette last-mode)
                         (setf span nil
                               last-palette nil
                               last-mode nil))
@@ -4714,12 +4715,12 @@ Blob_~a:~10t.block~2%"
                         (setf last-palette palette
                               last-mode mode))
                        (t
-                        (emit-span x span last-palette)
+                        (emit-span x span last-palette last-mode)
                         (setf span (list paletted-stamp)
                               last-palette palette
                               last-mode mode)))
                   finally
-                     (emit-span x span last-palette)))
+                     (emit-span x span last-palette last-mode)))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp)
           (format output "~2%~10t.bend~%")))
@@ -5635,7 +5636,8 @@ treating non-black/non-white pixels as black"
                (tiles-high (/ height 8)))
           (dotimes (ty tiles-high)
             (dotimes (tx tiles-wide)
-              (let ((tile-pixels (extract-region image (* tx 8) (* ty 8) 7 7)))
+              (let ((tile-pixels (extract-region image (* tx 8) (* ty 8)
+                                                (+ (* tx 8) 7) (+ (* ty 8) 7))))
                 (let ((tile-bytes (cgb-tile-to-bytes tile-pixels palette-mode)))
                   (dotimes (i (length tile-bytes))
                     (vector-push-extend (aref tile-bytes i) tile-data)))))))))
@@ -5756,12 +5758,6 @@ treating non-black/non-white pixels as black"
 (defun compile-tg16-background (png-file target-dir height width palette-pixels)
   "Compile TurboGrafx-16/PC Engine background data - TEMPORARILY DISABLED DUE TO COMPILATION ERROR"
   (error "TG16 background compilation temporarily disabled due to compilation error"))
-(defun compile-art-cgb (index-out index-in)
-  "Compile art assets for Game Boy Color platform"
-  (let ((*machine* 359020))
-    (write-gb-tile-data index-out
-                        (parse-into-gb-tile-data
-                         (read-gb-art-index index-in) :color t))))
 
 (defun compile-sgb-frame (frame-out frame-in)
   "Compile Super Game Boy frame/border graphics"
@@ -5907,7 +5903,7 @@ treating non-black/non-white pixels as black"
     .word $0000, $0000, $0000, $0000  ; Colors 4-7 (placeholder)
     .word $0000, $0000, $0000, $0000  ; Colors 8-11 (placeholder)
     .word $0000, $0000, $0000, $0000  ; Colors 12-15 (placeholder)
-~2%")
+~2%" (pathname-name png-file))
 
       ;; Add graphics descriptor
       (format src-file ";;; Graphics descriptor

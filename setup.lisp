@@ -34,28 +34,27 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
      ,@body))
 
 ;; Load skyline-tool system
-(asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool"
-                                               :type "asd")
-                                *load-pathname*)
-               :name :skyline-tool)
-
 (asdf:load-asd (merge-pathnames (make-pathname :directory '(:relative "eightbol")
                                                :name "eightbol"
                                                :type "asd")
                                 *load-pathname*)
                :name :eightbol)
+(asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool"
+                                               :type "asd")
+                                *load-pathname*)
+               :name :skyline-tool)
 (pushnew (asdf:system-relative-pathname :skyline-tool #p"./lib/") ql:*local-project-directories*)
 
-(format t "~&Quickloading Skyline-Tool System … ")
-(finish-output)
-(handler-case
-    (progn (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :eightbol)
-           (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :skyline-tool))
-  (name-conflict (e) (error e)))
-(format t "… done with Quickload.~2%")
-
-;; These are missing, but apparently also no-op works
-(defmethod clim-internals::note-output-record-got-sheet ((drei drei:drei-area) (pane clim:pane)))
-(defmethod clim-internals::note-output-record-lost-sheet ((drei drei:drei-area) (pane clim:pane)))
-
-(finish-output)
+#+ ()
+(progn
+  (format t "~&Quickloading Skyline-Tool System … ")
+  (finish-output)
+  (handler-case
+      (progn (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :eightbol)
+             #+ () (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :skyline-tool))
+    (name-conflict (e) (error e)))
+  (format t "… done with Quickload.~2%")
+  ;; These are missing, but apparently also no-op works
+  (defmethod clim-internals::note-output-record-got-sheet ((drei drei:drei-area) (pane clim:pane)))
+  (defmethod clim-internals::note-output-record-lost-sheet ((drei drei:drei-area) (pane clim:pane)))
+  (finish-output))
