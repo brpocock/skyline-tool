@@ -11,26 +11,31 @@ Returns one of:
   NIL                         — no annotation, use default PIC
   (:object-ref class-name)    — @ClassName pointer
   (:pic string)               — = PIC-string (verbatim PIC clause)
-  (:varchar n field-name)     — = VARCHAR(n) DEPENDING ON FieldName"
+
+Pascal-type strings (leading-byte-length + fixed data area) are declared
+as two separate adjacent slots (.NameLength 1 / .Name 12 = PIC X(12)).
+The DEPENDING ON form is intentionally NOT supported; use separate slots."
   (when parts
     (let ((first (first parts)))
       (cond
         ;; @ClassName — object reference
         ((and (> (length first) 1) (char= #\@ (char first 0)))
          (list :object-ref (subseq first 1)))
-        ;; = … — explicit PIC or VARCHAR
+        ;; = … — explicit PIC clause
         ((string= first "=")
          (let ((rest (rest parts)))
            (when rest
              (let ((spec (format nil "~{~a~^ ~}" rest)))
-               (let ((varchar-match
-                       (cl-ppcre:register-groups-bind (n field)
-                           ("VARCHAR\\((\\d+)\\)\\s+DEPENDING\\s+ON\\s+(\\S+)"
-                            spec)
-                         (list (parse-integer n) field))))
-                 (if varchar-match
-                     (list* :varchar varchar-match)
-                     (list :pic spec)))))))
+               ;; Pascal strings: VARCHAR(n) DEPENDING ON is legacy notation;
+               ;; correct form is two separate slots (.NameLength 1 / .Name n = PIC X(n)).
+               ;; Strip DEPENDING ON and treat as plain PIC X(n) with a warning.
+               (cl-ppcre:register-groups-bind (n)
+                   ("(?i)VARCHAR\\((\\d+)\\).*DEPENDING\\s+ON" spec)
+                 (warn "Classes.Defs: use separate NameLength and Name slots for ~
+Pascal strings. Treating VARCHAR(~a) DEPENDING ON ... as PIC X(~a)." n n)
+                 (return-from parse-slot-annotation
+                   (list :pic (format nil "PIC X(~a)" n))))
+               (list :pic spec)))))
         (t nil)))))
 
 (defun slot-annotation-to-cobol-pic (annotation size)
@@ -39,15 +44,12 @@ to a COBOL PIC clause string suitable for use in a .cpy file.
 Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
   (cond
     ((null annotation)
-     ;; Default mapping
      (cond
        ((= size 1) "PIC 99 USAGE BINARY")
        ((= size 2) "PIC 9999 USAGE BINARY")
        (t          (format nil "OCCURS ~d TIMES PIC 99 USAGE BINARY" size))))
     ((eq (car annotation) :object-ref)
      (format nil "OBJECT REFERENCE ~a" (second annotation)))
-    ((eq (car annotation) :varchar)
-     (format nil "PIC X(~d) DEPENDING ON ~a" (second annotation) (third annotation)))
     ((eq (car annotation) :pic)
      (second annotation))
     (t
@@ -447,6 +449,4 @@ ClassMethodsH: .byte >(GenericFunctionTables)
                     (reverse all-classes-sequentially)))
           (format class-graph "~&}~%"))))
     ;; Generate COBOL copybooks for all classes
-    (make-cobol-copybooks class-defs-pathname)
-    ;; Generate Phantasia-Globals.cpy from assembly sources
-    (make-globals-copybook)))
+    (make-cobol-copybooks class-defs-pathname)))
