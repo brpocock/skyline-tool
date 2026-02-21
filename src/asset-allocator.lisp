@@ -900,13 +900,20 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                                               (pathname (enough-namestring target))
                                               (string target)
                                               (t (princ-to-string target)))
-                                    ":")))
-    (with-open-file (makefile #p"Makefile"
-                      :external-format :latin-1)
-      (loop for line = (read-line makefile nil nil)
-            while line
-            when (eql 0 (search target-prefix line))
-              do (return t)))))
+                                    ":"))
+        (makefiles (list (merge-pathnames #p"Makefile" (project-root))
+                         (merge-pathnames
+                          (make-pathname :directory (list :relative "Source" "Build")
+                                         :name (machine-directory-name) :type "mak")
+                          (project-root)))))
+    (dolist (makefile makefiles)
+      (when (probe-file makefile)
+        (with-open-file (stream makefile :external-format :utf-8)
+          (loop for line = (read-line stream nil nil)
+                while line
+                when (eql 0 (search target-prefix line))
+                  do (return-from makefile-contains-target-p t)))))
+    nil))
 
 (defun find-included-file (name &key cwd testp)
   "Find the pathname of an included source file NAME.
@@ -945,8 +952,14 @@ Returns the pathname of the found file, or signals an error if not found."
                          :name name :type "s")))
     (when (skyline-tool-writes-p generated-pathname)
       (return-from find-included-file generated-pathname))
-    (if (makefile-contains-target-p generated-pathname)
-        (return-from find-included-file generated-pathname)))
+    (when (makefile-contains-target-p generated-pathname)
+      (return-from find-included-file generated-pathname)))
+  ;; Eightbol-generated class assembly (e.g. CharacterClass.generated.s)
+  (let ((eightbol-pathname
+          (make-pathname :directory (list :relative "Source" "Code" (machine-directory-name) "Classes")
+                         :name name :type "s")))
+    (when (makefile-contains-target-p eightbol-pathname)
+      (return-from find-included-file eightbol-pathname)))
   (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~(~2,'0x~)~
 ~@[~&Current working directory: ~a~]~
@@ -1541,7 +1554,7 @@ Dist/~a.~a.~a.a78: ~0@* Dist/~a.~a.~a.bin
 
 ~0@*
 Dist/~a.~a.~a.bin: \\~
-~{~%~10tObject/Bank~(~2,'0x~).~a.~a.o~^ \\~}
+~{~%~10tObject/${PORT}/Bank~(~2,'0x~).~a.~a.o~^ \\~}
 	mkdir -p Dist
 	cat $^ > $@
 	bin/7800sign -w $@
@@ -1924,7 +1937,8 @@ This Makefile handles everything not covered by the top-level Makefile."
                         (make-pathname
                          :directory (list :relative "Source" "Generated" (machine-directory-name))
                          :name "Makefile")
-                        :if-exists :supersede)
+                        :if-exists :supersede
+                        :external-format :utf-8)
     (let ((*region* nil))
       (write-makefile-header)
       (write-makefile-for-bare-assets)
