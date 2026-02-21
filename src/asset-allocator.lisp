@@ -901,7 +901,8 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                                               (string target)
                                               (t (princ-to-string target)))
                                     ":")))
-    (with-input-from-file (makefile #p"Makefile")
+    (with-open-file (makefile #p"Makefile"
+                      :external-format :latin-1)
       (loop for line = (read-line makefile nil nil)
             while line
             when (eql 0 (search target-prefix line))

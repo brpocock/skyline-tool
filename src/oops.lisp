@@ -4,24 +4,42 @@
 ;;; Annotation parsing helpers for Classes.Defs
 ;;; ---------------------------------------------------------------
 
-(defun pascal-to-cobol-name (name)
-  "Convert a PascalCase assembly symbol to a COBOL hyphenated name.
+(defun pascal-to-eightbol-name (name)
+  "Convert a PascalCase or hyphenated assembly symbol to a EIGHTBOL NAME in
+UPPERCASE-HYPHENATED form, as required by EIGHTBOL naming conventions.
 A hyphen is inserted before each uppercase letter that follows a lowercase
-letter (or digit), preserving acronyms as a unit.
-  \"NameLength\"       → \"Name-Length\"
-  \"MaxHP\"            → \"Max-HP\"
-  \"ClassID\"          → \"Class-ID\"
-  \"AbsoluteDeltaX\"   → \"Absolute-Delta-X\"
-  \"HP\"               → \"HP\"   (all-caps acronym unchanged)
-  \"TTL\"              → \"TTL\"  (all-caps acronym unchanged)"
-  (with-output-to-string (out)
-    (loop for i from 0 below (length name)
-          for ch = (char name i)
-          do (when (and (> i 0)
-                        (upper-case-p ch)
-                        (lower-case-p (char name (1- i))))
-               (write-char #\- out))
-             (write-char ch out))))
+letter (or digit); the result is uppercased.
+  \"NameLength\"       → \"NAME-LENGTH\"
+  \"MaxHP\"            → \"MAX-HP\"
+  \"ClassID\"          → \"CLASS-ID\"
+  \"AbsoluteDeltaX\"   → \"ABSOLUTE-DELTA-X\"
+  \"HP\"               → \"HP\"
+  \"WorkFitness\"      → \"WORK-FITNESS\"
+  \"work-fitness\"     → \"WORK-FITNESS\"   (already hyphenated)
+  \"WORK-FITNESS\"     → \"WORK-FITNESS\"   (already correct)"
+  (string-upcase
+   (with-output-to-string (out)
+     (loop for i from 0 below (length name)
+           for ch = (char name i)
+           do (when (and (> i 0)
+                         (upper-case-p ch)
+                         (lower-case-p (char name (1- i))))
+                (write-char #\- out))
+              (write-char ch out)))))
+
+(defun pascal-to-copybook-filename (name)
+  "Convert PascalCase to Title-And-Hyphens for copybook filenames.
+   NonPlayerCharacter → Non-Player-Character
+   Character → Character"
+  (title-case (param-case name)))
+
+(defun eightbol-slot-name (pascal-name)
+  "Convert PascalCase slot name to EIGHTBOL copybook form. Avoids reserved words
+that would conflict with eightbol grammar (e.g. CLASS-ID -> OBJ-CLASS-ID)."
+  (let ((base (pascal-to-eightbol-name pascal-name)))
+    (case (intern base :keyword)
+      ((:class-id) "OBJ-CLASS-ID")
+      (t base))))
 
 (defun parse-slot-annotation (parts)
   "Parse the annotation portion of a slot definition (everything after size).
@@ -35,7 +53,7 @@ Returns one of:
 Pascal-type strings use two adjacent slots with a VARCHAR DEPENDING ON:
   .NameLength 1
   .Name 12 = VARCHAR(12) DEPENDING ON Name-Length
-The DEPENDING ON field is referenced by its COBOL hyphenated name."
+The DEPENDING ON field is referenced by its EIGHTBOL hyphenated name."
   (when parts
     (let ((first (first parts)))
       (cond
@@ -55,9 +73,9 @@ The DEPENDING ON field is referenced by its COBOL hyphenated name."
                (list :pic spec)))))
         (t nil)))))
 
-(defun slot-annotation-to-cobol-pic (annotation size)
+(defun slot-annotation-to-eightbol-pic (annotation size)
   "Convert a slot annotation (from PARSE-SLOT-ANNOTATION) and SIZE (bytes)
-to a COBOL PIC clause string suitable for use in a .cpy file.
+to a EIGHTBOL PIC clause string suitable for use in a .cpy file.
 Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
   (cond
     ((null annotation)
@@ -66,9 +84,12 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
        ((= size 2) "PIC 9999 USAGE BINARY")
        (t          (format nil "OCCURS ~d TIMES PIC 99 USAGE BINARY" size))))
     ((eq (car annotation) :object-ref)
-     (format nil "OBJECT REFERENCE ~a" (second annotation)))
+     (format nil "USAGE OBJECT REFERENCE ~a" (second annotation)))
     ((eq (car annotation) :varchar)
-     (format nil "VARCHAR(~d) DEPENDING ON ~a" (second annotation) (third annotation)))
+     ;; Correct COBOL: PIC X OCCURS 0 TO n TIMES DEPENDING ON size-field.
+     ;; Size-field does not get a picture.
+     (format nil "PIC X OCCURS 0 TO ~d TIMES DEPENDING ON ~a"
+             (second annotation) (pascal-to-eightbol-name (third annotation))))
     ((eq (car annotation) :pic)
      (second annotation))
     (t
@@ -77,6 +98,22 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
 ;;; ---------------------------------------------------------------
 ;;; Copybook generation  (Source/Generated/{ClassName}.cpy)
 ;;; ---------------------------------------------------------------
+
+(defun compute-class-size-during-parse (class-name class-bases class-size slot-sizes class-slots-order)
+  "Return the size of CLASS-NAME (parent's size + own slots). Used during parse when class-size not yet finalised."
+  (unless (or (string= class-name "BasicObject")
+              (gethash class-name class-bases))
+    (error "Parent class ~s not found" class-name))
+  (let ((base-sz (gethash class-name class-size))
+        (parent (gethash class-name class-bases)))
+    (cond (base-sz base-sz)
+          ((null parent) 0)       ; BasicObject
+          (t (let ((parent-sz (compute-class-size-during-parse parent class-bases class-size slot-sizes class-slots-order))
+                   (own-slots (gethash class-name class-slots-order '()))
+                   (sizes-h (gethash class-name slot-sizes)))
+               (+ parent-sz
+                  (reduce #'+ (mapcar (lambda (s) (gethash s sizes-h 0)) own-slots)
+                          :initial-value 0)))))))
 
 (defun class-ancestry-chain (class-name class-bases-hash)
   "Return the ancestor chain for CLASS-NAME as a list from root to CLASS-NAME.
@@ -87,12 +124,12 @@ E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor\" \"Character\")"
           do (push c chain))
     chain))
 
-(defun make-cobol-copybooks
+(defun make-eightbol-copybooks
     (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
-  "Generate COBOL copybook (.cpy) files from Classes.Defs.
+  "Generate EIGHTBOL copybook (.cpy) files from Classes.Defs.
 
 For each class defined in CLASS-DEFS-PATHNAME, writes
-Source/Generated/{ClassName}.cpy containing all slots (inherited and own)
+Source/Generated/{machine}/Classes/{ClassName}.cpy containing all slots (inherited and own)
 in ancestry order (root → leaf), with section comments identifying the
 origin class of each group of slots.
 
@@ -117,14 +154,14 @@ Slot annotation conventions in Classes.Defs:
                                                 (setf (gethash "ClassID" h) 1) h)
           (gethash "BasicObject" slot-annotations) (make-hash-table :test 'equal))
     (with-input-from-file (class-file class-defs-pathname)
-      (loop with current-class = "BasicObject"
-            with slot-offset   = 1
-            for line = (read-line class-file nil nil) while line do
-            (cond
-              ((emptyp line) nil)
-              ((char= #\; (char line 0)) nil)  ; comment
-              ((char= #\# (char line 0)) nil)  ; method — ignored for copybooks
-              ((char= #\. (char line 0))        ; slot definition
+        (loop with current-class = "BasicObject"
+              with slot-offset   = 1
+              for line = (read-line class-file nil nil) while line do
+              (cond
+                ((emptyp line) nil)
+                ((char= #\; (char line 0)) nil)  ; comment
+                ((char= #\# (char line 0)) nil)  ; method — ignored for copybooks
+                ((char= #\. (char line 0))        ; slot definition
                (let* ((parts (split-sequence #\Space (subseq line 1)
                                              :remove-empty-subseqs t))
                       (name  (first parts))
@@ -158,8 +195,7 @@ Slot annotation conventions in Classes.Defs:
                        (gethash new-class class-slots-order) '()
                        (gethash new-class slot-sizes) (make-hash-table :test 'equal)
                        (gethash new-class slot-annotations) (make-hash-table :test 'equal)
-                       slot-offset (or (gethash old-class class-size)
-                                       (error "Parent class ~s not found" old-class))
+                       slot-offset (compute-class-size-during-parse old-class class-bases class-size slot-sizes class-slots-order)
                        current-class new-class)
                  (push new-class all-classes))))))
     ;; Finalise sizes
@@ -172,34 +208,54 @@ Slot annotation conventions in Classes.Defs:
                                             own-slots)
                                 :initial-value 0)))
           (setf (gethash class-name class-size) (+ base-sz own-sz)))))
-    ;; Write one .cpy per class  — canonical path: Source/Generated/Classes/{Name}.cpy
-    (let ((generated-dir #p"./Source/Generated/Classes/"))
+    ;; Collect size-fields: slots that are DEPENDING ON targets for :varchar (they get no picture)
+    (let ((size-fields (make-hash-table :test 'equal)))
+      (dolist (class-name (reverse all-classes))
+        (dolist (ancestor (class-ancestry-chain class-name class-bases))
+          (let ((annot-hash (gethash ancestor slot-annotations)))
+            (when annot-hash
+              (maphash (lambda (slot-name annotation)
+                         (when (and (eq (car annotation) :varchar)
+                                    (third annotation))
+                           (setf (gethash (third annotation) size-fields) t)))
+                       annot-hash)))))
+    ;; Write one .cpy per class  — canonical path: Source/Generated/{machine}/Classes/{Name}-Slots.cpy
+    (let ((generated-dir (merge-pathnames
+                          (make-pathname :directory
+                                         `(:relative "Source" "Generated"
+                                                     ,(machine-directory-name) "Classes"))
+                          #p"./")))
       (ensure-directories-exist generated-dir)
       (dolist (class-name (reverse all-classes))
         (let ((cpy-path (merge-pathnames
-                         (make-pathname :name class-name :type "cpy")
+                         (make-pathname :name (concatenate 'string (pascal-to-copybook-filename class-name) "-Slots") :type "cpy")
                          generated-dir)))
           (with-output-to-file (out cpy-path :if-exists :supersede)
-            (format out "* ~a — generated by make-classes-for-oops~%" class-name)
-            (format out "* DO NOT EDIT — regenerated from Classes.Defs~%")
-            (let ((chain (class-ancestry-chain class-name class-bases)))
-              (dolist (ancestor chain)
-                (let ((own-slots   (reverse (gethash ancestor class-slots-order '())))
-                      (sizes-hash  (gethash ancestor slot-sizes))
-                      (annot-hash  (gethash ancestor slot-annotations)))
-                  (when own-slots
-                    (if (string= ancestor class-name)
-                        (format out "* Own slots (~a):~%" ancestor)
-                        (format out "* Inherited from ~a:~%" ancestor))
-                    (dolist (slot-name own-slots)
-                      (let* ((size       (gethash slot-name sizes-hash 1))
-                             (annotation (when annot-hash
-                                           (gethash slot-name annot-hash)))
-                             (pic        (slot-annotation-to-cobol-pic annotation size))
-                             (cobol-name (pascal-to-cobol-name slot-name)))
-                        (format out " 05 ~a ~a.~%" cobol-name pic))))))))
+            (with-eightbol-sequence
+              (emit-eightbol-comment out (format nil " ~a-Slots -- generated by make-classes-for-oops"
+                                             class-name))
+              (emit-eightbol-comment out " DO NOT EDIT -- regenerated from Classes.Defs")
+              (let ((chain (class-ancestry-chain class-name class-bases)))
+                (dolist (ancestor chain)
+                  (let ((own-slots   (reverse (gethash ancestor class-slots-order '())))
+                        (sizes-hash  (gethash ancestor slot-sizes))
+                        (annot-hash  (gethash ancestor slot-annotations)))
+                    (when own-slots
+                      (emit-eightbol-blank out)
+                      (if (string= ancestor class-name)
+                          (emit-eightbol-comment out (format nil " Own slots (~a):" ancestor))
+                          (emit-eightbol-comment out (format nil " Inherited from ~a:" ancestor)))
+                      (dolist (slot-name own-slots)
+                        (let* ((size       (gethash slot-name sizes-hash 1))
+                               (annotation (when annot-hash
+                                             (gethash slot-name annot-hash)))
+                               (pic        (if (gethash slot-name size-fields)
+                                               ""  ; size-field does not get a picture
+                                               (slot-annotation-to-eightbol-pic annotation size)))
+                               (cpy-name   (eightbol-slot-name slot-name)))
+                          (emit-eightbol-var 5 cpy-name pic out)))))))))
           (format t "~&Generated ~a~%" (enough-namestring cpy-path))))))
-  (values))
+  (values)))
 
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
@@ -209,8 +265,8 @@ Processes the Classes.Defs file to generate various output files containing
 class constants, Forth definitions, inheritance graphs, and assembly code
 for the OOPS (Object-Oriented Programming System).
 
-Also generates COBOL copybooks in Source/Generated/{ClassName}.cpy via
-MAKE-COBOL-COPYBOOKS.
+Also generates EIGHTBOL copybooks in Source/Generated/{ClassName}.cpy via
+MAKE-EIGHTBOL-COPYBOOKS.
 
 @table @asis
 @item CLASS-DEFS-PATHNAME
@@ -468,5 +524,5 @@ ClassMethodsH: .byte >(GenericFunctionTables)
 ;;; Finis.~%"
                     (reverse all-classes-sequentially)))
           (format class-graph "~&}~%"))))
-    ;; Generate COBOL copybooks for all classes
-    (make-cobol-copybooks class-defs-pathname)))
+    ;; Generate EIGHTBOL copybooks for all classes
+    (make-eightbol-copybooks class-defs-pathname)))
