@@ -82,7 +82,7 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
      (cond
        ((= size 1) "PIC 99 USAGE BINARY")
        ((= size 2) "PIC 9999 USAGE BINARY")
-       (t          (format nil "OCCURS ~d TIMES PIC 99 USAGE BINARY" size))))
+       (t          (format nil "PIC 99 USAGE BINARY OCCURS ~d TIMES" size))))
     ((eq (car annotation) :object-ref)
      (format nil "USAGE OBJECT REFERENCE ~a" (second annotation)))
     ((eq (car annotation) :varchar)

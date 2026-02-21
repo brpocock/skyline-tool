@@ -179,13 +179,13 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
          ((and (eq kind :word) (= size 2)) "PIC 9999 USAGE BINARY")
          ((eq kind :fill)
           (if (and (= size 1) (not raw-size-sym)) "PIC 99 USAGE BINARY"
-              (format nil "OCCURS ~a TIMES PIC 99 USAGE BINARY"
+              (format nil "PIC 99 USAGE BINARY OCCURS ~a TIMES"
                       (or (eb raw-size-sym) size))))
          ((and (eq kind :byte) (> size 1))
-          (format nil "OCCURS ~a TIMES PIC 99 USAGE BINARY"
+          (format nil "PIC 99 USAGE BINARY OCCURS ~a TIMES"
                   (or (eb raw-size-sym) size)))
          ((and (eq kind :word) (> size 2))
-          (format nil "OCCURS ~a TIMES PIC 9999 USAGE BINARY"
+          (format nil "PIC 9999 USAGE BINARY OCCURS ~a TIMES"
                   (or (eb raw-size-sym) (/ size 2))))
          (t nil)))
       ((eq (first annotation) :object-ref)
