@@ -567,6 +567,22 @@ SOURCE-PATHNAME: Output path for the generated source file"
               (loop for i from 1 upto max-dock-id collecting i))
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
 
+(defun parse-number-or-fraction (value)
+  "Parse VALUE as a number, supporting integers, decimals, and fractions (e.g. 20/3).
+Returns a real number. Handles values that may be strings, numbers, or nil.
+Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.)."
+  (cond
+    ((numberp value) value)
+    ((null value) 0)
+    (t (let ((s (string-trim #(#\Space #\Tab) (string value))))
+         ;; Normalize Unicode fraction slash (U+2044) to ASCII slash
+         (setf s (substitute #\/ (code-char #x2044) s))
+         (let ((pos (position #\/ s)))
+           (if pos
+               (/ (parse-number:parse-number (subseq s 0 pos))
+                  (parse-number:parse-number (subseq s (1+ pos))))
+               (parse-number:parse-number s)))))))
+
 (defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods"))
   "Read the orchestration table from Source/Tables/Orchestration.ods"
   (format *trace-output* "~&Reading orchestration from ~a" (enough-namestring pathname))
@@ -576,11 +592,11 @@ SOURCE-PATHNAME: Output path for the generated source file"
           when (and row (not (emptyp (string-trim #(#\Space) (getf row :instrument)))))
             collecting (list :instrument (getf row :instrument)
                              :distortion (make-keyword (string-upcase (getf row :distortion)))
-                             :attack-addend (parse-number (getf row :attack-addend))
-                             :decay-subtrahend (parse-number (getf row :decay-subtrahend))
-                             :decay-duration (parse-number (getf row :decay-duration))
-                             :release-subtrahend (parse-number (getf row :release-subtrahend))
-                             :tia-distortion (parse-number (getf row :tia-distortion))))))
+                             :attack-addend (parse-number-or-fraction (getf row :attack-addend))
+                             :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
+                             :decay-duration (parse-number-or-fraction (getf row :decay-duration))
+                             :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
+                             :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))))))
 
 (defun write-orchestration (&optional (input #p"Source/Tables/Orchestration.ods")
                                       (output (format nil "Source/Generated/~a/Orchestration.s" (machine-directory-name))))

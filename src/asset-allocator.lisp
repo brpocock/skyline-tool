@@ -749,6 +749,7 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
          (includes (list (list :relative "Source" "Code" machine-dir)
                          (list :relative "Source" "Code" machine-dir "Common")
                          (list :relative "Source" "Code" machine-dir "Routines")
+                         (list :relative "Source" "Generated" cpu-dir) ; EightBol output (e.g. CharacterClass.s)
                          (list :relative "Source" "Code" machine-dir "Classes")
                          (list :relative "Source" "Code" machine-dir "Stagehand")
                          (list :relative "Object" machine-dir)
@@ -896,23 +897,31 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                 machine-dir (pathname-name pathname) machine-dir))))
 
 (defun makefile-contains-target-p (target)
-  (let ((target-prefix (concatenate 'string (typecase target
-                                              (pathname (enough-namestring target))
-                                              (string target)
-                                              (t (princ-to-string target)))
-                                    ":"))
-        (makefiles (list (merge-pathnames #p"Makefile" (project-root))
-                         (merge-pathnames
-                          (make-pathname :directory (list :relative "Source" "Build")
-                                         :name (machine-directory-name) :type "mak")
-                          (project-root)))))
-    (dolist (makefile makefiles)
-      (when (probe-file makefile)
-        (with-open-file (stream makefile :external-format :utf-8)
-          (loop for line = (read-line stream nil nil)
-                while line
-                when (eql 0 (search target-prefix line))
-                  do (return-from makefile-contains-target-p t)))))
+  (let* ((target-str (typecase target
+                       (pathname (enough-namestring target))
+                       (string target)
+                       (t (princ-to-string target))))
+         (target-prefix (concatenate 'string target-str ":"))
+         (makefiles (list (merge-pathnames #p"Makefile" (project-root))
+                          (merge-pathnames
+                           (make-pathname :directory (list :relative "Source" "Build")
+                                          :name (machine-directory-name) :type "mak")
+                           (project-root))))
+         (cpu-dir (cpu-directory-name)))
+    (flet ((matches-p (line)
+             (or (eql 0 (search target-prefix line))
+                 ;; Match Source/Generated/${CPUDIR}/CharacterClass.s when target is Source/Generated/6502/CharacterClass.s
+                 (and (eql 0 (search "Source/Generated/" line))
+                      (search "CharacterClass.s:" line)
+                      (or (search (format nil "Generated/~a/" cpu-dir) line)
+                          (search "Generated/${CPUDIR}/" line))))))
+      (dolist (makefile makefiles)
+        (when (probe-file makefile)
+          (with-open-file (stream makefile :external-format :utf-8)
+            (loop for line = (read-line stream nil nil)
+                  while line
+                  when (matches-p line)
+                    do (return-from makefile-contains-target-p t))))))
     nil))
 
 (defun find-included-file (name &key cwd testp)
@@ -954,9 +963,9 @@ Returns the pathname of the found file, or signals an error if not found."
       (return-from find-included-file generated-pathname))
     (when (makefile-contains-target-p generated-pathname)
       (return-from find-included-file generated-pathname)))
-  ;; Eightbol-generated class assembly (e.g. CharacterClass.generated.s)
+  ;; EightBol-generated class assembly (e.g. Source/Generated/6502/CharacterClass.s)
   (let ((eightbol-pathname
-          (make-pathname :directory (list :relative "Source" "Code" (machine-directory-name) "Classes")
+          (make-pathname :directory (list :relative "Source" "Generated" (cpu-directory-name))
                          :name name :type "s")))
     (when (makefile-contains-target-p eightbol-pathname)
       (return-from find-included-file eightbol-pathname)))
@@ -1437,17 +1446,17 @@ Source/Generated/Bank~(~2,'0x~).~a.~a.s: Source/Assets.index Source/Generated/Ba
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool --port ${PORT} write-asset-bank ~x ~a ~a
 
-Object/~a/Bank~(~2,'0x~).~a.~a.o \\
-  ~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt \\
-  ~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: \\
+Object/${PORT}/Bank~(~2,'0x~).~a.~a.o \\
+  ~3:*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt \\
+  ~3:*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: \\
 		Source/Generated/Bank~(~2,'0x~).~a.~a.s \\
 ~10tSource/Assets.index bin/skyline-tool \\~{~%~10t~a~^ \\~}
-	mkdir -p Object
+	mkdir -p Object/${PORT}
 	${AS7800} -DTV=~a ~a \\~{~%		-I ~a \\~}
-		~0@*-l Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
-                    ~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt \\
-		~0@*$< -o Object/Bank~(~2,'0x~).~a.~a.o
-	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/Bank~(~2,'0x~).~a.~a.o.list.txt"
+		~0@*-l Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
+                    ~0@*-L Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt \\
+		~0@*$< -o Object/${PORT}/Bank~(~2,'0x~).~a.~a.o
+	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt"
             bank build video
             asset-objects
             build
@@ -1455,7 +1464,6 @@ Object/~a/Bank~(~2,'0x~).~a.~a.o \\
             bank build video
             asset-objects
             bank build video
-            (machine-directory-name *machine*)
             bank build video
             bank build video
             (append asset-objects (asset-loaders asset-objects))
@@ -1469,37 +1477,36 @@ Object/~a/Bank~(~2,'0x~).~a.~a.o \\
   "Writes the Makefile entry for a ROM bank"
   (when (= *bank* *last-bank*)
     (format t "~%
-~*Source/Generated/LastBankDefs.~a.~a.s: ~0@*Object/Bank~(~2,'0x~).~a.~a.o \\
-~10t~0@*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt
-	bin/skyline-tool --port ${PORT} labels-to-include ~0@*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
+~*Source/Generated/${PORT}/LastBankDefs.~a.~a.s: ~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o \\
+~10t~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt
+	bin/skyline-tool --port ${PORT} labels-to-include ~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
 		c000 ffff ~1@*LastBankDefs.~a.~a"
             *bank* build video))
   (format t "~%
-Object/~a/Bank~(~2,'0x~).~a.~a.o ~
-~3:*Object/Bank~(~2,'0x~).~a.~a.o.list.txt ~
-~3:*Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: ~
+Object/${PORT}/Bank~(~2,'0x~).~a.~a.o ~
+~3:*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt ~
+~3:*Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt: ~
 ~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
-	mkdir -p Object
+	mkdir -p Object/${PORT}
 	-rm -f $@
 	${AS7800} -DTV=~a \\
 		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
-		~0@*-l Object/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
-		~0@*-L Object/Bank~(~2,'0x~).~a.~a.o.list.txt $< \\
-		~0@*-o Object/Bank~(~2,'0x~).~a.~a.o 2>&1 | \\
-		tee ~0@*Object/Bank~(~2,'0x~).~a.~a.out
+		~0@*-l Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.LABELS.txt \\
+		~0@*-L Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt $< \\
+		~0@*-o Object/${PORT}/Bank~(~2,'0x~).~a.~a.o 2>&1 | \\
+		tee ~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.out
 	echo \"@	$$(grep 'warning: Bank .~0@*~(~2,'0x~) ends at ' ~
- ~0@*Object/Bank~(~2,'0x~).~a.~a.out | ~
+ ~0@*Object/${PORT}/Bank~(~2,'0x~).~a.~a.out | ~
  cut -d',' -f2)\" > ~
  ~0@*Source/Generated/Bank~(~2,'0x~).~a.~a.size
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode \\
-                      ~0@* Object/Bank~(~2,'0x~).~a.~a.o.list.txt
+                      ~0@* Object/${PORT}/Bank~(~2,'0x~).~a.~a.o.list.txt
 	[ -f $@ ]"
-          (machine-directory-name *machine*)
           *bank* build video (recursive-read-deps bank-source)
           (if (= *bank* *last-bank*)
-              "Source/Generated/Orchestration.s"
-              (format nil "Source/Generated/LastBankDefs.~a.~a.s" build video))
+              "Source/Generated/${PORT}/Orchestration.s"
+              (format nil "Source/Generated/${PORT}/LastBankDefs.~a.~a.s" build video))
           video
           (when (= *bank* *last-bank*) *bank*)
           (first-assets-bank build)
@@ -1530,7 +1537,7 @@ Dist/~a.Test.a78: Dist/~:*~a.Test.bin
 	bin/7800header -f Source/Generated/header.Test.script $@
 
 Dist/~:*~a.Test.bin: \\~
-~{~%~10tObject/Bank~(~2,'0x~).Test.o~^ \\~}
+~{~%~10tObject/${PORT}/Bank~(~2,'0x~).Test.o~^ \\~}
 	mkdir -p Dist
 	cat $^ > $@
 	bin/7800sign -w $@
@@ -1695,28 +1702,28 @@ exit
                            :type "s")))
         (when (= *bank* *last-bank*)
           (format t "~%
-Object/Bank~(~2,'0x~).Test.o.LABELS.txt: Object/Bank~(~:*~2,'0x~).Test.o
+Object/${PORT}/Bank~(~2,'0x~).Test.o.LABELS.txt: Object/${PORT}/Bank~(~:*~2,'0x~).Test.o
 	$(MAKE) -f Source/Generated/${PORT}/Makefile $<
 
-Source/Generated/LastBankDefs.Test.NTSC.s: Object/Bank~(~2,'0x~).Test.o Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt
-	bin/skyline-tool --port ${PORT} labels-to-include Object/Bank~(~:*~2,'0x~).Test.o.LABELS.txt \\
+Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s: Object/${PORT}/Bank~(~2,'0x~).Test.o Object/${PORT}/Bank~(~:*~2,'0x~).Test.o.LABELS.txt
+	bin/skyline-tool --port ${PORT} labels-to-include Object/${PORT}/Bank~(~:*~2,'0x~).Test.o.LABELS.txt \\
 		c000 ffff LastBankDefs.Test.NTSC"
                   *bank* *last-bank*))
         (if (and (= #x3f *last-bank*)
                  (= #x3e *bank*))
             (format t "~%
-Object/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
-	mkdir -p Object/
+Object/${PORT}/Bank~(~2,'0x~).Test.o.LABELS.txt:~:*
+	mkdir -p Object/${PORT}
 	echo \";;; nop\" > $@
 
-Object/Bank~(~2,'0x~).Test.o:
-	mkdir -p Object/
+Object/${PORT}/Bank~(~2,'0x~).Test.o:
+	mkdir -p Object/${PORT}
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
                     *bank*)
             (format t "~%
-Object/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/LastBankDefs.Test.NTSC.s~]
-	mkdir -p Object
+Object/${PORT}/Bank~(~2,'0x~).Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/${PORT}/LastBankDefs.Test.NTSC.s~]
+	mkdir -p Object/${PORT}
 	${AS7800} ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
 	-DFIRSTASSETSBANK=~d ~{ \\~%		-I ~a ~} \\
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
@@ -2167,17 +2174,17 @@ EndOfBinary = *
       (format source "~3&~10t.dsection BankData~%~10t.include \"EndBank.s\"~%"))))
 
 (defun labels-to-include (labels-file lower upper include-file-name)
-  "Extract labels between LOWER and UPPER (hex) from LABELS-FILE into Source/Generated/INCLUDE-FILE-NAME"
+  "Extract labels between LOWER and UPPER (hex) from LABELS-FILE into Source/Generated/{PORT}/INCLUDE-FILE-NAME"
   (let ((low (parse-integer lower :radix 16))
         (high (parse-integer upper :radix 16))
         (include-file (make-pathname :name include-file-name
                                      :type "s"
-                                     :directory '(:relative "Source" "Generated"))))
+                                     :directory `(:relative "Source" "Generated" ,(machine-directory-name)))))
     (with-input-from-file (labs labels-file)
       (ensure-directories-exist include-file)
       (with-output-to-file (incs include-file :if-exists :supersede)
-        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a.s… "
-                labels-file include-file-name)
+        (format *trace-output* "~&Converting ~a to include file Source/Generated/~a/~a.s… "
+                labels-file (machine-directory-name) include-file-name)
         (finish-output *trace-output*)
         (format incs ";;; Generated file~2%Lib:~10t.block")
         (let ((table (make-hash-table)))
