@@ -246,8 +246,9 @@ Reads item drop tables from an ODS spreadsheet and generates assembly code."
           (format output "~%Chance:
 ~10t.byte ~{$~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^~%~10t.byte ~}"
                   (mapcar (lambda (drop)
-                            (when-let (n (number? (getf drop :chance)))
-                              (floor (* #x100 n) #x100)))
+                            (or (when-let (n (number? (getf drop :chance)))
+                                  (floor (* #x100 n) #x100))
+                                0))
                           enemies-drops))
           (format output "~%Item:~{~%~10t.byte Item~a ~}"
                   (mapcar (lambda (drop) (getf drop :item))
