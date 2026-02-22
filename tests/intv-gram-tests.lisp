@@ -605,7 +605,7 @@
 
         ;; Verify output was generated
         (is-true (probe-file output-path)
-                 "Output file should exist despite invalid palette indices"))))
+                 "Output file should exist despite invalid palette indices")))))
 
 ;; Test 18: Empty and malformed input handling
 (test gram-compiler-empty-input-handling
@@ -759,7 +759,7 @@
         (let ((content (uiop:read-file-string output-path)))
           (let ((decle-count (count-if (lambda (line)
                                         (search "DECLE" line))
-                                      (split-sequence:split-sequence #\newline content))))
+                                       (split-sequence #\newline content))))
             (is (= 8192 decle-count)
                 "Large image should generate 8192 DECLE statements: ~D" decle-count)))))))
 

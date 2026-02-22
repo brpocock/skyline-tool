@@ -1,6 +1,6 @@
 ;;; Phantasia SkylineTool/tests/eightbol-tests.lisp
-;;;; Comprehensive tests for eightbol.lisp COBOL compiler
-;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
+;;;; Comprehensive tests for EIGHTBOL compiler
+;;;; Copyright © 2026 Interworldly Adventuring, LLC.
 
 ;; Use the test package defined by the test runner
 (in-package :skyline-tool/test)
@@ -138,17 +138,13 @@
   (finishes (eightbol::resolve-variable-address "test-var") "Should handle basic address resolution"))
 
 ;; Test COBOL compilation functions
-(test cobol-compile-existence
-  "Test cobol-compile function exists"
-  (is-true (fboundp 'eightbol::cobol-compile) "cobol-compile should be defined"))
+(test eightbol-compile-existence
+  "Test eightbol-compile function exists"
+  (is-true (fboundp 'eightbol::eightbol-compile) "eightbol-compile should be defined"))
 
-(test parse-cobol-program-existence
-  "Test parse-cobol-program function exists"
-  (is-true (fboundp 'eightbol::parse-cobol-program) "parse-cobol-program should be defined"))
-
-(test parse-cobol-content-existence
-  "Test parse-cobol-content function exists"
-  (is-true (fboundp 'eightbol::parse-cobol-content) "parse-cobol-content should be defined"))
+(test parse-eightbol-program-existence
+  "Test parse-eightbol-program function exists"
+  (is-true (fboundp 'eightbol::parse-eightbol-program) "parse-eightbol-program should be defined"))
 
 (test generate-assembly-existence
   "Test generate-assembly function exists"
@@ -203,90 +199,6 @@
   (is-true (fboundp 'eightbol::parse-object-reference) "parse-object-reference should be defined"))
 
 ;; Test procedure parsing functions
-(test parse-procedure-line-existence
-  "Test parse-procedure-line function exists"
-  (is-true (fboundp 'eightbol::parse-procedure-line) "parse-procedure-line should be defined"))
-
-(test parse-move-statement-existence
-  "Test parse-move-statement function exists"
-  (is-true (fboundp 'eightbol::parse-move-statement) "parse-move-statement should be defined"))
-
-(test parse-add-statement-existence
-  "Test parse-add-statement function exists"
-  (is-true (fboundp 'eightbol::parse-add-statement) "parse-add-statement should be defined"))
-
-(test parse-subtract-statement-existence
-  "Test parse-subtract-statement function exists"
-  (is-true (fboundp 'eightbol::parse-subtract-statement) "parse-subtract-statement should be defined"))
-
-(test parse-multiply-statement-existence
-  "Test parse-multiply-statement function exists"
-  (is-true (fboundp 'eightbol::parse-multiply-statement) "parse-multiply-statement should be defined"))
-
-(test parse-divide-statement-existence
-  "Test parse-divide-statement function exists"
-  (is-true (fboundp 'eightbol::parse-divide-statement) "parse-divide-statement should be defined"))
-
-;; Test bitwise operation parsing functions
-(test parse-bitwise-operations-existence
-  "Test bitwise operation parsing functions exist"
-  (dolist (func '(eightbol::parse-bitwise-and-statement
-                  eightbol::parse-bitwise-or-statement
-                  eightbol::parse-bitwise-xor-statement))
-    (is-true (fboundp func) "~a should be defined" func)))
-
-;; Test flag operation parsing functions
-(test parse-flag-operations-existence
-  "Test flag operation parsing functions exist"
-  (dolist (func '(eightbol::parse-set-flag-statement
-                  eightbol::parse-clear-flag-statement
-                  eightbol::parse-test-flag-statement))
-    (is-true (fboundp func) "~a should be defined" func)))
-
-;; Test control flow parsing functions
-(test parse-control-flow-existence
-  "Test control flow parsing functions exist"
-  (dolist (func '(eightbol::parse-if-statement
-                  eightbol::parse-null-check
-                  eightbol::parse-perform-statement))
-    (is-true (fboundp func) "~a should be defined" func)))
-
-;; Test function call parsing functions
-(test parse-function-calls-existence
-  "Test function call parsing functions exist"
-  (dolist (func '(eightbol::parse-call-statement
-                  eightbol::parse-invoke-statement))
-    (is-true (fboundp func) "~a should be defined" func)))
-
-;; Test arithmetic generation functions
-(test generate-arithmetic-existence
-  "Test arithmetic generation functions exist"
-  (dolist (func '(eightbol::generate-16bit-add
-                  eightbol::generate-16bit-subtract))
-    (is-true (fboundp func) "~a should be defined" func)))
-
-;; Test variable size functions
-(test get-variable-size-existence
-  "Test get-variable-size function exists"
-  (is-true (fboundp 'eightbol::get-variable-size) "get-variable-size should be defined"))
-
-(test get-object-field-size-existence
-  "Test get-object-field-size function exists"
-  (is-true (fboundp 'eightbol::get-object-field-size) "get-object-field-size should be defined"))
-
-(test find-field-size-in-class-existence
-  "Test find-field-size-in-class function exists"
-  (is-true (fboundp 'eightbol::find-field-size-in-class) "find-field-size-in-class should be defined"))
-
-;; Test object and field functions
-(test find-object-field-existence
-  "Test find-object-field function exists"
-  (is-true (fboundp 'eightbol::find-object-field) "find-object-field should be defined"))
-
-(test find-method-id-existence
-  "Test find-method-id function exists"
-  (is-true (fboundp 'eightbol::find-method-id) "find-method-id should be defined"))
-
 ;; Test CartRAM and class functions
 (test find-cart-ram-variable-existence
   "Test find-cart-ram-variable function exists"
@@ -313,13 +225,6 @@
   "Test load-constants function exists"
   (is-true (fboundp 'eightbol::load-constants) "load-constants should be defined"))
 
-;; Test array operation parsing functions
-(test parse-array-operations-existence
-  "Test array operation parsing functions exist"
-  (dolist (func '(eightbol::parse-array-load
-                  eightbol::parse-array-store))
-    (is-true (fboundp func) "~a should be defined" func)))
-
 ;; Test global data section generation
 (test generate-global-data-section-existence
   "Test generate-global-data-section function exists"
@@ -335,7 +240,7 @@
 (test basic-cobol-compilation-workflow
   "Test basic COBOL compilation workflow exists"
   ;; Test that the main entry points exist and can be called
-  (is-true (fboundp 'eightbol::cobol-compile) "Main COBOL compiler should exist")
+  (is-true (fboundp 'eightbol::eightbol-compile) "Main EIGHTBOL compiler should exist")
   (is-true (fboundp 'eightbol::compile-file) "File compilation should exist"))
 
 ;; Test CPU target validation
@@ -393,9 +298,8 @@
                        eightbol::variable-address
                        eightbol::variable-size
                        eightbol::resolve-variable-address
-                       eightbol::cobol-compile
-                       eightbol::parse-cobol-program
-                       eightbol::parse-cobol-content
+                       eightbol::eightbol-compile
+                       eightbol::parse-eightbol-program
                        eightbol::generate-assembly))
     (is-true (fboundp func-name)
              "Function ~a should be defined" func-name)))
@@ -406,26 +310,14 @@
   (dolist (func-name '(eightbol::parse-data-line
                        eightbol::collect-picture-definition
                        eightbol::parse-occurs-clause
-                       eightbol::parse-object-reference
-                       eightbol::parse-procedure-line
-                       eightbol::parse-move-statement
-                       eightbol::parse-add-statement
-                       eightbol::parse-subtract-statement
-                       eightbol::parse-multiply-statement
-                       eightbol::parse-divide-statement
-                       eightbol::parse-if-statement))
+                       eightbol::parse-object-reference))
     (is-true (fboundp func-name)
              "Function ~a should be defined" func-name)))
 
 ;; Test that all utility functions are properly defined
 (test all-utility-functions-defined
   "Test that all utility functions are properly defined"
-  (dolist (func-name '(eightbol::get-variable-size
-                       eightbol::get-object-field-size
-                       eightbol::find-field-size-in-class
-                       eightbol::find-object-field
-                       eightbol::find-method-id
-                       eightbol::machine-directory-name
+  (dolist (func-name '(eightbol::machine-directory-name
                        eightbol::load-class-definitions
                        eightbol::load-cart-ram-variables
                        eightbol::load-constants))

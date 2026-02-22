@@ -43,13 +43,14 @@
         :compile-art-7800 'compile-art-7800
         :compile-art-400 'compile-art-400
         :compile-art-800 'compile-art-800
-        :compile-cobol-class 'eightbol:compile-eightbol-class
+        :compile-eightbol-class 'eightbol:compile-eightbol-class
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops
+        :make-globals-copybook 'make-globals-copybook
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
         :patch-7800gd 'push-7800gd-bin-no-execute
@@ -295,9 +296,14 @@ User input string with whitespace trimmed
   (first (split-sequence #\,
                          (sb-posix:passwd-gecos (sb-posix:getpwuid user-id)))))
 
+(defun skyline-debug-backtrace-p ()
+  "True if SKYLINE_DEBUG_BACKTRACE is set to t.
+When true, print error + backtrace and exit instead of waiting for input."
+  (string-equal "t" (or (uiop:getenv "SKYLINE_DEBUG_BACKTRACE") "")))
+
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
-  (when (string-equal "t" (or (uiop:getenv "SKYLINE_DEBUG_BACKTRACE") ""))
+  (when (skyline-debug-backtrace-p)
     (finish-output)
     (finish-output *trace-output*)
     (format *error-output* "~%~|
@@ -305,12 +311,12 @@ User input string with whitespace trimmed
 ~a
 "
             (class-name (class-of condition))
-            (cond ((string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
+            (cond ((skyline-debug-backtrace-p)
                    " (SKYLINE_DEBUG_BACKTRACE=t)")
                   (t ""))
             condition)
     ;; Show backtrace if requested
-    (when (string-equal (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "t")
+    (when (skyline-debug-backtrace-p)
       (format *error-output* "~&Backtrace:~%")
       (sb-debug:backtrace)
       (format *error-output* "~&"))
@@ -391,9 +397,15 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
   `(tagbody do-over
       (let* ((*system-debugger* *debugger-hook*)
              (*debugger-hook* (or
-                               (when (string-equal (or (sb-posix:getenv "SKYLINE_DEBUG_BACKTRACE") "") "t")
-                                 *system-debugger*)
-                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
+                               ;; SKYLINE_DEBUG_BACKTRACE=t: dump backtrace and exit, never invoke CLIM debugger
+                               (when (skyline-debug-backtrace-p)
+                                 #'friendly-tty-debugger)
+                               ;; Skip CLIM debugger when running non-interactively (e.g. from make
+                               ;; with AUTOCONTINUE=t); it partially invokes then fails on
+                               ;; INVOKE-WITH-PRISTINE-VIEWPORT.
+                               #+mcclim (when (and (x11-p)
+                                                   (not (string-equal (or (sb-posix:getenv "AUTOCONTINUE") "") "t")))
+                                          #'clim-debugger:debugger)
                                (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
                                *debugger-hook*)))
         (restart-case
@@ -541,7 +553,8 @@ See COPYING for details
     (launcher)))
 
 (defun find-default-port ()
-  (with-input-from-file (makefile (merge-pathnames "Makefile" (project-root)))
+  (with-open-file (makefile (merge-pathnames "Makefile" (project-root))
+                    :external-format :utf-8)
     (loop for line = (read-line makefile nil nil)
           while line
           when (search "PORT=" line)
@@ -572,6 +585,13 @@ See COPYING for details
       (apply fun args)
       (error "Command not recognized: “~a” (try “help”)" verb))))
 
+(defun clim-invoke-with-pristine-viewport-p (condition)
+  "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."
+  (and (typep condition 'error)
+       (let ((msg (princ-to-string condition)))
+         (or (search "INVOKE-WITH-PRISTINE-VIEWPORT" msg)
+             (search "already names" msg)))))
+
 (defun command (argv)
   "Main entry point for Skyline-Tool command-line interface.
 
@@ -586,6 +606,9 @@ Executes the requested command, may exit the process
 @end table
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
+  ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
+  (when (skyline-debug-backtrace-p)
+    (sb-ext:disable-debugger))
   (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))

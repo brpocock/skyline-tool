@@ -575,15 +575,15 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
     (let ((objects (when (and object-group (< 1 (length object-group)))
                      (remove-if (lambda (el)
                                   (or (not (equal "object" (car el)))
-                                      (when-let (type-name (assocdr "type"
+                                      (when-let (type-name (xml-attr "type"
                                                                     (second el)))
                                         (not (equalp "Wall" type-name)))))
                                 (subseq object-group 2)))))
       (dolist (object objects)
-        (let ((height (parse-number (assocdr "height" (second object))))
-              (width (parse-number (assocdr "width" (second object))))
-              (object-x (parse-number (assocdr "x" (second object))))
-              (object-y (parse-number (assocdr "y" (second object)))))
+        (let ((height (parse-real-number (xml-attr "height" (second object))))
+              (width (parse-real-number (xml-attr "width" (second object))))
+              (object-x (parse-real-number (xml-attr "x" (second object))))
+              (object-y (parse-real-number (xml-attr "y" (second object)))))
           (when (and (<= object-x test-x (+ object-x width))
                      (<= object-y test-y (+ object-y height)))
             (return-from tile-collision-p t))))))
@@ -842,7 +842,7 @@ Update map/s or script to agree with one another and DO-OVER."
         (warn "Locked tile without Lock code")))
     (if-let (switch (tile-property-value "Switch" xml))
       (set-bit 4 (ash (logand #x03 (parse-integer switch :radix 16)) 3)))
-    (when-let (tile-id (or tile-id (assocdr "id" (second xml))))
+    (when-let (tile-id (or tile-id (xml-attr "id" (second xml))))
       (when (and tile-palettes tile-id (zerop (logand (ash 7 5) (elt bytes 4))))
         (clear-bit 4 (ash 7 5))
         (set-bit 4 (ash (mod (aref tile-palettes (ensure-number tile-id)) 8) 5))))
@@ -857,7 +857,7 @@ Update map/s or script to agree with one another and DO-OVER."
   (let ((bytes (make-array '(6) :element-type '(unsigned-byte 8)))
         (tile.xml (find-if (lambda (el)
                              (and (equal "tile" (car el))
-                                  (= i (parse-integer (assocdr "id" (second el))))))
+                                  (= i (parse-integer (xml-attr "id" (second el))))))
                            (subseq xml 2))))
     ;; returns bytes
     (add-attribute-values palettes tile.xml bytes :tile-id i)))
@@ -922,13 +922,14 @@ Tileset object containing image data, tile dimensions, and palette information."
          (tileset (make-instance 'tileset :gid gid :pathname pathname)))
     (format *trace-output* "~&Loading tileset data from ~a" (enough-namestring pathname))
     (assert (equal "tileset" (first xml)))
-    (assert (member (assocdr "tilecount" (second xml)) '("64" "128") :test 'string-equal))
+    (assert (member (xml-attr "tilecount" (second xml)) '("64" "128") :test 'string-equal)
+            () "Tile count must be 64 or 128, got ~s" (second xml))
     (let* ((image (xml-match "image" xml))
-           (image-data (load-tileset-image-for-machine (assocdr "source" (second image))))
+           (image-data (load-tileset-image-for-machine (xml-attr "source" (second image))))
            (palette-data (split-images-to-palettes image-data)))
       (setf (tileset-image tileset) image-data
             (tileset-palettes tileset) palette-data)
-      (dotimes (i (parse-integer (assocdr "tilecount" (second xml))))
+      (dotimes (i (parse-integer (xml-attr "tilecount" (second xml))))
         (let ((bytes (parse-tile-attributes palette-data xml i)))
           (dotimes (b 6)
             (setf (aref (tile-attributes tileset) i b) (elt bytes b))))))
@@ -1113,6 +1114,11 @@ after considering ~:d option~:p."
   (format stream "~{~&     .byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~
 ~^,   $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
           (coerce string 'list)))
+
+(defun xml-attr (key attrs)
+  "Get XML attribute value by key from xmls (name value) attribute list.
+Uses string-equal so parsed attribute keys match string literals."
+  (cadr (assoc key attrs :test #'string-equal)))
 
 (defun xml-match (element xml &optional (error-code nil error-code-p))
   (or (find-if (lambda (el) (equal element (car el)))
@@ -1630,7 +1636,8 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
                        (atari-colu-string (aref series palette-index 1))
                        (atari-colu-string (aref series palette-index 2))
                        (atari-colu-string (aref series palette-index 3))))))
-      (let* ((tileset (load-tileset pathname)))
+      (let* ((tileset (let ((*region* :ntsc))
+                        (load-tileset pathname))))
         (format output ";;; Palette ~a~%;;; extracted from ~a"
                 (enough-namestring outfile) (enough-namestring pathname))
         (dolist (*region* '(:ntsc :pal))

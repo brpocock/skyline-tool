@@ -45,6 +45,27 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                :name :skyline-tool)
 (pushnew (asdf:system-relative-pathname :skyline-tool #p"./lib/") ql:*local-project-directories*)
 
+;; Load eightbol and skyline-tool with handler to trap CLIM name-conflict
+;; (INVOKE-WITH-PRISTINE-VIEWPORT already names...) and invoke CONTINUE restart.
+(format t "~&Loading EIGHTBOL and Skyline-Tool… ")
+(finish-output)
+(handler-bind ((program-error
+                (lambda (c)
+                  (let ((msg (princ-to-string c))
+                        (r (find-restart 'continue c)))
+                    (when (and r (or (search "INVOKE-WITH-PRISTINE-VIEWPORT" msg)
+                                     (search "already names" msg)))
+                      (format *error-output*
+                              "~&CLIM name conflict (~a): invoking CONTINUE restart~%"
+                              (type-of c))
+                      (finish-output *error-output*)
+                      (invoke-restart r))))))
+  (asdf:load-system :eightbol)
+  (asdf:load-system :skyline-tool))
+(load (merge-pathnames (make-pathname :name "compile" :type "lisp") *load-pathname*))
+(format t "… done.~2%")
+(finish-output)
+
 #+ ()
 (progn
   (format t "~&Quickloading Skyline-Tool System … ")
