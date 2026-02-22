@@ -989,7 +989,7 @@ file ~a.s in bank $~(~2,'0x~)~
                                         :name (subseq name 4) :type "art")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
+          (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
                          :name name :type "o")))))
   (when (eql 0 (search "Tileset." name))
     (let ((possible-file (make-pathname
@@ -997,7 +997,7 @@ file ~a.s in bank $~(~2,'0x~)~
                           :name (subseq name 8) :type "tsx")))
       (when (probe-file possible-file)
         (return-from find-included-binary-file
-          (make-pathname :directory (list :relative "Object" "Assets" (machine-directory-name))
+          (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
                          :name name :type "o")))))
   (when (eql 0 (search "Blob." name))
     (let ((possible-file (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
