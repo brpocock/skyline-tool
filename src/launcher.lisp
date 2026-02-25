@@ -258,10 +258,13 @@ The signal code was ~a" break-code)
 
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
-  (let* ((frame (clim:make-application-frame 'launcher-frame))
-         (*launcher-frame* frame))
-    (unless (boundp '*machine*)
-      (load-project.json))
+  (let ((frame (clim:make-application-frame 'launcher-frame)))
+    (if (boundp '*machine*)
+        (launcher-body frame)
+        (load-project.json nil (lambda () (launcher-body frame))))))
+
+(defun launcher-body (frame)
+  (let ((*launcher-frame* frame))
     (setf (clim:frame-pretty-name frame) (format nil "Skyline Tool for ~a: Launcher"
                                                  (title-case *game-title*))
           *default-pathname-defaults*

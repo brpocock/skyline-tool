@@ -241,7 +241,7 @@
         (end-bytes 0)) ; Would get actual memory usage
     (values result (- end-bytes start-bytes))))
 
-;;; All functions are exported in the defpackage above)
+;;; All functions are exported in the defpackage above
 
 ;;; Advanced Test Data Generators
 
@@ -282,12 +282,14 @@
         (base-value 128)) ; Mid-range base
     (dotimes (x width)
       (dotimes (y height)
-        (let ((noise (ecase noise-type
-                       (:white (random 256))
-                       (:gaussian (max 0 (min 255 (+ base-value (* intensity 50 (random-gaussian)))))
-                       (:perlin (perlin-noise x y)) ; Simplified Perlin-like
-                       (:salt-pepper (if (> (random 1.0) 0.95) (if (zerop (random 2)) 0 255) base-value)))))
-          (setf (aref pixels x y) (round noise)))))
+        (setf (aref pixels x y)
+              (round (ecase noise-type
+                      (:white (random 256))
+                      (:gaussian (max 0 (min 255 (+ base-value (* intensity 50 (random-gaussian)))))
+                      (:perlin (perlin-noise x y)) ; Simplified Perlin-like
+                      (:salt-pepper (if (> (random 1.0) 0.95)
+                                       (if (zerop (random 2)) 0 255)
+                                       base-value))))))))
     pixels))
 
 (defun random-gaussian ()

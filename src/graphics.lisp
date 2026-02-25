@@ -3710,11 +3710,12 @@ Used internally by BLOB ripping for color stamp conversion."
     (reverse png-list)))
 
 (defun compile-art-7800 (index-out index-in)
-  (let ((*machine* 7800))
-        (write-7800-binary index-out
-                           (interleave-7800-bytes
-                            (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))))
+  (let ((*machine* 7800)
+        (*region* (if (boundp '*region*) *region* :ntsc)))
+    (write-7800-binary index-out
+                      (interleave-7800-bytes
+                       (parse-into-7800-bytes
+                        (read-7800-art-index index-in))))))
 
 (defun read-nes-art-index (index-in)
   "Read NES art index file and return list of (png-name mode width-px height-px)"

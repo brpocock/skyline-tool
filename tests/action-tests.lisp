@@ -4,10 +4,6 @@
 
 (in-package :skyline-tool/test)
 
-
-(def-suite skyline-tool/test
-  :description "All Skyline-Tool test suites")
-
 (def-suite action-tests
   :description "Tests for character actions: gesture, panic, flying, wave-arms, dancing"
   :in skyline-tool/test)

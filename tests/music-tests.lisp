@@ -67,7 +67,7 @@
 
 ;;; Enhanced Property-Based Testing for Music
 
-(define-property-test psg-frequency-property-test
+(test psg-frequency-property-test
   "Property-based test for PSG frequency calculations across platforms"
   (dolist (system '(:sms :nes :gb :tg16))
     (let ((freq (generate-valid-psg-frequency system)))
@@ -78,7 +78,7 @@
         (:gb (is (<= 0 freq 2047) "Game Boy frequencies should be 0-2047 (11-bit)"))
         (:tg16 (is (<= 0 freq 4095) "TG16 frequencies should be 0-4095 (12-bit)"))))))
 
-(define-property-test psg-volume-property-test
+(test psg-volume-property-test
   "Property-based test for PSG volume ranges across platforms"
   (dolist (system '(:sms :nes :gb :tg16))
     (let ((volume (generate-valid-psg-volume system)))
@@ -87,7 +87,7 @@
         ((:sms :gb :nes) (is (<= 0 volume 15) "4-bit PSG volumes should be 0-15"))
         (:tg16 (is (<= 0 volume 31) "5-bit PSG volumes should be 0-31"))))))
 
-(define-property-test music-note-sequence-property-test
+(test music-note-sequence-property-test
   "Property-based test for music note sequence generation"
   (let ((sequence (generate-psg-note-sequence (+ 5 (random 20)))))
     ;; Test sequence structure
@@ -171,7 +171,7 @@
   (let ((invalid-paths '("/dev/null/invalid" "/root/invalid" "/etc/passwd" "" nil)))
     (dolist (path invalid-paths)
       (when path
-        (signals error (skyline-tool::compile-music-sms path "dummy-input.mid")))))))
+        (signals error (skyline-tool::compile-music-sms path "dummy-input.mid"))))))
 
 ;; Test ColecoVision music functions
 (test colecovision-music-compilation

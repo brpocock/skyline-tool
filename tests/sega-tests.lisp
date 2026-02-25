@@ -198,7 +198,7 @@
   (signals error (skyline-tool::parse-sms-chr-tiles
                   (make-array '(8 12) :initial-element 0) 8 12)))
 
-(define-property-test sms-dimension-property-test
+(test sms-dimension-property-test
   "Property-based test for SMS dimension validation"
   (let ((valid-dims (generate-valid-tile-dimensions))
         (invalid-dims (generate-invalid-tile-dimensions)))
@@ -224,7 +224,7 @@
     (setf (aref pixels 0 0) 4) ; Invalid color index
     (signals error (skyline-tool::parse-sms-chr-tiles pixels 8 8))))
 
-(define-property-test sms-color-validation-property
+(test sms-color-validation-property
   "Property-based test for SMS color index validation"
   ;; Test with random valid colors
   (let* ((dims (generate-valid-tile-dimensions))
@@ -254,7 +254,7 @@
         ;; Clean up
         (delete-file temp-file)))))
 
-(define-property-test sms-chr-rom-writing-property
+(test sms-chr-rom-writing-property
   "Property-based test for SMS CHR ROM file writing"
   (let* ((num-tiles (+ 1 (random 10))) ; 1-10 tiles
          (test-tiles (loop for i from 1 to num-tiles
@@ -397,7 +397,7 @@
                       (generate-valid-psg-volume) ; volume
                       (+ 10 (random 50))))) ; duration
 
-(define-property-test sms-psg-frequency-property
+(test sms-psg-frequency-property
   "Property-based test for SMS PSG frequency calculations"
   (let ((freq (generate-valid-psg-frequency)))
     ;; Test frequency range validation
@@ -409,7 +409,7 @@
       (is (= (logand freq #xFF) (logand freq 255)) "Low byte should be valid")
       (is (= (ash freq -8) (logand (ash freq -8) 15)) "High nibble should be valid"))))
 
-(define-property-test sms-psg-volume-property
+(test sms-psg-volume-property
   "Property-based test for SMS PSG volume handling"
   (let ((volume (generate-valid-psg-volume)))
     (is (<= 0 volume 15) "PSG volumes should be 0-15 (4-bit)")
@@ -432,7 +432,7 @@
   (is (= #xD0 (logior #xD0 0)) "Channel 2 volume")
   (is (= #xF0 (logior #xF0 0)) "Channel 3 volume"))
 
-(define-property-test sms-psg-command-property
+(test sms-psg-command-property
   "Property-based test for SMS PSG command construction"
   (let ((channel (random 4))
         (freq (generate-valid-psg-frequency))
@@ -461,7 +461,7 @@
       (when (probe-file temp-file)
         (delete-file temp-file)))))
 
-(define-property-test sms-music-note-sequence-property
+(test sms-music-note-sequence-property
   "Property-based test for SMS music note sequence handling"
   (let ((sequence (generate-psg-note-sequence (+ 5 (random 20)))))
     ;; Test sequence structure
@@ -649,7 +649,7 @@
 
 ;;; Advanced Property-Based Testing with Statistical Validation
 
-(define-property-test sms-statistical-tile-distribution
+(test sms-statistical-tile-distribution
   "Statistical test for SMS tile data distribution"
   (let* ((dims (generate-valid-tile-dimensions))
          (pixels (generate-random-pixels (first dims) (second dims) 3))
@@ -666,7 +666,7 @@
         ;; Check that high bytes are reasonable (bitplane data)
         (is (<= (aref tile 0) 255) "Tile bytes should be valid")))))
 
-(define-property-test sms-performance-scaling-test
+(test sms-performance-scaling-test
   "Property-based test for SMS performance scaling"
   (let* ((sizes '(32 64 128))
          (times '()))

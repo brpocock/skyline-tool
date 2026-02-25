@@ -1381,6 +1381,32 @@ Music:~:*
       (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%")
       (format source ";;; Spectrum 128K has AY-3-8912 PSG chip available~%"))))
 
+(defmethod compile-music-for-machine ((machine (eql 2416)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (let* ((*machine* 2416)
+         (chip (string-upcase sound-chip))
+         (chip-kw (intern (string-upcase sound-chip) :keyword))
+         (path (merge-pathnames (pathname source-out-name) (project-root))))
+    (ensure-directories-exist path)
+    (with-output-to-file (source path :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing Commander X-16 ~a music ~a…" chip source-out-name)
+      (cond
+        ((eq chip-kw :ym2151)
+         (format source ";;; Commander X-16 YM2151 Music compiled from ~a~%;;; do not edit (generated)~2%" in-file-name)
+         (format source "ym2151_init:~%    ret~2%")
+         (format source "ym2151_notes:~%    .byte 0~2%")
+         (format source "fm_voice_data:~%    .byte 0~2%")
+         (format source "play_fm_note:~%    ret~%"))
+        ((eq chip-kw :psg)
+         (format source ";;; Commander X-16 PSG Music compiled from ~a~%;;; do not edit (generated)~2%" in-file-name)
+         (format source "psg_init:~%    ret~2%")
+         (format source "psg_notes:~%    .byte 0~2%")
+         (format source "play_psg_note:~%    ret~%"))
+        (t
+         (format source ";;; Unknown sound chip: ~a~%;;; do not edit (generated)~2%" chip)
+         (format source "unknown_chip_error:~%    ret~%"))))
+    t))
+
 (defun compile-music (source-out-name in-file-name
                       &optional (machine-type$ "2600")
                                 (sound-chip "TIA")

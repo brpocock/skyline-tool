@@ -1,12 +1,6 @@
 (in-package :skyline-tool)
 
-;; Force write-master-makefile (and asset-allocator) into the buildapp image.
-;; The symbol reference in *invocation* may not suffice for buildapp's tree-shaking.
-(declaim (ftype (function (&optional t) t) write-master-makefile))
-;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
-;; undefined-function during buildapp compile when interface loads before oops.
-(declaim (ftype (function (&key (:root-dir t) (:output-path t)) t) make-globals-copybook))
-(declaim (ftype (function (&key (:root-dir t) (:output-path t) (:machine t)) t) make-service-banks-copybook))
+
 
 ;; entry point from shell
 
@@ -79,8 +73,7 @@
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile
-        :self-test 'run-self-test
-        :eightbol-test 'run-eightbol-test))
+        :self-test 'run-self-test))
 
 (defun run-self-test (&rest args)
   "Run all unit tests for SkylineTool and exit with appropriate status.
@@ -101,48 +94,17 @@ Loads test system, runs tests, exits the Lisp process
       (progn
           (asdf:load-system :skyline-tool/test)
         ;; Run all tests and exit with appropriate code
-        (let ((results (fiveam:run :skyline-tool/test)))
-          (fiveam:explain! results)
-          (multiple-value-bind (num-checks passed num-passed passed%
-                                skipped num-skipped skipped%
-                                failed num-failed failed%
-                                unknown num-unknown unknown%)
-              (fiveam::partition-results (if (typep results 'sequence) results (list results)))
-            (declare (ignore num-checks passed num-passed passed% skipped skipped%
-                            failed failed% unknown num-unknown unknown%))
-            (if (and (zerop num-failed) (zerop num-skipped))
+        (let ((results (fiveam:run-all-tests)))
+          (multiple-value-bind (passed failed skipped) (fiveam:results-status results)
+            (if (and passed (zerop failed) (zerop skipped))
                 (progn
-                  (format t "~%~&All tests passed")
+                  (format t "~&All tests passed~%")
                   (sb-ext:exit :code 0))
                 (progn
-                  (format t "~%~&Tests failed: ~d test(s) failed" num-failed)
+                  (format t "~&Tests failed: ~d test(s) failed~%" failed)
                   (sb-ext:exit :code 1))))))
     (error (e)
-      (format t "~%~&Failed to load or run tests: ~a" e)
-      (sb-ext:exit :code 1))))
-
-(defun run-eightbol-test (&rest args)
-  "Run all unit tests for EIGHTBOL compiler and exit with appropriate status.
-
-Loads the eightbol/test system and executes all FiveAM unit tests,
-exiting with status 0 for success or 1 for failure.
-
-@table @asis
-@item ARGS
-Command-line arguments (ignored)
-@item Side Effects
-Loads eightbol/test system, runs tests, exits the Lisp process
-@end table
-
-@xref{function:run-self-test}, @xref{function:command}."
-  (declare (ignore args))
-  (handler-case
-      (progn
-        (asdf:test-system :eightbol)
-        (format t "~%~&All EIGHTBOL tests passed")
-        (sb-ext:exit :code 0))
-    (error (e)
-      (format t "~%~&EIGHTBOL tests failed: ~a" e)
+      (format t "~&Failed to load or run tests: ~a~%" e)
       (sb-ext:exit :code 1))))
 
 (defun run-repl ()
@@ -220,7 +182,7 @@ User input string with whitespace trimmed
   (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
-       (lambda () (prompt "restart with this parameter (e.g. filename) ?")))
+       (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
       #-mcclim nil
       (prompt "provide a value for this restart")))
 
@@ -237,15 +199,15 @@ User input string with whitespace trimmed
                     :process-name title)
           #'break)
       (progn
-        (format t "~&~% ? ~a ?~%" title)
+        (format t "~&~% ★ ~a ★~%" title)
         (apply #'format t message args)
         (fresh-line)
         (force-output))))
 
 (defun friendly-offer-single-restart (restart)
-  (if (y-or-n-p "~%Would you like to run this restart? (Say ?N? to quit)
+  (if (y-or-n-p "~%Would you like to run this restart? (Say “N” to quit)
 ~s: ~a
-? "
+⇒ "
                 restart
                 restart)
       (invoke-restart-interactively restart)
@@ -264,7 +226,7 @@ User input string with whitespace trimmed
                                (restart-name restart)
                                restart))
                        restarts)))
-     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ? ")
+     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ⇒ ")
      (finish-output *query-io*)
      (let* ((reply (read-line *query-io*))
             (reply-number (ignore-errors (parse-integer reply :junk-allowed t)))
@@ -282,29 +244,29 @@ User input string with whitespace trimmed
          ((and reply-number (<= 1 reply-number (length restarts)))
           (invoke-restart-interactively (elt restarts (1- reply-number))))
          ((= 1 (length reply-name-matches))
-          (format *query-io* "?~a?" (first reply-name-matches))
+          (format *query-io* "“~a”" (first reply-name-matches))
           (finish-output *query-io*)
           (invoke-restart-interactively (first reply-name-matches)))
          (reply-name-matches
-          (format *query-io* "?~a? is the name of ~r restart~:p."
+          (format *query-io* "“~a” is the name of ~r restart~:p."
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-matches)
-            (when (y-or-n-p "You want to ?~a??~%  ([3m~a[0m) ? "
+            (when (y-or-n-p "You want to “~a”?~%  ([3m~a[0m) ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (reply-name-partials
-          (format *query-io* "?~a? matches ~r restart name~:p (partially)"
+          (format *query-io* "“~a” matches ~r restart name~:p (partially)"
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-partials)
-            (when (y-or-n-p "~&You want to ?~a??~%  ([3m~a[0m)  ? "
+            (when (y-or-n-p "~&You want to “~a”?~%  ([3m~a[0m)  ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (t
-          (format *error-output* "~&I'm sorry, I don't see any restart like ?~a.?" reply)
+          (format *error-output* "~&I'm sorry, I don't see any restart like “~a.”" reply)
           (finish-output *error-output*))))))
 
 (defvar *system-debugger* *debugger-hook*)
@@ -384,7 +346,7 @@ When true, print error + backtrace and exit instead of waiting for input."
           (format *error-output* "~%~|
 [31;1mAn error of type ~:(~a~) was signalled,
 but a CONTINUE restart was available and AUTOCONTINUE=T.[0m
-~a ? ~a
+~a ⇒ ~a
 "
                   (class-name (class-of condition))
                   condition restart))
@@ -493,7 +455,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                      :report "Edit in Climacs"
                      :interactive prompt-function
                      (edit-myself-in-climacs file)
-                     (format t "Climacs now open ? ~
+                     (format t "Climacs now open … ~
 recompile when you've corrected the error. (C-c C-k) and restart.")
                      (go do-over))
           (recompile-tool ()
@@ -517,10 +479,10 @@ Supply a list of verb(s) to see detailed documentation"
   (format *trace-output* "~&
 
  Skyline-Tool
- ????????????
+ ————————————
 
-Copyright ? 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright ? 2024-2026 Interworldly Adventuring, LLC.
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -531,7 +493,7 @@ Machine: ~a, type: ~a,~%	version ~a
 
 Usage: the first  parameter must be a verb;  following parameters depend
 on the verb being invoked. You almost certainly want to just look at the
-Makefile for an example, but you can try ?help? + command-name for the
+Makefile for an example, but you can try “help” + command-name for the
 documentation also.
 
 "
@@ -542,13 +504,13 @@ documentation also.
   (if commands
       (dolist (command commands)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase command))))
-          (format *trace-output* "~2% ? ~(~a~)~2%~a"
+          (format *trace-output* "~2% • ~(~a~)~2%~a"
                   command (or (documentation fun 'function)
                               "(no documentation yet)"))
-          (format *trace-output* "~% ? ~a: unknown ?" command)))
+          (format *trace-output* "~% • ~a: unknown ☹" command)))
       (dolist (verb (sort (remove-if-not #'keywordp *invocation*)
                           #'string-lessp))
-        (format *trace-output* "~% ? ~(~a~): ~a"
+        (format *trace-output* "~% • ~(~a~): ~a"
                 verb (or (first-line (documentation (getf *invocation* verb)
                                                     'function))
                          "(no documentation yet)")))))
@@ -580,8 +542,8 @@ To see specifics about one command, add its name to the end, e.g.
 
 If you need more help, ask support@interworldly.com
 
-Copyright ? 2016-2024, Bruce-Robert Pocock
-Copyright ? 2024-2026, Interworldly Adventuring, LLC
+Copyright © 2016-2024, Bruce-Robert Pocock
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -600,40 +562,31 @@ See COPYING for details
             do (return-from find-default-port (subseq line (1+ (position #\= line))))))
   "7800")
 
-(defun load-project.json (&optional (port-label (find-default-port)) thunk)
-  "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
-   PORT-LABEL defaults via find-default-port.
-   JSON keys: * prefix, lowercase-with-hyphens (e.g. :*part-number, :*game-title).
-   Uses assocdr for alist lookup."
-  (let* ((effective-port (if (or (null port-label) (string-equal port-label "nil"))
-                             (find-default-port)
-                             port-label))
-         (json-path (merge-pathnames (format nil "Project.~a.json" effective-port)
+(defun load-project.json (&optional (port-label (find-default-port)))
+  (let* ((json-path (merge-pathnames (format nil "Project.~a.json" port-label)
                                      (project-root)))
-         (project-data (json:decode-json-from-source json-path))
-         (*project.json* project-data)
-         (*game-title* (or (assocdr :*game-title project-data) (assocdr :Game project-data)))
-         (*part-number* (assocdr :*part-number project-data))
-         (*studio* (assocdr :*studio project-data))
-         (*publisher* (assocdr :*publisher project-data))
-         (*machine* (or (assocdr :*machine project-data)
-                       (ignore-errors (machine-number-by-tag effective-port))))
-         (*sound* (assocdr :*sound project-data))
-         (*common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) '())))
-         (*default-skin-color* (assocdr :*default-skin-color project-data))
-         (*default-hair-color* (assocdr :*default-hair-color project-data))
-         (*default-clothes-color* (assocdr :*default-clothes-color project-data))
-         (*region* (intern (string (or (assocdr :*region project-data) nil)) :keyword)))
-    (funcall thunk)))
+         (project-data (json:decode-json-from-source json-path)))
+    (let ((region (cdr (assoc :*region project-data))))
+      (setf *project.json* project-data
+            *game-title* (cdr (assoc :*game project-data))
+            *part-number*  (cdr (assoc :*part-number project-data))
+            *studio* (cdr (assoc :*studio project-data))
+            *publisher* (cdr (assoc :*publisher project-data))
+            *machine* (cdr (assoc :*machine project-data))
+            *sound* (cdr (assoc :*sound project-data))
+            *common-palette* (mapcar #'intern (cdr (assoc :*common-palette project-data)))
+            *default-skin-color* (cdr (assoc :*default-skin-color project-data))
+            *default-hair-color* (cdr (assoc :*default-hair-color project-data))
+            *default-clothes-color* (cdr (assoc :*default-clothes-color project-data))
+            *region* (if region (intern (string region) :keyword) :ntsc)))))))
 
 (defun run-for-port (port-label &rest subcommand)
-  (load-project.json port-label
-    (lambda ()
-      (format *trace-output* "~&Running for port: ~a" port-label)
-      (destructuring-bind (verb &rest args) subcommand
-        (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-          (apply fun args)
-          (error "Command not recognized: ?~a? (try ?help?)" verb))))))
+  (load-project.json port-label)
+  (format *trace-output* "~&Running for port: ~a" port-label)
+  (destructuring-bind (verb &rest args) subcommand
+    (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+      (apply fun args)
+      (error "Command not recognized: “~a” (try “help”)" verb))))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)
   "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."
@@ -659,8 +612,8 @@ Executes the requested command, may exit the process
   ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
   (when (skyline-debug-backtrace-p)
     (sb-ext:disable-debugger))
-  (format t "~&Skyline tool (? 2026) invoked:
-(Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
+  (format t "~&Skyline tool (© 2026) invoked:
+(Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
   (unless (or (and (< 1 (length argv)) (string-equal "--port" (second argv)))
               (and (boundp '*machine*) *machine*))
@@ -678,7 +631,7 @@ Executes the requested command, may exit the process
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
                    (unless (char= #\- (char verb 0))
-                     (format *trace-output* "~&Running for game ?~a? for ~a" 
+                     (format *trace-output* "~&Running for game “~a” for ~a" 
                                             *game-title* (machine-long-name))
                      (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
@@ -694,7 +647,7 @@ Executes the requested command, may exit the process
                          invocation))
                 #-mcclim nil
                 (funcall #'runner)))
-          (error "Command not recognized: ?~a? (try ?help?)" verb))
+          (error "Command not recognized: “~a” (try “help”)" verb))
         (fresh-line)))))
 
 (defun c (&rest args)

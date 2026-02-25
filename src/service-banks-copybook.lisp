@@ -22,7 +22,7 @@ BANK-NUM is the integer value (e.g. 3 for $03)."
                   (when (and sym hex)
                     (let ((num (parse-integer hex :radix 16)))
                       (push (cons num sym) alist))))))
-      (file-error (e) (warn "~&Could not read ~a: ~a" enums-path e)))
+      (cl:file-error () (warn "~&Could not read ~a" enums-path)))
     (nreverse alist)))
 
 ;;; ---------------------------------------------------------------
@@ -49,7 +49,7 @@ PATH is the bank file path. BANK-NUM->SYMBOL is an alist (integer . symbol-strin
                     ("^\\s*\\.Dispatch\\s+(Service[A-Za-z0-9]+)\\s*," line)
                   (when (and service bank-sym)
                     (push (cons service bank-sym) results))))))
-      (file-error (e) (warn "~&Could not read ~a: ~a" path e)))
+      (cl:file-error () (warn "~&Could not read ~a" path)))
     (nreverse results)))
 
 ;;; ---------------------------------------------------------------
@@ -92,7 +92,10 @@ The copybook format is EIGHTBOL-compatible:
                           (loop for n from 0 to 31
                                 for subdir = (merge-pathnames
                                               (make-pathname :directory
-                                                            `(:relative ,(format nil "Bank~2,'0x" n)))
+                                                            `(:relative ,(format nil "Bank~a" (let ((s (format nil "~x" n)))
+                                     (concatenate 'string
+                                       (make-string (max 0 (- 2 (length s))) :initial-element #\0)
+                                       s)))))
                                               banks-dir)
                                 when (probe-file subdir)
                                 append (directory (merge-pathnames

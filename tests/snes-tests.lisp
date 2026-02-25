@@ -300,7 +300,7 @@
                  ;; Check for actual BRR header bytes (should not be all zeros for functional data)
                  (let ((brr-header-count (count-substring ".byte $01" full-content)))
                    (is (> brr-header-count 0)
-                       "Should contain BRR end block headers indicating functional encoding")))))
+                       "Should contain BRR end block headers indicating functional encoding"))))))
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))

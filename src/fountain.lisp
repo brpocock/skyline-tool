@@ -708,8 +708,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                                         (append (pathname-directory (asdf:system-source-directory :skyline-tool))
                                                                                 '(:up))))))
                          (with-input-from-file (input json-path)
-                           (mapcar #'intern (cdr (assoc :*common-palette
-                                                        (json:decode-json-from-source input)))))))
+                           (let ((data (json:decode-json-from-source input)))
+                             (mapcar #'intern (or (cdr (assoc :*common-palette data))
+                                                  (cdr (assoc :|*CommonPalette| data))
+                                                  (cdr (assoc :common-palette data))
+                                                  '()))))))
 (eval (let ((terminals (concatenate 'list +stage-direction-words+
                                    '(number quoted actor variable)
                                    *common-palette*)))

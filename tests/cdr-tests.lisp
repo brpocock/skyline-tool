@@ -147,48 +147,49 @@
         (ignore-errors (delete-file input-file))))
 
 ;; Test PSG music compilation
-(let ((temp-file "Object/CDR/test-psg.s")
-      (input-file "test-input.mid"))
-  (unwind-protect
-       ;; Create minimal test input
-       (with-open-file (out input-file :direction :output :if-exists :supersede)
-         (write '((:note-on :channel 0 :key 60 :velocity 100 :time 0)
-                  (:note-off :channel 0 :key 60 :velocity 0 :time 100)) :stream out :readably t))
+(test cdr-psg-music-compilation
+  "Test Commander X-16 PSG music compilation"
+  (let ((temp-file "Object/CDR/test-psg.s")
+        (input-file "test-input.mid"))
+    (unwind-protect
+         (progn
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write '((:note-on :channel 0 :key 60 :velocity 100 :time 0)
+                      (:note-off :channel 0 :key 60 :velocity 0 :time 100)) :stream out :readably t))
 
-    (is-true (skyline-tool::compile-music-for-machine 2416 "PSG" temp-file input-file "NTSC")
-             "Should compile PSG music successfully")
-    
-    (when (probe-file temp-file)
-      (with-open-file (stream temp-file :direction :input)
-        (let ((content (alexandria:read-stream-content-into-string stream)))
-          (is-true (search "Commander X-16 PSG Music" content))
-          (is-true (search "psg_init:" content))
-          (is-true (search "psg_notes:" content))
-          (is-true (search "play_psg_note:" content))))))
-  
-  ;; Cleanup
-  (ignore-errors (delete-file temp-file))
-  (ignore-errors (delete-file input-file))
-  
-  ;; Test unsupported sound chip
+           (is-true (skyline-tool::compile-music-for-machine 2416 "PSG" temp-file input-file "NTSC")
+                    "Should compile PSG music successfully")
+
+           (when (probe-file temp-file)
+             (with-open-file (stream temp-file :direction :input)
+               (let ((content (alexandria:read-stream-content-into-string stream)))
+                 (is-true (search "Commander X-16 PSG Music" content))
+                 (is-true (search "psg_init:" content))
+                 (is-true (search "psg_notes:" content))
+                 (is-true (search "play_psg_note:" content))))))
+      (ignore-errors (delete-file temp-file))
+      (ignore-errors (delete-file input-file)))))
+
+;; Test unsupported sound chip handling
+(test cdr-unknown-sound-chip
+  "Test Commander X-16 handles unknown sound chips gracefully"
   (let ((temp-file "Object/CDR/test-unknown.s")
         (input-file "test-input.mid"))
     (unwind-protect
-         (with-open-file (out input-file :direction :output :if-exists :supersede)
-           (write '((:note-on :channel 0 :key 60 :velocity 100 :time 0)) :stream out :readably t))
-      
-      (is-true (skyline-tool::compile-music-for-machine 2416 "UNKNOWN" temp-file input-file "NTSC")
-               "Should handle unknown sound chips gracefully")
-      
-      (when (probe-file temp-file)
-        (with-open-file (stream temp-file :direction :input)
-          (let ((content (alexandria:read-stream-content-into-string stream)))
-            (is-true (search "Unknown sound chip: UNKNOWN" content))
-            (is-true (search "unknown_chip_error:" content))))))
-    
-    ;; Cleanup
-    (ignore-errors (delete-file temp-file))
-    (ignore-errors (delete-file input-file))))
+         (progn
+           (with-open-file (out input-file :direction :output :if-exists :supersede)
+             (write '((:note-on :channel 0 :key 60 :velocity 100 :time 0)) :stream out :readably t))
+
+           (is-true (skyline-tool::compile-music-for-machine 2416 "UNKNOWN" temp-file input-file "NTSC")
+                    "Should handle unknown sound chips gracefully")
+
+           (when (probe-file temp-file)
+             (with-open-file (stream temp-file :direction :input)
+               (let ((content (alexandria:read-stream-content-into-string stream)))
+                 (is-true (search "Unknown sound chip: UNKNOWN" content))
+                 (is-true (search "unknown_chip_error:" content))))))
+      (ignore-errors (delete-file temp-file))
+      (ignore-errors (delete-file input-file)))))
 
 ;; Test error handling for Commander X-16
 (test cdr-error-handling

@@ -3,6 +3,15 @@
 
 (defpackage :skyline-tool/test
   (:use :cl :skyline-tool :fiveam)
+  (:import-from :skyline-tool/test-generators
+   #:generate-valid-psg-frequency
+   #:generate-valid-psg-volume
+   #:generate-psg-note-sequence
+   #:generate-invalid-psg-commands
+   #:generate-valid-tile-dimensions
+   #:generate-invalid-tile-dimensions
+   #:generate-random-pixels
+   #:with-temp-file)
   (:export #:action-tests
            #:animation-preview-tests
            #:graphics-tests
@@ -84,6 +93,12 @@
            #:generate-malformed-file-content
            #:generate-corrupted-midi-data
            #:with-performance-measurement))
+
+(in-package :skyline-tool/test)
+
+;; Root suite for all Skyline-Tool tests; must be defined before any :in skyline-tool/test suites
+(fiveam:def-suite skyline-tool/test
+  :description "All Skyline-Tool test suites")
 
 (defparameter *test-file*
   (let* ((platform-dir (if (and (boundp 'skyline-tool::*machine*)

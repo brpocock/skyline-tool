@@ -90,7 +90,7 @@
               (compile-font-generic 200 nil "test-font" nil)
             (error (e)
               ;; Expected to fail without proper font input
-              (is t "Font compilation properly handles missing input"))))
+              (is-true t "Font compilation properly handles missing input"))))
         (when (probe-file temp-font)
           (delete-file temp-font)))))
 
@@ -145,7 +145,7 @@
   "Test Lynx sprite and tile data conversion"
   ;; Test basic sprite data structures
   ;; This would need mock PNG data to fully test
-  (is t "Lynx sprite conversion framework should exist"))
+  (is-true t "Lynx sprite conversion framework should exist"))
 
 ;; Test Lynx sound conversion
 (test lynx-sound-conversion
