@@ -102,6 +102,67 @@
             (is (string= "Phantasia" game)
                 "*game* should be Phantasia from Project.7800.json")))))))
 
+;;;; project-json-value regression (JSON "Game" key extraction)
+
+(test project-json-value/extracts-game-from-alist-string-key
+  "Regression: project-json-value finds Game from alist with string key."
+  (let ((data '(("Game" . "Phantasia") ("Version" . "0.0"))))
+    (is (string= "Phantasia"
+                (skyline-tool::project-json-value data "Game" :game :GAME :*game))
+        "Should extract from \"Game\" key (cl-json string keys)")))
+
+(test project-json-value/extracts-game-from-alist-keyword-key
+  "Regression: project-json-value finds Game from alist with :GAME keyword."
+  (let ((data '((:GAME . "Phantasia") (:VERSION . "0.0"))))
+    (is (string= "Phantasia"
+                (skyline-tool::project-json-value data :*game "Game" :game :GAME))
+        "Should extract from :GAME key (cl-json keyword keys)")))
+
+(test project-json-value/extracts-game-from-hash-table
+  "Regression: project-json-value finds Game from hash-table."
+  (let ((data (make-hash-table :test 'equal)))
+    (setf (gethash "Game" data) "Phantasia")
+    (is (string= "Phantasia"
+                (skyline-tool::project-json-value data "Game" :game :GAME))
+        "Should extract from hash-table with \"Game\" key")))
+
+;;;; find-locale-id-from-xml regression (map Scene ID)
+
+(test find-locale-id-from-xml/extracts-id-from-tmx-property
+  "Regression: find-locale-id-from-xml extracts ID from map TMX property.
+Prevents 'No Scene ID' when map has id property but not in MapsIndex.ods."
+  (let ((xml '(map nil
+                   (properties nil
+                     (property (("name" "id") ("type" "int") ("value" "53"))))
+                   (tileset nil))))
+    (let ((skyline-tool::*current-scene* nil))
+      (is (= 53 (skyline-tool::find-locale-id-from-xml xml))
+          "Should extract id=53 from TMX property element"))))
+
+;;;; find-included-file regression (copybook resolution)
+
+(test find-included-file/resolves-globals-copybook
+  "Regression: find-included-file resolves Phantasia-Globals when copybook exists.
+Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from BasicObject.cob."
+  (let* ((tmp (uiop:ensure-directory-pathname
+               (merge-pathnames
+                (format nil "find-included-file-test-~a/" (get-internal-real-time))
+                (uiop:temporary-directory))))
+         (classes-dir (merge-pathnames "Source/Generated/7800/Classes/" tmp))
+         (copybook (merge-pathnames
+                    (make-pathname :name "Phantasia-Globals" :type "cpy")
+                    classes-dir)))
+    (ensure-directories-exist copybook)
+    (with-open-file (out copybook :direction :output)
+      (write-line "* Generated for test" out))
+    (unwind-protect
+         (let ((skyline-tool::*machine* 7800)
+               (skyline-tool::*bank* #x3F))
+           (is (equal copybook
+                     (skyline-tool::find-included-file "Phantasia-Globals" :root tmp))
+               "find-included-file should return copybook path when file exists"))
+      (uiop:delete-directory-tree tmp :validate t :if-does-not-exist :ignore))))
+
 ;; Test core compilation functions
 (test core-compilation-functions
   "Test that core compilation functions are available"
