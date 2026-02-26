@@ -1,8 +1,28 @@
 (in-package :skyline-tool)
 
-;;; ---------------------------------------------------------------
+;;; Dynamic variables for class-definition parsing contexts
+(defvar *class-bases* nil)
+(defvar *class-size* nil)
+(defvar *class-slots* nil)
+(defvar *class-slots-order* nil)
+(defvar *slot-sizes* nil)
+(defvar *slot-annotations* nil)
+(defvar *class-content-order* nil)
+(defvar *class-graph* nil)
+(defvar *class-constants* nil)
+(defvar *class-methods* nil)
+(defvar *classes.forth* nil)
+(defvar *methods-set* nil)
+
 ;;; Annotation parsing helpers for Classes.Defs
-;;; ---------------------------------------------------------------
+
+(defun classes-defs-comment-line-p (line)
+  "Return true if LINE is a comment (starts with ; or * after trim)."
+  (and line
+       (let ((trimmed (string-trim #(#\Space #\Tab) line)))
+         (and (plusp (length trimmed))
+              (or (char= #\; (char trimmed 0))
+                  (char= #\* (char trimmed 0)))))))
 
 (defun pascal-to-eightbol-name (name)
   "Convert a PascalCase or hyphenated assembly symbol to a EIGHTBOL NAME in
@@ -95,29 +115,28 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
     (t
      (format nil "PIC 99 USAGE BINARY ;; unknown annotation ~s" annotation))))
 
-;;; ---------------------------------------------------------------
 ;;; Copybook generation  (Source/Generated/{ClassName}.cpy)
-;;; ---------------------------------------------------------------
 
-(defun compute-class-size-during-parse (class-name class-bases class-size slot-sizes class-slots-order)
-  "Return the size of CLASS-NAME (parent's size + own slots). Used during parse when class-size not yet finalised."
+(defun compute-class-size-during-parse (class-name)
+  "Return the size of CLASS-NAME (parent's size + own slots). Uses *class-bases*, *class-size*, *slot-sizes*, *class-slots-order*."
   (unless (or (string= class-name "BasicObject")
-              (gethash class-name class-bases))
+              (gethash class-name *class-bases*))
     (error "Parent class ~s not found" class-name))
-  (let ((base-sz (gethash class-name class-size))
-        (parent (gethash class-name class-bases)))
+  (let ((base-sz (gethash class-name *class-size*))
+        (parent (gethash class-name *class-bases*)))
     (cond (base-sz base-sz)
-          ((null parent) 0)       ; BasicObject
-          (t (let ((parent-sz (compute-class-size-during-parse parent class-bases class-size slot-sizes class-slots-order))
-                   (own-slots (gethash class-name class-slots-order '()))
-                   (sizes-h (gethash class-name slot-sizes)))
+          ((null parent) 0)
+          (t (let ((parent-sz (compute-class-size-during-parse parent))
+                   (own-slots (gethash class-name *class-slots-order* '()))
+                   (sizes-h (or (gethash class-name *slot-sizes*)
+                                (make-hash-table :test 'equal))))
                (+ parent-sz
                   (reduce #'+ (mapcar (lambda (s) (gethash s sizes-h 0)) own-slots)
                           :initial-value 0)))))))
 
 (defun class-ancestry-chain (class-name class-bases-hash)
   "Return the ancestor chain for CLASS-NAME as a list from root to CLASS-NAME.
-E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor\" \"Character\")"
+Single inheritance only. E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor\" \"Character\")"
   (let (chain)
     (loop for c = class-name then (gethash c class-bases-hash)
           while c
@@ -138,23 +157,23 @@ Slot annotation conventions in Classes.Defs:
   .SlotName size @ClassName   — OBJECT REFERENCE ClassName (2-byte pointer)
   .SlotName size = PIC-string — verbatim PIC clause
   .SlotName size = VARCHAR(n) DEPENDING ON Field — variable-length string"
-  (let ((class-slots      (make-hash-table :test 'equal))
-        (class-slots-order (make-hash-table :test 'equal))  ; ordered list of slot names
-        (class-content-order (make-hash-table :test 'equal)) ; (:slot name) or (:comment text) in parse order
-        (class-bases      (make-hash-table :test 'equal))
-        (class-size       (make-hash-table :test 'equal))
-        (slot-annotations (make-hash-table :test 'equal))   ; class → hash(name→annotation)
-        (slot-sizes       (make-hash-table :test 'equal))   ; class → hash(name→size)
-        (all-classes      '()))
+  (let ((*class-slots*       (make-hash-table :test 'equal))
+        (*class-slots-order* (make-hash-table :test 'equal))
+        (*class-content-order* (make-hash-table :test 'equal))
+        (*class-bases*       (make-hash-table :test 'equal))
+        (*class-size*        (make-hash-table :test 'equal))
+        (*slot-annotations*  (make-hash-table :test 'equal))
+        (*slot-sizes*        (make-hash-table :test 'equal))
+        (all-classes         '()))
     ;; Seed BasicObject
-    (setf (gethash "BasicObject" class-bases) nil
-          (gethash "BasicObject" class-size)  1
-          (gethash "BasicObject" class-slots) (make-hash-table :test 'equal)
-          (gethash "BasicObject" class-slots-order) '("ClassID")
-          (gethash "BasicObject" class-content-order) '((:slot "ClassID"))
-          (gethash "BasicObject" slot-sizes)  (let ((h (make-hash-table :test 'equal)))
-                                                (setf (gethash "ClassID" h) 1) h)
-          (gethash "BasicObject" slot-annotations) (make-hash-table :test 'equal))
+    (setf (gethash "BasicObject" *class-bases*) nil
+          (gethash "BasicObject" *class-size*)  1
+          (gethash "BasicObject" *class-slots*) (make-hash-table :test 'equal)
+          (gethash "BasicObject" *class-slots-order*) '("ClassID")
+          (gethash "BasicObject" *class-content-order*) '((:slot "ClassID"))
+          (gethash "BasicObject" *slot-sizes*)  (let ((h (make-hash-table :test 'equal)))
+                                                  (setf (gethash "ClassID" h) 1) h)
+          (gethash "BasicObject" *slot-annotations*) (make-hash-table :test 'equal))
     (with-input-from-file (class-file class-defs-pathname)
         (loop with current-class = "BasicObject"
               with slot-offset   = 1
@@ -167,7 +186,7 @@ Slot annotation conventions in Classes.Defs:
                  (let ((comment-text (string-trim " " (subseq trimmed 1))))
                    (when (plusp (length comment-text))
                      (push (list :comment comment-text)
-                           (gethash current-class class-content-order '())))))
+                           (gethash current-class *class-content-order* '())))))
                 ((char= #\# (char line 0)) nil)  ; method — ignored for copybooks
                 ((char= #\. (char line 0))        ; slot definition
                (let* ((parts (split-sequence #\Space (subseq line 1)
@@ -180,52 +199,53 @@ Slot annotation conventions in Classes.Defs:
                       (size (if (and annotation (eq (car annotation) :object-ref))
                                 (pointer-size-for-machine)
                                 parsed-size)))
-                 (unless (gethash current-class class-slots)
-                   (setf (gethash current-class class-slots)
+                 (unless (gethash current-class *class-slots*)
+                   (setf (gethash current-class *class-slots*)
                          (make-hash-table :test 'equal)))
-                 (unless (gethash current-class slot-sizes)
-                   (setf (gethash current-class slot-sizes)
+                 (unless (gethash current-class *slot-sizes*)
+                   (setf (gethash current-class *slot-sizes*)
                          (make-hash-table :test 'equal)))
-                 (unless (gethash current-class slot-annotations)
-                   (setf (gethash current-class slot-annotations)
+                 (unless (gethash current-class *slot-annotations*)
+                   (setf (gethash current-class *slot-annotations*)
                          (make-hash-table :test 'equal)))
-                 (setf (gethash name (gethash current-class class-slots))
+                 (setf (gethash name (gethash current-class *class-slots*))
                        (cons slot-offset size))
-                 (setf (gethash name (gethash current-class slot-sizes)) size)
+                 (setf (gethash name (gethash current-class *slot-sizes*)) size)
                  (when annotation
-                   (setf (gethash name (gethash current-class slot-annotations))
+                   (setf (gethash name (gethash current-class *slot-annotations*))
                          annotation))
-                 (pushnew name (gethash current-class class-slots-order) :test #'string=)
-                 (push (list :slot name) (gethash current-class class-content-order))
+                 (pushnew name (gethash current-class *class-slots-order*) :test #'string=)
+                 (push (list :slot name) (gethash current-class *class-content-order*))
                  (incf slot-offset size)))
               ((find #\< line)              ; class definition
                (destructuring-bind (new-class old-class)
                    (mapcar (curry #'string-trim #(#\Space))
                            (split-sequence #\< line))
-                 (setf (gethash new-class class-bases) old-class
-                       (gethash new-class class-slots) (make-hash-table :test 'equal)
-                       (gethash new-class class-slots-order) '()
-                       (gethash new-class class-content-order) '()
-                       (gethash new-class slot-sizes) (make-hash-table :test 'equal)
-                       (gethash new-class slot-annotations) (make-hash-table :test 'equal)
-                       slot-offset (compute-class-size-during-parse old-class class-bases class-size slot-sizes class-slots-order)
+                 (setf (gethash new-class *class-bases*) old-class
+                       (gethash new-class *class-slots*) (make-hash-table :test 'equal)
+                       (gethash new-class *class-slots-order*) '()
+                       (gethash new-class *class-content-order*) '()
+                       (gethash new-class *slot-sizes*) (make-hash-table :test 'equal)
+                       (gethash new-class *slot-annotations*) (make-hash-table :test 'equal)
+                       slot-offset (compute-class-size-during-parse old-class)
                        current-class new-class)
                  (push new-class all-classes))))))
     ;; Finalise sizes
     (dolist (class-name (reverse all-classes))
-      (let ((own-slots (gethash class-name class-slots-order)))
-        (let* ((parent  (gethash class-name class-bases))
-               (base-sz (or (gethash parent class-size) 0))
-               (own-sz  (reduce #'+ (mapcar (lambda (s)
-                                              (gethash s (gethash class-name slot-sizes) 0))
-                                            own-slots)
+      (let ((own-slots (gethash class-name *class-slots-order*)))
+        (let* ((parent  (gethash class-name *class-bases*))
+               (base-sz (or (gethash parent *class-size*) 0))
+               (sizes-h (or (gethash class-name *slot-sizes*)
+                            (make-hash-table :test 'equal)))
+               (own-sz  (reduce #'+ (mapcar (lambda (s) (gethash s sizes-h 0))
+                                            (or own-slots '()))
                                 :initial-value 0)))
-          (setf (gethash class-name class-size) (+ base-sz own-sz)))))
+          (setf (gethash class-name *class-size*) (+ base-sz own-sz)))))
     ;; Collect size-fields: slots that are DEPENDING ON targets for :varchar (they get no picture)
     (let ((size-fields (make-hash-table :test 'equal)))
       (dolist (class-name (reverse all-classes))
-        (dolist (ancestor (class-ancestry-chain class-name class-bases))
-          (let ((annot-hash (gethash ancestor slot-annotations)))
+        (dolist (ancestor (class-ancestry-chain class-name *class-bases*))
+          (let ((annot-hash (gethash ancestor *slot-annotations*)))
             (when annot-hash
               (maphash (lambda (slot-name annotation)
                          (declare (ignore slot-name))
@@ -249,11 +269,12 @@ Slot annotation conventions in Classes.Defs:
               (emit-eightbol-comment out (format nil " ~a-Slots -- generated by make-classes-for-oops"
                                              class-name))
               (emit-eightbol-comment out " DO NOT EDIT -- regenerated from Classes.Defs")
-              (let ((chain (class-ancestry-chain class-name class-bases)))
+              (let ((chain (class-ancestry-chain class-name *class-bases*)))
                 (dolist (ancestor chain)
-                  (let ((content     (reverse (gethash ancestor class-content-order '())))
-                        (sizes-hash  (gethash ancestor slot-sizes))
-                        (annot-hash  (gethash ancestor slot-annotations)))
+                  (let ((content     (reverse (gethash ancestor *class-content-order* '())))
+                        (sizes-hash  (or (gethash ancestor *slot-sizes*)
+                                         (make-hash-table :test 'equal)))
+                        (annot-hash  (gethash ancestor *slot-annotations*)))
                     (when content
                       (emit-eightbol-blank out)
                       (if (string= ancestor class-name)
@@ -276,14 +297,13 @@ Slot annotation conventions in Classes.Defs:
           (format *trace-output* "~&Generated ~a~%" (enough-namestring cpy-path)))))
   (values))))
 
-(defun finalize-oops-class (class-name last-slot-offset
-                            class-graph class-constants class-methods classes.forth
-                            class-slots class-bases class-size methods-set)
-  "Emit OOPS class definitions for CLASS-NAME. Called during class-def parsing."
+(defun finalize-oops-class (class-name last-slot-offset)
+  "Emit OOPS class definitions for CLASS-NAME. Uses *class-graph*, *class-constants*, *class-methods*, *classes.forth*, *class-slots*, *class-bases*, *class-size*, *methods-set*."
   (let ((class-final-size last-slot-offset)
-        (slots (gethash class-name class-slots))
-        (methods (gethash class-name methods-set)))
-    (format class-graph "
+        (slots (gethash class-name *class-slots*))
+        (methods (or (gethash class-name *methods-set*)
+                     (make-hash-table :test 'equal))))
+    (format *class-graph* "
 ~a [label=\"{~a|~{. ~a (~d byte~:p)~^|~}|~{# ~a~^|~}}\"]"
             class-name
             (title-case class-name)
@@ -292,7 +312,7 @@ Slot annotation conventions in Classes.Defs:
                     in (sort (hash-table-keys slots) #'string-lessp)
                     append (list (title-case field)
                                  (cdr (gethash field slots)))
-                    do (format classes.forth "
+                    do (format *classes.forth* "
  : ~a-~a! ~a~a prop! ;
  : ~a-~a@ ~a~a prop@ ; "
                                 (param-case class-name)
@@ -316,10 +336,10 @@ Slot annotation conventions in Classes.Defs:
                                                   class-name))
                                   (hash-table-keys methods))
                    #'string-lessp)))
-    (setf (gethash class-name class-size) class-final-size)
-    (format class-constants "~%~10t~aSize = $~2,'0x"
+    (setf (gethash class-name *class-size*) class-final-size)
+    (format *class-constants* "~%~10t~aSize = $~2,'0x"
             class-name class-final-size)
-    (format class-methods "~2%~aClassMethods:~%"
+    (format *class-methods* "~2%~aClassMethods:~%"
             class-name)
     (dolist (method (sort (hash-table-keys methods) #'string-lessp))
       (let* ((original-class (gethash method methods))
@@ -328,42 +348,42 @@ Slot annotation conventions in Classes.Defs:
                 (loop with oops-class = class-name
                       until (string= oops-class original-class)
                       collecting oops-class
-                      do (setf oops-class (gethash oops-class class-bases)))
+                      do (setf oops-class (gethash oops-class *class-bases*)))
                 (list original-class))))
-        (format classes.forth "~% : ~a-~a ~aClass CallMethod~:*~a~a call-method ; "
+        (format *classes.forth* "~% : ~a-~a ~aClass CallMethod~:*~a~a call-method ; "
                 (param-case class-name)
                 (param-case method)
                 class-name
                 method)
-        (format class-methods "
+        (format *class-methods* "
 ~10t.weak~
 ~{~%~12tMethod~a~a := MissingMethod~}
 ~10t.endweak"
                 (mapcan (lambda (oops-class) (list oops-class method))
                         class-ancestry))
-        (format class-methods "
+        (format *class-methods* "
 ~10t* = ~aClassMethods + Call~a~a
 Invoke~a~a:"
                 class-name original-class method
                 class-name method)
         (dolist (oops-class class-ancestry)
-          (format class-methods "
+          (format *class-methods* "
 ~10t.if Method~a~a~0@* != MissingMethod
 ~12tjmp Method~a~a
 ~10t.else"
                   oops-class method))
-        (format class-methods "
+        (format *class-methods* "
 ~12tjmp MissingMethod
 ~12t.warn ~
 \"There is no implementation of the generic function Method~a~a ~
 and no ancestor provides an implementation (searched ~{~a~^, ~})\""
                 class-name method class-ancestry)
         (dotimes (_ (length class-ancestry))
-          (format class-methods "~%~10t.fi"))))
-    (format class-methods "
+          (format *class-methods* "~%~10t.fi"))))
+    (format *class-methods* "
 ~10t* = ~aClassMethods + 3 * ~d"
             class-name (length (hash-table-keys methods)))
-    (format class-methods "
+    (format *class-methods* "
 Method~aDestroy: .proc
 ~10t.mvaw Size, ~:*~aSize
 ~10t.mva Ref, #-1
@@ -378,7 +398,7 @@ Method~aDestroy: .proc
 
 Processes the Classes.Defs file to generate various output files containing
 class constants, Forth definitions, inheritance graphs, and assembly code
-for the OOPS (Object-Oriented Programming System).
+for the OOPS (Object-Oriented Programming System). Single inheritance only.
 
 Also generates EIGHTBOL copybooks in Source/Generated/{ClassName}.cpy via
 MAKE-EIGHTBOL-COPYBOOKS.
@@ -423,51 +443,126 @@ node [shape=Mrecord];
 ~10tCallBasicObjectDestroy = 0
 ")
               (format class-graph "~&BasicObject [label=\"{ Basic Object | . Class ID (1 byte) | # Destroy}\"];")
-              (let ((methods-set (make-hash-table :test 'equal))
-                    (class-slots (make-hash-table :test 'equal))
-                    (class-bases (make-hash-table :test 'equal))
-                    (class-size (make-hash-table :test #'equal)))
-                (setf (gethash "BasicObject" class-bases) nil
-                      (gethash "BasicObject" class-size) 1)
+              (let ((*class-graph* class-graph)
+                    (*class-constants* class-constants)
+                    (*class-methods* class-methods)
+                    (*classes.forth* classes.forth)
+                    (*methods-set* (make-hash-table :test 'equal))
+                    (*class-slots* (make-hash-table :test 'equal))
+                    (*class-bases* (make-hash-table :test 'equal))
+                    (*class-size* (make-hash-table :test #'equal)))
+                (setf (gethash "BasicObject" *class-bases*) nil
+                      (gethash "BasicObject" *class-size*) 1
+                      (gethash "BasicObject" *class-slots*)
+                      (let ((h (make-hash-table :test 'equal)))
+                        (setf (gethash "ClassID" h) (cons 0 1))
+                        h))
                 (let ((basic-object-methods (make-hash-table :test 'equal)))
                   (setf (gethash "Destroy" basic-object-methods) "BasicObject"
-                        (gethash "BasicObject" methods-set) basic-object-methods))
-                (loop with parent-class = "BasicObject"
-                        with current-class = "BasicObject"
-                        with class-index = 1 with slot-offset = 1
-                        for line = (read-line class-file nil nil) while line
-                        do (let ((trimmed (string-trim #(#\Space #\Tab) line)))
-                             (cond
-                               ;; Comment: line starts with ; (at column 0 or after whitespace)
-                               ((and (plusp (length trimmed))
-                                     (eql #\; (char trimmed 0)))
-                                (fresh-line class-constants)
-                                (princ line class-constants)
-                                (fresh-line class-methods)
-                                (princ line class-methods)
-                                (let ((content-start (position-if (lambda (ch)
-                                                                    (and (char/= #\; ch)
-                                                                         (char/= #\Space ch)
-                                                                         (char/= #\Tab ch)))
-                                                                  line)))
-                                  (format classes.forth "~& ( ~a ) "
-                                          (if content-start (subseq line content-start) ""))))
-                               ((emptyp trimmed) ; blank line
-                              (fresh-line class-constants)
-                              (fresh-line class-methods)
-                              (fresh-line classes.forth))
+                        (gethash "BasicObject" *methods-set*) basic-object-methods))
+                (do* ((line (read-line class-file nil nil) (read-line class-file nil nil))
+                      (parent-class "BasicObject" parent-class)
+                      (cur-class "BasicObject" cur-class)
+                      (class-index 1 class-index)
+                      (cur-slot-offset 1 cur-slot-offset))
+                     ((null line)
+                      (when cur-class
+                        (finalize-oops-class cur-class cur-slot-offset))
+                      ;; Write ClassInheritance.s and ClassSizes.s while *class-bases* and *class-size* are bound
+                      (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
+                                                        :if-exists :supersede)
+                        (format inheritance ";;; Class inheritances derived from ~s~2%"
+                                (enough-namestring class-defs-pathname))
+                        (format inheritance
+                                "~2%;;; ~|~2%ParentClass:
+~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
+                                (mapcan (lambda (oops-class)
+                                          (list (gethash oops-class *class-bases*) oops-class))
+                                        (reverse (copy-list all-classes-sequentially)))))
+                      (with-output-to-file (sizes (concatenate 'string output-dir "ClassSizes.s")
+                                                  :if-exists :supersede)
+                        (format sizes ";;; Class sizes derived from ~s~2%ClassSize: .block"
+                                (enough-namestring class-defs-pathname))
+                        (format sizes
+                                "~{~&~20t.byte ~d~40t; ~aClass~}~2%~10t.bend~%;;; Finis.~%"
+                                (mapcan (lambda (oops-class)
+                                          (list (gethash oops-class *class-size*) oops-class))
+                                        (reverse (copy-list all-classes-sequentially)))))
+                      (fresh-line *class-constants*)
+                      (terpri *class-constants*)
+                      (format *class-methods* "
+;;; 
+;;; Set up method dispatch jump table pointers
+
+GenericFunctionTables = (BasicObjectClassMethods, BasicObjectClassMethods, ~{~aClassMethods~^, ~})
+
+ClassMethodsL: .byte <(GenericFunctionTables)
+ClassMethodsH: .byte >(GenericFunctionTables)
+
+;;; Finis.~%"
+                              (reverse all-classes-sequentially))
+                      (format *class-graph* "~&}~%"))
+                  (let ((trimmed (string-trim #(#\Space #\Tab) line)))
+                             (when (classes-defs-comment-line-p line)
+                               (fresh-line class-constants)
+                               (princ line class-constants)
+                               (fresh-line class-methods)
+                               (princ line class-methods)
+                               (let ((content-start (position-if (lambda (ch)
+                                                                    (char/= #\; ch)
+                                                                       )
+                                                                 trimmed)))
+                                 (format classes.forth "~& ( ~a ) "
+                                         (if content-start (subseq trimmed content-start) ""))))
+                             (when (emptyp trimmed)
+                               (fresh-line class-constants)
+                               (fresh-line class-methods)
+                               (fresh-line classes.forth))
+                             (when (and (not (classes-defs-comment-line-p line))
+                                        (not (emptyp trimmed)))
+                               (cond
+                             ((position #\< line) ; class definition (X < Y) — check first
+                              (destructuring-bind (new-class old-class)
+                                  (mapcar (curry #'string-trim #(#\Space))
+                                          (split-sequence #\< line))
+                                (push new-class all-classes-sequentially)
+                                (let ((prior-class cur-class))
+                                  (when prior-class
+                                    (finalize-oops-class prior-class cur-slot-offset))
+                                  (setf cur-class new-class
+                                        parent-class old-class
+                                        cur-slot-offset (gethash old-class *class-size*)
+                                        (gethash new-class *class-bases*) old-class
+                                        (gethash new-class *methods-set*)
+                                        (copy-hash-table (or (gethash old-class *methods-set*)
+                                                            (make-hash-table :test 'equal))))
+                                  (finish-output)
+                                  (unless cur-slot-offset
+                                    (error "Could not find parent class ~s in ~s"
+                                           old-class *class-size*)))
+                                (format *class-graph* "~% \"~a\" -> \"~a\";" parent-class cur-class)
+                                (format class-constants "~%
+~10t;; class ~a (parent: ~a)
+~10t~aClass = $~2,'0x~%"
+                                        cur-class parent-class
+                                        cur-class (incf class-index))))
                              ((char= #\# (char line 0)) ; method name
-                              (if current-class
-                                  (let ((name (string-trim #(#\Space) (subseq line 1)))
-                                        (methods (gethash current-class methods-set)))
-                                    (setf (gethash name methods) current-class)
+                              (if cur-class
+                                  (let* ((name (string-trim #(#\Space) (subseq line 1)))
+                                         (methods (or (gethash cur-class *methods-set*)
+                                                      (setf (gethash cur-class *methods-set*)
+                                                            (make-hash-table :test 'equal)))))
+                                    (setf (gethash name methods) cur-class)
                                     (format class-constants "~%~10tCall~a~a = $~2,'0x"
-                                            current-class name (* 3 (1- (hash-table-count methods)))))
+                                            cur-class name (* 3 (1- (hash-table-count methods)))))
                                   (cerror "Continue, ignoring"
                                           "Ignoring method without class: ~s" line)))
                              ((char= #\. (char line 0)) ; slot name & size
-                              (if current-class
-                                  (let* ((parts (split-sequence #\Space (subseq line 1)
+                              (if cur-class
+                                  (let* ((class-slots (or (gethash cur-class *class-slots*)
+                                                         (setf (gethash cur-class *class-slots*)
+                                                               (make-hash-table :test 'equalp))))
+                                         (parts (split-sequence #\Space (subseq line 1)
                                                                 :remove-empty-subseqs t))
                                          (name  (first parts))
                                          (size$ (second parts))
@@ -480,84 +575,18 @@ node [shape=Mrecord];
                                                     parsed-size)))
                                     (format class-constants "
 ~10t~a~a = $~2,'0x~@[~32t; … $~2,'0x~]"
-                                            current-class name slot-offset
+                                            cur-class name cur-slot-offset
                                             (when (/= 1 size)
-                                              (1- (+ slot-offset size))))
-                                    (unless (gethash current-class class-slots)
-                                      (setf (gethash current-class class-slots)
-                                            (make-hash-table :test 'equalp)))
-                                    (setf (gethash name (gethash current-class class-slots))
-                                          (cons slot-offset size))
-                                    (incf slot-offset size))
+                                              (1- (+ cur-slot-offset size))))
+                                    (setf (gethash name class-slots)
+                                          (cons cur-slot-offset size))
+                                    (incf cur-slot-offset size))
                                   (cerror "Continue, ignoring"
                                           "Ignoring slot without class: ~s" line)))
-                             ((find #\< line) ; class definition (X < Y)
-                              (destructuring-bind (new-class old-class)
-                                  (mapcar (curry #'string-trim #(#\Space))
-                                          (split-sequence #\< line))
-                                (push new-class all-classes-sequentially)
-                                (let ((prior-class current-class))
-                                  (when prior-class
-                                    (finalize-oops-class prior-class slot-offset
-                                                        class-graph class-constants class-methods classes.forth
-                                                        class-slots class-bases class-size methods-set))
-                                  (setf current-class new-class
-                                        parent-class old-class
-                                        slot-offset (gethash old-class class-size)
-                                        (gethash new-class class-bases) old-class
-                                        (gethash new-class methods-set)
-                                        (copy-hash-table (gethash old-class methods-set)))
-                                  (finish-output)
-                                  (unless slot-offset
-                                    (error "Could not find parent class ~s in ~s"
-                                           old-class class-size)))
-                                (format class-graph "~% \"~a\" -> \"~a\";" parent-class current-class)
-                                (format class-constants "~%
-~10t;; class ~a (parent: ~a)
-~10t~aClass = $~2,'0x~%"
-                                        current-class parent-class
-                                        current-class (incf class-index)))))
                                ;; anything else
                                (t (cerror "Continue, ignoring line"
-                                          "Unrecognized line in class definitions: ~s" line))))))
-                        finally
-                           (when current-class
-                             (finalize-oops-class current-class slot-offset
-                                                 class-graph class-constants class-methods classes.forth
-                                                 class-slots class-bases class-size methods-set))))
-              (with-output-to-file (inheritance (concatenate 'string output-dir "ClassInheritance.s")
-                                                :if-exists :supersede)
-                  (format inheritance ";;; Class inheritances derived from ~s~2%"
-                          (enough-namestring class-defs-pathname))
-                  (format inheritance
-                          "~2%;;; ~|~2%ParentClass:
-~10t.byte 0, 0~{~%~10t.byte ~aClass~40t; parent of ~aClass~}~3&;;; Finis.~%"
-                          (mapcan (lambda (oops-class)
-                                    (list (gethash oops-class class-bases) oops-class))
-                                  (reverse (copy-list all-classes-sequentially)))))
-                (with-output-to-file (sizes (concatenate 'string output-dir "ClassSizes.s")
-                                            :if-exists :supersede)
-                  (format sizes ";;; Class sizes derived from ~s~2%ClassSize: .block"
-                          (enough-namestring class-defs-pathname))
-                  (format sizes
-                          "~{~&~20t.byte ~d~40t; ~aClass~}~2%~10t.bend~%;;; Finis.~%"
-                          (mapcan (lambda (oops-class)
-                                    (list (gethash oops-class class-size) oops-class))
-                                  (reverse (copy-list all-classes-sequentially)))))
-              (fresh-line class-constants)
-              (terpri class-constants))
-            (format class-methods "
-;;; 
-;;; Set up method dispatch jump table pointers
-
-GenericFunctionTables = (BasicObjectClassMethods, BasicObjectClassMethods, ~{~aClassMethods~^, ~})
-
-ClassMethodsL: .byte <(GenericFunctionTables)
-ClassMethodsH: .byte >(GenericFunctionTables)
-
-;;; Finis.~%"
-                    (reverse all-classes-sequentially)))
-          (format class-graph "~&}~%"))
+                                          "Unrecognized line in class definitions: ~s" line)))))))))
+              )
     ;; Generate EIGHTBOL copybooks for all classes
-    (make-eightbol-copybooks class-defs-pathname))
+    (make-eightbol-copybooks class-defs-pathname)))))
 

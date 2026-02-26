@@ -1808,7 +1808,7 @@
       (with-output-to-file (s source-name :if-exists :supersede)
         (format s ";;; ~a Source/Generated/AnimationTable.s
 ;;;; This is a generated file (from Animation.ods), editing it is futile~2%"
-                (title-case *game-title*))
+                (title-case *game*))
         (format s "~2%~10t.section BankData~%AnimationTable: .block")
         (format s "~2%Sequences:")
         (dolist (frames '(2 4 8))

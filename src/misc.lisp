@@ -1251,7 +1251,7 @@ then use $f9 (512kiB) banking."
              (write-byte 0 header) ;; bank1_page
              (write-byte 1 header) ;; version
              ;; cart_name (32 bytes, null-terminated)
-             (let ((name-str (format nil "~a~c" (or *game-title* "Unknown") #\null)))
+             (let ((name-str (format nil "~a~c" (or *game* "Unknown") #\null)))
                (loop for i from 0 below 32
                      do (write-byte (if (< i (length name-str))
                                         (char-code (aref name-str i))

@@ -90,6 +90,18 @@
     (is-true command-function "command function should exist")
     (is (fboundp command-function) "command should be bound to a function")))
 
+;; Test load-project.json extracts game name from JSON (:*game key)
+(test load-project-json-game-name
+  "load-project.json sets *game* from :*game key."
+  (let ((project-root (skyline-tool::project-root)))
+    (when (probe-file (merge-pathnames "Project.7800.json" project-root))
+      (skyline-tool::load-project.json "7800"
+        (lambda ()
+          (let ((game (symbol-value (find-symbol "*GAME*" :skyline-tool))))
+            (is (stringp game) "*game* should be a string")
+            (is (string= "Phantasia" game)
+                "*game* should be Phantasia from Project.7800.json")))))))
+
 ;; Test core compilation functions
 (test core-compilation-functions
   "Test that core compilation functions are available"

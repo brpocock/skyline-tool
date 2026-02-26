@@ -56,7 +56,7 @@
                             (list "ptyxis"
                                   "-s"
                                   "--title" (format nil "Running ~a: ~a"
-                                                    (cl-change-case:title-case *game-title*)
+                                                    (cl-change-case:title-case *game*)
                                                     script-full-name)
                                   "--" "bin/playtest" 
                                   (format nil "NEWGAME=~a"
@@ -117,7 +117,7 @@
       (let ((frame (clim:make-application-frame 'run-script-frame)))
         (let ((*run-script-frame* frame))
           (setf (clim:frame-pretty-name frame)
-                (format nil "~a: Run Script" (cl-change-case:title-case *game-title*)))
+                (format nil "~a: Run Script" (cl-change-case:title-case *game*)))
           (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
                        :name "Script Runner (launcher)")))))
 

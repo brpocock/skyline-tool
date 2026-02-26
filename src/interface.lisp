@@ -5,7 +5,7 @@
 (declaim (ftype (function (&optional t) t) write-master-makefile))
 ;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
 ;; undefined-function during buildapp compile when interface loads before oops.
-(declaim (ftype (function (&key (:root-dir t) (:output-path t)) t) make-globals-copybook))
+(declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
 (declaim (ftype (function (&key (:root-dir t) (:output-path t) (:machine t)) t) make-service-banks-copybook))
 
 ;; entry point from shell
@@ -600,19 +600,35 @@ See COPYING for details
             do (return-from find-default-port (subseq line (1+ (position #\= line))))))
   "7800")
 
+(defun project-json-value (data &rest keys)
+  "Extract value from project JSON DATA (alist or hash-table) for first matching KEY in KEYS.
+   Handles both alist (assoc) and hash-table (gethash) for cl-json variant compatibility."
+  (flet ((from-alist (alist k)
+           (if (stringp k)
+               (cdr (assoc k alist :test #'string=))
+               (cdr (assoc k alist)))))
+    (dolist (k keys)
+      (let ((v (if (hash-table-p data)
+                   (gethash k data)
+                   (from-alist data k))))
+        (when v (return-from project-json-value v))))))
+
 (defun load-project.json (&optional (port-label (find-default-port)) thunk)
-  "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
+  "Load Project.{port}.json and run THUNK with *game*, *machine*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
-   JSON keys: * prefix, lowercase-with-hyphens (e.g. :*part-number, :*game-title).
-   Uses assocdr for alist lookup."
+   Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
   (let* ((effective-port (if (or (null port-label) (string-equal port-label "nil"))
                              (find-default-port)
                              port-label))
-         (json-path (merge-pathnames (format nil "Project.~a.json" effective-port)
-                                     (project-root)))
+         (json-name (format nil "Project.~a.json" effective-port))
+         (json-path (merge-pathnames json-name (project-root)))
+         (json-path (if (probe-file json-path)
+                        json-path
+                        (merge-pathnames json-name (uiop:pathname-directory-pathname
+                                                    (uiop:getcwd)))))
          (project-data (json:decode-json-from-source json-path))
          (*project.json* project-data)
-         (*game-title* (or (assocdr :*game-title project-data) (assocdr :Game project-data)))
+         (*game* (project-json-value project-data :*game "Game" :game :GAME))
          (*part-number* (assocdr :*part-number project-data))
          (*studio* (assocdr :*studio project-data))
          (*publisher* (assocdr :*publisher project-data))
@@ -679,7 +695,7 @@ Executes the requested command, may exit the process
           (flet ((runner ()
                    (unless (char= #\- (char verb 0))
                      (format *trace-output* "~&Running for game ?~a? for ~a" 
-                                            *game-title* (machine-long-name))
+                                            *game* (machine-long-name))
                      (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
                                          (flatten invocation)))

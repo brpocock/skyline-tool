@@ -633,12 +633,12 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
   "Return the pointer size in bytes for the given MACHINE (default *machine*).
 Used when @ClassName object references in Classes.Defs need architecture-appropriate
 pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for 32-bit (m68k, ARM7, SH2, V810)."
-  (let ((cpu (string-downcase (cpu-directory-name machine)))))
+  (let ((cpu-name (string-downcase (cpu-directory-name machine))))
     (cond
-      ((member cpu '("m68k" "sh2" "arm7" "v810") :test #'string=) 4)
-      ((string= cpu "65816") 3)
-      ((member cpu '("i286") :test #'string=) 2)
-      (t 2)))
+      ((member cpu-name '("m68k" "sh2" "arm7" "v810") :test #'string=) 4)
+      ((string= cpu-name "65816") 3)
+      ((member cpu-name '("i286") :test #'string=) 2)
+      (t 2))))
 
 (defun machine-directory-name (&optional (machine *machine*))
   "Return the directory name for the current machine platform"
@@ -760,7 +760,8 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
          (base-includes (list (list :relative "Source" "Code" machine-dir)
                              (list :relative "Source" "Code" machine-dir "Common")
                              (list :relative "Source" "Code" machine-dir "Routines")
-                             (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol output
+                             (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol .s output
+                             (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
                              (list :relative "Source" "Code" machine-dir "Classes")
                              (list :relative "Source" "Code" machine-dir "Stagehand")
                              (list :relative "Object" machine-dir)
@@ -915,6 +916,7 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                        (t (princ-to-string target))))
          (target-prefix (concatenate 'string target-str ":"))
          (makefiles (list (merge-pathnames #p"Makefile" (project-root))
+                          (merge-pathnames #p"common.mak" (project-root))
                           (merge-pathnames
                            (make-pathname :directory (list :relative "Source" "Build")
                                           :name (machine-directory-name) :type "mak")
@@ -972,6 +974,13 @@ Returns the pathname of the found file, or signals an error if not found."
                   (eql 0 (search frag name)))
                 (list "Song." "Art." "Blob." "Script."))
       (return-from find-included-file generated-asset-pathname)))
+  ;; EightBol-generated class assembly (e.g. Source/Generated/Classes/6502/CharacterClass.s from Character.cob)
+  ;; Prefer before include paths so bank deps use generated file, triggering correct rebuild when .cob changes.
+  (let ((eightbol-pathname
+          (make-pathname :directory (list :relative "Source" "Generated" "Classes" (cpu-directory-name))
+                         :name name :type "s")))
+    (when (makefile-contains-target-p eightbol-pathname)
+      (return-from find-included-file eightbol-pathname)))
   (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
     (let ((possible-file (make-pathname :directory path :name name :type "s")))
       (when (probe-file possible-file)
@@ -983,12 +992,6 @@ Returns the pathname of the found file, or signals an error if not found."
       (return-from find-included-file generated-pathname))
     (when (makefile-contains-target-p generated-pathname)
       (return-from find-included-file generated-pathname)))
-  ;; EightBol-generated class assembly (e.g. Source/Generated/Classes/6502/CharacterClass.s)
-  (let ((eightbol-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" "Classes" (cpu-directory-name))
-                         :name name :type "s")))
-    (when (makefile-contains-target-p eightbol-pathname)
-      (return-from find-included-file eightbol-pathname)))
   (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~2,'0x~
 ~@[~&Current working directory: ~a~]~
@@ -1568,10 +1571,10 @@ Dist/~:*~a.Test.bin: \\~
 
 ~0@*Dist/~a.Test.bin: .EXTRA_PREREQS = bin/7800sign
 "
-          *game-title*
+          *game*
           (loop for bank below (number-of-banks :public :ntsc)
                 collect (format nil "~2,'0x" bank))
-          *game-title*))
+          *game*))
 
 (defun write-makefile-top-line (&key video build)
   "Writes the top lines for the Makefile"
@@ -1592,12 +1595,12 @@ Dist/~a.~a.~a.bin: \\~
 
 ~0@*Dist/~a.~a.~a.bin: .EXTRA_PREREQS = bin/7800sign
 "
-                  *game-title*
+                  *game*
                   build video
                   (loop for bank below (number-of-banks build video)
                         appending (list (format nil "~2,'0x" bank) build video))
                   build video
-                  *game-title*))
+                  *game*))
     (64 (format t "~%
 Dist/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 	cp $^ $@
@@ -1609,7 +1612,7 @@ Object/Phantasia.CBM.zip: \\~
 
 "
                 (all-encoded-asset-names)
-                *game-title*))
+                *game*))
     (128 (format t "~%
 Dist/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 	cp $^ $@
@@ -1621,7 +1624,7 @@ Object/Phantasia.CBM.zip: \\~
 
 "
                  (all-encoded-asset-names)
-                 *game-title*))))
+                 *game*))))
 
 (defvar *assets-for-builds* (make-hash-table :test 'equalp)
   "A cache of assets and in which builds they are used.")
@@ -1681,7 +1684,7 @@ set pokey@450
 save
 exit
 "
-              *game-title*
+              *game*
               *part-number*
               (string (char build 0)) (string (char (string video) 0))
               (mod (current-year) 100) (current-julian-date)
@@ -1707,7 +1710,7 @@ set pokey@450
 save
 exit
 "
-              *game-title*
+              *game*
               "Test"
               (current-year) (current-julian-date)))))
 

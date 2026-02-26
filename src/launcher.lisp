@@ -19,7 +19,7 @@
 (defun run-tiled ()
   "Open the project in Tiled"
   (uiop:run-program (list "make" "pngs"))
-  (uiop:run-program (list "tiled" (format nil "Source/Maps/~a.tiled-project" *game-title*))))
+  (uiop:run-program (list "tiled" (format nil "Source/Maps/~a.tiled-project" *game*))))
 
 (defun open-file-manager ()
   "Open your File Manager in the project folder"
@@ -127,7 +127,7 @@
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"
   (clim-simple-echo:run-in-simple-echo
-   (lambda () (push-7800gd-bin (format nil "Dist/~a.Public.NTSC.bin" *game-title*)))
+   (lambda () (push-7800gd-bin (format nil "Dist/~a.Public.NTSC.bin" *game*)))
    :process-name "Push binary"))
 
 (defun shove-binary-into-running-7800-game-drive ()
@@ -137,13 +137,13 @@ Should try to just reload the current scene, if there were no code (only
 asset) changes, this may work."
   (clim-simple-echo:run-in-simple-echo
    (lambda ()
-     (push-7800gd-bin-no-execute (format nil "Dist/~a.Public.NTSC.bin" *game-title*)
+     (push-7800gd-bin-no-execute (format nil "Dist/~a.Public.NTSC.bin" *game*)
                                  (find-7800gd-serial-port) t))
    :process-name "Shove binary into running system"))
 
 (defun explain-error-code (error-code)
   (let ((codes-file (make-pathname :directory (list :relative "Dist")
-				   :name (format nil "~a.error.codes" *game-title*)
+				   :name (format nil "~a.error.codes" *game*)
                                    :type "tsv")))
     (unless (probe-file codes-file)
       (uiop:run-program (list "make" (enough-namestring codes-file))))
@@ -266,7 +266,7 @@ The signal code was ~a" break-code)
 (defun launcher-body (frame)
   (let ((*launcher-frame* frame))
     (setf (clim:frame-pretty-name frame) (format nil "Skyline Tool for ~a: Launcher"
-                                                 (title-case *game-title*))
+                                                 (title-case *game*))
           *default-pathname-defaults*
           (let ((skyline-dir (asdf:system-source-directory 
                               (asdf:find-system :skyline-tool))))
