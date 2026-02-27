@@ -46,7 +46,8 @@
     pixels))
 
 (def-suite sega-tests
-  :description "Tests for Sega SG-1000 and Master System-specific SkylineTool functionality")
+  :description "Tests for Sega SG-1000 and Master System-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite sega-tests)
 

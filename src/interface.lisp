@@ -99,22 +99,12 @@ Loads test system, runs tests, exits the Lisp process
       (progn
           (asdf:load-system :skyline-tool/test)
         ;; Run all tests and exit with appropriate code
-        (let ((results (fiveam:run :skyline-tool/test)))
-          (fiveam:explain! results)
-          (multiple-value-bind (num-checks passed num-passed passed%
-                                skipped num-skipped skipped%
-                                failed num-failed failed%
-                                unknown num-unknown unknown%)
-              (fiveam::partition-results (if (typep results 'sequence) results (list results)))
-            (declare (ignore num-checks passed num-passed passed% skipped skipped%
-                            failed failed% unknown num-unknown unknown%))
-            (if (and (zerop num-failed) (zerop num-skipped))
-                (progn
-                  (format t "~%~&All tests passed")
-                  (sb-ext:exit :code 0))
-                (progn
-                  (format t "~%~&Tests failed: ~d test(s) failed" num-failed)
-                  (sb-ext:exit :code 1))))))
+        (let ((all-passed (fiveam:run-all-tests :summary :end)))
+          (if all-passed
+              (progn (format t "~%~&All tests passed")
+                     (sb-ext:exit :code 0))
+              (progn (format t "~%~&Tests failed")
+                     (sb-ext:exit :code 1)))))
     (error (e)
       (format t "~%~&Failed to load or run tests: ~a" e)
       (sb-ext:exit :code 1))))

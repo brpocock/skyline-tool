@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite eightbol-tests
-  :description "Comprehensive tests for eightbol COBOL compiler")
+  :description "Comprehensive tests for eightbol COBOL compiler"
+  :in skyline-tool/test)
 
 (in-suite eightbol-tests)
 

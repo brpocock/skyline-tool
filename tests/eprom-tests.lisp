@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite eprom-tests
-  :description "Comprehensive tests for EPROM programming system")
+  :description "Comprehensive tests for EPROM programming system"
+  :in skyline-tool/test)
 
 (in-suite eprom-tests)
 

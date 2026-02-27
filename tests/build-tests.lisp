@@ -1,14 +1,11 @@
 ;;; Phantasia SkylineTool/tests/build-tests.lisp
 ;;;; Copyright © 2024-2026 Bruce-Robert Pocock; Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
-(defpackage :skyline-tool/build-test
-  (:use :cl :fiveam)
-  (:export #:build-tests))
-
-(in-package :skyline-tool/build-test)
+(in-package :skyline-tool/test)
 
 (def-suite build-tests
-  :description "Regression tests for build system and compilation issues")
+  :description "Regression tests for build system and compilation issues"
+  :in skyline-tool/test)
 
 (in-suite build-tests)
 
@@ -81,8 +78,7 @@
 (test package-existence
   "Test that all expected packages exist"
   (let ((expected-packages '(:skyline-tool :skyline-tool/test
-                             :skyline-tool/graphics-test
-                             :skyline-tool/build-test)))
+                             :skyline-tool/graphics-test)))
     (dolist (pkg expected-packages)
       (is-true (find-package pkg)
                "Package ~A should exist" pkg))))

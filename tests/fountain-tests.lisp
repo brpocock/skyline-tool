@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite fountain-tests
-  :description "Comprehensive tests for fountain scripting system")
+  :description "Comprehensive tests for fountain scripting system"
+  :in skyline-tool/test)
 
 (in-suite fountain-tests)
 

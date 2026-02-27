@@ -1,7 +1,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite animation-preview-tests
-  :description "Tests for animation preview scale calculation and display")
+  :description "Tests for animation preview scale calculation and display"
+  :in skyline-tool/test)
 
 (in-suite animation-preview-tests)
 

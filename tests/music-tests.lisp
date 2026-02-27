@@ -4,7 +4,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite music-tests
-  :description "Tests for all music/sound conversion functionality")
+  :description "Tests for all music/sound conversion functionality"
+  :in skyline-tool/test)
 
 (in-suite music-tests)
 

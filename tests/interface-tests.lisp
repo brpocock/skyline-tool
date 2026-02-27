@@ -4,10 +4,12 @@
 (in-package :skyline-tool/test)
 
 (def-suite interface-tests
-  :description "Tests for command-line interface functions")
+  :description "Tests for command-line interface functions"
+  :in skyline-tool/test)
 
 (def-suite conversion-tests
-  :description "Comprehensive functional tests for all Skyline-Tool conversion functions")
+  :description "Comprehensive functional tests for all Skyline-Tool conversion functions"
+  :in skyline-tool/test)
 
 (in-suite interface-tests)
 

@@ -5,8 +5,8 @@
 (in-package :skyline-tool)
 
 (def-suite a2gs-suite
-    :description "Tests for Apple IIGS platform support"
-    :in test-suite)
+  :description "Tests for Apple IIGS platform support"
+  :in skyline-tool/test)
 
 (in-suite a2gs-suite)
 

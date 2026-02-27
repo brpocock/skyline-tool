@@ -4,7 +4,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite lynx-tests
-  :description "Tests for all Atari Lynx conversion functionality")
+  :description "Tests for all Atari Lynx conversion functionality"
+  :in skyline-tool/test)
 
 (in-suite lynx-tests)
 

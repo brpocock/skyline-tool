@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite tileset-tests
-  :description "Tests for tileset palette extraction and processing")
+  :description "Tests for tileset palette extraction and processing"
+  :in skyline-tool/test)
 
 (in-suite tileset-tests)
 
@@ -124,7 +125,8 @@
   "Valid TV regions supported by the system")
 
 (def-suite tileset-palette-extraction-suite
-  :description "Comprehensive tests for tileset palette extraction")
+  :description "Comprehensive tests for tileset palette extraction"
+  :in skyline-tool/test)
 
 (in-suite tileset-palette-extraction-suite)
 

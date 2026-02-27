@@ -117,4 +117,5 @@
                              (:file "zx81-tests" :depends-on ("package"))
                              )))
   :perform (asdf:test-op (o c)
-                         (uiop:symbol-call :fiveam :run! :skyline-tool/test)))
+                         (assert (uiop:symbol-call :fiveam :run-all-tests
+                                                   :summary :end))))

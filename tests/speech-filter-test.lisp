@@ -3,7 +3,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite speech-filter-tests
-  :description "Tests for platform-specific speech command filtering")
+  :description "Tests for platform-specific speech command filtering"
+  :in skyline-tool/test)
 
 (in-suite speech-filter-tests)
 

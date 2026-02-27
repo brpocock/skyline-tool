@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite graphics-tests
-  :description "Comprehensive tests for graphics processing functions")
+  :description "Comprehensive tests for graphics processing functions"
+  :in skyline-tool/test)
 
 (in-suite graphics-tests)
 

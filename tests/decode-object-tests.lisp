@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite decode-object-tests
-  :description "Comprehensive tests for decode-object object decoding and debugging")
+  :description "Comprehensive tests for decode-object object decoding and debugging"
+  :in skyline-tool/test)
 
 (in-suite decode-object-tests)
 

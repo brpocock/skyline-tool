@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite misc-tests
-  :description "Comprehensive tests for utility functions in misc.lisp")
+  :description "Comprehensive tests for utility functions in misc.lisp"
+  :in skyline-tool/test)
 
 (in-suite misc-tests)
 

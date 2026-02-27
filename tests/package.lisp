@@ -96,7 +96,7 @@
 
 (in-package :skyline-tool/test)
 
-;; Root suite for all Skyline-Tool tests; must be defined before any :in skyline-tool/test suites
+;; Root suite for all Skyline-Tool tests; must be defined before any :in skyline-tool/test suites.
 (fiveam:def-suite skyline-tool/test
   :description "All Skyline-Tool test suites")
 

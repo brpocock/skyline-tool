@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite maps-tests
-  :description "Comprehensive tests for maps level/map system")
+  :description "Comprehensive tests for maps level/map system"
+  :in skyline-tool/test)
 
 (in-suite maps-tests)
 

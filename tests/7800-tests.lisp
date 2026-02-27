@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite 7800-tests
-  :description "Tests for Atari 7800-specific SkylineTool functionality")
+  :description "Tests for Atari 7800-specific SkylineTool functionality"
+  :in skyline-tool/test)
 
 (in-suite 7800-tests)
 
@@ -319,7 +320,8 @@
            "interleave-7800-bytes should handle nil input"))
 
 (def-suite 7800-comprehensive-suite
-  :description "Comprehensive 7800 functionality tests")
+  :description "Comprehensive 7800 functionality tests"
+  :in skyline-tool/test)
 
 (in-suite 7800-comprehensive-suite)
 
@@ -336,7 +338,8 @@
 
 ;; Scrolling subsystem tests
 (def-suite 7800-scrolling-suite
-  :description "Tests for 7800 scrolling subsystem functionality")
+  :description "Tests for 7800 scrolling subsystem functionality"
+  :in skyline-tool/test)
 
 (in-suite 7800-scrolling-suite)
 

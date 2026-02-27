@@ -5,8 +5,8 @@
 (in-package :skyline-tool)
 
 (def-suite tg16-suite
-    :description "Tests for TurboGrafx-16/PC Engine platform support"
-    :in test-suite)
+  :description "Tests for TurboGrafx-16/PC Engine platform support"
+  :in skyline-tool/test)
 
 (in-suite tg16-suite)
 

@@ -4,7 +4,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite display-list-tests
-  :description "Tests for display list generation, decoding, and validation")
+  :description "Tests for display list generation, decoding, and validation"
+  :in skyline-tool/test)
 
 (in-suite display-list-tests)
 

@@ -5,7 +5,8 @@
 (in-package :skyline-tool/test)
 
 (def-suite intv-gram-tests
-  :description "Tests for Intellivision graphics and music compilation")
+  :description "Tests for Intellivision graphics and music compilation"
+  :in skyline-tool/test)
 
 (in-suite intv-gram-tests)
 
@@ -643,7 +644,8 @@
            "+intv-palette+ should be an array"))
 
 (def-suite intv-comprehensive-suite
-  :description "Comprehensive Intellivision functionality tests")
+  :description "Comprehensive Intellivision functionality tests"
+  :in skyline-tool/test)
 
 (in-suite intv-comprehensive-suite)
 

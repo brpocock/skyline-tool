@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite animation-editor-tests
-  :description "Comprehensive tests for animation editor tools")
+  :description "Comprehensive tests for animation editor tools"
+  :in skyline-tool/test)
 
 (in-suite animation-editor-tests)
 

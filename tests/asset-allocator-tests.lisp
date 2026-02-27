@@ -14,7 +14,8 @@
        ,@body)))
 
 (def-suite asset-allocator-tests
-  :description "Comprehensive tests for asset management and allocation functions")
+  :description "Comprehensive tests for asset management and allocation functions"
+  :in skyline-tool/test)
 
 (in-suite asset-allocator-tests)
 
