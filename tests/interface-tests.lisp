@@ -128,16 +128,16 @@
 
 ;;;; find-locale-id-from-xml regression (map Scene ID)
 
-(test find-locale-id-from-xml/extracts-id-from-tmx-property
-  "Regression: find-locale-id-from-xml extracts ID from map TMX property.
-Prevents 'No Scene ID' when map has id property but not in MapsIndex.ods."
-  (let ((xml '(map nil
-                   (properties nil
-                     (property (("name" "id") ("type" "int") ("value" "53"))))
-                   (tileset nil))))
-    (let ((skyline-tool::*current-scene* nil))
+(test find-locale-id-from-xml/uses-spreadsheet-only
+  "Regression: find-locale-id-from-xml uses MapsIndex.ods only; Phantasia does not use TMX IDs."
+  (let ((xml '(map nil (tileset nil)))
+        (segment "Test/SomeMap")
+        (maps-ids (make-hash-table :test 'equal)))
+    (setf (gethash segment maps-ids) 53)
+    (let ((skyline-tool::*current-scene* segment)
+          (skyline-tool::*maps-ids* maps-ids))
       (is (= 53 (skyline-tool::find-locale-id-from-xml xml))
-          "Should extract id=53 from TMX property element"))))
+          "Should return ID from spreadsheet for *current-scene*"))))
 
 ;;;; find-included-file regression (copybook resolution)
 

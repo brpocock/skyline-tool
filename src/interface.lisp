@@ -6,7 +6,6 @@
 ;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
 ;; undefined-function during buildapp compile when interface loads before oops.
 (declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
-(declaim (ftype (function (&key (:root-dir t) (:output-path t) (:machine t)) t) make-service-banks-copybook))
 
 ;; entry point from shell
 
@@ -57,7 +56,6 @@
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops
         :make-globals-copybook 'make-globals-copybook
-        :make-service-banks-copybook 'make-service-banks-copybook
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
         :patch-7800gd 'push-7800gd-bin-no-execute
@@ -639,7 +637,8 @@ See COPYING for details
          (*default-skin-color* (assocdr :*default-skin-color project-data))
          (*default-hair-color* (assocdr :*default-hair-color project-data))
          (*default-clothes-color* (assocdr :*default-clothes-color project-data))
-         (*region* (intern (string (or (assocdr :*region project-data) nil)) :keyword)))
+         (*region* (intern (string-upcase (string (or (assocdr :*region project-data) "ntsc")))
+                          :keyword)))
     (funcall thunk)))
 
 (defun run-for-port (port-label &rest subcommand)

@@ -50,8 +50,11 @@ letter (or digit); the result is uppercased.
 (defun pascal-to-copybook-filename (name)
   "Convert PascalCase to Title-And-Hyphens for copybook filenames.
    NonPlayerCharacter → Non-Player-Character
-   Character → Character"
-  (title-case (param-case name)))
+   Character → Character
+   Uses hyphens (not spaces) so Makefile dependencies parse correctly."
+  (format nil "~{~a~^-~}"
+          (mapcar #'string-capitalize
+                  (split-sequence #\- (param-case name)))))
 
 (defun eightbol-slot-name (pascal-name)
   "Convert PascalCase slot name to EIGHTBOL copybook form. Avoids reserved words
@@ -230,6 +233,7 @@ Slot annotation conventions in Classes.Defs:
                        slot-offset (compute-class-size-during-parse old-class)
                        current-class new-class)
                  (push new-class all-classes))))))
+    (setf all-classes (nconc all-classes (list "BasicObject")))
     ;; Finalise sizes
     (dolist (class-name (reverse all-classes))
       (let ((own-slots (gethash class-name *class-slots-order*)))
@@ -521,9 +525,9 @@ ClassMethodsH: .byte >(GenericFunctionTables)
                              (when (and (not (classes-defs-comment-line-p line))
                                         (not (emptyp trimmed)))
                                (cond
-                             ((position #\< line) ; class definition (X < Y) — check first
+                             ((find #\< line) ; class definition (X < Y) — check first
                               (destructuring-bind (new-class old-class)
-                                  (mapcar (curry #'string-trim #(#\Space))
+                                  (mapcar (curry #'string-trim #(#\Space #\Tab))
                                           (split-sequence #\< line))
                                 (push new-class all-classes-sequentially)
                                 (let ((prior-class cur-class))

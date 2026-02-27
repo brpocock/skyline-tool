@@ -403,9 +403,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                 (with-output-to-file (*standard-output* to :if-does-not-exist :create
                                                            :if-exists :supersede)
                   (format t ";;; This is a generated file, from ~s
-~10t.enc \"minifont\"
-
-~{~a~^_~}: .block~2%"
+~10t.enc \"minifont\"~{~a~^_~}: .block~2%"
                           (enough-namestring forth)
                           (split-sequence #\. (pathname-name to)))
                   (let ((*forth-file* forth))

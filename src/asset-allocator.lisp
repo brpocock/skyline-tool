@@ -183,21 +183,25 @@ Pathname to the assets index file (default @file{Source/Assets.index}).
 @end table
 
 Returns the cached or freshly parsed assets list."
-  (when (and *assets-list* *asset-ids-seen*)
-    (return-from read-assets-list
-      (values *assets-list* *asset-ids-seen*)))
-  (format *trace-output* "~&Reading assets index from ~a…"
-          (enough-namestring index-file))
-  (let ((index-hash (make-hash-table :test 'equal))
-        (seen-ids (make-seen-ids-table)))
-    (with-input-from-file (index index-file)
-      (loop for line = (read-line index nil nil)
-            while line
-            do (interpret-line-from-assets-list line
-                                                :seen-ids seen-ids :index-hash index-hash)))
-    (setf *assets-list* index-hash
-          *asset-ids-seen* seen-ids)
-    (values index-hash seen-ids)))
+  (let* ((base (or (project-root)
+                   (uiop:pathname-directory-pathname (uiop:getcwd))))
+         (resolved-index (merge-pathnames index-file base)))
+    (read-map-ids-table (merge-pathnames #p"Source/Tables/MapsIndex.ods" base))
+    (when (and *assets-list* *asset-ids-seen*)
+      (return-from read-assets-list
+        (values *assets-list* *asset-ids-seen*)))
+    (format *trace-output* "~&Reading assets index from ~a…"
+            (enough-namestring resolved-index))
+    (let ((index-hash (make-hash-table :test 'equal))
+          (seen-ids (make-seen-ids-table)))
+      (with-input-from-file (index resolved-index)
+        (loop for line = (read-line index nil nil)
+              while line
+              do (interpret-line-from-assets-list line
+                                                  :seen-ids seen-ids :index-hash index-hash)))
+      (setf *assets-list* index-hash
+            *asset-ids-seen* seen-ids)
+      (values index-hash seen-ids))))
 
 (defun filter-assets-for-build (index-hash build)
   "Select only the assets from INDEX-HASH which are for the selected BUILD.
@@ -938,7 +942,7 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                     do (return-from makefile-contains-target-p t))))))
     nil))
 
-(defun find-included-file (name &key cwd testp)
+(defun find-included-file (name &key cwd testp root)
   "Find the pathname of an included source file NAME.
 
 @table @asis
@@ -948,55 +952,60 @@ The base name of the file to find (without extension).
 Current working directory (optional).
 @item TESTP
 If true, include test directories in search.
+@item ROOT
+Project root pathname. Defaults to (project-root). Override for testing.
 @end table
 
 Searches for .s, .cob, or .cpy sources.
 
 Returns the pathname of the found file, or signals an error if not found."
-  ;; Check for COBOL copybooks in Generated/Classes (e.g. Phantasia-Globals.cpy, Basic-Object-Slots.cpy)
-  (let ((copybook-path (merge-pathnames
-                        (make-pathname :directory (list :relative "Source" "Generated"
-                                                         (machine-directory-name) "Classes")
-                                       :name name :type "cpy")
-                        (project-root))))
-    (when (probe-file copybook-path)
-      (return-from find-included-file copybook-path)))
-  ;; Check for COBOL sources in Source/Classes
-  (when-let (cobol-file (make-pathname :directory (list :relative "Source" "Classes")
-                                     :name name :type "cob"))
-    (when (probe-file cobol-file)
-      (return-from find-included-file cobol-file)))
+  (let ((root (or root (project-root) (uiop:pathname-directory-pathname (uiop:getcwd)))))
+    ;; Check for COBOL copybooks in Generated/Classes (e.g. Phantasia-Globals.cpy, Basic-Object-Slots.cpy)
+    (let ((copybook-path (merge-pathnames
+                         (make-pathname :directory (list :relative "Source" "Generated"
+                                                        (machine-directory-name) "Classes")
+                                        :name name :type "cpy")
+                         root)))
+      (when (probe-file copybook-path)
+        (return-from find-included-file copybook-path)))
+    ;; Check for COBOL sources in Source/Classes
+    (let ((cobol-path (merge-pathnames
+                       (make-pathname :directory (list :relative "Source" "Classes")
+                                     :name name :type "cob")
+                       root)))
+      (when (probe-file cobol-path)
+        (return-from find-included-file cobol-path)))
 
-  (let ((generated-asset-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name) "Assets")
-                         :name name :type "s")))
-    (when (some (lambda (frag)
-                  (eql 0 (search frag name)))
-                (list "Song." "Art." "Blob." "Script."))
-      (return-from find-included-file generated-asset-pathname)))
-  ;; EightBol-generated class assembly (e.g. Source/Generated/Classes/6502/CharacterClass.s from Character.cob)
-  ;; Prefer before include paths so bank deps use generated file, triggering correct rebuild when .cob changes.
-  (let ((eightbol-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" "Classes" (cpu-directory-name))
-                         :name name :type "s")))
-    (when (makefile-contains-target-p eightbol-pathname)
-      (return-from find-included-file eightbol-pathname)))
-  (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
-    (let ((possible-file (make-pathname :directory path :name name :type "s")))
-      (when (probe-file possible-file)
-        (return-from find-included-file possible-file))))
-  (let ((generated-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
-                         :name name :type "s")))
-    (when (skyline-tool-writes-p generated-pathname)
-      (return-from find-included-file generated-pathname))
-    (when (makefile-contains-target-p generated-pathname)
-      (return-from find-included-file generated-pathname)))
-  (error "Cannot find a possible source for included ~:[source~;test~] ~
+    (let ((generated-asset-pathname
+            (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name) "Assets")
+                           :name name :type "s")))
+      (when (some (lambda (frag)
+                    (eql 0 (search frag name)))
+                  (list "Song." "Art." "Blob." "Script."))
+        (return-from find-included-file generated-asset-pathname)))
+    ;; EightBol-generated class assembly (e.g. Source/Generated/Classes/6502/CharacterClass.s from Character.cob)
+    ;; Prefer before include paths so bank deps use generated file, triggering correct rebuild when .cob changes.
+    (let ((eightbol-pathname
+            (make-pathname :directory (list :relative "Source" "Generated" "Classes" (cpu-directory-name))
+                           :name name :type "s")))
+      (when (makefile-contains-target-p eightbol-pathname)
+        (return-from find-included-file eightbol-pathname)))
+    (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
+      (let ((possible-file (make-pathname :directory path :name name :type "s")))
+        (when (probe-file possible-file)
+          (return-from find-included-file possible-file))))
+    (let ((generated-pathname
+            (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
+                           :name name :type "s")))
+      (when (skyline-tool-writes-p generated-pathname)
+        (return-from find-included-file generated-pathname))
+      (when (makefile-contains-target-p generated-pathname)
+        (return-from find-included-file generated-pathname)))
+    (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~2,'0x~
 ~@[~&Current working directory: ~a~]~
 ~@[~&TestP: ~a~]"
-         testp name *bank* cwd testp))
+           testp name *bank* cwd testp)))
 
 (defun find-included-binary-file (name)
   (when (search "StagehandHigh" name)
@@ -1460,42 +1469,45 @@ Defaults are Source/Assets.index → Source/Generated/AssetIDs.s and .forth"
   "Writes the Makefile for an asset ROM bank"
   (let* ((all-assets (all-assets-for-build build))
          (asset-objects (mapcar (rcurry #'asset->deps-list build) all-assets))
-         (bank-hex (format nil "~2,'0x" bank)))
+         (bank-hex (string-upcase (format nil "~2,'0x" bank)))
+         (object-deps (append asset-objects (asset-loaders asset-objects)))
+         (include-paths (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
+                               (include-paths-for-current-bank)))
+         (asm-flags (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
+                          ((equal build "Demo") "-DDEMO=true")
+                          (t ""))))
     (format t "~%
 Source/Generated/Bank~a.~a.~a.list: Source/Assets.index \\
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool --port ${PORT} allocate-assets ~a
-
+~%"
+            bank-hex build video asset-objects build)
+    (format t "
 Source/Generated/Bank~a.~a.~a.s: Source/Assets.index Source/Generated/Bank~a.~a.~a.list \\
 ~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
 	bin/skyline-tool --port ${PORT} write-asset-bank ~x ~a ~a
-
+~%"
+            bank-hex build video
+            bank-hex build video
+            asset-objects
+            bank build video)
+    (format t "
 Object/${PORT}/Bank~a.~a.~a.o \\
   ~3:*Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
   ~3:*Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt: \\
-		Source/Generated/Bank~a.~a.~a.s \\
-~10tSource/Assets.index bin/skyline-tool \\~{~%~10t~a~^ \\~}
+~20tSource/Generated/Bank~a.~a.~a.s \\
+~20tSource/Assets.index bin/skyline-tool \\~{~%~20t~a~^ \\~}
 	mkdir -p Object/${PORT}
 	${AS7800} -DTV=~a ~a \\~{~%		-I ~a \\~}
 		~0@*-l Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt \\
                     ~0@*-L Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
 		~0@*$< -o Object/${PORT}/Bank~a.~a.~a.o
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~a.~a.~a.o.list.txt"
-            bank build video
-            asset-objects
-            build
             bank-hex build video
             bank-hex build video
-            asset-objects
-            bank-hex build video
-            bank-hex build video
-            bank-hex build video
-            (append asset-objects (asset-loaders asset-objects))
-            video (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
-                        ((equal build "Demo") "-DDEMO=true")
-                        (t ""))
-            (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
-                    (include-paths-for-current-bank)))))
+            object-deps
+            video asm-flags
+            include-paths)))
 
 (defun write-bank-makefile (bank-source &key build video)
   "Writes the Makefile entry for a ROM bank"
@@ -1634,10 +1646,10 @@ Object/Phantasia.CBM.zip: \\~
 
 Uses *ASSETS-FOR-BUILDS* as a cache"
   (or (gethash build *assets-for-builds*)
-      (format *trace-output* "~&Assets for build ~s: " build)
       (let ((assets (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
                                              build)))
-        (format *trace-output* " …~:d asset~:p selected" (length assets))
+        (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected" build
+                (length assets))
         (setf (gethash build *assets-for-builds*) assets)
         assets)))
 
@@ -1727,7 +1739,7 @@ exit
                            :type "s")))
         (when (= *bank* *last-bank*)
           (format t "~%
-Object/${PORT}/Bank~a.Test.o.LABELS.txt: Object/${PORT}/Bank~:*~a.Test.o
+Object/${PORT}/Bank~2,'0x.Test.o.LABELS.txt: Object/${PORT}/Bank~:*~2,'0x.Test.o
 	$(MAKE) -f Source/Generated/${PORT}/Makefile $<
 
 Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s: Object/${PORT}/Bank~2,'0x.Test.o Object/${PORT}/Bank~:*~2,'0x.Test.o.LABELS.txt
@@ -1809,25 +1821,26 @@ Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%~20t~a~}~@[~* \\~%~20tSource/Generated/$
 
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
-  (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
-      (let ((*last-bank* (1- (number-of-banks build video))))
-        (write-makefile-top-line :build build :video video)
-        (write-header-script :build build :video video)
-        (dotimes (*bank* (1+ *last-bank*))
-          (let ((bank-source (bank-source-pathname)))
-            (cond
-              ((= *bank* *last-bank*)
-               (write-bank-makefile (last-bank-source-pathname)
-                                    :build build :video video))
-              ((and (= *last-bank* #x3f)
-                    (= *bank* #x3e))
-               (write-ram-bank-makefile :build build :video video))
-              ((probe-file bank-source)
-               (write-bank-makefile bank-source
-                                    :build build :video video))
-              (t (write-asset-bank-makefile *bank*
-                                            :build build :video video)))))))))
+  (let ((root (or (uiop:pathname-directory-pathname (uiop:getcwd)) (project-root))))
+    (dolist (build +all-builds+)
+      (dolist (video (supported-video-types machine))
+        (let ((*last-bank* (1- (number-of-banks build video))))
+          (write-makefile-top-line :build build :video video)
+          (write-header-script :build build :video video)
+          (dotimes (*bank* (1+ *last-bank*))
+            (let ((bank-source (bank-source-pathname)))
+              (cond
+                ((= *bank* *last-bank*)
+                 (write-bank-makefile (last-bank-source-pathname)
+                                      :build build :video video))
+                ((and (= *last-bank* #x3f)
+                      (= *bank* #x3e))
+                 (write-ram-bank-makefile :build build :video video))
+                ((probe-file (merge-pathnames bank-source root))
+                 (write-bank-makefile bank-source
+                                      :build build :video video))
+                (t (write-asset-bank-makefile *bank*
+                                              :build build :video video))))))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 200)))
   "Write makefile content for Atari Lynx"
@@ -2039,18 +2052,19 @@ This Makefile handles everything not covered by the top-level Makefile."
       (zip:with-zipfile (zip pathname)
         (if-let (entry (gethash (format nil "~a.mscx" asset-name)
                                 (zip:zipfile-entries zip)))
-          (when-let (work-number$
-                     (third (find-if
-                             (lambda (el)
-                               (and (equal (first el) "metaTag")
-                                    (equalp (second el) '(("name" "workNumber")))))
-                             (cddr
-                              (lastcar (xmls:parse-to-list
-                                        (babel:octets-to-string
-                                         (zip:zipfile-entry-contents entry))))))))
-            (format *trace-output* "~&//* Song “~a” has ID $~2,'0x (from workNumber)"
-                    (pathname-name pathname) (parse-integer work-number$)))
-            (return-from get-asset-id (parse-integer work-number$)))))
+          (when-let (raw (third (find-if
+                                 (lambda (el)
+                                   (and (equal (first el) "metaTag")
+                                        (equalp (second el) '(("name" "workNumber")))))
+                                 (cddr
+                                  (lastcar (xmls:parse-to-list
+                                            (babel:octets-to-string
+                                             (zip:zipfile-entry-contents entry))))))))
+            (let ((work-number$ (string raw)))
+              (when (every #'digit-char-p work-number$)
+                (format *trace-output* "~&//* Song “~a” has ID $~2,'0x (from workNumber)"
+                        (pathname-name pathname) (parse-integer work-number$))
+                (return-from get-asset-id (parse-integer work-number$))))))))
     (let ((id (ash (logand #xff00 (sxhash asset-name)) -8)))
       (format *trace-output* "~&//* Song “~a” has ID $~2,'0x"
               (pathname-name pathname) id)

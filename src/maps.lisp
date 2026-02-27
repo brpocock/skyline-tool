@@ -1,7 +1,7 @@
 (in-package :skyline-tool)
 
-(defmacro dovector ((var seq) &body body)
-  `(loop for ,var across ,seq do (progn ,@body) finally (return (values))))
+(defmacro dovector ((var seq &optional retvar) &body body)
+  `(loop for ,var across ,seq do (progn ,@body) finally (return (values ,retvar))))
 
 (defclass level ()
   ((decals :accessor level-decals :initarg :decals)
@@ -398,10 +398,25 @@
           (array-dimension (tile-attributes tileset) 0)))
 
 (defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
-  (load-tileset-image
-   (make-pathname :directory (list :relative "Source" "Maps" "Tiles" (machine-directory-name))
-                  :name (pathname-name pathname$)
-                  :type "png")))
+  (let* ((name (pathname-name pathname$))
+         (machine-path (merge-pathnames
+                        (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                        (machine-directory-name))
+                                       :name name :type "png")
+                        (or (project-root)
+                            (uiop:pathname-directory-pathname (uiop:getcwd)))))
+         (hicolor-path (merge-pathnames
+                       (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                      "Hicolor")
+                                     :name name :type "png")
+                       (or (project-root)
+                           (uiop:pathname-directory-pathname (uiop:getcwd))))))
+    (load-tileset-image
+     (if (probe-file machine-path)
+         machine-path
+         (if (probe-file hicolor-path)
+             hicolor-path
+             machine-path)))))
 
 (defun load-tileset-image (pathname)
   "Load the “sprite sheet” image for a tile set from PATHNAME"
@@ -623,72 +638,83 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defvar *maps-dock-ids* (make-hash-table :test 'equal))
 (defvar *dock-ids-maps* (make-hash-table :test 'equal))
 
-(defun read-map-ids-table (&optional (table #p"Source/Tables/MapsIndex.ods"))
+(defun read-map-ids-table (&optional (table (merge-pathnames #p"Source/Tables/MapsIndex.ods"
+                                                            (or (project-root)
+                                                                (uiop:pathname-directory-pathname
+                                                                 (uiop:getcwd))))))
   (format *trace-output* "~&Reading maps table from “~a”… " (enough-namestring table))
   (setf *maps-ids* (make-hash-table :test 'equal)
         *maps-display-names* (make-hash-table :test 'equal)
         *maps-dock-ids* (make-hash-table :test 'equal)
         *dock-ids-maps* (make-hash-table :test 'equal))
-  (let* ((page (ss->lol (first (read-ods-into-lists table)))))
-    (dolist (row page)
-      (destructuring-bind (&key island full-name display-name id dock-id
-                           &allow-other-keys)
-          row
-        (when full-name
-          (let ((segment-name
-                  (remove #\_ (concatenate 'string
-                                           (pascal-case (string island)) "/"
-                                           (pascal-case (string full-name))))))
-            (setf (gethash segment-name *maps-ids*) (parse-integer id)
+  (let* ((raw-rows (first (read-ods-into-lists table)))
+         (header (first raw-rows))
+         (data-rows (rest raw-rows)))
+    (dolist (row data-rows)
+      (let ((island (and (< 0 (length row)) (elt row 0)))
+            (full-name (and (< 1 (length row)) (elt row 1)))
+            (id (and (< 2 (length row)) (elt row 2)))
+            (display-name (and (< 4 (length row)) (elt row 4)))
+            (dock-id (and (< 6 (length row)) (elt row 6))))
+        (declare (ignore header))
+        (when (and full-name (not (emptyp (string full-name)))
+                   id (not (emptyp (string id))))
+          (let* ((island-str (pascal-case (string island)))
+                 (full-str (string full-name))
+                 ;; Island header rows use "0" or numeric id as full name; map path is Island/Island
+                 (effective-full (if (every #'digit-char-p full-str)
+                                    island-str
+                                    (pascal-case full-str)))
+                 (segment-name
+                  (remove-if (lambda (c) (member c '(#\' #\_)))
+                             (concatenate 'string island-str "/" effective-full))))
+            (setf (gethash segment-name *maps-ids*) (parse-integer (string id))
                   (gethash segment-name *maps-display-names*)
-                  (lower-case display-name))
-            (format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer id)
-                    segment-name (lower-case display-name))
-            (when (not (emptyp dock-id))
-              (setf (gethash segment-name *maps-dock-ids*) (parse-integer dock-id)
-                    (gethash (parse-integer dock-id) *dock-ids-maps*) segment-name)))))))
+                  (lower-case (or (and display-name (string display-name)) "")))
+            (format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer (string id))
+                    segment-name (lower-case (or (and display-name (string display-name)) "")))
+            (when (and dock-id (not (emptyp (string dock-id))))
+              (let ((d (parse-integer (string dock-id))))
+                (setf (gethash segment-name *maps-dock-ids*) d
+                      (gethash d *dock-ids-maps*) segment-name))))))))
   (unless (plusp (hash-table-count *maps-ids*))
     (error "~a does not seem to define any maps" (enough-namestring table)))
   (format *trace-output* " … now I know about ~:d map~:p" (hash-table-count *maps-ids*)))
 
+(defun maps-segment-lookup (segment-name)
+  "Look up SEGMENT-NAME in *maps-ids*, trying direct match and normalized variants
+(apostrophe/underscore removed) to handle ODS vs Assets.index naming differences."
+  (or (gethash segment-name *maps-ids*)
+      (gethash (remove-if (lambda (c) (member c '(#\' #\_))) segment-name)
+               *maps-ids*)
+      (when (and (boundp '*maps-ids*) *maps-ids* (plusp (hash-table-count *maps-ids*)))
+        ;; Try case-insensitive match for ODS vs Assets.index differences
+        (loop for key being the hash-keys of *maps-ids*
+              when (string-equal key segment-name)
+                return (gethash key *maps-ids*)))))
+
 (defun find-locale-id-from-xml (xml)
+  "Look up map ID from MapsIndex.ods spreadsheet. Phantasia does not use IDs from TMX.
+XML is the map element; *current-scene* must be bound to the segment name (e.g. Solace/AncientBurialSite3)."
+  (declare (ignore xml))
   (tagbody top
      (restart-case
-         (let ((id-prop (or
-                         (when *current-scene*
-                           (when (or (not (boundp '*maps-ids*))
-                                     (null *maps-ids*)
-                                     (zerop (hash-table-count *maps-ids*)))
-                             (read-map-ids-table))
-                           (prog1 
-                               (gethash *current-scene* *maps-ids*)
-                             (format *trace-output* "~&Loaded maps index, looking for ~a"
-                                     *current-scene*)))
-                         (find-if (lambda (el)
-                                    (some (lambda (kv)
-                                            (destructuring-bind (key value) kv
-                                              (and (equal key "name") (equalp value "id"))))
-                                          (second el)))
-                                  (xml-matches "property" (xml-match "properties" xml nil))))))
+         (let ((id-prop (when *current-scene*
+                         (when (or (not (boundp '*maps-ids*))
+                                   (null *maps-ids*)
+                                   (zerop (hash-table-count *maps-ids*)))
+                           (read-map-ids-table))
+                         (prog1
+                             (maps-segment-lookup *current-scene*)
+                           (format *trace-output* "~&Loaded maps index, looking for ~a"
+                                   *current-scene*)))))
            (assert id-prop (id-prop) "No Scene ID~@[ for “~a”~]
-Cannot find a locale ID property from map data or the maps index spreadsheet.
-~@[Searched the properties of “~a”~%~]~
-There should be an entry in Source/Tables/MapsIndex.ods,
-or an ID property on the map itself
-\(Map → Map Properties, name: ID, type: int)
-with the locale's unique ID.
+Cannot find a locale ID from the maps index spreadsheet.
+Add an entry in Source/Tables/MapsIndex.ods with Island, Full Name, and ID columns.
 To CONTINUE, look up the unique ID and provide it now,
 or add it to the spreadsheet and RELOAD-MAP-IDS-TABLE."
-                   *current-scene*
                    *current-scene*)
-           (return-from find-locale-id-from-xml
-             (etypecase id-prop
-               (number id-prop)
-               (cons (parse-integer (second (find-if (lambda (kv)
-                                                       (destructuring-bind (key value) kv
-                                                         (declare (ignore value))
-                                                         (equal key "value")))
-                                                     (second id-prop))))))))
+           (return-from find-locale-id-from-xml id-prop))
        (reload-map-ids-table ()
          :report "Reload Source/Tables/MapsIndex.ods"
          (read-map-ids-table)
@@ -1530,7 +1556,7 @@ with appropriate naming for the game engine to load.
 @item Package: skyline-tool
 @item Arguments: pathname (pathname designator), &optional common-pathname (pathname designator)
 @item Returns: nil
-@item Side Effects: Writes compiled tileset data to Object/Assets/Tileset.*.o
+@item Side Effects: Writes compiled tileset data to Object/$(PORT)/Assets/Tileset.*.o
 @end table
 
 This function processes tileset image files, extracting individual tiles and organizing them into the format required by the MARIA graphics processor. The compilation process includes:
@@ -1552,7 +1578,7 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
 (compile-tileset #p\"Source/Tilesets/Overworld.tsx\")
 @end example"
   (let ((*machine* 7800)
-        (outfile (make-pathname :directory '(:relative "Object" "Assets")
+        (outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                 :name (format nil "Tileset.~a" (pathname-name pathname))
                                 :type "o")))
     (ensure-directories-exist outfile)
