@@ -17,6 +17,11 @@
   "Test ZX81 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/81/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
         (input-file (format nil "/tmp/test-music-~a.mid" (get-universal-time))))
+    (ensure-directories-exist (pathname (directory-namestring output-file)))
+    ;; Create minimal input file (ZX81 method does not read it, only uses name in header)
+    (unless (probe-file input-file)
+      (with-open-file (f input-file :direction :output :if-does-not-exist :create)
+        (write-byte 0 f)))
     ;; Test that function exists and can be called
     (is-true (fboundp 'skyline-tool::compile-music-zx81)
              "compile-music-zx81 should exist")

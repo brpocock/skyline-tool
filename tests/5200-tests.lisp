@@ -13,6 +13,8 @@
 ;; Test 5200 Mode E bitmap compilation functionality
 (test 5200-mode-e-bitmap-compilation
   "Test that 5200 Mode E bitmap compilation produces correct output"
+  (ensure-directories-exist (merge-pathnames (pathname "Object/5200/")
+                                             (skyline-tool::project-root)))
   ;; Test with a simple 8x8 pattern that should produce recognizable output
   (let* ((test-pixels (make-array '(8 8) :element-type '(unsigned-byte 32)
                                   :initial-contents
@@ -24,7 +26,8 @@
                                     #(1 1 0 0 1 1 0 0)  ; Row 5: inverse 2-pixel
                                     #(0 0 0 0 1 1 1 1)  ; Row 6: half/half
                                     #(1 1 1 1 0 0 0 0)))) ; Row 7: inverse half/half
-         (temp-file "Object/5200/tmp5200.s"))
+         (temp-file (merge-pathnames (pathname "Object/5200/tmp5200.s")
+                                    (skyline-tool::project-root))))
 
     ;; Compile the test data - this should return a truthy value indicating success
     (is-true (skyline-tool::compile-5200-mode-e-bitmap test-pixels
@@ -107,18 +110,20 @@
 ;; Test 5200 Mode E bitmap with different sizes
 (test 5200-mode-e-different-sizes
   "Test 5200 Mode E bitmap compilation with different valid sizes"
+  (ensure-directories-exist (merge-pathnames (pathname "Object/5200/")
+                                             (skyline-tool::project-root)))
   ;; Test with 16x16 array
   (let ((large-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)))
     (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels
                                                         :png-file (make-pathname :name "test-16x16" :type "png")
-                                                        :target-dir (make-pathname :directory '(:absolute "Object" "5200")))
+                                                        :target-dir "Object/5200/")
              "Should handle 16x16 arrays and return truthy value"))
 
   ;; Test with 4x4 array
   (let ((small-pixels (make-array '(4 4) :element-type '(unsigned-byte 32) :initial-element 1)))
     (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels
                                                         :png-file (make-pathname :name "test-4x4" :type "png")
-                                                        :target-dir (make-pathname :directory '(:absolute "Object" "5200")))
+                                                        :target-dir "Object/5200/")
              "Should handle 4x4 arrays and return truthy value"))
 
   ;; Test with rectangular array (not square)
@@ -140,7 +145,8 @@
                                     #(1 1 2 2 1 1 2 2)  ; Row 5: mixed pattern
                                     #(0 0 0 0 1 1 1 1)  ; Row 6: half/half
                                     #(2 2 2 2 0 0 0 0)))) ; Row 7: inverse half/half
-         (temp-file "Object/5200/tmp5200-palette.s"))
+         (temp-file (merge-pathnames (pathname "Object/5200/tmp5200-palette.s")
+                                    (skyline-tool::project-root))))
 
     ;; Test with single palette (color-per-line-p = nil)
     (is-true (skyline-tool::compile-5200-mode-e-bitmap test-pixels
@@ -171,7 +177,8 @@
                                     #(1 0 1 0)
                                     #(0 1 0 1)
                                     #(1 0 1 0))))
-         (temp-file "Object/5200/tmp5200-base-palette.s"))
+         (temp-file (merge-pathnames (pathname "Object/5200/tmp5200-base-palette.s")
+                                    (skyline-tool::project-root))))
 
     ;; Test with custom base palette
     (is-true (skyline-tool::compile-5200-mode-e-bitmap test-pixels
@@ -190,7 +197,8 @@
   "Test that 5200 Mode E bitmap compilation handles compression correctly"
   ;; Test small image (should not compress by default, threshold is 512 pixels)
   (let* ((small-pixels (make-array '(8 8) :element-type '(unsigned-byte 32) :initial-element 0)) ; 64 pixels
-         (small-file "Object/5200/tmp5200-small.s"))
+         (small-file (merge-pathnames (pathname "Object/5200/tmp5200-small.s")
+                                     (skyline-tool::project-root))))
 
     (is-true (skyline-tool::compile-5200-mode-e-bitmap small-pixels
                                                        :png-file (make-pathname :name "test-small" :type "png")
@@ -206,7 +214,8 @@
 
   ;; Test large image (should compress by default)
   (let* ((large-pixels (make-array '(32 32) :element-type '(unsigned-byte 32) :initial-element 0)) ; 1024 pixels
-         (large-file "Object/5200/tmp5200-large.s"))
+         (large-file (merge-pathnames (pathname "Object/5200/tmp5200-large.s")
+                                     (skyline-tool::project-root))))
 
     (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels
                                                        :png-file (make-pathname :name "test-large" :type "png")
@@ -222,8 +231,10 @@
 
   ;; Test explicit compression control
   (let* ((medium-pixels (make-array '(16 16) :element-type '(unsigned-byte 32) :initial-element 0)) ; 256 pixels
-         (compress-file "Object/5200/tmp5200-compress.s")
-         (nocompress-file "Object/5200/tmp5200-nocompress.s"))
+         (compress-file (merge-pathnames (pathname "Object/5200/tmp5200-compress.s")
+                                        (skyline-tool::project-root)))
+         (nocompress-file (merge-pathnames (pathname "Object/5200/tmp5200-nocompress.s")
+                                          (skyline-tool::project-root))))
 
     ;; Force compression on medium image
     (is-true (skyline-tool::compile-5200-mode-e-bitmap medium-pixels
@@ -265,7 +276,8 @@
                                        #(1 0 0 0 0 0 0 1)  ; Row 5: inside empty
                                        #(1 0 1 0 1 0 1 0)  ; Row 6: checkerboard
                                        #(0 1 1 1 1 1 1 0)))) ; Row 7: outline
-         (temp-file "Object/5200/tmp5200-gtia.s"))
+         (temp-file (merge-pathnames (pathname "Object/5200/tmp5200-gtia.s")
+                                    (skyline-tool::project-root))))
 
     ;; Compile the sprite data
     (is-true (skyline-tool::compile-gtia-player
@@ -377,6 +389,8 @@
 ;; Test 5200 edge cases and advanced functionality
 (test 5200-edge-cases
   "Test 5200 conversion with edge cases and advanced scenarios"
+  (ensure-directories-exist (merge-pathnames (pathname "Object/5200/")
+                                             (skyline-tool::project-root)))
   ;; Test very large image (Mode E territory)
   (let ((large-pixels (make-array '(320 200) :element-type '(unsigned-byte 32) :initial-element 0)))
     (is-true (skyline-tool::compile-5200-mode-e-bitmap large-pixels
@@ -410,14 +424,21 @@
              "Should handle images with many colors (palette reduction)"))
 
   ;; Test color-per-line vs single palette comparison
+  ;; compile-5200-mode-e-bitmap uses dim0=width, dim1=height, so (8 4) = 8 wide, 4 tall
   (let ((test-pixels (make-array '(8 4) :element-type '(unsigned-byte 32)
                                  :initial-contents
-                                 #(#(0 1 0 1 0 1 0 1)
-                                   #(1 0 1 0 1 0 1 0)
-                                   #(0 2 0 2 0 2 0 2)  ; Introduce color 2
-                                   #(2 0 2 0 2 0 2 0))))
-        (perline-file "Object/5200/tmp5200-perline.s")
-        (single-file "Object/5200/tmp5200-single.s"))
+                                 #(#(0 1 0 1)
+                                   #(0 1 0 1)
+                                   #(1 0 1 0)
+                                   #(1 0 1 0)
+                                   #(0 2 0 2)  ; Introduce color 2
+                                   #(0 2 0 2)
+                                   #(2 0 2 0)
+                                   #(2 0 2 0))))
+        (perline-file (merge-pathnames (pathname "Object/5200/tmp5200-perline.s")
+                                       (skyline-tool::project-root)))
+        (single-file (merge-pathnames (pathname "Object/5200/tmp5200-single.s")
+                                      (skyline-tool::project-root))))
 
     ;; Test with per-line palette
     (is-true (skyline-tool::compile-5200-mode-e-bitmap test-pixels
@@ -462,7 +483,9 @@
       (destructuring-bind (&key name width height compress palette (type :bitmap)) test-case
         (let* ((pixels (make-array (list width height) :element-type '(unsigned-byte 32) :initial-element 0))
                (png-file (make-pathname :name (format nil "test-integration-~a" name) :type "png"))
-               (asm-file (format nil "Object/5200/test-integration-~a.s" name)))
+               (asm-file (namestring (merge-pathnames
+                                     (pathname (format nil "Object/5200/test-integration-~a.s" name))
+                                     (skyline-tool::project-root)))))
 
           ;; Fill with some pattern data
           (dotimes (y height)
@@ -490,7 +513,8 @@
                 (is-true (search ".bend" content)
                          (format nil "~a should contain .bend directive" name))
                 ;; Check for valid byte directives (should not contain malformed ones)
-                (is-false (search ".byte $" content)
+                ;; Malformed = .byte $ not followed by two hex digits
+                (is-false (cl-ppcre:scan "\\.byte \\$(?![0-9a-fA-F]{2})" content)
                           (format nil "~a should not contain malformed .byte directives" name))
                 ;; Should have some actual data bytes
                 (is-true (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)

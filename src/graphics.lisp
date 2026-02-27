@@ -1144,6 +1144,11 @@ PNG image in an unsuitable format:
           (return-from try-to-maintain-palette
             (try-to-maintain-palette new overall))
           (return-from try-to-maintain-palette new)))
+  ;; Pad shorter palette to match new's length (Mode E rows can have varying color counts)
+  (when (< (length old) (length new))
+    (setf old (append old (loop repeat (- (length new) (length old)) collect 0))))
+  (when (and overall (< (length overall) (length new)))
+    (setf overall (append overall (loop repeat (- (length new) (length overall)) collect 0))))
   (assert (= (length new) (length old)))
   (let ((offer
           (loop with palette = (copy-list old)
@@ -1655,18 +1660,23 @@ Shape:~{~{~a~}~2%~}
             (length output) (- 100.0 (* 100.0 (/ (length output) (length bytes)))))
     output))
 
-(defun compile-5200-mode-e-bitmap (image-pixels &key png-file
-                                                     target-dir
+(defun compile-5200-mode-e-bitmap (image-pixels &key (png-file (make-pathname :name "tmp5200" :type "png"))
+                                                     (target-dir "Object/5200/")
                                                      (height (array-dimension image-pixels 1))
                                                      (width (array-dimension image-pixels 0))
                                                      (compressp (< 512 (* height width)))
                                                      (color-per-line-p t)
                                                      base-palette)
-  (let ((out-file-name (merge-pathnames
-                        (make-pathname :name
-                                       (pathname-name png-file)
-                                       :type "s")
-                        target-dir)))
+  (let* ((base-dir (if (typep target-dir 'pathname)
+                       (merge-pathnames target-dir (project-root))
+                       (merge-pathnames (pathname (or target-dir "Object/5200/"))
+                                        (project-root))))
+         (out-file-name (merge-pathnames
+                         (make-pathname :name
+                                        (pathname-name png-file)
+                                        :type "s")
+                         base-dir)))
+    (ensure-directories-exist out-file-name)
     (format *trace-output* "~% Ripping Mode ~a pixmap graphics from ~D×~D image…"
             (if (< height 97) "D/E" "E")
             width height)
@@ -1720,15 +1730,19 @@ CoLu:
                                                                   ".Colors"))
                             'list)
                     (flatten colors))))
-      (format *trace-output* "~% Done writing to ~A" out-file-name))))
+      (format *trace-output* "~% Done writing to ~A" out-file-name)
+      t)))
 
 (defun compile-gtia-player (png-file out-dir
                             height width image-pixels)
-  (let ((out-file-name (merge-pathnames
-                        (make-pathname :name
-                                       (pathname-name png-file)
-                                       :type "s")
-                        out-dir)))
+  (let* ((base-dir (merge-pathnames (pathname (or out-dir "Object/5200/"))
+                                    (project-root)))
+         (out-file-name (merge-pathnames
+                         (make-pathname :name
+                                        (pathname-name png-file)
+                                        :type "s")
+                         base-dir)))
+    (ensure-directories-exist out-file-name)
     (format *trace-output* "~% Ripping GTIA Player graphics from ~D×~D image"
             width height)
     (finish-output *trace-output*)
@@ -1754,7 +1768,8 @@ Shape:~{~a~}
                     (mapcar #'byte-and-art (reverse-16 shape))
                     (mapcar #'byte-and-art (reverse-7-or-8 shape)))
                 (mapcar #'atari-colu colors)))
-      (format *trace-output* "~% Done writing to ~A" out-file-name))))
+      (format *trace-output* "~% Done writing to ~A" out-file-name)
+      t)))
 
 (defun pretty-mob-data-listing-vic2 (mob)
   (mapcar #'bytes-and-art

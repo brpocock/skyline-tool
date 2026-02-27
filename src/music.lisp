@@ -1351,10 +1351,12 @@ Music:~:*
 
 (defmethod compile-music-for-machine ((machine (eql 81)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (let ((*machine* 81))
-    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+  (let ((*machine* 81)
+        (path (merge-pathnames (pathname source-out-name) (project-root))))
+    (ensure-directories-exist path)
+    (with-output-to-file (source path :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing ZX81 EAR music ~a…" source-out-name)
-      (format source ";;; ZX81 EAR Music compiled from ~a~%;" in-file-name)
+      (format source ";;; ZX81 EAR Music compiled from ~a~%" in-file-name)
       (format source ";;; ZX81 cassette EAR interface (1-bit audio)~2%")
       ;; ZX81 has very limited sound capabilities via EAR cassette port
       (format source "ear_init:~%")
@@ -1367,10 +1369,12 @@ Music:~:*
 
 (defmethod compile-music-for-machine ((machine (eql 2068)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
-  (let ((*machine* 2068))
-    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+  (let ((*machine* 2068)
+        (path (merge-pathnames (pathname source-out-name) (project-root))))
+    (ensure-directories-exist path)
+    (with-output-to-file (source path :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing Spectrum beeper music ~a…" source-out-name)
-      (format source ";;; ZX Spectrum Beeper Music compiled from ~a~%;" in-file-name)
+      (format source ";;; ZX Spectrum Beeper Music compiled from ~a~%" in-file-name)
       (format source ";;; ZX Spectrum internal speaker (1-bit audio)~2%")
       ;; ZX Spectrum has AY-3-8912 in 128K models, but basic beeper in 48K
       (format source "beeper_init:~%")
@@ -1413,6 +1417,14 @@ Music:~:*
                                 (output-coding "NTSC"))
   (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
   (compile-music-for-machine *machine* sound-chip source-out-name in-file-name output-coding))
+
+(defun compile-music-zx81 (source-out-name in-file-name)
+  "Compile music for ZX81 (machine 81). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 81 "EAR" source-out-name in-file-name "PAL"))
+
+(defun compile-music-spectrum (source-out-name in-file-name)
+  "Compile music for ZX Spectrum (machine 2068). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 2068 "Beeper" source-out-name in-file-name "PAL"))
 
 (defvar *sec/quarter-note* 1/2)
 
