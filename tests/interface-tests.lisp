@@ -307,9 +307,7 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
           (is (documentation func 'function)
               "~A should have documentation" func-name)))))
 
-;; =============================================================================
 ;; COMPREHENSIVE CONVERSION FUNCTION TESTS
-;; =============================================================================
 
 (in-suite conversion-tests)
 
@@ -338,9 +336,7 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
                    `(cleanup-temp-file ,(car binding)))
                  bindings))))
 
-;; =============================================================================
 ;; WRITE-MASTER-MAKEFILE TESTS
-;; =============================================================================
 
 (test write-master-makefile-generates-valid-makefile
   "Test that write-master-makefile generates a syntactically valid Makefile"
@@ -392,9 +388,47 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
         (is (search "Dist/Phantasia.Test.a78:" content)
             "Should include Test build target")))))
 
-;; =============================================================================
+(test write-master-makefile-7800-make-n-parses
+  "Test that write-master-makefile for 7800 produces a Makefile that make -n can parse"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set to run make -n test"))
+    (let ((skyline-tool::*machine* 7800))
+      (skyline-tool::write-master-makefile 7800))
+    (let ((makefile (merge-pathnames "Source/Generated/7800/Makefile" root)))
+      (unless (probe-file makefile)
+        (fiveam:skip "7800 Makefile must exist at ~s" (namestring makefile)))
+      (multiple-value-bind (stdout stderr exit)
+          (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
+                           :directory root
+                           :ignore-error-status t
+                           :output :string
+                           :error-output :string)
+        (declare (ignore stdout stderr))
+        (is (zerop exit)
+            "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
+            (namestring makefile) exit)))))
+
+(test write-master-makefile-5200-make-n-parses
+  "Test that write-master-makefile for 5200 produces a Makefile that make -n can parse"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set to run make -n test"))
+    (let ((skyline-tool::*machine* 5200))
+      (skyline-tool::write-master-makefile 5200))
+    (let ((makefile (merge-pathnames "Source/Generated/5200/Makefile" root)))
+      (unless (probe-file makefile)
+        (fiveam:skip "5200 Makefile must exist at ~s" (namestring makefile)))
+      (multiple-value-bind (stdout stderr exit)
+          (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
+                           :directory root
+                           :ignore-error-status t
+                           :output :string
+                           :error-output :string)
+        (declare (ignore stdout stderr))
+        (is (zerop exit)
+            "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
+            (namestring makefile) exit)))))
+
 ;; WRITE-GIMP-PALETTES TESTS
-;; =============================================================================
 
 (test write-gimp-palettes-creates-palette-files
   "Test that write-gimp-palettes creates GIMP palette files"
@@ -418,15 +452,11 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
                       "Palette file should start with GIMP header"))))))
       (uiop:chdir original-dir))))
 
-;; =============================================================================
 ;; EXTRACT-TILESET-PALETTE TESTS (already exists in graphics-tests)
-;; =============================================================================
 
 ;; Skip - already tested in graphics-tests.lisp
 
-;; =============================================================================
 ;; LABELS-TO-FORTH TESTS
-;; =============================================================================
 
 (test labels-to-forth-converts-basic-labels
   "Test that labels-to-forth converts assembler labels to Forth constants"
@@ -465,9 +495,7 @@ DecimalLabel = 1234"))
           (is (search "$4D2 CONSTANT DecimalLabel" content)
               "Should convert decimal to hex in Forth"))))))
 
-;; =============================================================================
 ;; LABELS-TO-MAME TESTS
-;; =============================================================================
 
 (test labels-to-mame-converts-to-debug-format
   "Test that labels-to-mame converts labels to MAME debug format"
@@ -484,9 +512,7 @@ CurrentBank = $9ABC"))
           (is (search "wp" content) "Should contain MAME watchpoint commands")
           (is (search "$1234" content) "Should include converted addresses"))))))
 
-;; =============================================================================
 ;; PREPEND-FUNDAMENTAL-MODE TESTS
-;; =============================================================================
 
 (test prepend-fundamental-mode-modifies-list-file
   "Test that prepend-fundamental-mode adds fundamental mode entries"
@@ -504,9 +530,7 @@ another_entry = $2000"))
           (is (search "fundamental" (string-downcase content))
               "Should add fundamental mode entries"))))))
 
-;; =============================================================================
 ;; WRITE-ASSET-IDS TESTS
-;; =============================================================================
 
 (test write-asset-ids-generates-forth-and-asm-files
   "Test that write-asset-ids generates both Forth and assembly output"
@@ -543,9 +567,7 @@ empty-asset.png 320A 32×32"))
       (cleanup-temp-file forth-output)
       (cleanup-temp-file asm-output))))
 
-;; =============================================================================
 ;; WRITE-CHARACTER-IDS TESTS
-;; =============================================================================
 
 (test write-character-ids-generates-character-tables
   "Test that write-character-ids generates character ID tables from spreadsheet"
@@ -563,9 +585,7 @@ AnotherCharacter,2,Another Description"))
       (cleanup-temp-file forth-output)
       (cleanup-temp-file asm-output))))
 
-;; =============================================================================
 ;; WRITE-ACTOR-PROTOTYPES TESTS
-;; =============================================================================
 
 (test write-actor-prototypes-generates-prototype-data
   "Test that write-actor-prototypes generates actor prototype assembly"
@@ -585,9 +605,7 @@ TestChar,100,50,25"))
       (cleanup-temp-file spreadsheet-file)
       (cleanup-temp-file output-file))))
 
-;; =============================================================================
 ;; COMPILATION FUNCTION TESTS (Basic - detailed tests already exist)
-;; =============================================================================
 
 (test compile-forth-basic-functionality
   "Test that compile-forth can process basic Forth code"
@@ -596,6 +614,23 @@ TestChar,100,50,25"))
     (ensure-directories-exist output-file)
     (finishes (compile-forth input-file output-file))
     (is-true (probe-file output-file) "Forth compilation should produce output file")))
+
+(test compile-forth-prologue-newline-after-minifont-enc
+  "Regression: 64tass needs @code{.enc \"minifont\"} and the @code{Script_…} label on separate lines.
+
+A missing @code{~%} produced @samp{.enc \"minifont\"Script_Foo_Bar: .block}, which is a parse error and leaves @code{.bend} unmatched."
+  (with-temp-files ((input-file (create-temp-file ": noop ;"))
+                    (output-file (make-pathname :name "Script.Foo.Bar" :type "s" :directory '(:absolute "tmp"))))
+    (let ((skyline-tool::*machine* 7800)
+          (*default-pathname-defaults* (skyline-tool::project-root)))
+      (ensure-directories-exist output-file)
+      (finishes (compile-forth input-file output-file))
+      (when (probe-file output-file)
+        (let ((content (uiop:read-file-string output-file)))
+          (is (null (search ".enc \"minifont\"Script_" content))
+              "Do not concatenate closing quote of .enc to Script_ label")
+          (is (search "Script_Foo_Bar: .block" content)
+              "Block label should use underscores from dotted output pathname"))))))
 
 (test compile-map-basic-functionality
   "Test that compile-map can process basic TMX map files"
@@ -666,9 +701,7 @@ existing line 3"))
           (is (search "existing line" content)
               "Should preserve existing content"))))))
 
-;; =============================================================================
 ;; INTEGRATION TESTS - Complete workflow validation
-;; =============================================================================
 
 (test conversion-system-integration
   "Test that the complete conversion system works together"
@@ -732,9 +765,7 @@ COLOR_ADDR = $2000"))
     ;; The important thing is that it doesn't crash the Lisp system
     (is-true t "Conversion functions should handle filesystem errors gracefully")))
 
-;; =============================================================================
 ;; ERROR HANDLING TESTS
-;; =============================================================================
 
 (test conversion-functions-handle-missing-files
   "Test that conversion functions handle missing input files gracefully"

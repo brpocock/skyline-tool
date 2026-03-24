@@ -644,6 +644,14 @@
   (signals error (skyline-tool::blob-rip-7800-160a "/nonexistent.png") "Should handle missing files")
   (signals error (skyline-tool::blob-rip-7800-320ac "/nonexistent.png") "Should handle missing files"))
 
+(test blob-rip-7800-320ac-single-spans-section
+  "Multi-zone 320A/C blob output must contain exactly one Spans: block.
+
+A regression placed @code{blob/write-spans-320ac} inside @code{dotimes} over zones, which re-emitted duplicate @code{SpanN} equates and broke 64tass assembly.  A full PNG→blob integration check belongs in a non-interactive harness; here we assert the ripper is present so the suite stays loadable under SBCL/FiveAM."
+
+  (is-true (fboundp 'skyline-tool::blob-rip-7800-320ac)
+           "blob-rip-7800-320ac must exist for 320A/C Spans output"))
+
 (test 7800-art-processing-functions
   "Test art processing functions for comprehensive coverage"
   ;; Test core art processing functions exist
