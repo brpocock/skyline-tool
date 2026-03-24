@@ -21,3 +21,8 @@ DEADJOE
 .~lock.*
 
 lib/system-index.txt
+
+# Test/build outputs at Skyline-Tool root (not Phantasia Object/)
+/Object/
+/system-index.txt
+/test-input.mid
