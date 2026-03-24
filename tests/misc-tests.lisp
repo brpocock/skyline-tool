@@ -126,7 +126,7 @@
 ;; Test machine-valid-p function
 (test machine-valid-p-valid-machines
   "Test machine-valid-p with valid machine numbers"
-  (dolist (machine '(8 16 64 2600 5200 7800 800 400 3010 1000 9918))
+  (dolist (machine '(8 16 64 2600 5200 7800 800 400 3010 837 2110 1000 9918))
     (is-true (skyline-tool::machine-valid-p machine)
              "machine-valid-p should return T for valid machine ~a" machine)))
 

@@ -3,6 +3,8 @@
 ;; Force write-master-makefile (and asset-allocator) into the buildapp image.
 ;; The symbol reference in *invocation* may not suffice for buildapp's tree-shaking.
 (declaim (ftype (function (&optional t) t) write-master-makefile))
+(declaim (ftype (function (&optional t) t) write-intv-asset-includes))
+(declaim (ftype (function (t t) t) compile-blob-intv))
 ;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
 ;; undefined-function during buildapp compile when interface loads before oops.
 (declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
@@ -33,6 +35,7 @@
         :compile-2600-playfield 'compile-2600-playfield
         :compile-batari-48px 'compile-batari-48px-command
         :compile-forth 'compile-forth
+        :compile-forth-z80 'compile-forth-z80
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
         :compile-midi 'midi-compile
@@ -48,6 +51,7 @@
         :compile-art-7800 'compile-art-7800
         :compile-art-400 'compile-art-400
         :compile-art-800 'compile-art-800
+        :compile-blob-intv 'compile-blob-intv
         :compile-eightbol-class 'eightbol:compile-eightbol-class
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
@@ -77,6 +81,7 @@
         :write-projection-tables.s 'write-projection-tables.s
         :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile
+        :write-intv-asset-includes 'write-intv-asset-includes
         :self-test 'run-self-test
         :eightbol-test 'run-eightbol-test))
 
@@ -498,6 +503,14 @@ effective for next time, you should run Make (which will run Buildapp).
             :report "Quit completely from Skyline-Tool"
             (bye))))))
 
+(defun available-eightbol-cpus ()
+  "Return display names for EIGHTBOL CPU backends."
+  (or (let ((sym (find-symbol "+CPU-DISPLAY-NAMES+" :eightbol)))
+        (when (and sym (boundp sym))
+          (mapcar #'cdr (symbol-value sym))))
+      '("6502" "65c02" "65c816" "cp1610" "HuC6280" "RP2A03"
+        "Z80" "SM83" "m68k" "i286" "ARM7" "F8")))
+
 (defun about-skyline-tool (&rest commands)
   "Display help and version information.
 
@@ -527,6 +540,9 @@ documentation also.
           (software-type) (software-version)
           (machine-instance) (machine-type) (machine-version)
           (short-site-name) (long-site-name))
+  (let ((cpus (available-eightbol-cpus)))
+    (when cpus
+      (format *trace-output* "~&EIGHTBOL CPU backends: ~{~a~^, ~}~2%" cpus)))
   (if commands
       (dolist (command commands)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase command))))

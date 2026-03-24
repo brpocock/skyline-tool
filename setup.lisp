@@ -62,7 +62,9 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                       (invoke-restart r))))))
   (asdf:load-system :eightbol)
   (asdf:load-system :skyline-tool))
-(load (merge-pathnames (make-pathname :name "compile" :type "lisp") *load-pathname*))
+(let ((compile-lisp (merge-pathnames (make-pathname :name "compile" :type "lisp") *load-pathname*)))
+  (when (probe-file compile-lisp)
+    (load compile-lisp)))
 (format t "… done.~2%")
 (finish-output)
 

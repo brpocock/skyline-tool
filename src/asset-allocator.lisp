@@ -1574,7 +1574,7 @@ matches @code{Song_Hurt_ID} (avoids stale class references)."
           (let ((heal-alias-hash (%asset-ids-song-heal-alias-hash asset-ids)))
             (when heal-alias-hash
               (format outfile "~%~%~10tSong_Heal_ID = $~2,'0x" heal-alias-hash)))))))
-  
+
   (let* ((base (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))
          (resolved-out (merge-pathnames outfile-pathname base))
          (resolved-in (merge-pathnames infile-pathname base)))
@@ -1751,20 +1751,22 @@ Object/${PORT}/Bank~a.~a.~a.o:
 
 (defun write-makefile-test-target ()
   "Writes the test ROM target for the Makefile"
+  ;; Raw @file{.bin} is bank objects concatenated only (unsigned).  @file{.a78}
+  ;; adds the header script then @command{7800sign -w} (mandatory Atari signature
+  ;; on the header+ROM image; never sign @file{.bin} or the ROM tail is wrong).
   (format t "~%
 Dist/~a.Test.a78: Dist/~:*~a.Test.bin
 	cp $^ $@
 	bin/7800header -f Source/Generated/header.Test.script $@
+	bin/7800sign -w $@
 
 Dist/~:*~a.Test.bin: \\~
 ~{~%~10tObject/${PORT}/Bank~a.Test.o~^ \\~}
 	mkdir -p Dist
 	cat $^ > $@
-	bin/7800sign -w $@
 
-~0@*Dist/~a.Test.a78: .EXTRA_PREREQS = bin/7800header
+~0@*Dist/~a.Test.a78: .EXTRA_PREREQS = bin/7800header bin/7800sign
 
-~0@*Dist/~a.Test.bin: .EXTRA_PREREQS = bin/7800sign
 "
           *game*
           (loop for bank below (number-of-banks :public :ntsc)
@@ -1778,17 +1780,16 @@ Dist/~:*~a.Test.bin: \\~
 Dist/~a.~a.~a.a78: ~0@* Dist/~a.~a.~a.bin
 	cp $^ $@
 	bin/7800header -f Source/Generated/header.~1@*~a.~a.script $@
+	bin/7800sign -w $@
 
 ~0@*
 Dist/~a.~a.~a.bin: \\~
 ~{~%~10tObject/${PORT}/Bank~a.~a.~a.o~^ \\~}
 	mkdir -p Dist
 	cat $^ > $@
-	bin/7800sign -w $@
 
-~0@*Dist/~a.~a.~a.a78: .EXTRA_PREREQS = bin/7800header
+~0@*Dist/~a.~a.~a.a78: .EXTRA_PREREQS = bin/7800header bin/7800sign
 
-~0@*Dist/~a.~a.~a.bin: .EXTRA_PREREQS = bin/7800sign
 "
                   *game*
                   build video
@@ -1873,11 +1874,41 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%~10t~a~^ \\~}
 (defun current-year ()
   (nth-value 5 (decode-universal-time (get-universal-time))))
 
+(defparameter *7800-a78-header-shared-script-lines*
+  "set supergame
+set bankset
+unset ram@4000
+unset snes1
+unset composite
+set 7800joy1
+unset 7800joy2
+set hsc
+set savekey
+set pokey@450
+fix
+save
+exit
+"
+  "Lines after @code{name} and @code{set tv…} for every 7800 @file{.a78} script.
+
+AA, Public, Demo, and Test builds all use this same block so cart hardware,
+controllers, and peripherals stay identical; only the embedded title line and TV
+format differ per script.")
+
 (defun write-header-script (&key build video)
-  "Write the header script for the given BUILD, VIDEO ROM"
+  "Write the @command{7800header} parameter script for BUILD and VIDEO.
+
+Only the Atari 7800 port uses A78 headers; other machines skip this step.
+
+Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
+@code{tvpal}.  All other options match @code{*7800-a78-header-shared-script-lines*}."
   (when (member *machine* '(5200 400 800))
     ;; Atari 8-bit cartridge ports do not use @command{7800header} / A78 header scripts.
     (return-from write-header-script nil))
+  (unless (eql *machine* 7800)
+    (return-from write-header-script nil))
+  (assert (keywordp video) (video)
+          "7800 header script requires VIDEO (:ntsc or :pal), not ~s" video)
   (let ((script-pathname (make-pathname
                           :directory `(:relative "Source" "Generated" ,(machine-directory-name))
                           :name (format nil "header.~a.~a"
@@ -1886,48 +1917,26 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%~10t~a~^ \\~}
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
-      (format script "name ~15a ~6a/~1a~1a~2d.~3,'0d
-set tv~(~a~)
-set supergame
-set ram@4000
-set snes1
-unset 7800joy2
-set savekey
-set hsc
-set composite
-set pokey@450
-save
-exit
-"
+      (format script "name ~a ~a.~a~%set tv~(~a~)~%~a"
               *game*
-              *part-number*
-              (string (char build 0)) (string (char (string video) 0))
-              (mod (current-year) 100) (current-julian-date)
-              video))))
+              build
+              (string-upcase (symbol-name video))
+              video
+              *7800-a78-header-shared-script-lines*))))
 
 (defun write-test-header-script ()
-  "Write the header file for the test ROM"
+  "Write the header file for the test ROM (7800 only; same flags as other builds)."
+  (unless (eql *machine* 7800)
+    (return-from write-test-header-script nil))
   (let ((script-pathname (make-pathname
                           :directory `(:relative "Source" "Generated" ,(machine-directory-name))
                           :name "header.Test"
                           :type "script")))
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname :if-exists :supersede)
-      (format script "name ~16a ~4a ~2d.~3,'0d
-set tvntsc
-set supergame
-set ram@4000
-set snes1
-unset 7800joy2
-set savekey
-set composite
-set pokey@450
-save
-exit
-"
+      (format script "name ~a Test~%set tvntsc~%~a"
               *game*
-              "Test"
-              (current-year) (current-julian-date)))))
+              *7800-a78-header-shared-script-lines*))))
 
 (defun write-makefile-test-banks ()
   "Write Makefile rules for test ROM banks

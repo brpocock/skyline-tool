@@ -534,6 +534,13 @@
     (is (stringp (skyline-tool::machine-long-name))
         "machine-long-name should return a string")))
 
+;; 32 × 32 KiB = 1 MiB SuperCart-style image (see asset-allocator number-of-banks / size-of-banks).
+(test 5200-rom-bank-count-and-size
+  "5200 master makefile uses 32 banks of 32 KiB each"
+  (let ((skyline-tool::*machine* 5200))
+    (is (= 32 (skyline-tool::number-of-banks "Public" :ntsc)))
+    (is (= #x8000 (skyline-tool::size-of-banks)))))
+
 ;; Test 5200 unimplemented functions signal appropriate errors
 (test 5200-unimplemented-functions
   "Test that unimplemented 5200 functions signal appropriate errors"

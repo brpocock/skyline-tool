@@ -61,7 +61,14 @@
   ;; Test Master System (machine 3010) validation
   (let ((skyline-tool::*machine* 3010))
     (is-true (skyline-tool::machine-valid-p)
-             "Master System (machine 3010) should be recognized as valid")))
+             "Master System (machine 3010) should be recognized as valid"))
+  ;; Game Gear (837 / 2110) — same Z80 tree as SMS
+  (let ((skyline-tool::*machine* 837))
+    (is-true (skyline-tool::machine-valid-p)
+             "Game Gear (machine 837) should be recognized as valid"))
+  (let ((skyline-tool::*machine* 2110))
+    (is-true (skyline-tool::machine-valid-p)
+             "Game Gear (machine 2110) should be recognized as valid")))
 
 ;; Test Sega machine code validation
 (test sega-machine-codes
@@ -74,7 +81,14 @@
 
   (let ((skyline-tool::*machine* 3010))
     (is-true (string= (skyline-tool::machine-short-name) "SMS")
-             "Master System should have correct short name")))
+             "Master System should have correct short name"))
+
+  (let ((skyline-tool::*machine* 837))
+    (is-true (string= (skyline-tool::machine-directory-name) "GG")
+             "Game Gear (837) should map to GG source directory"))
+  (let ((skyline-tool::*machine* 2110))
+    (is-true (string= (skyline-tool::machine-directory-name) "GG")
+             "Game Gear (2110) should map to GG source directory")))
 
 ;; Test Sega music compilation functions
 (test sega-music-compilation
@@ -97,7 +111,9 @@
   (is-true (fboundp 'skyline-tool::compile-music-sg1000)
            "compile-music-sg1000 should exist")
   (is-true (fboundp 'skyline-tool::compile-music-sms)
-           "compile-music-sms should exist"))
+           "compile-music-sms should exist")
+  (is-true (fboundp 'skyline-tool::compile-music-game-gear)
+           "compile-music-game-gear should exist"))
 
 ;; Test Sega platform dispatch recognition
 (test sega-dispatch-recognition

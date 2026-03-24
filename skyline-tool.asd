@@ -79,7 +79,7 @@
                  (:file "threed" :depends-on ("package"))
                  (:file "utils" :depends-on ("package"))
                  )))
-  :in-order-to ((asdf:test-op (asdf:test-op #:skyline-tool/tests))))
+  :in-order-to ((asdf:test-op (asdf:test-op #:skyline-tool/test))))
 
 ;; Separate test system
 (asdf:defsystem #:skyline-tool/test

@@ -20,9 +20,7 @@
 
 (defun run-all-tests ()
   "Run all test suites with comprehensive reporting"
-  (format t "~&========================================~%")
-  (format t "   SKYLINE TOOL ENHANCED TEST SUITE~%")
-  (format t "========================================~2%")
+  (format t "~&SKYLINE TOOL ENHANCED TEST SUITE~2%")
 
   (let ((start-time (get-universal-time))
         (total-tests 0)
@@ -67,9 +65,7 @@
     ;; Overall summary
     (let ((end-time (get-universal-time))
           (total-time (/ (- (get-internal-real-time) start-time) internal-time-units-per-second)))
-      (format t "~&========================================~%")
-      (format t "               TEST SUMMARY~%")
-      (format t "========================================~%")
+      (format t "~&TEST SUMMARY~%")
       (format t "Total Tests:     ~5D~%" total-tests)
       (format t "Passed:          ~5D~%" passed-tests)
       (format t "Failed:          ~5D~%" failed-tests)
@@ -80,15 +76,12 @@
 
       ;; Detailed suite breakdown
       (format t "SUITE BREAKDOWN:~%")
-      (format t "----------------~%")
       (dolist (suite (reverse suite-results))
         (destructuring-bind (name result passed total time) suite
           (format t "~15A: ~3D/~3D (~5,1F%) ~8,2F sec~%"
                   name passed total
                   (if (zerop total) 0 (* 100 (/ passed total)))
                   time)))
-
-      (format t "~&========================================~%")
 
       ;; Recommendations based on results
       (when (> failed-tests 0)
@@ -99,9 +92,7 @@
         (format t "   • Run individual failing tests for debugging~%"))
 
       (when (< (/ passed-tests total-tests) 0.95)
-        (format t "   • Consider improving test coverage~%"))
-
-      (format t "~&========================================~%"))
+        (format t "   • Consider improving test coverage~%"))))
 
     ;; Return overall success
     (= passed-tests total-tests)))

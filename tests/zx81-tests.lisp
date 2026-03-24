@@ -20,7 +20,8 @@
     (ensure-directories-exist (pathname (directory-namestring output-file)))
     ;; Create minimal input file (ZX81 method does not read it, only uses name in header)
     (unless (probe-file input-file)
-      (with-open-file (f input-file :direction :output :if-does-not-exist :create)
+      (with-open-file (f input-file :direction :output :if-does-not-exist :create
+                                 :element-type '(unsigned-byte 8))
         (write-byte 0 f)))
     ;; Test that function exists and can be called
     (is-true (fboundp 'skyline-tool::compile-music-zx81)

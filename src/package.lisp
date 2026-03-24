@@ -14,6 +14,10 @@
            #:compile-sound
            #:compile-music
            #:compile-music-for-machine
+           #:compile-music-sms
+           #:compile-music-colecovision
+           #:compile-music-sg1000
+           #:compile-music-game-gear
            #:freq<-midi-key
            #:key<-midi-key
            #:midi-key<-freq
@@ -49,10 +53,12 @@
            #:check-for-absent-assets
            #:compile-animation-sequences
            #:compile-art-7800
+           #:compile-blob-intv
            #:compile-code
            #:compile-enemies
            #:compile-font-command
            #:compile-forth
+           #:compile-forth-z80
            #:compile-item-drops
            #:compile-midi
            #:compile-obj
@@ -65,6 +71,7 @@
            #:labels-to-mame
            #:labels-to-include
            #:make-classes-for-oops
+           #:list-classes-defs-method-introductions
            #:prepend-fundamental-mode
            #:push-7800gd-bin
            #:push-7800gd-bin-no-execute
@@ -117,7 +124,8 @@
 (defvar *default-skin-color*)
 (defvar *default-hair-color*)
 (defvar *default-clothes-color*)
-(defvar *region*)
+(defparameter *region* :ntsc
+  "Default TV standard for palette and color conversion (:ntsc, :pal, :secam).")
 
 
 (defun generated-file-path (filename)

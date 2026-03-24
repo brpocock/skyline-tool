@@ -303,6 +303,31 @@
     (is-true (fboundp func)
              "~a function should be defined" func)))
 
+(test labels-to-include-emits-all-labels-at-same-address
+  "labels-to-include must emit every equate in range; duplicate addresses must not collapse.
+
+Unparseable values (floats) must not be forced to address 0 (which overwrote other labels)."
+  (uiop:with-temporary-file (:pathname lab :suffix ".LABELS.txt")
+    (with-open-file (s lab :direction :output :if-exists :supersede)
+      (format s "DupA = $1000~%DupB = $1000~%SkipFloat = 9.5~%Unique = $2000~%"))
+    (let ((skyline-tool::*machine* 7800)
+          (out (merge-pathnames
+                (make-pathname :name "ZZTestDupLabelsInc"
+                               :type "s"
+                               :directory `(:relative "Source" "Generated" "7800"))
+                (skyline-tool::project-root))))
+      (unwind-protect
+           (progn
+             (skyline-tool::labels-to-include lab "0000" "ffff" "ZZTestDupLabelsInc")
+             (is-true (probe-file out) "generated include should exist")
+             (let ((txt (uiop:read-file-string out)))
+               (is (search "DupA" txt) "DupA missing from include")
+               (is (search "DupB" txt) "DupB missing from include (duplicate-address bug)")
+               (is (search "Unique" txt) "Unique missing from include")
+               (is (null (search "SkipFloat" txt)) "unparseable float must not appear")))
+        (when (probe-file out)
+          (delete-file out))))))
+
 ;; Test compilation functions
 (test compilation-functions-existence
   "Test that compilation functions exist"

@@ -161,7 +161,7 @@
               (bitplane-1 (subseq tile-bytes 8 16)))
           ;; Check that bitplane data is not all zeros (indicating conversion worked)
           (is (notevery #'zerop bitplane-0))
-          (is (notevery #'zerop bitplane-1))))))
+          (is (notevery #'zerop bitplane-1)))))))
 
 (test tg16-color-index-validation
   "Test TG16 color index validation and clamping"

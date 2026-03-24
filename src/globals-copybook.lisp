@@ -17,9 +17,7 @@
 ;;;     Level 05         → column 12  (Area B, 4-space indent)
 ;;;     Level 10         → column 16  (8-space indent)
 
-;;; ---------------------------------------------------------------
 ;;; EIGHTBOL fixed-format output helpers (shared with oops.lisp)
-;;; ---------------------------------------------------------------
 
 (defmacro with-eightbol-sequence (&body body)
   "Execute BODY. Sequence numbers are optional and provided by inputs."
@@ -52,17 +50,19 @@ Cols 1-6: sequence field (blanks when optional). Col 7: *."
           (eightbol-level-indent level) level name))
 
 (defun emit-eightbol-var (level name pic stream)
-  "Emit a EIGHTBOL data description entry."
+  "Emit a EIGHTBOL data description entry.
+Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID)."
   (format stream "~%~6t ~a~2,'0d ~a ~a."
-          (eightbol-level-indent level) level (pascal-to-eightbol-name name) pic))
+          (eightbol-level-indent level) level (eightbol-slot-name name) pic))
 
 (defun emit-eightbol-const (level name value stream)
-  "Emit a EIGHTBOL constant (77 or 78 level) with VALUE."
+  "Emit a EIGHTBOL constant (77 or 78 level) with VALUE.
+Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID)."
   (let ((pic (cond ((< value 256)   "PIC 99 USAGE BINARY")
                    ((< value 65536) "PIC 9999 USAGE BINARY")
                    (t               "PIC 9(8) USAGE BINARY"))))
     (format stream "~%~6t ~a~2,'0d ~a ~a VALUE ~d."
-            (eightbol-level-indent level) level (pascal-to-eightbol-name name) pic value)))
+            (eightbol-level-indent level) level (eightbol-slot-name name) pic value)))
 
 (defparameter *sysram-section-labels*
   '(("SysRAMLow"  . "SYS-RAM-LOW")
@@ -167,10 +167,34 @@ Returns plist :name :kind :size :value :annotation :raw-size-sym,
                       :value intval :annotation annotation))))))
       nil)))
 
+(defconstant +page-size+ #x100
+  "6502 page size in bytes. CartRAM gaps.size = page-size - MaxAnimationBuffers.")
+
+(defvar *parsed-constants* nil
+  "Alist of (name . value) from Constants.s, for resolving derived symbols like gaps.size.")
+
+(defun eightbol-occurs-sym (raw-sym)
+  "Convert assembly symbol for OCCURS clause to EIGHTBOL form, avoiding reserved words.
+When RAW-SYM is gaps.size (SIZE is reserved), derives value from $100 - MaxAnimationBuffers
+using *parsed-constants*; otherwise uses pascal-to-eightbol-name."
+  (when (null raw-sym) (return-from eightbol-occurs-sym nil))
+  (let ((str (string raw-sym)))
+    (cond
+      ((string-equal str "gaps.size")
+       (let ((max-ab (cdr (assoc "MaxAnimationBuffers" *parsed-constants*
+                                :test #'string-equal))))
+         (if max-ab
+             (format nil "~d" (- +page-size+ max-ab))
+             (progn
+               (warn "Cannot resolve gaps.size ($100 - MaxAnimationBuffers): ~
+                      MaxAnimationBuffers not found in Constants.s")
+               nil))))
+      (t (pascal-to-eightbol-name str)))))
+
 (defun var-to-eightbol-pic (kind size annotation raw-size-sym)
   "Return EIGHTBOL PIC clause string for a variable, or NIL to skip.
 Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
-  (flet ((eb (sym) (if sym (pascal-to-eightbol-name (string sym)) nil)))
+  (flet ((eb (sym) (if sym (eightbol-occurs-sym sym) nil)))
     (cond
       ((eq kind :const) nil)
       ((null annotation)
@@ -246,6 +270,14 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
            (common   (merge-pathnames
                       (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
                       root-dir))
+           (*parsed-constants*
+            (remove nil
+                    (mapcar (lambda (item)
+                              (when (and (eq :const (getf item :kind)) (getf item :value))
+                                (cons (string (getf item :name)) (getf item :value))))
+                            (or (parse-assembly-globals
+                                 (merge-pathnames "Constants.s" common))
+                                ()))))
            (out-dir  (merge-pathnames
                       (make-pathname :directory `(:relative "Source" "Generated" ,machine-dir "Classes"))
                       root-dir))

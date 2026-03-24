@@ -13,8 +13,16 @@
 ;; Load the test system components explicitly to ensure package definitions are available
 (asdf:load-system :skyline-tool/test :force t)
 
-;; Set up the machine environment from PLATFORM environment variable
-(setf skyline-tool::*machine* (parse-integer (uiop:getenv "PLATFORM")))
+;; Set up the machine environment from PLATFORM (defaults to 7800 = Atari 7800 / main tree).
+(setf skyline-tool::*machine*
+      (parse-integer (or (uiop:getenv "PLATFORM") "7800")))
 
-;; Run all tests
-(fiveam:run-all-tests)
+;; Run all tests; exit 1 if any suite fails (same idea as run-skyline-tests in interface.lisp).
+(let ((all-passed (fiveam:run-all-tests :summary :end)))
+  (if all-passed
+      (progn
+        (format t "~&All tests passed~%")
+        (uiop:quit 0))
+      (progn
+        (format t "~&Tests failed~%")
+        (uiop:quit 1))))

@@ -47,9 +47,9 @@ Number of random bytes to generate (default 8)
 @item Returns
 String containing LENGTH×2 hexadecimal characters
 @end table"
-  (let ((bytes (funcall (find-symbol "RANDOM-BYTES" :ironclad) length)))
+  (let ((bytes (ironclad:random-data length)))
     (unless (and (arrayp bytes) (= (length bytes) length))
-      (error "Ironclad RANDOM-BYTES returned invalid data: ~s" bytes))
+      (error "Ironclad RANDOM-DATA returned invalid data: ~s" bytes))
     (format nil "~(~{~2,'0X~}~)" (coerce bytes 'list))))
 
 (defun warn-once (format &rest args)
@@ -488,7 +488,7 @@ Text processing and font rendering functions
 " (world-from-filename map-file) area token)
       (let ((*stringtab*))
         (script->asm script)
-        (format t "~% rts~3%;;; --------------------------------~2%")
+        (format t "~% rts~3%")
         (write-stringtab)
         (format t "~3%;;; End.~%")))
     script-file)
@@ -693,7 +693,8 @@ Script labels:"
         (:not (pushnew (second words) *all-flags* :test 'equal)
          `(not (did ,(second words))))))))
 
-(defun compile-script (area stream delim &optional recursion)
+(defun %compile-script-block (area stream delim &optional recursion)
+  "Private: compile one dashed script block for @code{read-declaration} (not Fountain)."
   (format *trace-output* "~& (compiling script in ~A~@[, until ~A~])" area recursion)
   (let* ((sexp '(prog))
          (string "")
@@ -725,7 +726,7 @@ Script labels:"
                     (setf string line)
                     (format *trace-output* " ✓ starts another screen")))))
         (unless (or recursion (dash-delim-p delim))
-          (error "Expected script delimiter --------------------------------; got ~A" delim))
+          (error "Expected script delimiter (line of dashes); got ~A" delim))
         ;; (if recursion
         ;;     (format *error-output* "~%     Looking for end marker ~A" recursion)
         ;;     (format *error-output* "~% Compiling a script for area ~A" area))
@@ -746,7 +747,7 @@ Script labels:"
                    (ecase command
                      (if (appendf sexp
                                   `((if ,(parse-boolean-expr words)
-                                        ,(compile-script area stream delim "\\fi")))))
+                                        ,(%compile-script-block area stream delim "\\fi")))))
                      ((give take)
                       (appendf sexp `((,command ,@words)))
                       (pushnew (second words) *all-items* :test 'string=))
@@ -760,7 +761,7 @@ Script labels:"
           finally (progn (when (plusp (length string))
                            (finish-string))
                          (format *trace-output* "~&… done~:[ with this script.~; with this § — got to ~:*~A.~]" recursion)
-                         (return-from compile-script sexp)))))))
+                         (return-from %compile-script-block sexp)))))))
 
 (defun read-declaration (area stream line dictionary)
   (unless (or (zerop (length line))
@@ -835,7 +836,7 @@ Script labels:"
                              (learn :critter critter)
                              (pushnew critter *all-critters* :test 'equal)
                              (accepted 2)))
-                   ((:chat :script) (accepted 1) (learn :script (compile-script area stream (read-line stream))))
+                   ((:chat :script) (accepted 1) (learn :script (%compile-script-block area stream (read-line stream))))
                    (:& (accepted 1))
                    (:item (let ((item-name (second declared)))
                             (learn :sprite item-name)
@@ -909,7 +910,6 @@ Script labels:"
 
 (defun write-index (index)
   (format *trace-output* "~2&
-------------------------------------------------------------------------
 Done with all files; saw:
  All areas: ~{~A~^, ~}~% All items: ~{~A~^, ~}~% All flags: ~{~A~^, ~}~% All critters: ~{~A~^, ~}"
           (sort *all-areas* #'string<)
@@ -1237,7 +1237,46 @@ then use $f9 (512kiB) banking."
 (defmethod print-object ((hash-table hash-table) s)
   (format s "#<Hash-Table (~s): ~s>" (hash-table-test hash-table) (hash-table-plist hash-table)))
 ;;
+(defun %atari800-car-rom-checksum (pathname)
+  "Sum of all octets in PATHNAME (matches Atari800 @code{CARTRIDGE_Checksum})."
+  (with-open-file (stream pathname :element-type '(unsigned-byte 8))
+    (loop for b = (read-byte stream nil nil)
+          while b
+          sum b)))
+
+(defun %atari800-5200-car-type-id (byte-size)
+  "Map raw ROM size in bytes to Atari800 @file{cartridge_info.h} type id (low byte).
+
+Super Cart 5200 ids @code{71}–@code{74} cover 64–512 KiB.  @w{1024 KiB}
+(@w{1 MiB}) Atarimax Flash uses @code{CARTRIDGE_ATMAX_NEW_1024} (@code{75})."
+  (ecase byte-size
+    (#x8000 4)     ; 32 KiB standard 5200
+    (#x10000 71)    ; 64 KiB Super Cart
+    (#x20000 72)    ; 128 KiB
+    (#x40000 73)    ; 256 KiB
+    (#x80000 74)    ; 512 KiB
+    (#x100000 75))) ; 1024 KiB — Atarimax 1 MB Flash (new); bytes 4–7 @code{00 00 00 4B}
+
 (defun write-cart-header (header-name binary-name)
+  "Write Lynx or Atari 5200 cart image to HEADER-NAME from raw ROM BINARY-NAME.
+
+For Lynx (@code{*MACHINE*} @code{200}), writes 64-byte LNX header and appends ROM.
+
+For Atari 5200 (@code{*MACHINE*} @code{5200}), writes the 16-byte @samp{CART}
+header used by Atari800 (@code{CARTRIDGE_WriteImage}): magic @samp{CART},
+bytes @code{4--7} cartridge type id in @w{32-bit} big-endian (MSB first).  For
+@w{1 MiB} (@w{1024 KiB}) Atarimax Flash use id @code{75} (@code{00 00 00 4B}).
+Then big-endian @w{32-bit} additive checksum of all ROM bytes, four reserved
+zero bytes, then the raw ROM.  Nominal size and banking are implicit in the type
+id per @file{DOC/cart.txt}; the id must match the ROM length and hardware (see
+developer guide 5200 port section).
+
+@table @asis
+@item HEADER-NAME
+Path of the output @file{.lnx} or @file{.car} image (header plus ROM).
+@item BINARY-NAME
+Path to the raw ROM binary to wrap.
+@end table"
   (ecase *machine*
           (200
            (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
@@ -1278,22 +1317,28 @@ then use $f9 (512kiB) banking."
                           (incf bytes-written))
                  (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
           (5200
-     (let ((size (ql-util:file-size binary-name)))
-       (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
-                                                :if-exists :supersede)
-         (write-byte (char-code #\C) header)
-         (write-byte (char-code #\A) header)
-         (write-byte (char-code #\R) header)
-         (write-byte (char-code #\T) header)
-         (write-bytes #(0 0 0) header)
-         (write-byte (ecase size
-                       (#x8000 4)
-                       (#x10000 71)
-                       (#x20000 72)
-                       (#x40000 73)
-                       (#x80000 74))
-                     header)
-         (write-bytes #(0 0 0 0 0 0 0 0) header))))))
+           (let* ((size (ql-util:file-size binary-name))
+                  (type-id (%atari800-5200-car-type-id size))
+                  (checksum (%atari800-car-rom-checksum binary-name)))
+             (with-output-to-file (out header-name :element-type '(unsigned-byte 8)
+                                                  :if-exists :supersede)
+               (write-byte (char-code #\C) out)
+               (write-byte (char-code #\A) out)
+               (write-byte (char-code #\R) out)
+               (write-byte (char-code #\T) out)
+               (write-byte 0 out)
+               (write-byte 0 out)
+               (write-byte 0 out)
+               (write-byte type-id out)
+               (write-byte (ldb (byte 8 24) checksum) out)
+               (write-byte (ldb (byte 8 16) checksum) out)
+               (write-byte (ldb (byte 8 8) checksum) out)
+               (write-byte (ldb (byte 8 0) checksum) out)
+               (write-bytes #(0 0 0 0) out)
+               (with-open-file (bin binary-name :element-type '(unsigned-byte 8))
+                 (loop for b = (read-byte bin nil nil)
+                       while b
+                       do (write-byte b out))))))))
 
 (defun prepend-fundamental-mode (file)
   (let ((contents (read-file-into-string file)))

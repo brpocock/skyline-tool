@@ -2463,8 +2463,8 @@ PlaySong EXECUTE "  song))))
               "Actor ~:(~a~) asked to ~a, but they are not in the scene" actor action-verb)
       (return-from perform-character-action))
     (format t "~% ~a CharacterID_~a character-action!"
-            (pascal-case (string name))
-            action-enum)))
+            action-enum
+            (pascal-case (string name)))))
 
 (defstage dance (actor)
   "ACTOR should perform the “dance” action."
@@ -2549,12 +2549,51 @@ PlaySong EXECUTE "  song))))
                 do (setf (gethash line dict) t)))
         (setf *dict-words* dict))))
 
+(defparameter *genlabel-counter* 0
+  "Monotonic serial mixed into @code{genlabel} output (per @code{compile-forth} reset).")
+
+(defvar *genlabel-root-forth-file* nil
+  "When non-nil, pathname of the top-level Forth source for @code{compile-forth}.
+
+Mixed into every @code{genlabel} hash so @code{IF}/@code{BEGIN} labels differ across
+script assets; @code{gensym} alone repeats across separate tool invocations.")
+
 (defun genlabel (prefix)
-  (let* ((hash (format nil "~36r" (sxhash (string (gensym prefix)))))
-         (l (min (length hash) 6)))
+  "Return a unique assembly label string with PREFIX and a base-36 suffix.
+
+PREFIX names the construct (e.g. @code{\"If\"}, @code{\"Loop\"}).  The suffix
+derives from @code{sxhash} of PREFIX, the namestring of
+@code{*genlabel-root-forth-file*} (or @code{*forth-file*} or the current
+directory), and @code{*genlabel-counter*} after increment — not from
+@code{gensym}, which resets each Lisp run and produced duplicate
+@code{If_…}/@code{Loop_…} labels across different @file{Script.*.s} files when
+only six digits were kept.
+
+@table @asis
+@item PREFIX
+Short Pascal-case stem for the label (e.g. @code{\"If\"}).
+@item Dynamic @code{*genlabel-root-forth-file*}
+Set by @code{compile-forth} to the root Forth input pathname.
+@item Dynamic @code{*forth-file*}
+Falls back when root is unset (nested compilation).
+@item Dynamic @code{*genlabel-counter*}
+Incremented once per call; reset to 0 around each @code{compile-forth} run.
+@end table
+
+@subsection Outputs
+Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
+@var{suffix} is up to eight base-36 digits."
+  (declare (type string prefix))
+  (let* ((salt (namestring (or *genlabel-root-forth-file*
+                               *forth-file*
+                               (uiop:getcwd))))
+         (serial (incf *genlabel-counter*))
+         (h (logand #xffffffff (sxhash (list prefix salt serial))))
+         (hash (format nil "~36r" h))
+         (l (min (length hash) 8)))
     (format nil "~a_~a"
             prefix
-            (subseq hash (- (length hash) l) (length hash)))))
+            (subseq hash (max 0 (- (length hash) l)) (length hash)))))
 
 (defstage exit (who)
   (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
@@ -3144,6 +3183,15 @@ FadeColor~:(~a~) FadingTarget C!"
                        sym value)))
             sym)))
   (format t "~2%( end of script file. ) ~%"))
+
+(defmacro with-forth-file-wrappers (() &body body)
+  "Emit standard header/footer around Forth text compiled from Fountain."
+  `(prog2
+       (format t "~% ( -*- forth -*- )
+( This file is compiled from Fountain sources. )
+( Alterations to this generated file will be discarded. ) ")
+       (progn ,@body)
+     (format t "~2&( End of Forth sources. )~%")))
 
 (defun compile-fountain-string (string)
   "Compile Fountain script in STRING "

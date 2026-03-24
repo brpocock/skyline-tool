@@ -57,8 +57,8 @@
                   (let ((sequence (list)))
                     (dolist (frame (cddr animation))
                       (assert (equal "frame" (car frame)))
-                      (let ((frame-tile (parse-integer (assocdr "tileid" (second frame))))
-                            (duration (/ (parse-integer (assocdr "duration" (second frame)))
+                      (let ((frame-tile (parse-integer (xml-attr "tileid" (second frame))))
+                            (duration (/ (parse-integer (xml-attr "duration" (second frame)))
                                          1000)))
                         (push frame-tile sequence)
                         (push duration sequence)))
@@ -107,10 +107,10 @@
 (defun parse-layer (layer)
   (let ((data (xml-match "data" layer)))
     (assert data)
-    (assert (equal "base64" (assocdr "encoding" (second data))))
+    (assert (equal "base64" (xml-attr "encoding" (second data))))
     (assert (stringp (third data)))
-    (let* ((width (parse-integer (assocdr "width" (second layer))))
-           (height (parse-integer (assocdr "height" (second layer)))))
+    (let* ((width (parse-integer (xml-attr "width" (second layer))))
+           (height (parse-integer (xml-attr "height" (second layer)))))
       (split-grid-to-rows width height
                           (bytes-to-32-bits
                            (cl-base64:base64-string-to-usb8-array (third data)))))))
@@ -140,6 +140,20 @@
                             number tilesets)
                     (return (values #x7f #(0 0 0 0 0 0) -1))))))
 
+(defun %max-global-tile-id (&rest tilesets)
+  "%Private implementation: largest global Tiled GID valid for TILESETS.
+
+@table @asis
+@item TILESETS
+Zero or more @code{tileset} instances; @code{nil} entries ignored.
+@end table
+
+Each tileset contributes GIDs from @code{(tileset-gid)} through
+@code{(+ (tileset-gid) tile-count - 1)}."
+  (loop for ts in (remove-if #'null tilesets)
+        maximize (1- (+ (tileset-gid ts)
+                        (array-dimension (tile-attributes ts) 0)))))
+
 (defun assign-attributes (attr attr-table)
   "Assign attibutes ATTR into ATTR-TABLE, reusing existing entry if possible"
   (or (position attr attr-table :test #'equalp)
@@ -148,8 +162,8 @@
 
 (defun object-covers-tile-p (x y object &key tile-width)
   "Returns generally true if the OBJECT is over tile at X, Y"
-  (let* ((obj-x1 (parse-number (assocdr "x" (second object))))
-         (obj-y1 (parse-number (assocdr "y" (second object))))
+  (let* ((obj-x1 (parse-number (or (assocdr "x" (second object)) "0")))
+         (obj-y1 (parse-number (or (assocdr "y" (second object)) "0")))
          (obj-x2 (1- (+ obj-x1 (parse-number (or (assocdr "width" (second object)) "1")))))
          (obj-y2 (1- (+ obj-y1 (parse-number (or (assocdr "height" (second object)) "1")))))
          (cell-x1 (* x tile-width)) (cell-x2 (+ cell-x1 (1- tile-width)))
@@ -247,8 +261,8 @@
 
 (defun collect-decal-object (object enemies base-tileset decal-tileset &key (tile-width 8))
   (declare (ignore enemies)) ; TODO: #1238
-  (let ((x (floor (parse-number (assocdr "x" (second object))) tile-width))
-        (y (1- (floor (parse-number (assocdr "y" (second object))) 16)))
+  (let ((x (floor (parse-number (or (assocdr "x" (second object)) "0")) tile-width))
+        (y (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16)))
         (name (or (assocdr "name" (second object)) "(Unnamed decal)")))
     (when-let (gid$ (assocdr "gid" (second object)))
       (let ((gid (let ((n (parse-integer gid$)))
@@ -309,7 +323,8 @@
          (attributes-table (list #(0 0 0 0 0 0)))
          (exits-table (cons nil nil))
          (decals-table (cons nil nil))
-         (enemies (make-array 0 :element-type 'cons :adjustable t :fill-pointer t)))
+         (enemies (make-array 0 :element-type 'cons :adjustable t :fill-pointer t))
+         (max-tile-gid (%max-global-tile-id base-tileset decal-tileset)))
     (assert (<= 10 (array-dimension ground 1) 64) ()
             "The tile map must have from 10-64 (not ~:d) rows"
             (array-dimension ground 1))
@@ -331,17 +346,19 @@
             (warn "Tile number zero (blank) replaced with $7f at (~d, ~d) on ~:[ground~;detail~] layer."
                   x y detailp)
             (setf tile-number #x7f))
-          (unless (<= 1 tile-number 128)
+          (unless (<= 1 tile-number max-tile-gid)
             (cerror "Continue, using tile $7f"
-                    "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer."
-                    tile-number tile-number x y detailp)
+                    "Tile number is ridiculous, got ~d ($~x) at (~d, ~d) on ~:[ground~;detail~] layer (valid GIDs 1–~d)."
+                    tile-number tile-number x y detailp max-tile-gid)
             (setf tile-number #x7f))
           (multiple-value-bind (tile-id tile-attributes)
               (find-tile-by-number tile-number base-tileset
+                                   :decal-tileset decal-tileset
                                    :x x :y y :layer (if detailp "detail" "ground"))
             (when detailp
               (multiple-value-bind (alt-tile-id alt-tile-attributes)
                   (find-tile-by-number (aref ground x y) base-tileset
+                                       :decal-tileset decal-tileset
                                        :x x :y y :layer "detail")
                 (setf (aref tile-attributes 5) alt-tile-id)
                 (add-alt-tile-attributes tile-attributes alt-tile-attributes)))
@@ -398,25 +415,34 @@
           (array-dimension (tile-attributes tileset) 0)))
 
 (defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
+  "Load tileset PNG for the current machine, with sensible fallbacks.
+
+Prefer @file{Source/Maps/Tiles/@var{machine}/}, then @file{7800/} (same 8×16
+Maria-style sheets as other 6502 Atari ports), then @file{Hicolor/}, then the
+machine-specific path for a clear missing-file error."
   (let* ((name (pathname-name pathname$))
+         (root (or (project-root)
+                   (uiop:pathname-directory-pathname (uiop:getcwd))))
          (machine-path (merge-pathnames
                         (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
                                                         (machine-directory-name))
                                        :name name :type "png")
-                        (or (project-root)
-                            (uiop:pathname-directory-pathname (uiop:getcwd)))))
+                        root))
+         (7800-path (merge-pathnames
+                     (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                     "7800")
+                                    :name name :type "png")
+                     root))
          (hicolor-path (merge-pathnames
-                       (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
-                                                      "Hicolor")
-                                     :name name :type "png")
-                       (or (project-root)
-                           (uiop:pathname-directory-pathname (uiop:getcwd))))))
+                        (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                        "Hicolor")
+                                       :name name :type "png")
+                        root)))
     (load-tileset-image
-     (if (probe-file machine-path)
-         machine-path
-         (if (probe-file hicolor-path)
-             hicolor-path
-             machine-path)))))
+     (cond ((probe-file machine-path) machine-path)
+           ((probe-file 7800-path) 7800-path)
+           ((probe-file hicolor-path) hicolor-path)
+           (t machine-path)))))
 
 (defun load-tileset-image (pathname)
   "Load the “sprite sheet” image for a tile set from PATHNAME"
@@ -464,7 +490,7 @@
                        :test #'=)))
 
 (defun tile-fits-palette-p (tile palette)
-  (every (lambda (c) (member c palette))
+  (every (lambda (c) (or (null c) (member c palette)))
          (all-colors-in-tile tile)))
 
 (defun 2a-to-list (2a)
@@ -484,16 +510,23 @@
                      collect (aref 2a row column))))
 
 (defun region->list-of-colors (tile)
-  "Extract the list of all colors found in the two-dimensional array TILE"
+  "Extract the list of all colors found in the two-dimensional array TILE.
+Transparent pixels (@code{NIL} from @code{png->palette}) are omitted — they are
+not palette indices and must not be passed to @code{color-distance-by-indices}."
   (destructuring-bind (width height) (array-dimensions tile)
     (loop for y below height
           append
           (loop for x below width
-                collect (aref tile x y)))))
+                for c = (aref tile x y)
+                unless (null c)
+                  collect c))))
 
 (defun color-distance-by-indices (index0 index1
                                   &key (palette (machine-palette)))
   "Find the color distance between the colors with PALETTE indicies INDEX0 and INDEX1"
+  (unless (and (integerp index0) (integerp index1))
+    (error "color-distance-by-indices: invalid indices ~s ~s (expected palette indices)"
+           index0 index1))
   (destructuring-bind (c0-r c0-g c0-b)
       (elt palette index0)
     (destructuring-bind (c1-r c1-g c1-b)
@@ -510,46 +543,56 @@
 
 (defun best-palette (tile palettes &key allow-imperfect-p x y)
   (let ((palettes (mapcar (lambda (p) (coerce p 'list)) (2a-to-list palettes))))
-    (or (position-if (lambda (palette)
-                       (tile-fits-palette-p tile palette))
-                     palettes)
-        (when allow-imperfect-p
-          (loop for palette in palettes
-                for index from 0
-                with machine-palette = (machine-palette)
-                with best = nil
-                with best-distance = most-positive-fixnum
-                do (let ((distance
-                           (reduce #'min
-                                   (mapcar
-                                    (lambda (color)
-                                      (loop for pal-color in palette
-                                            minimize
-                                            (color-distance-by-indices
-                                             pal-color color
-                                             :palette machine-palette)))
-                                    (region->list-of-colors tile)))))
-                     (when (< distance best-distance)
-                       (setf best index
-                             best-distance distance)))
-                finally (return best)))
-        (cond
-          ;; TODO: #1219 make a proper error with presentation methods to handle this
-          ((clim:extended-output-stream-p *trace-output*)
-           (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
+    (labels ((tileset-palette-fail ()
+               ;; TODO: #1219 make a proper error with presentation methods to handle this
+               (cond
+                 ((clim:extended-output-stream-p *trace-output*)
+                  (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
 All colors: ~s~@[~% at (~3d,~3d)~]"
-                  tile palettes (all-colors-in-tile tile) x y))
-          ((tty-xterm-p)
-           (error "Tile could not fit any palette:~% Tile: ~a
+                         tile palettes (all-colors-in-tile tile) x y))
+                 ((tty-xterm-p)
+                  (error "Tile could not fit any palette:~% Tile: ~a
  Palettes: ~{~%~5t~{~{$~2,'0x ~a~}~^, ~}~^;~45t~{~{$~2,'0x ~a~}~^, ~}~^; ~}
 All colors: ~{~{$~2,'0x ~a~}~^, ~}~@[~% at (~3d, ~3d)~]"
-                  (pixels-to-ansi-string tile)
-                  (mapcar #'palette-to-ansi-pairs palettes)
-                  (palette-to-ansi-pairs (all-colors-in-tile tile))
-                  x y))
-          (t (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
+                         (pixels-to-ansi-string tile)
+                         (mapcar #'palette-to-ansi-pairs palettes)
+                         (palette-to-ansi-pairs (all-colors-in-tile tile))
+                         x y))
+                 (t (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
 All colors: ~s~@[~% at (~3d,~3d)~]"
-                    tile palettes (all-colors-in-tile tile) x y))))))
+                            tile palettes (all-colors-in-tile tile) x y)))))
+      (let ((exact (position-if (lambda (palette)
+                                  (tile-fits-palette-p tile palette))
+                                palettes)))
+        (cond
+          (exact exact)
+          (allow-imperfect-p
+           (let ((approx (loop for palette in palettes
+                               for index from 0
+                               with machine-palette = (machine-palette)
+                               with best = nil
+                               with best-distance = most-positive-fixnum
+                               do (let* ((colors (region->list-of-colors tile))
+                                         (clean-row (remove-if #'null palette))
+                                         (distance (if (null colors)
+                                                       0
+                                                       (if (null clean-row)
+                                                           most-positive-fixnum
+                                                           (reduce #'min
+                                                                   (mapcar
+                                                                    (lambda (color)
+                                                                      (loop for pal-color in clean-row
+                                                                            minimize
+                                                                            (color-distance-by-indices
+                                                                             pal-color color
+                                                                             :palette machine-palette)))
+                                                                    colors))))))
+                                    (when (< distance best-distance)
+                                      (setf best index
+                                            best-distance distance)))
+                               finally (return best))))
+             (or approx (tileset-palette-fail))))
+          (t (tileset-palette-fail)))))))
 
 (defun split-images-to-palettes (image)
   (let ((tiles (extract-8×16-tiles image))
@@ -595,10 +638,10 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                                         (not (equalp "Wall" type-name)))))
                                 (subseq object-group 2)))))
       (dolist (object objects)
-        (let ((height (parse-real-number (xml-attr "height" (second object))))
-              (width (parse-real-number (xml-attr "width" (second object))))
-              (object-x (parse-real-number (xml-attr "x" (second object))))
-              (object-y (parse-real-number (xml-attr "y" (second object)))))
+        (let ((height (parse-real-number (or (xml-attr "height" (second object)) "0")))
+              (width (parse-real-number (or (xml-attr "width" (second object)) "0")))
+              (object-x (parse-real-number (or (xml-attr "x" (second object)) "0")))
+              (object-y (parse-real-number (or (xml-attr "y" (second object)) "0"))))
           (when (and (<= object-x test-x (+ object-x width))
                      (<= object-y test-y (+ object-y height)))
             (return-from tile-collision-p t))))))
@@ -649,15 +692,19 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
         *dock-ids-maps* (make-hash-table :test 'equal))
   (let* ((raw-rows (first (read-ods-into-lists table)))
          (header (first raw-rows))
-         (data-rows (rest raw-rows)))
+         (data-rows (rest raw-rows))
+         (last-island nil))
     (dolist (row data-rows)
-      (let ((island (and (< 0 (length row)) (elt row 0)))
-            (full-name (and (< 1 (length row)) (elt row 1)))
-            (id (and (< 2 (length row)) (elt row 2)))
-            (display-name (and (< 4 (length row)) (elt row 4)))
-            (dock-id (and (< 6 (length row)) (elt row 6))))
+      (let* ((cell0 (and (< 0 (length row)) (elt row 0)))
+             (island (if (and cell0 (not (emptyp (string cell0))))
+                         (progn (setf last-island cell0) cell0)
+                         last-island))
+             (full-name (and (< 1 (length row)) (elt row 1)))
+             (id (and (< 2 (length row)) (elt row 2)))
+             (display-name (and (< 4 (length row)) (elt row 4)))
+             (dock-id (and (< 6 (length row)) (elt row 6))))
         (declare (ignore header))
-        (when (and full-name (not (emptyp (string full-name)))
+        (when (and island full-name (not (emptyp (string full-name)))
                    id (not (emptyp (string id))))
           (let* ((island-str (pascal-case (string island)))
                  (full-str (string full-name))
@@ -684,88 +731,103 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
 (defun maps-segment-lookup (segment-name)
   "Look up SEGMENT-NAME in *maps-ids*, trying direct match and normalized variants
 (apostrophe/underscore removed) to handle ODS vs Assets.index naming differences."
-  (or (gethash segment-name *maps-ids*)
-      (gethash (remove-if (lambda (c) (member c '(#\' #\_))) segment-name)
-               *maps-ids*)
-      (when (and (boundp '*maps-ids*) *maps-ids* (plusp (hash-table-count *maps-ids*)))
-        ;; Try case-insensitive match for ODS vs Assets.index differences
-        (loop for key being the hash-keys of *maps-ids*
-              when (string-equal key segment-name)
-                return (gethash key *maps-ids*)))))
+  (let ((trimmed (string-trim '(#\space #\tab) segment-name)))
+    (or (gethash segment-name *maps-ids*)
+        (gethash trimmed *maps-ids*)
+        (gethash (coerce (remove-if (lambda (c) (member c '(#\' #\_))) trimmed) 'string)
+                 *maps-ids*)
+        (when (and (boundp '*maps-ids*) *maps-ids* (plusp (hash-table-count *maps-ids*)))
+          ;; Try case-insensitive match for ODS vs Assets.index differences
+          (loop for key being the hash-keys of *maps-ids*
+                when (string-equal key segment-name)
+                  return (gethash key *maps-ids*))
+          ;; Fallback: match by Island/MapName when path has 2+ parts
+          (let ((parts (split-sequence #\/ trimmed)))
+            (when (>= (length parts) 2)
+              (let ((island (first parts))
+                    (map-name (lastcar parts)))
+                (loop for key being the hash-keys of *maps-ids*
+                      for key-parts = (split-sequence #\/ key)
+                      when (and (>= (length key-parts) 2)
+                                (string-equal (first key-parts) island)
+                                (string-equal (lastcar key-parts) map-name))
+                        return (gethash key *maps-ids*)))))))))
 
-(defun find-locale-id-from-xml (xml)
-  "Look up map ID from MapsIndex.ods spreadsheet. Phantasia does not use IDs from TMX.
-XML is the map element; *current-scene* must be bound to the segment name (e.g. Solace/AncientBurialSite3)."
-  (declare (ignore xml))
+(defun find-locale-id-for-segment (segment-name)
+  "Look up map ID for SEGMENT-NAME (e.g. Solace/AncientBurialSite2) from MapsIndex.ods.
+Does not rely on *current-scene*."
   (tagbody top
      (restart-case
-         (let ((id-prop (when *current-scene*
+         (let ((id-prop (when segment-name
                          (when (or (not (boundp '*maps-ids*))
                                    (null *maps-ids*)
                                    (zerop (hash-table-count *maps-ids*)))
                            (read-map-ids-table))
                          (prog1
-                             (maps-segment-lookup *current-scene*)
-                           (format *trace-output* "~&Loaded maps index, looking for ~a"
-                                   *current-scene*)))))
-           (assert id-prop (id-prop) "No Scene ID~@[ for “~a”~]
-Cannot find a locale ID from the maps index spreadsheet.
-Add an entry in Source/Tables/MapsIndex.ods with Island, Full Name, and ID columns.
-To CONTINUE, look up the unique ID and provide it now,
-or add it to the spreadsheet and RELOAD-MAP-IDS-TABLE."
-                   *current-scene*)
-           (return-from find-locale-id-from-xml id-prop))
+                             (maps-segment-lookup segment-name)
+                           (format *trace-output* "~&Loaded maps index, looking for ~s"
+                                   segment-name)))))
+           (return-from find-locale-id-for-segment id-prop))
        (reload-map-ids-table ()
          :report "Reload Source/Tables/MapsIndex.ods"
          (read-map-ids-table)
          (go top)))))
 
+(defun find-locale-id-from-xml (xml)
+  "Look up map ID from MapsIndex.ods spreadsheet. Phantasia does not use IDs from TMX.
+XML is the map element; *current-scene* must be bound to the segment name (e.g. Solace/AncientBurialSite3)."
+  (declare (ignore xml))
+  (find-locale-id-for-segment *current-scene*))
+
 (defun find-entrance-by-name (xml name locale-name)
   "Find entrance NAME in the map XML for  LOCALE-NAME"
-  (tagbody top
-     (restart-case
-         (let ((locale-id (get-asset-id :map
-                                        (format nil "~{~a~^/~}"
-                                                (mapcar #'pascal-case
-                                                        (split-sequence #\/ locale-name))))))
-           (dolist (group (xml-matches "objectgroup" xml))
-             (dolist (object (xml-matches "object" group))
-               (when-let (properties (xml-match "properties" object nil))
-                 (dolist (prop (xml-matches "property" properties))
-                   (when (and (find-if (lambda (kv)
-                                         (destructuring-bind (key value) kv
-                                           (and (equalp key "value")
-                                                (equalp (pascal-case value)
-                                                        name))))
-                                       (second prop))
-                              (find-if (lambda (kv) (destructuring-bind (key value) kv
-                                                      (and (equalp key "name")
-                                                           (equalp value "Entrance"))))
-                                       (second prop)))
-                     (let ((x (floor (parse-number
-                                      (second (find-if (lambda (kv)
-                                                         (destructuring-bind (key value) kv
-                                                           (declare (ignore value))
-                                                           (equalp key "x")))
-                                                       (second object))))
-                                     (parse-integer (assocdr "tilewidth" (second xml)))))
-                           (y (floor (parse-number
-                                      (second (find-if (lambda (kv)
-                                                         (destructuring-bind (key value) kv
-                                                           (declare (ignore value))
-                                                           (equalp key "y")))
-                                                       (second object))))
-                                     16)))
-                       (return-from find-entrance-by-name (list locale-id x y))))))))
-           (cerror "Place at (10, 10) for now"
-                   "Can't link to non-existing “~a” point in locale “~a”
+  (labels ((lookup-attr (attrs key &optional default)
+             (or (second (find-if (lambda (kv)
+                                    (destructuring-bind (k v) kv
+                                      (declare (ignore v))
+                                      (equalp k key)))
+                                  attrs))
+                 default)))
+    (tagbody top
+       (restart-case
+           (let ((locale-id (get-asset-id :map
+                                          (format nil "~{~a~^/~}"
+                                                  (mapcar #'pascal-case
+                                                          (split-sequence #\/ locale-name))))))
+             (dolist (group (xml-matches "objectgroup" xml))
+               (dolist (object (xml-matches "object" group))
+                 (when-let (properties (xml-match "properties" object nil))
+                   (dolist (prop (xml-matches "property" properties))
+                     (when (and (find-if (lambda (kv)
+                                           (destructuring-bind (key value) kv
+                                             (and (equalp key "value")
+                                                  (equalp (pascal-case value) name))))
+                                         (second prop))
+                                (find-if (lambda (kv)
+                                           (destructuring-bind (key value) kv
+                                             (and (equalp key "name")
+                                                  (equalp value "Entrance"))))
+                                         (second prop)))
+                       (let* ((x (floor (or (ignore-errors
+                                              (parse-number
+                                               (lookup-attr (second object) "x" "0")))
+                                             0)
+                                        16))
+                              (y (floor (or (ignore-errors
+                                              (parse-number
+                                               (lookup-attr (second object) "y" "0")))
+                                             0)
+                                        16)))
+                         (return-from find-entrance-by-name (list locale-id x y))))))))
+             (cerror "Place at (10, 10) for now"
+                     "Can't link to non-existing “~a” point in locale “~a”
 Update map/s or script to agree with one another and DO-OVER."
-                   name locale-name)
-           (list locale-id 10 10))
-       (reload-map ()
-         :report (lambda (s) (format s "Reload “~a” map" locale-name))
-         (setf xml (load-other-map locale-name))
-         (go top)))))
+                     name locale-name)
+             (list locale-id 10 10))
+         (reload-map ()
+           :report (lambda (s) (format s "Reload “~a” map" locale-name))
+           (setf xml (load-other-map locale-name))
+           (go top))))))
 
 (defun assign-exit (locale point exits)
   (format *trace-output* "~&Searching locale “~a” for an entrance point “~a”…" locale point)
@@ -883,7 +945,10 @@ Update map/s or script to agree with one another and DO-OVER."
   (let ((bytes (make-array '(6) :element-type '(unsigned-byte 8)))
         (tile.xml (find-if (lambda (el)
                              (and (equal "tile" (car el))
-                                  (= i (parse-integer (xml-attr "id" (second el))))))
+                                  (second el)
+                                  (let ((id$ (xml-attr "id" (second el))))
+                                    (and id$
+                                         (= i (parse-integer id$))))))
                            (subseq xml 2))))
     ;; returns bytes
     (add-attribute-values palettes tile.xml bytes :tile-id i)))
@@ -926,23 +991,29 @@ compile-tileset, compile-map (for embedded tilesets)
 Tileset object containing image data, tile dimensions, and palette information."
   (let* ((path (etypecase xml-reference
                  (cons (let ((source
-                               (assocdr "source"
-                                        (second xml-reference))))
+                               (xml-attr "source" (second xml-reference))))
+                         (unless source
+                           (error "Tileset reference missing source attribute: ~s"
+                                  xml-reference))
                          (split-sequence #\/ source)))
                  (pathname (split-sequence #\/ (namestring xml-reference)))
                  (string (split-sequence #\/ xml-reference))))
-         (pathname (merge-pathnames
-                    (make-pathname
-                     :directory (cons :relative
-                                      (subseq path 0 (1- (length path))))
-                     :name (subseq (last-elt path)
-                                   0
-                                   (position #\. (last-elt path) :from-end t))
-                     :type (subseq (last-elt path)
-                                   (1+ (position #\. (last-elt path) :from-end t))))
-                    (or relative-path #p"./")))
+         (pathname (let* ((file (last-elt path))
+                          (dot (position #\. file :from-end t))
+                          (name (if dot (subseq file 0 dot) file))
+                          (type (if dot (subseq file (1+ dot)) nil)))
+                     (merge-pathnames
+                      (make-pathname
+                       :directory (cons :relative
+                                        (subseq path 0 (1- (length path))))
+                       :name name
+                       :type type)
+                      (or relative-path #p"./"))))
          (gid (if (consp xml-reference)
-                  (parse-integer (assocdr "firstgid" (second xml-reference)))
+                  (parse-integer
+                   (or (xml-attr "firstgid" (second xml-reference))
+                       (error "Tileset reference missing firstgid attribute: ~s"
+                              xml-reference)))
                   0))
          (xml (xmls:parse-to-list (alexandria:read-file-into-string pathname)))
          (tileset (make-instance 'tileset :gid gid :pathname pathname)))
@@ -1253,22 +1324,24 @@ range is 0 - #xffffffff (4,294,967,295)"
       (assemble-binary run-commands-pathname))))
 
 (defun tileset-rom-bank (xml)
-  ;; FIXME #125
-  (loop for (string id)
-          on '("SandyIsland" 5
-               "Indoor" 6
-               "JungleIsland" 7
-               "Ancient" 8
-               "Mechanism" 9
-               "Cityscape" #xa
-               "Arturos" #xb
-               "Shipboard" #xc
-               "Undersea" #xd)
-        by #'cddr
-        when (some (lambda (match)
-                     (search string (assocdr "source" (second match))))
-                   (xml-matches "tileset" xml))
-          do (return id)))
+  "Map TMX tileset @code{source} path to a ROM bank id for packed tile data.
+Returns @code{0} if no known prefix matches (FIXME #125)."
+  (or (loop for (string id)
+              on '("SandyIsland" 5
+                   "Indoor" 6
+                   "JungleIsland" 7
+                   "Ancient" 8
+                   "Mechanism" 9
+                   "Cityscape" #xa
+                   "Arturos" #xb
+                   "Shipboard" #xc
+                   "Undersea" #xd)
+            by #'cddr
+            when (some (lambda (match)
+                         (search string (or (assocdr "source" (second match)) "")))
+                       (xml-matches "tileset" xml))
+              do (return id))
+      0))
 
 (defun write-binary-animations-list (animations-list s &key frame-rate)
   #+ () (format *trace-output* "~%WRITE-BINARY-ANIMATIONS-LIST: ~2%~s~2%" animations-list)
@@ -1367,18 +1440,20 @@ with appropriate naming for the game engine to load.
         (xml (xmls:parse-to-list (alexandria:read-file-into-string pathname))))
     (assert (equal "map" (car xml)) ()
             "The XML header does not appear to be for a tiled map (TMX) file")
-    (assert (equal "orthogonal" (car (assocdr "orientation" (second xml)))) ()
+    (assert (equal "orthogonal" (xml-attr "orientation" (second xml))) ()
             "The map file must be in orthogonal orientation")
-    (assert (equal "right-down" (car (assocdr "renderorder" (second xml)))) ()
+    (assert (equal "right-down" (xml-attr "renderorder" (second xml))) ()
             "The map file must be in right-down render order")
-    (assert (member (car (assocdr "tilewidth" (second xml))) '("8" "16") :test #'string-equal) ()
+    (assert (member (xml-attr "tilewidth" (second xml)) '("8" "16") :test #'string-equal) ()
             "The map file must have 8px or 16px wide tiles")
-    (assert (equal "16" (car (assocdr "tileheight" (second xml)))) ()
+    (assert (equal "16" (xml-attr "tileheight" (second xml))) ()
             "The map file must have 16px high tiles")
     (let* ((tilesets (mapcar (lambda (tileset) (load-tileset tileset pathname))
                              (xml-matches "tileset" xml)))
            (layers (xml-matches "layer" xml))
-           (tile-width (parse-integer (assocdr "tilewidth" (second xml))))
+           (tile-width (parse-integer (or (xml-attr "tilewidth" (second xml))
+                                         (error "Map element missing required attribute tilewidth in ~a"
+                                                pathname))))
            (object-groups (xml-matches "objectgroup" xml))
            (animations-list (parse-tile-animation-set (first tilesets)))
            (decals-animations-list (when (rest tilesets)
@@ -1678,11 +1753,21 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
             (format output "~%~10t.fi~%")))))))
 
 (defun find-named-object-in-scene (name-object &optional (scene-name *current-scene*))
-  (dolist (match (xml-matches "object" (xml-match "objectgroup" (locale-xml scene-name))))
-    (when-let (this-name (ignore-errors (assocdr "name" (cadr match))))
-      (when (string-equal this-name name-object)
-        (return-from find-named-object-in-scene
-          (list :x (parse-number (assocdr "x" (cadr match)))
-                :y (parse-number (assocdr "y" (cadr match)))
-                :gid (parse-integer (assocdr "gid" (cadr match))))))))
+  (flet ((lookup-attr (attrs key &optional default)
+           (or (second (find-if (lambda (kv)
+                                  (destructuring-bind (k v) kv
+                                    (declare (ignore v))
+                                    (equalp k key)))
+                                attrs))
+               default)))
+    (dolist (match (xml-matches "object" (xml-match "objectgroup" (locale-xml scene-name))))
+      (let* ((attrs (cadr match))
+             (this-name (lookup-attr attrs "name")))
+        (when (and this-name (string-equal this-name name-object))
+          (return-from find-named-object-in-scene
+            (list :x (parse-number (lookup-attr attrs "x" "0"))
+                  :y (parse-number (lookup-attr attrs "y" "0"))
+                  :gid (or (and (lookup-attr attrs "gid")
+                                (parse-integer (lookup-attr attrs "gid") :junk-allowed t))
+                           0)))))))
   (error "Can't find “~a” in scene “~a”" name-object scene-name))

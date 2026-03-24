@@ -103,7 +103,8 @@
           (write *test-midi-data* :stream out :readably t))
 
         ;; Test compilation
-        (finishes (skyline-tool::compile-music output-file input-file "2609" "AY-3-8910" "NTSC"))
+        (let ((skyline-tool::*machine* 2609))
+          (finishes (skyline-tool::compile-music output-file input-file "2609" "AY-3-8910" "NTSC")))
 
         ;; Validate output
         (validate-music-output-file output-file 2609
@@ -112,6 +113,26 @@
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
+
+(test intv-ay-3-8910-score-and-midi-compile-path
+  "Intellivision PSG: score->song, write-song-binary, and compile-midi AY-3-8910 path"
+  (let ((skyline-tool::*machine* 2609)
+        (score (list (list :lyric nil :instrument :piano :time 0.0d0 :duration 0.1d0
+                           :key 60 :velocity 100))))
+    (let ((song (skyline-tool::score->song score :ay-3-8910 :ntsc)))
+      (is (arrayp song) "score->song :ay-3-8910 should return an array")
+      (is (plusp (array-dimension song 0)) "should have at least one note row"))
+    (let ((bin (merge-pathnames (format nil "test-ay-~a.bin" (skyline-tool::generate-secure-random-id 2))
+                                (uiop:temporary-directory))))
+      (unwind-protect
+          (let ((song (skyline-tool::score->song score :ay-3-8910 :ntsc)))
+            (finishes (skyline-tool::write-song-binary song :ay-3-8910 bin))
+            (is-true (probe-file bin))
+            (is-true (> (with-open-file (s bin :element-type '(unsigned-byte 8))
+                          (file-length s))
+                        3)
+                     "AY binary should have header plus ≥1 note (6 bytes)"))
+        (when (probe-file bin) (delete-file bin))))))
 
 (test 64-c64-music-compilation-validation
   "Test that Commodore 64 music compilation produces correct assembly output"
@@ -283,9 +304,6 @@
 
         ;; Test that SNES compilation signals error (currently unimplemented)
         (signals error (skyline-tool::compile-music output-file input-file "6" "SPC700" "NTSC"))
-
-        ;; Test that ColecoVision compilation signals error (currently unimplemented)
-        (signals error (skyline-tool::compile-music output-file input-file "9918" "SN76489" "NTSC"))
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
@@ -415,10 +433,11 @@
 
 (test colecovision-music-compilation-validation
   "Test that ColecoVision music compilation produces correct assembly output"
-  (let ((output-file (format nil "Object/264/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
+  (let ((output-file (format nil "Object/9918/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
         (input-file "test-input.mid"))
     (unwind-protect
         (progn
+           (ensure-directories-exist output-file)
            ;; Create a minimal test input file
            (with-open-file (out input-file :direction :output :if-exists :supersede)
              (write *test-midi-data* :stream out :readably t))
@@ -427,7 +446,7 @@
            (finishes (skyline-tool::compile-music-colecovision output-file input-file))
 
            ;; Validate output contains expected ColecoVision PSG code
-           (validate-music-output-file output-file 264
+           (validate-music-output-file output-file 9918
                                      '(";;; ColecoVision SN76489 PSG Music compiled from"
                                        "PSG_PORT = $FF"
                                        "psg_init:"

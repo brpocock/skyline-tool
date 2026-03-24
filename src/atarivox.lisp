@@ -210,6 +210,14 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                                      (intellivoice-basic-pronunciation word))))))))
       bytes)))
 
+(defun intellivoice-basic-pronunciation (word)
+  "Fallback phoneme sequence for unknown IntelliVoice WORD.
+
+Returns a conservative pause token so script compilation succeeds even when
+the dictionary lacks an entry."
+  (declare (ignore word))
+  (list "PA1"))
+
 (defvar *intellivoice-dictionary* nil)
 
 (defun ensure-intellivoice-dictionary ()

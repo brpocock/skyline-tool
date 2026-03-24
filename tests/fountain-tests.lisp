@@ -218,6 +218,23 @@
     (is (stringp label2) "Should return a string")
     (is (not (string= label1 label2)) "Labels should be unique")))
 
+(test genlabel-distinct-across-root-forth-files
+  "genlabel must mix the root Forth pathname so separate Script.* outputs never share If_/Loop_ labels.
+
+Previously @code{sxhash} of @code{gensym} plus a six-digit suffix repeated across
+@command{compile-forth} runs (fresh gensym counter each process), breaking 64tass
+with duplicate globals."
+  (let ((a (let ((skyline-tool::*genlabel-root-forth-file*
+                   #p"/tmp/Script.Atsirav.AfterKillAnenemy.forth")
+                 (skyline-tool::*genlabel-counter* 0))
+             (skyline-tool::genlabel "If")))
+        (b (let ((skyline-tool::*genlabel-root-forth-file*
+                   #p"/tmp/Script.Atsirav.BridgeTalk.forth")
+                 (skyline-tool::*genlabel-counter* 0))
+             (skyline-tool::genlabel "If"))))
+    (is (not (string= a b))
+        "Same PREFIX and serial must still yield different labels when root Forth path differs")))
+
 ;; Test stage direction functions
 (test stage-facing-value-existence
   "Test stage-facing-value function exists"

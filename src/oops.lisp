@@ -58,10 +58,17 @@ letter (or digit); the result is uppercased.
 
 (defun eightbol-slot-name (pascal-name)
   "Convert PascalCase slot name to EIGHTBOL copybook form. Avoids reserved words
-that would conflict with eightbol grammar (e.g. CLASS-ID -> OBJ-CLASS-ID)."
+that would conflict with eightbol grammar (e.g. CLASS-ID -> OBJ-CLASS-ID,
+POINTER -> ZP-POINTER, SIZE -> OBJ-SIZE, METHOD -> OBJ-METHOD,
+REMAINDER -> CART-REMAINDER, TRUE -> CONST-TRUE)."
   (let ((base (pascal-to-eightbol-name pascal-name)))
     (case (intern base :keyword)
       ((:class-id) "OBJ-CLASS-ID")
+      ((:pointer) "ZP-POINTER")
+      ((:size) "OBJ-SIZE")
+      ((:method) "OBJ-METHOD")
+      ((:remainder) "CART-REMAINDER")
+      ((:true) "CONST-TRUE")
       (t base))))
 
 (defun parse-slot-annotation (parts)
@@ -121,17 +128,25 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
 ;;; Copybook generation  (Source/Generated/{ClassName}.cpy)
 
 (defun compute-class-size-during-parse (class-name)
-  "Return the size of CLASS-NAME (parent's size + own slots). Uses *class-bases*, *class-size*, *slot-sizes*, *class-slots-order*."
+  "Return the size of CLASS-NAME (parent's size + own slots). Uses *class-bases*, *class-size*, *slot-sizes*, *class-slots-order*.
+
+When any of these specials is @code{NIL} or not a hash-table (e.g. tests that bind only a subset), treat missing tables as empty so @code{gethash} is never called with @code{NIL} as the table argument."
   (unless (or (string= class-name "BasicObject")
-              (gethash class-name *class-bases*))
+              (and *class-bases* (hash-table-p *class-bases*)
+                   (gethash class-name *class-bases*)))
     (error "Parent class ~s not found" class-name))
-  (let ((base-sz (gethash class-name *class-size*))
-        (parent (gethash class-name *class-bases*)))
+  (let ((base-sz (and *class-size* (hash-table-p *class-size*)
+                      (gethash class-name *class-size*)))
+        (parent (and *class-bases* (hash-table-p *class-bases*)
+                     (gethash class-name *class-bases*))))
     (cond (base-sz base-sz)
           ((null parent) 0)
           (t (let ((parent-sz (compute-class-size-during-parse parent))
-                   (own-slots (gethash class-name *class-slots-order* '()))
-                   (sizes-h (or (gethash class-name *slot-sizes*)
+                   (own-slots (if (and *class-slots-order* (hash-table-p *class-slots-order*))
+                                  (gethash class-name *class-slots-order* '())
+                                  '()))
+                   (sizes-h (or (and *slot-sizes* (hash-table-p *slot-sizes*)
+                                     (gethash class-name *slot-sizes*))
                                 (make-hash-table :test 'equal))))
                (+ parent-sz
                   (reduce #'+ (mapcar (lambda (s) (gethash s sizes-h 0)) own-slots)
@@ -146,6 +161,48 @@ Single inheritance only. E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor
           do (push c chain))
     chain))
 
+(defun list-classes-defs-method-introductions
+    (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
+  "Return alist of (INTRODUCING-CLASS . METHOD-NAME) for each # line in CLASS-DEFS-PATHNAME.
+
+Each METHOD-NAME is the OOPS hash key (text after #), e.g. @code{GetBounds} for a
+@code{#GetBounds} line. Parsing matches @code{make-classes-for-oops}: a class
+line @code{Child < Parent} sets the current class; each @code{#} line at column
+zero binds the method to that class. Comment and blank lines are ignored.
+
+@table @asis
+@item CLASS-DEFS-PATHNAME
+Path to @file{Classes.Defs} (default @file{./Source/Classes/Classes.Defs}).
+@end table
+
+@table @asis
+@item Return value
+A fresh list of @code{(cons introducing-class method-name-string)} in file order.
+Does not include @code{Destroy} on BasicObject (runtime assembly); only explicit
+@code{#} lines appear.
+@end table"
+  (let ((result '())
+        ;; Match make-classes-for-oops: method lines before first class decl bind to BasicObject.
+        (cur-class "BasicObject"))
+    (with-input-from-file (class-file class-defs-pathname)
+      (loop for line = (read-line class-file nil nil)
+            while line
+            for trimmed = (string-trim #(#\Space #\Tab) line)
+            unless (or (emptyp trimmed) (classes-defs-comment-line-p line))
+              do (cond
+                   ((find #\< line)
+                    (destructuring-bind (new-class old-class)
+                        (mapcar (curry #'string-trim #(#\Space #\Tab))
+                                (split-sequence #\< line))
+                      (declare (ignore old-class))
+                      (setf cur-class new-class)))
+                   ((and (plusp (length line)) (char= #\# (char line 0)))
+                    (let ((name (string-trim #(#\Space) (subseq line 1))))
+                      (when (plusp (length name))
+                        (push (cons cur-class name) result))))
+                   (t nil))))
+    (nreverse result)))
+
 (defun make-eightbol-copybooks
     (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
   "Generate EIGHTBOL copybook (.cpy) files from Classes.Defs.
@@ -158,7 +215,7 @@ origin class of each group of slots.
 Slot annotation conventions in Classes.Defs:
   .SlotName size              — default PIC (1→PIC 99, 2→PIC 9999, n→OCCURS n PIC 99)
   .SlotName size @ClassName   — OBJECT REFERENCE ClassName (2-byte pointer)
-  .SlotName size = PIC-string — verbatim PIC clause
+  .SlotName size = PIC-string — verbatim PIC clause (prefer explicit PIC/USAGE for enums, buffers, …)
   .SlotName size = VARCHAR(n) DEPENDING ON Field — variable-length string"
   (let ((*class-slots*       (make-hash-table :test 'equal))
         (*class-slots-order* (make-hash-table :test 'equal))
@@ -239,7 +296,8 @@ Slot annotation conventions in Classes.Defs:
       (let ((own-slots (gethash class-name *class-slots-order*)))
         (let* ((parent  (gethash class-name *class-bases*))
                (base-sz (or (gethash parent *class-size*) 0))
-               (sizes-h (or (gethash class-name *slot-sizes*)
+               (sizes-h (or (and *slot-sizes* (hash-table-p *slot-sizes*)
+                                 (gethash class-name *slot-sizes*))
                             (make-hash-table :test 'equal)))
                (own-sz  (reduce #'+ (mapcar (lambda (s) (gethash s sizes-h 0))
                                             (or own-slots '()))
@@ -276,7 +334,8 @@ Slot annotation conventions in Classes.Defs:
               (let ((chain (class-ancestry-chain class-name *class-bases*)))
                 (dolist (ancestor chain)
                   (let ((content     (reverse (gethash ancestor *class-content-order* '())))
-                        (sizes-hash  (or (gethash ancestor *slot-sizes*)
+                        (sizes-hash  (or (and *slot-sizes* (hash-table-p *slot-sizes*)
+                                              (gethash ancestor *slot-sizes*))
                                          (make-hash-table :test 'equal)))
                         (annot-hash  (gethash ancestor *slot-annotations*)))
                     (when content

@@ -11,7 +11,7 @@
           while (find (peek-char nil *standard-input* nil)
                       #(#\Space #\Page #\Tab #\Newline))))
   (let ((char (peek-char nil *standard-input* nil)))
-    (when (char= #\\ char)
+    (when (and char (char= #\\ char))
       ;; Skip backslash comment to end of line
       (read-line *standard-input* nil "")
       ;; Recursively read next word after comment
@@ -24,7 +24,9 @@
         else do (vector-push-extend char word)))
 
 (defvar *words* nil)
-(defparameter *forth-bootstrap-pathname* #p"Source/Scripts/Forth/Bootstrap.forth")
+(defparameter *forth-bootstrap-pathname*
+  (merge-pathnames #p"Source/Scripts/Forth/Bootstrap.forth" (project-root))
+  "Absolute path to Forth bootstrap under the game project root (Phantasia), not SkylineTool cwd.")
 (defvar *forth-file* nil)
 (defparameter *forth-base* 10)
 
@@ -33,7 +35,7 @@
     (when-let (def (gethash name *words*))
       (destructuring-bind (runtime compiler meta) def
         (declare (ignore runtime compiler))
-        (destructuring-bind (&key source source-file) meta
+        (destructuring-bind (&key source source-file &allow-other-keys) meta
           (warn "redefining ~a (now from ~a, previously from ~a~@[ ~a~])"
                 name *forth-file* source source-file))))
     ;; Check for [inline] directive
@@ -296,79 +298,82 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                                (format nil "_~4,'0x" (char-code char))))))
 
 (defun forth-interpret (word)
-  (if-let (def (presence (gethash word *words*)))
-    (destructuring-bind (run compile &optional metadata) def
+  (multiple-value-bind (def foundp) (gethash word *words*)
+    (if (and foundp def)
+        (destructuring-bind (run compile &optional metadata) def
       #+ () (format *trace-output* "~& \ forth-interpret ~a found definition from ~a"
                     word (getf metadata :source))
-      (if run
-          (progn
-            (if-let (num (and (= 1 (length run))
-                              (or (numberp (first run))
-                                  (ignore-errors
-                                   (parse-integer (first run) :radix *forth-base*)))))
-              (if (< num #x100)
-                  (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d constant: ~a"
-                          (logand #xff num)
-                          (logand #xff num)
-                          word)
-                  (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
+      (cond
+        (run
+         (if-let (num (and (= 1 (length run))
+                           (or (numberp (first run))
+                               (ignore-errors
+                                (parse-integer (first run) :radix *forth-base*)))))
+           (if (< num #x100)
+               (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d constant: ~a"
+                       (logand #xff num)
+                       (logand #xff num)
+                       word)
+               (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
+                       (logand #xff num)
+                       (ash (logand #xff00 num) -8)
+                       (logand #xffff num)
+                       word)))
+         ;; Handle inline vs regular word definitions
+         (let ((inline-p (getf metadata :inline)))
+           (let (*forth-input-stuffing*)
+             (when (< 1 (length run))
+               (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
+                       word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
+             (dolist (w (reverse (copy-list run)))
+               (push w *forth-input-stuffing*))
+             (loop while *forth-input-stuffing*
+                   do (forth-interpret (read-forth-word)))
+             (when (< 1 (length run))
+               (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p "")))))
+         (force-output *standard-output*))
+        (compile
+         (forth-eval compile))
+        (t nil)))
+        ;; else: No def
+        (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
+          (destructuring-bind (run compile &optional metadata) asm-def
+            (declare (ignore metadata))
+            (if run
+                (let ((num (parse-integer (first run))))
+                  (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
                           (logand #xff num)
                           (ash (logand #xff00 num) -8)
                           (logand #xffff num)
-                          word)))
-            ;; Handle inline vs regular word definitions
-            (let ((inline-p (getf metadata :inline)))
-              (let (*forth-input-stuffing*)
-                (when (< 1 (length run))
-                  (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
-                          word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
-                (dolist (w (reverse (copy-list run)))
-                  (push w *forth-input-stuffing*))
-                (loop while *forth-input-stuffing*
-                      do (forth-interpret (read-forth-word)))
-                (when (< 1 (length run))
-                  (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p ""))))))
-          (force-output *standard-output*))
-      (forth-eval compile)))
-  ;; else: No def
-  (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
-    (destructuring-bind (run compile &optional metadata) asm-def
-      (declare (ignore metadata))
-      (if run
-          (let ((num (parse-integer (first run))))
-            (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
-                    (logand #xff num)
-                    (ash (logand #xff00 num) -8)
-                    (logand #xffff num)
-                    word (mangle-word-for-internals word)))
-          (forth-eval compile)))
-    (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
-      (if (< num #x100)
-          (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
-                  (logand #xff num)
-                  (logand #xff num))
-          (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
-                  (logand #xff num)
-                  (ash (logand #xff00 num) -8)
-                  (logand #xffff num)))
-      (tagbody top
-         (restart-case
-             (error "Unknown word: ~a~%(mangles to: ~a)"
-                    word (mangle-word-for-internals word))
-           (continue ()
-             :report "Continue, using a literal zero"
-             (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
-                     word
-                     (mangle-word-for-internals word)))
-           (words ()
-             :report "Review the list of words in the Forth environment"
-             (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
-             (when (x11-p)
-               (let ((words *words*))
-                 (clim-simple-echo:run-in-simple-echo
-                  (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
-                  :process-name "Forth Words")))
-             (go top)))))))
+                          word (mangle-word-for-internals word)))
+                (forth-eval compile)))
+          (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
+            (if (< num #x100)
+                (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
+                        (logand #xff num)
+                        (logand #xff num))
+                (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+                        (logand #xff num)
+                        (ash (logand #xff00 num) -8)
+                        (logand #xffff num)))
+            (tagbody top
+               (restart-case
+                   (error "Unknown word: ~a~%(mangles to: ~a)"
+                          word (mangle-word-for-internals word))
+                 (continue ()
+                   :report "Continue, using a literal zero"
+                   (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
+                           word
+                           (mangle-word-for-internals word)))
+                 (words ()
+                   :report "Review the list of words in the Forth environment"
+                   (format *trace-output* "~{~a~^ ~}" (hash-table-keys *words*))
+                   (when (x11-p)
+                     (let ((words *words*))
+                       (clim-simple-echo:run-in-simple-echo
+                        (lambda () (format t "~{~a~^ ~}" (hash-table-keys words)))
+                        :process-name "Forth Words")))
+                   (go top)))))))))
 
 (defun compile-forth-script (&key (dictionary (initialize-forth-dictionary)))
   (let ((*words* dictionary))
@@ -384,16 +389,48 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
     (force-output *trace-output*)
     *words*))
 
-(defmacro with-forth-file-wrappers (() &body body)
-  `(prog2
-       (format t "~% ( -*- forth -*- )
-( This file is compiled from Fountain sources. )
-( Alterations to this generated file will be discarded. ) ")
-       (progn ,@body)
-     (format t "~2&( End of Forth sources. )~%")))
+(defun compile-forth-z80 (forth to)
+  "Emit Z80 assembly stub for FORTH path TO (C128 Z80 coprocessor; z80asm syntax).
+
+Full Z80 Forth inner interpreter is not yet implemented; this writes a loadable
+stub that touches the shared mailbox page so the build pipeline can link.
+
+@table @asis
+@item FORTH
+Input Forth source pathname (content parsed in a future milestone).
+@item TO
+Output Z80 assembly file for @command{z80asm}.
+@end table"
+  (declare (ignorable forth))
+  (with-output-to-file (*standard-output* to :if-does-not-exist :create
+                                            :if-exists :supersede)
+    (format t ";;; Generated Z80 Forth stub (compile-forth-z80)~
+;;; Source: ~a~2%"
+            (enough-namestring forth))
+    (format t "ORG 0x4000~%START:~%")
+    (format t "    LD HL, 0FC0h~%")
+    (format t "    INC (HL)~%")
+    (format t "    RET~%"))
+  (format *trace-output* "~& Z80 Forth stub written to ~a." (enough-namestring to))
+  (force-output *trace-output*))
 
 (defun compile-forth (forth to)
-  "Compile the Forth program FORTH into the assembly sources TO"
+  "Compile the Forth program FORTH into the assembly sources TO.
+
+Writes a 64tass header: comment, then @code{.enc \"minifont\"} on one line, then the
+script block label derived from @var{TO}’s filename (@code{Script_@var{a_b_c}} from
+@file{Script.a.b.c.s}) and @code{.block} on the next line — never glued to
+@code{.enc}, which would confuse the assembler.
+
+@table @asis
+@item FORTH
+Pathname of input Forth source.
+@item TO
+Pathname of output @file{.s} file.
+@end table
+
+@subsection Outputs
+Returns @code{nil}. Writes TO. Trace on @code{*trace-output*}."
   (let (victoryp)
     (unwind-protect
          (progn (format *trace-output* "~2% Compiling ~a~%~10t→ ~a …"
@@ -403,10 +440,12 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                 (with-output-to-file (*standard-output* to :if-does-not-exist :create
                                                            :if-exists :supersede)
                   (format t ";;; This is a generated file, from ~s
-~10t.enc \"minifont\"~{~a~^_~}: .block~2%"
+~10t.enc \"minifont\"~%~10t~{~a~^_~}: .block~2%"
                           (enough-namestring forth)
                           (split-sequence #\. (pathname-name to)))
-                  (let ((*forth-file* forth))
+                  (let ((*forth-file* forth)
+                        (*genlabel-root-forth-file* forth)
+                        (*genlabel-counter* 0))
                     (with-input-from-file (*standard-input* *forth-file*)
                       (compile-forth-script)))
                   (format t "~2%~10t.bend~%"))

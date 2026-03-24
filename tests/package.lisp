@@ -180,13 +180,10 @@ Width and height specify dimensions, pattern can be:
 
 (defun generate-test-coverage-report ()
   "Generate a comprehensive test coverage report"
-  (format t "~&===============================================================================~%")
-  (format t "                    SKYLINE TOOL TEST COVERAGE REPORT~%")
-  (format t "===============================================================================~2%")
+  (format t "~&SKYLINE TOOL TEST COVERAGE REPORT~2%")
 
   ;; Test Suite Overview
   (format t "TEST SUITE OVERVIEW:~%")
-  (format t "-------------------~%")
   (format t "• Sega Tests (SMS): Platform-specific tests with property-based testing~%")
   (format t "• Graphics Tests: Comprehensive graphics conversion validation~%")
   (format t "• Music Tests: Audio conversion and synthesis testing~%")
@@ -196,7 +193,6 @@ Width and height specify dimensions, pattern can be:
 
   ;; Test Categories
   (format t "TEST CATEGORIES:~%")
-  (format t "---------------~%")
   (format t "✓ Unit Tests: ~%")
   (format t "  - Function existence and basic functionality~%")
   (format t "  - Parameter validation and error handling~%")
@@ -223,7 +219,6 @@ Width and height specify dimensions, pattern can be:
 
   ;; Test Data Generators
   (format t "TEST DATA GENERATORS:~%")
-  (format t "--------------------~%")
   (format t "• Pixel Data: Random, correlated, gradient, noise, structured patterns~%")
   (format t "• Audio Data: PSG sequences, MIDI tracks, FM synthesis parameters~%")
   (format t "• File Data: Valid/invalid paths, malformed content, corrupted data~%")
@@ -232,7 +227,6 @@ Width and height specify dimensions, pattern can be:
 
   ;; Coverage Areas
   (format t "COVERAGE AREAS:~%")
-  (format t "--------------~%")
   (let ((platforms '("SMS" "TG16" "Intellivision" "NES" "Game Boy" "SNES"))
         (components '("Graphics/Tiles" "Sound/Audio" "File I/O" "Error Handling" "Performance")))
     (format t "Platforms: ~{~A~^, ~}~%" platforms)
@@ -241,7 +235,6 @@ Width and height specify dimensions, pattern can be:
 
   ;; Quality Metrics
   (format t "QUALITY METRICS:~%")
-  (format t "---------------~%")
   (format t "• Test-to-Code Ratio: High (multiple test variants per function)~%")
   (format t "• Edge Case Coverage: Comprehensive (boundary values, error conditions)~%")
   (format t "• Property Testing: Extensive (100+ iterations per property)~%")
@@ -251,13 +244,10 @@ Width and height specify dimensions, pattern can be:
 
   ;; Recommendations
   (format t "RECOMMENDATIONS:~%")
-  (format t "---------------~%")
   (format t "• Run tests regularly during development~%")
   (format t "• Monitor performance regressions~%")
   (format t "• Expand coverage for new platforms~%")
   (format t "• Consider adding code coverage tools~%")
   (format t "~%")
 
-  (format t "===============================================================================~%")
-  (format t "Report generated: ~A~%" (get-universal-time))
-  (format t "===============================================================================~%"))
+  (format t "Report generated: ~A~%" (get-universal-time)))

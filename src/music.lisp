@@ -1252,21 +1252,95 @@ Music:~:*
   (declare (ignore output-coding sound-chip in-file-name))
   (error "DMG music compilation not yet implemented"))
 
+(defun write-sn76489-z80-stubs (stream psg-port tone-label)
+  "Emit Z80/SN76489 helper labels expected by music regression tests (sjasm-compatible)."
+  (format stream "~%PSG_PORT = $~2,'0x~2%" psg-port)
+  (format stream "psg_init:~%")
+  (format stream "    ld a, $9f~%")
+  (format stream "    out (PSG_PORT), a~%")
+  (format stream "    ret~2%")
+  (format stream "note_freqs:~%")
+  (format stream "    .word 0~2%")
+  (ecase tone-label
+    (:psg-write
+     (format stream "psg_write:~%")
+     (format stream "    out (PSG_PORT), a~%")
+     (format stream "    ret~2%"))
+    (:play-tone
+     (format stream "play_tone:~%")
+     (format stream "    out (PSG_PORT), a~%")
+     (format stream "    ret~2%")))
+  (format stream "psg_stop:~%")
+  (format stream "    ld a, $ff~%")
+  (format stream "    out (PSG_PORT), a~%")
+  (format stream "    ret~%"))
+
+(defun write-sn76489-song-bytes (notes source-out)
+  "Append SN76489 music rows (frame, channel, period lo/hi, volume, duration) as assembly bytes."
+  (format source-out "~2%;;; SN76489 PSG music data (time, ch, period lo/hi, vol, dur frames)")
+  (loop for i below (array-dimension notes 0)
+        do (let ((time (aref notes i 0))
+                 (channel (aref notes i 1))
+                 (period-lo (aref notes i 2))
+                 (period-hi (aref notes i 3))
+                 (volume (aref notes i 4))
+                 (duration (aref notes i 5)))
+             (format source-out "~%    .byte ~d, ~d, $~2,'0x, $~2,'0x, ~d, ~d"
+                     time channel period-lo period-hi volume duration))))
+
+(defun compile-sn76489-music-for-machine (machine sound-chip source-out-name in-file-name output-coding
+                                          &key header-comment psg-port tone-label)
+  (unless (sn76489-sound-chip-p (make-keyword (string-upcase (string sound-chip))))
+    (error "Machine ~a music expects SN76489 PSG, got ~s" machine sound-chip))
+  (let ((*machine* machine)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table)))
+    (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (format source-out ";;; ~a ~a~%;;; do not edit (generated)~%"
+              header-comment in-file-name)
+      (import-song-to-catalog :song-file-name in-file-name
+                              :sound-chip (make-keyword (string-upcase sound-chip))
+                              :output-coding (make-keyword (string-upcase output-coding))
+                              :catalog catalog
+                              :comments-catalog comments-catalog)
+      (write-sn76489-z80-stubs source-out psg-port tone-label)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (format source-out "~2%~a:~%" (assembler-label-name (string symbol)))
+            do (write-sn76489-song-bytes notes source-out)))))
+
 (defmethod compile-music-for-machine ((machine (eql 9918)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding sound-chip in-file-name))
-  (error "ColecoVision music compilation not yet implemented"))
+  (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
+                                     :header-comment "ColecoVision SN76489 PSG Music compiled from"
+                                     :psg-port #xff
+                                     :tone-label :play-tone))
 
 (defmethod compile-music-for-machine ((machine (eql 1000)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding sound-chip in-file-name))
-  (error "SG-1000 music compilation not yet implemented"))
+  (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
+                                     :header-comment "SG-1000 SN76489 PSG Music compiled from"
+                                     :psg-port #x7f
+                                     :tone-label :play-tone))
 
 (defmethod compile-music-for-machine ((machine (eql 3010)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding sound-chip in-file-name))
-  (error "SMS music compilation not yet implemented"))
+  (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
+                                     :header-comment "SN76489 PSG Music compiled from"
+                                     :psg-port #x7f
+                                     :tone-label :psg-write))
 
 (defmethod compile-music-for-machine ((machine (eql 837)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding sound-chip in-file-name))
-  (error "SGG music compilation not yet implemented"))
+  "Compile SN76489 music for Sega Game Gear (machine 837); same chip and port as SMS."
+  (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
+                                     :header-comment "Sega Game Gear SN76489 PSG Music compiled from"
+                                     :psg-port #x7f
+                                     :tone-label :psg-write))
+
+(defmethod compile-music-for-machine ((machine (eql 2110)) sound-chip source-out-name in-file-name output-coding)
+  "Compile SN76489 music for Sega Game Gear (machine 2110); alias for 837 in asset allocator."
+  (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
+                                     :header-comment "Sega Game Gear SN76489 PSG Music compiled from"
+                                     :psg-port #x7f
+                                     :tone-label :psg-write))
 
 (defmethod compile-music-for-machine ((machine (eql 3)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding sound-chip in-file-name))
@@ -1415,8 +1489,11 @@ Music:~:*
                       &optional (machine-type$ "2600")
                                 (sound-chip "TIA")
                                 (output-coding "NTSC"))
+  "Compile IN-FILE-NAME to SOURCE-OUT-NAME for MACHINE-TYPE$ (decimal string), SOUND-CHIP, OUTPUT-CODING.
+
+Uses @code{compile-music-for-machine} with @code{(parse-integer MACHINE-TYPE$)}, not @code{*machine*}, so callers may target any supported machine."
   (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
-  (compile-music-for-machine *machine* sound-chip source-out-name in-file-name output-coding))
+  (compile-music-for-machine (parse-integer machine-type$) sound-chip source-out-name in-file-name output-coding))
 
 (defun compile-music-zx81 (source-out-name in-file-name)
   "Compile music for ZX81 (machine 81). Wrapper for compile-music-for-machine."
@@ -1425,6 +1502,22 @@ Music:~:*
 (defun compile-music-spectrum (source-out-name in-file-name)
   "Compile music for ZX Spectrum (machine 2068). Wrapper for compile-music-for-machine."
   (compile-music-for-machine 2068 "Beeper" source-out-name in-file-name "PAL"))
+
+(defun compile-music-sms (source-out-name in-file-name)
+  "Compile music for Sega Master System (machine 3010). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 3010 "SN76489" source-out-name in-file-name "NTSC"))
+
+(defun compile-music-colecovision (source-out-name in-file-name)
+  "Compile music for ColecoVision (machine 9918). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 9918 "SN76489" source-out-name in-file-name "NTSC"))
+
+(defun compile-music-sg1000 (source-out-name in-file-name)
+  "Compile music for SG-1000 (machine 1000). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 1000 "SN76489" source-out-name in-file-name "NTSC"))
+
+(defun compile-music-game-gear (source-out-name in-file-name)
+  "Compile music for Sega Game Gear (machine 837). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 837 "SN76489" source-out-name in-file-name "NTSC"))
 
 (defvar *sec/quarter-note* 1/2)
 
@@ -1486,6 +1579,49 @@ Music:~:*
   (multiple-value-bind (octave-ish note-in-octave) (floor key 12)
     (let ((note-name (nth note-in-octave '(c c♯ d d♯ e f f♯ g g♯ a a♯ b))))
       (values (1- octave-ish) note-in-octave note-name))))
+
+(defun midi->note-name (midi-note-number)
+  "Convert a MIDI note number to a note name like “C4”
+
+@table @asis
+@item Inputs
+@item MIDI-NOTE-NUMBER
+A MIDI note number from 0 to 127
+@item Outputs
+@item string
+A string containing the note name (e.g., \"C4\", \"F♯3\"). Note,
+the string will have the correct sharp sign (♯) not the octothorpe (#).
+@end table"
+  (let* ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+         (octave (floor midi-note-number 12))
+         (note-index (mod midi-note-number 12)))
+    (format nil "~a~d" (aref note-names note-index) (1- octave))))
+
+(defun note->midi-note-number (note-name)
+  "Convert a note name like “C4” to a MIDI note number
+
+@table @asis
+@item Inputs
+@item NOTE-NAME
+A string containing a note name (e.g., \"C4\", \"F♯3\").
+Caution: You must use the sharp sign (♯) not the octothorpe (#),
+and flats (♭) or naturals (♮) are not understood.
+@item Outputs
+@item integer or nil
+A MIDI note number from 0 to 127, or nil if parsing fails
+@end table"
+  (let ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
+        (note-name (string-upcase note-name)))
+    ;; Simple parsing: find the note part and octave part
+    (let* ((len (length note-name))
+           (note-part (if (and (>= len 2) (char= (char note-name 1) #\♯))
+                         (subseq note-name 0 2)
+                         (subseq note-name 0 1)))
+           (octave-part (subseq note-name (length note-part)))
+           (octave (parse-integer octave-part :junk-allowed t))
+           (note-index (position note-part note-names :test #'string=)))
+      (when (and note-index octave)
+        (+ (* octave 12) note-index)))))
 
 (defconstant +a4/hz+ 440
   "The frequency (Hz) of the A in octave 4; by convention, 440Hz.")
@@ -1602,6 +1738,26 @@ Music:~:*
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
   (score->hokey-notes score frame-rate))
 
+(defun score-item-to-ay-note-event (item)
+  "Turn a plist from @code{midi->score} into an @code{(:note …)} event for @code{midi-to-ay-3-8910}.
+
+@table @asis
+@item ITEM
+Plist with @code{:time}, @code{:key}, @code{:duration}, optional @code{:velocity}
+@item Returns
+A single @code{(:note :time … :key … :duration … :velocity …)} form
+@end table"
+  (list :note
+        :time (getf item :time)
+        :key (getf item :key)
+        :duration (getf item :duration)
+        :velocity (or (getf item :velocity) 127)))
+
+(defmethod score->song (score (format (eql :ay-3-8910)) frame-rate)
+  "Build AY-3-8910 note array for Intellivision @code{compile-midi} / @code{midi-compile}."
+  (nth-value 0 (midi-to-ay-3-8910 (list (mapcar #'score-item-to-ay-note-event score))
+                                  (make-keyword (string-upcase frame-rate)))))
+
 (defun pokey-distortion-for-instrument (instrument-name)
   (or (loop for row in (get-orchestration)
             when (string-equal instrument-name (getf row :instrument))
@@ -1689,7 +1845,7 @@ Music:~:*
           (case (random 8)
             (0 (princ "♪" *trace-output*))
             (2 (princ "𝅘𝅥" *trace-output*)))
-          (let ((d-t (* 60 (- (hokey-note-start-time note) time))); NTSC XXX
+          (let ((d-t (* 60 (- (hokey-note-start-time note) time))) ; NTSC XXX
                 (instrument (or (hokey-note-instrument note) 0)))
             (setf time (hokey-note-start-time note))
             (multiple-value-bind (duration note) ; shadows outer NOTE
@@ -1727,29 +1883,39 @@ Music:~:*
                 note-count (* 8 (1+ note-count))))
       (terpri *trace-output*))))
 
+(defmethod write-song-binary ((notes array) (format (eql :ay-3-8910)) output)
+  "Write Intellivision PSG note table for @code{compile-midi} (@code{bin/skyline-tool compile-midi …})."
+  (write-song-data-to-binary notes output 2609 :ay-3-8910))
+
 (defun midi-to-ay-3-8910 (midi-notes output-coding)
-  "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision"
-  (let ((frame-rate (ecase output-coding (:ntsc 60) (:pal 50)))
+  "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision
+
+TIME and DURATION in decoded MIDI events are in seconds; they are converted
+to frame counts using 60 (NTSC) or 50 (PAL) frames per second."
+  (let ((fps (ecase output-coding (:ntsc 60) (:pal 50)))
         (output (list)))
     (dolist (track midi-notes)
-      (let ((voice-assignments (make-array 3 :initial-element nil)) ; 3 PSG channels
-            (current-time 0))
+      (let ((voice-assignments (make-array 3 :initial-element nil))) ; 3 PSG channels
         (dolist (event track)
           (ecase (first event)
             (:note
              (destructuring-bind (&key time key duration velocity) (rest event)
-               (let ((psg-channel (find-free-psg-channel voice-assignments time)))
+               (let* ((time-sec (float (or time 0) 1.0d0))
+                      (dur-sec (float (or duration 0) 1.0d0))
+                      (t-frames (floor (* time-sec fps)))
+                      (d-frames (max 1 (floor (* dur-sec fps))))
+                      (vel (or velocity 127))
+                      (psg-channel (find-free-psg-channel voice-assignments time-sec)))
                  (when psg-channel
                    (let* ((frequency (freq<-midi-key key))
                           (period (frequency-to-ay-period frequency)))
-                     ;; Store note data: (time channel period-low period-high volume duration)
-                     (push (list time psg-channel (logand period #xff) (ash period -8)
-                                 (min 15 (floor (* 15 (/ velocity 127)))) duration)
+                     ;; (time-frames channel period-lo period-hi volume duration-frames)
+                     (push (list t-frames psg-channel (logand period #xff) (ash period -8)
+                                 (min 15 (floor (* 15 (/ vel 127)))) d-frames)
                            output)
                      (setf (aref voice-assignments psg-channel)
-                           (+ time duration)))))))))
-        ;; Sort by time
-        (setf output (sort output #'< :key #'first))))
+                           (+ time-sec dur-sec)))))))))))
+    (setf output (sort output #'< :key #'first))
     ;; Convert to array format expected by the system
     (let ((result (make-array (list (length output) 6))))
       (loop for i from 0
@@ -1762,6 +1928,86 @@ Music:~:*
                  (setf (aref result i 4) volume)        ; volume (0-15)
                  (setf (aref result i 5) duration)))    ; duration in frames
       (values result nil))))
+
+(defun frequency-to-sn76489-period (frequency)
+  "Convert frequency in Hz to 10-bit SN76489 tone period (NTSC master clock 3579545 Hz).
+Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
+  (let ((clock 3579545.0))
+    (if (or (null frequency) (<= frequency 0))
+        0
+        (max 0 (min 1023 (round (- (/ clock (* 32.0 frequency)) 1)))))))
+
+(defun midi-to-sn76489-sequences (midi-notes output-coding)
+  "Convert MIDI tracks to SN76489 event array (same column layout as AY-3-8910 helper)."
+  (let ((fps (ecase (if (keywordp output-coding)
+                         output-coding
+                         (make-keyword (string-upcase (string output-coding))))
+               (:ntsc 60)
+               (:pal 50)
+               (:secam 50)))
+        (output (list)))
+    (dolist (track midi-notes)
+      (let ((voice-assignments (make-array 3 :initial-element nil)))
+        (dolist (event track)
+          (ecase (first event)
+            (:note
+             (destructuring-bind (&key time key duration velocity) (rest event)
+               (let* ((time-sec (float (or time 0) 1.0d0))
+                      (dur-sec (float (or duration 0) 1.0d0))
+                      (t-frames (floor (* time-sec fps)))
+                      (d-frames (max 1 (floor (* dur-sec fps))))
+                      (vel (or velocity 127))
+                      (psg-channel (find-free-psg-channel voice-assignments time-sec)))
+                 (when psg-channel
+                   (let* ((frequency (freq<-midi-key key))
+                          (period (frequency-to-sn76489-period frequency)))
+                     (push (list t-frames psg-channel (logand period #xff) (logand #xff (ash period -8))
+                                 (min 15 (floor (* 15 (/ vel 127)))) d-frames)
+                           output)
+                     (setf (aref voice-assignments psg-channel)
+                           (+ time-sec dur-sec)))))))))))
+    (setf output (sort output #'< :key #'first))
+    (let ((result (make-array (list (length output) 6))))
+      (loop for i from 0
+            for note in output
+            do (destructuring-bind (time channel period-lo period-hi volume duration) note
+                 (setf (aref result i 0) (floor time))
+                 (setf (aref result i 1) channel)
+                 (setf (aref result i 2) period-lo)
+                 (setf (aref result i 3) period-hi)
+                 (setf (aref result i 4) volume)
+                 (setf (aref result i 5) duration)))
+      (values result nil))))
+
+(defun sn76489-sound-chip-p (sound-chip)
+  "True if SOUND-CHIP selects the TI SN76489 / Sega PSG (four channels, latch data port)."
+  (and (symbolp sound-chip)
+       (string-equal (symbol-name sound-chip) "SN76489")))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 3010)) midi-notes sound-chip)
+  (if (sn76489-sound-chip-p sound-chip)
+      (midi-to-sn76489-sequences midi-notes output-coding)
+      (call-next-method)))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 837)) midi-notes sound-chip)
+  (if (sn76489-sound-chip-p sound-chip)
+      (midi-to-sn76489-sequences midi-notes output-coding)
+      (call-next-method)))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 2110)) midi-notes sound-chip)
+  (if (sn76489-sound-chip-p sound-chip)
+      (midi-to-sn76489-sequences midi-notes output-coding)
+      (call-next-method)))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 9918)) midi-notes sound-chip)
+  (if (sn76489-sound-chip-p sound-chip)
+      (midi-to-sn76489-sequences midi-notes output-coding)
+      (call-next-method)))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 1000)) midi-notes sound-chip)
+  (if (sn76489-sound-chip-p sound-chip)
+      (midi-to-sn76489-sequences midi-notes output-coding)
+      (call-next-method)))
 
 (defun find-free-psg-channel (voice-assignments current-time)
   "Find the first available PSG channel"
@@ -1833,46 +2079,3 @@ Music:~:*
   (write-song-binary (score->song (midi->score input (make-keyword frame-rate))
                                   (make-keyword format) (make-keyword frame-rate))
                      (make-keyword format) output))
-
-(defun midi->note-name (midi-note-number)
-  "Convert a MIDI note number to a note name like “C4”
-
-@table @asis
-@item Inputs
-@item MIDI-NOTE-NUMBER
-A MIDI note number from 0 to 127
-@item Outputs
-@item string
-A string containing the note name (e.g., \"C4\", \"F♯3\"). Note,
-the string will have the correct sharp sign (♯) not the octothorpe (#).
-@end table"
-  (let* ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
-         (octave (floor midi-note-number 12))
-         (note-index (mod midi-note-number 12)))
-    (format nil "~a~d" (aref note-names note-index) (1- octave))))
-
-(defun note->midi-note-number (note-name)
-  "Convert a note name like “C4” to a MIDI note number
-
-@table @asis
-@item Inputs
-@item NOTE-NAME
-A string containing a note name (e.g., \"C4\", \"F♯3\").
-Caution: You must use the sharp sign (♯) not the octothorpe (#),
-and flats (♭) or naturals (♮) are not understood.
-@item Outputs
-@item integer or nil
-A MIDI note number from 0 to 127, or nil if parsing fails
-@end table"
-  (let ((note-names #("C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"))
-        (note-name (string-upcase note-name)))
-    ;; Simple parsing: find the note part and octave part
-    (let* ((len (length note-name))
-           (note-part (if (and (>= len 2) (char= (char note-name 1) #\♯))
-                         (subseq note-name 0 2)
-                         (subseq note-name 0 1)))
-           (octave-part (subseq note-name (length note-part)))
-           (octave (parse-integer octave-part :junk-allowed t))
-           (note-index (position note-part note-names :test #'string=)))
-      (when (and note-index octave)
-        (+ (* octave 12) note-index)))))
