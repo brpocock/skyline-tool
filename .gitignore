@@ -23,6 +23,10 @@ DEADJOE
 
 lib/system-index.txt
 
+# SBCL heap images built under SkylineTool/bin (large); same names as Phantasia repo bin/
+bin/eightbol
+bin/skyline-tool
+
 # Test/build outputs at Skyline-Tool root (not Phantasia Object/)
 /Object/
 /system-index.txt
