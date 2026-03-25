@@ -4257,7 +4257,7 @@ but world “~a” needs ~:d for the ~r level~:p
         (unless (and background (= background (aref pixels x y)))
           (incf (gethash (aref pixels x y) popularity 0)))))
     (list-chomp count (sort (hash-table-keys popularity)
-                            #'< :key (lambda (n) (gethash n popularity))))))
+                            #'> :key (lambda (n) (gethash n popularity))))))
 
 (defun most-popular-13-colors (pixels width height)
   (most-popular-colors pixels width height :count 13))
