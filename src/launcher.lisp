@@ -1,3 +1,6 @@
+;;; Phantasia SkylineTool/src/launcher.lisp
+;;;; Copyright © 2026 Interworldly Adventuring, LLC.
+
 (in-package :skyline-tool)
 
 (defvar *launcher-frame* nil)
@@ -233,7 +236,10 @@ The signal code was ~a" break-code)
                  (setf size #x4000)
                  (format t "~%Bank $~2,'0x *size file not parsed" bank))
                (when (= bank #x3f)
-                 (let ((sh-size (with-input-from-file (sh #p"Object/StagehandHigh.o")
+                 (let ((sh-size (with-input-from-file (sh (merge-pathnames
+                                                          (make-pathname :directory (list :relative "Object" (machine-directory-name))
+                                                                         :name "StagehandHigh" :type "o")
+                                                          (uiop:getcwd)))
                                   (file-length sh))))
                    (format t "~%Stagehand High included in Bank $3F — $~4,'0x (~:d)" sh-size sh-size)
                    (incf size sh-size)))

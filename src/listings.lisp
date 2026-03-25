@@ -1,7 +1,16 @@
+;;; Phantasia SkylineTool/src/listings.lisp
+;;;; Copyright © 2026 Interworldly Adventuring, LLC.
+
 (in-package :skyline-tool)
 
 (defun labels-to-mame (labels-file mame-file &optional (guardrailsp$ nil))
   "Converts LABELS-FILE into a format MAME can read as “comments” in MAME-FILE.
+
+Public play scripts intentionally do not run @code{go}: the debugger stays paused
+until the user presses F12 so you can set breakpoints before the game runs.
+
+Emits one @code{rp} when @code{pc<0x8000}: instruction fetch must not occur outside ROM
+@code{$8000}--@code{$ffff} (any RAM, cart RAM, mirrors, or unmapped below that).
 
 --guardrails to enable guardrails in MAME. (May cause crashes.)"
   (with-output-to-file (mame mame-file :if-exists :supersede)
@@ -67,7 +76,7 @@ wp 5048,1,w,{wpdata == 3},{printf \"Switching context to Script thread (tid 3) (
 wp 5048,1,w,{wpdata > 3},{printf \"Switching context to non-existing thread (tid %d) (pc $%04x, beamy %d)\", wpdata, pc, beamy}
 bp ~4,'0x,1,{snap \"brk.snap.png\"; save \"brk.core\",0,10000; printf \"BRK handler invoked at $%02x:%04x\", b@(4661),  -2+w@(2+sp)}
 bp ~4,'0x,1,{snap \"fault.snap.png\"; save \"fault.core\",0,10000; printf \"Minor Fault %x.%x.%x.%x invoked at $%02x:%04x\", b@(1+w@(1+sp)), b@(2+w@(1+sp)), b@(3+w@(1+sp)), b@(4+w@(1+sp)), b@(4661),  -2+w@(1+sp)}
-rp {pc<8000},{printf \"Program counter underflow\"}
+rp {pc<0x8000},{printf \"PC below ROM window (not $8000-$ffff) pc=$%04x bank=$%02x\", pc, b@(4661)}
 bp c024,1,{printf \"NMI selector: $%04x (scanline %d)\", w@97, beamy;go}
 printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
