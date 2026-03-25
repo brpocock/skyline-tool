@@ -8,6 +8,7 @@ DEADJOE
 *.tiled-session
 .mscbackup
 *.backup
+*.bak
 
 # Generated/output files
 *.fasl
