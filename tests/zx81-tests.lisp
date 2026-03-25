@@ -33,9 +33,10 @@
 
     ;; Validate output file was created and has expected content
     (when (probe-file output-file)
-      (is-true (> (file-length output-file) 0)
-               "Output file should contain data")
       (with-open-file (stream output-file)
+        (is-true (> (file-length stream) 0)
+                 "Output file should contain data")
+        (file-position stream 0)
         (let ((content (read-line stream)))
           (is-true (search "ZX81 EAR Music" content)
                    "Output should contain ZX81 music header"))))

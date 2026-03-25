@@ -263,9 +263,9 @@
       ;; Verify file was created and has correct size
       (is-true (probe-file temp-file) "CHR ROM file should be created")
       (when (probe-file temp-file)
-        (is (= 32 (file-length temp-file)) "File should be 32 bytes for one tile")
-        ;; Verify file contents
         (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+          (is (= 32 (file-length f)) "File should be 32 bytes for one tile")
+          (file-position f 0)
           (dotimes (i 32)
             (is (= #xAA (read-byte f)) "File should contain expected data")))
         ;; Clean up
@@ -284,9 +284,9 @@
       ;; Verify file
       (is-true (probe-file temp-file))
       (when (probe-file temp-file)
-        (is (= (* num-tiles 32) (file-length temp-file)))
-        ;; Verify all data can be read back
         (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+          (is (= (* num-tiles 32) (file-length f)))
+          (file-position f 0)
           (dotimes (tile-idx num-tiles)
             (let ((tile (nth tile-idx test-tiles)))
               (dotimes (byte-idx 32)
@@ -300,7 +300,8 @@
     (finishes (skyline-tool::write-sms-chr-rom temp-file nil))
     (is-true (probe-file temp-file))
     (when (probe-file temp-file)
-      (is (= 0 (file-length temp-file)) "Empty tile list should produce empty file")
+      (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+        (is (= 0 (file-length f)) "Empty tile list should produce empty file"))
       (delete-file temp-file)))
 
   ;; Single tile with all zeros
@@ -309,8 +310,9 @@
     (skyline-tool::write-sms-chr-rom temp-file (list zero-tile))
     (is-true (probe-file temp-file))
     (when (probe-file temp-file)
-      (is (= 32 (file-length temp-file)))
       (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+        (is (= 32 (file-length f)))
+        (file-position f 0)
         (dotimes (i 32)
           (is (= 0 (read-byte f)) "Zero tile should write all zeros")))
       (delete-file temp-file)))
@@ -322,7 +324,8 @@
     (skyline-tool::write-sms-chr-rom temp-file tiles)
     (is-true (probe-file temp-file))
     (when (probe-file temp-file)
-      (is (= 64 (file-length temp-file)) "Two tiles should be 64 bytes")
+      (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+        (is (= 64 (file-length f)) "Two tiles should be 64 bytes"))
       (delete-file temp-file))))
 
 (test sms-performance-stress-test
@@ -594,7 +597,8 @@
           (skyline-tool::write-sms-chr-rom temp-file tiles)
           (is-true (probe-file temp-file))
           (when (probe-file temp-file)
-            (is (= (* (length tiles) 32) (file-length temp-file)))))
+            (with-open-file (f temp-file :element-type '(unsigned-byte 8))
+              (is (= (* (length tiles) 32) (file-length f))))))
       (when (probe-file temp-file)
         (delete-file temp-file)))))
 

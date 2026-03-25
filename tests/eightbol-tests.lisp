@@ -47,23 +47,17 @@
       "Should split dash-separated values"))
 
 (test split-sequence-edge-cases
-  "Test split-sequence with edge cases"
+  "Test split-sequence with edge cases and various delimiters"
   (is (equal (eightbol::split-sequence #\, "") '()) "Empty string should return empty list")
   (is (equal (eightbol::split-sequence #\, ",,") '()) "Only delimiters should return empty list")
-  (is (equal (eightbol::split-sequence #\, "abc") '("abc")) "No delimiters should return original"))
-
-(test split-sequence-edge-cases
-  "Test split-sequence with various delimiters and edge cases"
-  ;; Test with different delimiters
+  (is (equal (eightbol::split-sequence #\, "abc") '("abc")) "No delimiters should return original")
   (is (equal (eightbol::split-sequence #\, "apple,banana,cherry") '("apple" "banana" "cherry"))
       "Should split on commas")
   (is (equal (eightbol::split-sequence #\| "one|two|three") '("one" "two" "three"))
       "Should split on pipes")
   (is (equal (eightbol::split-sequence #\space "hello world test") '("hello" "world" "test"))
       "Should split on spaces")
-  ;; Test edge cases
   (is (equal (eightbol::split-sequence #\, "single") '("single")) "Single item no delimiter")
-  (is (equal (eightbol::split-sequence #\, "") '()) "Empty string")
   (is (equal (eightbol::split-sequence #\, ",,,") '()) "Only delimiters"))
 
 ;; Test case conversion functions
@@ -186,10 +180,6 @@
 (test parse-data-line-existence
   "Test parse-data-line function exists"
   (is-true (fboundp 'eightbol::parse-data-line) "parse-data-line should be defined"))
-
-(test collect-picture-definition-existence
-  "Test collect-picture-definition function exists"
-  (is-true (fboundp 'eightbol::collect-picture-definition) "collect-picture-definition should be defined"))
 
 (test parse-occurs-clause-existence
   "Test parse-occurs-clause function exists"

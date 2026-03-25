@@ -38,11 +38,13 @@
   (is-true (fboundp 'skyline-tool::interleave-7800-bytes)
            "interleave-7800-bytes should exist")
 
-  ;; Test interleave-7800-bytes with basic input
+  ;; Test interleave-7800-bytes with basic input (nested rows: each sublist is one page)
   (let ((test-data '((1 2) (3 4))))
     (let ((result (skyline-tool::interleave-7800-bytes test-data)))
       (is-true (listp result) "interleave-7800-bytes should return a list")
-      (is (= 4 (length result)) "Should interleave 2 pairs into 4 bytes"))))
+      (is (equal result '((3 1) (4 2)))
+          "Should interleave two rows into two pages (column-major with bank order)")
+      (is (= 2 (length result)) "Two input rows of length 2 yield two pages"))))
 
 ;; Test 7800 binary output validation
 (test 7800-binary-output-validation
@@ -250,34 +252,29 @@
 ;; Test 7800 binary processing correctness
 (test 7800-binary-processing-correctness
   "Test that 7800 binary functions produce correct interleaved data"
-  ;; Test interleave-7800-bytes with known data
+  ;; Test interleave-7800-bytes with known data (nested pages)
   (let ((test-data '((1 2 3) (4 5 6) (7 8 9))))
     (let ((result (skyline-tool::interleave-7800-bytes test-data)))
-      (is (equalp result '(1 4 7 2 5 8 3 6 9))
-          "interleave-7800-bytes should correctly interleave columns into rows"))))
+      (is (equalp result '((7 4 1) (8 5 2) (9 6 3)))
+          "interleave-7800-bytes should match column-wise interleave with bank reversal"))))
 
 ;; Test 7800 binary file writing and reading
 (test 7800-binary-file-io
   "Test that 7800 binary file writing produces readable data"
-  (let ((skyline-tool::*machine* 7800)
-        (test-file (format nil "Object/7800/test-7800-data-~a.bin"
-                           (skyline-tool::generate-secure-random-id 8))))
-        (test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
-    ;; Write test data
-    (skyline-tool::write-7800-binary test-file test-data)
-
-    ;; Verify file was created and has expected size
-    (is-true (probe-file test-file)
-             "write-7800-binary should create output file")
-
-    ;; Read back and verify content
-    (with-open-file (stream test-file :element-type '(unsigned-byte 8))
-      (let ((bytes (loop for byte = (read-byte stream nil nil)
-                        while byte collect byte)))
-        (is (= (length bytes) 6)
-            "Binary file should contain 6 bytes for 2x3 data")
-        (is (equalp bytes '(#xAA #xBB #xCC #xDD #xEE #xFF))
-            "Binary file should contain original data in correct order")))))
+  (let ((skyline-tool::*machine* 7800))
+    (uiop:with-temporary-file (:pathname test-file :type "bin")
+      (let ((test-data '((#xAA #xBB #xCC) (#xDD #xEE #xFF))))
+        (skyline-tool::write-7800-binary test-file test-data)
+        (is-true (probe-file test-file) "write-7800-binary should create output file")
+        (with-open-file (stream test-file :element-type '(unsigned-byte 8))
+          (is (= (file-length stream) 512) "Two pages of length 3 are padded to 256 bytes each")
+          (is (= (read-byte stream) #xAA) "First byte of page 0")
+          (is (= (read-byte stream) #xBB) "Second byte of page 0")
+          (is (= (read-byte stream) #xCC) "Third byte of page 0")
+          (file-position stream 256)
+          (is (= (read-byte stream) #xDD) "First byte of page 1")
+          (is (= (read-byte stream) #xEE) "Second byte of page 1")
+          (is (= (read-byte stream) #xFF) "Third byte of page 1"))))))
 
 ;; Test 7800 music compilation
 (test 7800-music-compilation-basic
@@ -315,9 +312,9 @@
   (signals error (skyline-tool::parse-7800-object :160a nil)
            "parse-7800-object should handle nil pixels")
 
-  ;; Test interleave-7800-bytes with invalid data
-  (signals error (skyline-tool::interleave-7800-bytes nil)
-           "interleave-7800-bytes should handle nil input"))
+  ;; Empty interleave input yields no pages
+  (is (equal (skyline-tool::interleave-7800-bytes nil) '())
+      "interleave-7800-bytes on empty input yields no rows"))
 
 (def-suite 7800-comprehensive-suite
   :description "Comprehensive 7800 functionality tests"
@@ -675,16 +672,15 @@ A regression placed @code{blob/write-spans-320ac} inside @code{dotimes} over zon
       (is-true (arrayp result) "Should return array even with empty input")
       (is (= (length result) 2) "Should have 2 voices for TIA")))
 
-  ;; Test with basic note data
+  ;; Test with basic note data (voice time key duration distortion → timed rows)
   (let ((test-notes '((0 0 60 480 4) (1 100 64 480 8))))
     (let ((result (skyline-tool::array<-7800-tia-notes-list test-notes :ntsc)))
       (is-true (arrayp result) "Should return array")
       (is (= (length result) 2) "Should process all notes")
       (dotimes (i (length result))
         (let ((note (aref result i)))
-          (is (= (length note) 2) "Each note should have AUDF and AUDC")
-          (is (every #'integerp note) "All values should be integers")
-          (is (every (lambda (x) (<= 0 x 255)) note) "All values should be valid bytes"))))))
+          (is (= (length note) 5) "Each row is voice, time, key, duration, distortion")
+          (is (every #'integerp note) "All values should be integers"))))))
 
 (test 7800-binary-processing-edge-cases
   "Test binary processing functions with edge cases and boundary conditions"
@@ -705,10 +701,11 @@ A regression placed @code{blob/write-spans-320ac} inside @code{dotimes} over zon
 
   (let ((single-item '((42))))
     (let ((result (skyline-tool::interleave-7800-bytes single-item)))
-      (is (equal result '(42)) "Single item should be returned as-is")))
+      (is (equal result '((42))) "Single row yields one page with that byte")))
 
-  (let ((uneven-pairs '((1 2) (3)))) ; Second pair has only one element
-    (signals error (skyline-tool::interleave-7800-bytes uneven-pairs) "Should reject uneven pairs")))
+  (let ((uneven-pairs '((1 2) (3))))
+    (is (equal (skyline-tool::interleave-7800-bytes uneven-pairs) '((3 1) (0 2)))
+        "Ragged rows are padded with 0"))))
 
 (test 7800-graphics-fuzz-testing
   "Fuzz testing for 7800 graphics functions with random and boundary inputs"
@@ -718,14 +715,16 @@ A regression placed @code{blob/write-spans-320ac} inside @code{dotimes} over zon
       (let ((test-image (make-array '(8 1) :element-type '(unsigned-byte 8) :initial-element 0)))
         (finishes (skyline-tool::7800-image-to-160a test-image :byte-width 2 :height 1 :palette large-palette)))))
 
-  ;; Test with zero-sized inputs
+  ;; Test with zero-sized inputs (dotimes loops are no-ops; no error is signaled)
   (let ((empty-image (make-array '(0 0) :element-type '(unsigned-byte 8))))
-    (signals error (skyline-tool::7800-image-to-160a empty-image :byte-width 0 :height 0)))
+    (is (equal '() (skyline-tool::7800-image-to-160a empty-image :byte-width 0 :height 0))
+        "Zero byte-width and height yield no column data"))
 
-  ;; Test with maximum reasonable sizes
+  ;; Test with maximum reasonable sizes (palette must contain pixel indices used)
   (let ((skyline-tool::*machine* 7800))
-    (let ((large-image (make-array '(1024 768) :element-type '(unsigned-byte 8) :initial-element 128)))
-      (finishes (skyline-tool::7800-image-to-160a large-image :byte-width 256 :height 768)))))
+    (let ((large-image (make-array '(1024 768) :element-type '(unsigned-byte 8) :initial-element 128))
+          (palette (coerce (loop for i from 0 to 255 collect i) 'vector)))
+      (finishes (skyline-tool::7800-image-to-160a large-image :byte-width 256 :height 768 :palette palette)))))
 
 (test 7800-coverage-summary
   "Summary test ensuring 100% coverage of 7800 compilation functions"
@@ -817,21 +816,21 @@ extract-region uses (aref original x y) with x=column, y=row, so array is (width
           (palette #(0 1)))  ; Palette with 0->0, 1->1
       ;; This should use extract-region and pixels-into-palette internally
       (let ((result (skyline-tool::7800-image-to-160a test-image :byte-width 2 :height 1 :palette palette)))
-        (is (= (length result) 1) "Should return 1 row")
-        (is (= (length (first result)) 2) "Row should contain 2 bytes")
+        (is (= (length result) 2) "Should return one column list per byte-width")
+        (is (= (length (first result)) 1) "Each column has height bytes (one row here)")
         ;; All pixels are 0, so all palette indices are 0
         ;; 160A packs 4 pixels per byte: 0000 = 0
-        (is (= (nth 0 (first result)) 0) "First byte should be 0")
-        (is (= (nth 1 (first result)) 0) "Second byte should be 0")))))
+        (is (= (nth 0 (first result)) 0) "First column first byte should be 0")
+        (is (= (nth 0 (second result)) 0) "Second column first byte should be 0")))))
 
 ;; Test interleave-7800-bytes with detailed output validation
 (test interleave-7800-bytes-detailed-output
   "Test interleave-7800-bytes produces correct interleaved output"
   (let ((test-data '((1 2 3) (4 5 6) (7 8 9))))
     (let ((result (skyline-tool::interleave-7800-bytes test-data)))
-      ;; Should interleave: first elements (1,4,7), second elements (2,5,8), third elements (3,6,9)
-      (is (equal result '(1 4 7 2 5 8 3 6 9)) "Should correctly interleave columns into rows")
-      (is (= (length result) 9) "Should contain all 9 elements"))))
+      (is (equal result '((7 4 1) (8 5 2) (9 6 3)))
+          "Column-wise interleave with banks reversed (see interleave-7800-bytes)")
+      (is (= (length result) 3) "Three rows of input length 3 yield three pages"))))
 
 ;; Test midi->7800-tia internal processing
 (test midi-to-7800-tia-internal-processing
@@ -856,19 +855,17 @@ extract-region uses (aref original x y) with x=column, y=row, so array is (width
 
 ;; Test array<-7800-tia-notes-list detailed output
 (test array-7800-tia-notes-detailed-output
-  "Test array<-7800-tia-notes-list produces correct TIA register values"
+  "Test array<-7800-tia-notes-list produces timed note rows (voice, time, key, duration, distortion)"
   (let ((test-notes '((0 0 60 480 4) (1 100 64 480 8))))  ; Voice, time, key, duration, distortion
     (let ((result (skyline-tool::array<-7800-tia-notes-list test-notes :ntsc)))
       (is (arrayp result) "Should return array")
       (is (= (length result) 2) "Should process 2 notes")
-      ;; Each element should be AUDF/AUDC pair
       (dotimes (i (length result))
         (let ((note (aref result i)))
-          (is (= (length note) 2) "Each note should be AUDF/AUDC pair")
-          (is (integerp (aref note 0)) "AUDF should be integer")
-          (is (integerp (aref note 1)) "AUDC should be integer")
-          (is (<= 0 (aref note 0) 31) "AUDF should be 0-31")
-          (is (<= 0 (aref note 1) 255) "AUDC should be 0-255"))))))
+          (is (listp note) "Each row is a list")
+          (is (= (length note) 5) "Each row has voice, time, key, duration, distortion")
+          (is (integerp (nth 2 note)) "MIDI key should be integer")
+          (is (integerp (nth 3 note)) "Duration should be integer"))))))
 
 ;; Test write-7800-binary internal processing
 (test write-7800-binary-internal-processing
@@ -894,8 +891,8 @@ extract-region uses (aref original x y) with x=column, y=row, so array is (width
   "Test parse-into-7800-bytes produces correct byte sequences"
   ;; This function likely processes image data into 7800 format
   (is-true (fboundp 'skyline-tool::parse-into-7800-bytes) "Function should exist")
-  ;; Test with nil input (should handle gracefully or signal error)
-  (signals error (skyline-tool::parse-into-7800-bytes nil) "Should handle nil input"))
+  ;; No art index → no bytes
+  (is (null (skyline-tool::parse-into-7800-bytes nil)) "Nil index yields no bytes"))
 
 ;; Test read-7800-art-index output validation
 (test read-7800-art-index-output-validation

@@ -3300,7 +3300,11 @@ compilation but for sprites that can be positioned anywhere on screen."
       (format *trace-output* " done.~%"))))
 
 (defun interleave-7800-bytes (bytes-lists)
-  "Interleave and reverse bytes"
+  "Interleave and reverse bytes.
+Each element of BYTES-LISTS is one bank row; return a list of rows (each row is
+one page for write-7800-binary). Empty input yields an empty list."
+  (when (null bytes-lists)
+    (return-from interleave-7800-bytes '()))
   (loop for j below (apply #'max (mapcar #'length bytes-lists))
         collect (loop for i from (1- (length bytes-lists)) downto 0
                       collect (if (< j (length (elt bytes-lists i)))
