@@ -1877,8 +1877,7 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%~10t~a~^ \\~}
 (defparameter *7800-a78-header-shared-script-lines*
   "set supergame
 set bankset
-unset ram@4000
-unset snes1
+set ram@4000
 unset composite
 set 7800joy1
 unset 7800joy2
@@ -1902,9 +1901,6 @@ Only the Atari 7800 port uses A78 headers; other machines skip this step.
 
 Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
 @code{tvpal}.  All other options match @code{*7800-a78-header-shared-script-lines*}."
-  (when (member *machine* '(5200 400 800))
-    ;; Atari 8-bit cartridge ports do not use @command{7800header} / A78 header scripts.
-    (return-from write-header-script nil))
   (unless (eql *machine* 7800)
     (return-from write-header-script nil))
   (assert (keywordp video) (video)
