@@ -1,9 +1,3 @@
-# -----------------------------------------------------------------------------
-# Policy: Do not commit generated or build outputs. Phantasia uses Object/,
-# Dist/, and Source/Generated/; this repo may emit SBCL heaps, fasls, and
-# scratch files when built or tested standalone.
-# -----------------------------------------------------------------------------
-
 # Backup files
 *~
 *#
@@ -18,8 +12,6 @@ DEADJOE
 
 # Generated/output files
 *.fasl
-# Wrong-cwd copy of class index (canonical path is Phantasia Source/Classes/Classes.Defs)
-/Classes.Defs
 
 # IDE temp files
 .emacs.desktop
@@ -35,7 +27,3 @@ lib/system-index.txt
 bin/eightbol
 bin/skyline-tool
 
-# Test/build outputs at Skyline-Tool root (not Phantasia Object/)
-/Object/
-/system-index.txt
-/test-input.mid

@@ -282,22 +282,22 @@
                  (cond
                    ((string= "Sentinels" name)
                     (make-pathname
-                     :directory (list :relative "Object" "Assets")
+                     :directory (list :relative "Object" "7800" "Assets")
                      :name "Art.SandyIslandEnemies" :type "o"))
                    ((string= "Sailors" name)
                     (make-pathname
-                     :directory (list :relative "Object" "Assets")
+                     :directory (list :relative "Object" "7800" "Assets")
                      :name "Art.Sailors" :type "o"))
                    ((string= "Nefertem" name)
                     (make-pathname
-                     :directory (list :relative "Object" "Assets")
+                     :directory (list :relative "Object" "7800" "Assets")
                      :name "Art.CharacterEffectsTiles" :type "o"))
                    (t (make-pathname
-                       :directory (list :relative "Object" "Assets")
+                       :directory (list :relative "Object" "7800" "Assets")
                        :name (format nil "Art.~a" name)
                        :type "o")))
                  (make-pathname
-                  :directory (list :relative "Object" "Assets")
+                  :directory (list :relative "Object" "7800" "Assets")
                   :name (format nil "Tileset.~a" name)
                   :type "o"))
              :element-type '(unsigned-byte 8))

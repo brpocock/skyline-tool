@@ -718,6 +718,7 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
             (setf (gethash segment-name *maps-ids*) (parse-integer (string id))
                   (gethash segment-name *maps-display-names*)
                   (lower-case (or (and display-name (string display-name)) "")))
+	    #+()
             (format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer (string id))
                     segment-name (lower-case (or (and display-name (string display-name)) "")))
             (when (and dock-id (not (emptyp (string dock-id))))

@@ -59,7 +59,7 @@
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops
-        :make-globals-copybook 'make-globals-copybook
+        :write-globals-copybook 'write-globals-copybook
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
         :patch-7800gd 'push-7800gd-bin-no-execute
@@ -632,7 +632,7 @@ See COPYING for details
                                                     (uiop:getcwd)))))
          (project-data (json:decode-json-from-source json-path))
          (*project.json* project-data)
-         (*game* (project-json-value project-data :*game "Game" :game :GAME))
+         (*game* (assocdr :*game project-data))
          (*part-number* (assocdr :*part-number project-data))
          (*studio* (assocdr :*studio project-data))
          (*publisher* (assocdr :*publisher project-data))
