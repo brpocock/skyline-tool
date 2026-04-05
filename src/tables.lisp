@@ -459,7 +459,7 @@ ProjectionTables:~20t.block")
                  (incf counter)))
       (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
               counter label (* 16 8))
-      (format code "~10tEndOf~aNames := *
+      (format code "~2&~10tEndOf~aNames := *
 ~10tAll~aNames=(~{~a~^,~})
 Low:~10t.byte <(All~aNames), <EndOf~aNames
 High:~10t.byte >(All~aNames), >EndOf~aNames

@@ -2836,8 +2836,8 @@ compilation but for sprites that can be positioned anywhere on screen."
 
                 ;; Store color info
                 (push (cons (+ (* char-y chars-wide) char-x)
-                           (logior (ash (logand fg-color #x0F) 4)
-                                   (logand bg-color #x0F)))
+                            (logior (ash (logand fg-color #x0F) 4)
+                                    (logand bg-color #x0F)))
                       *ted-char-colors*)))))
 
         ;; Generate color RAM data
@@ -2853,7 +2853,7 @@ compilation but for sprites that can be positioned anywhere on screen."
             (format src-file "$~2,'0X" (aref color-data i))
             (if (= (mod (1+ i) 16) 0)
                 (format src-file "~%")
-                (format src-file ", ")))))
+                (format src-file ", "))))
 
         ;; Clear global data
         (setf *ted-char-colors* nil)
@@ -2866,9 +2866,9 @@ compilation but for sprites that can be positioned anywhere on screen."
     .byte ~D            ; Characters high
     .word ~D            ; Total characters
 ~2%" (pathname-name png-file) (pathname-name png-file) (pathname-name png-file)
-             chars-wide chars-high total-chars)))
+chars-wide chars-high total-chars))))
 
-    (format *trace-output* "~&Compiled TED character map: ~A (~Dx~D chars)" out-file chars-wide chars-high))
+  (format *trace-output* "~&Compiled TED character map: ~A (~Dx~D chars)" out-file chars-wide chars-high))
 
 (defvar *ted-char-colors* nil
   "Global variable to store TED character color data during compilation")
