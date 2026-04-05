@@ -94,15 +94,15 @@
 
 ;; Test load-project.json extracts game name from JSON (:*game key)
 (test load-project-json-game-name
-  "load-project.json sets *game* from :*game key."
+  "load-project.json sets *game-title* from :*game key."
   (let ((project-root (skyline-tool::project-root)))
     (when (probe-file (merge-pathnames "Project.7800.json" project-root))
       (skyline-tool::load-project.json "7800"
         (lambda ()
-          (let ((game (symbol-value (find-symbol "*GAME*" :skyline-tool))))
-            (is (stringp game) "*game* should be a string")
+          (let ((game (symbol-value (find-symbol "*GAME-TITLE*" :skyline-tool))))
+            (is (stringp game) "*game-title* should be a string")
             (is (string= "Phantasia" game)
-                "*game* should be Phantasia from Project.7800.json")))))))
+                "*game-title* should be Phantasia from Project.7800.json")))))))
 
 ;;;; project-json-value regression (JSON "Game" key extraction)
 

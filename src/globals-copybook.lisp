@@ -61,7 +61,7 @@ Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID).
   (let ((pic (cond ((< value 256)   "PIC 99 USAGE BINARY")
                    ((< value 65536) "PIC 9999 USAGE BINARY")
                    (t               "PIC 9(8) USAGE BINARY"))))
-    (format stream "~%~6t ~a~2,'0d ~a ~a VALUE ~d."
+    (format stream "~%~6t ~a~2,'0d ~a ~a VALUE '~x'."
             (eightbol-level-indent level) level (eightbol-slot-name name) pic value)))
 
 (defparameter *sysram-section-labels*
@@ -203,21 +203,21 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
          ((and (eq kind :word) (= size 2)) "PIC 9999 USAGE BINARY")
          ((eq kind :fill)
           (if (and (= size 1) (not raw-size-sym)) "PIC 99 USAGE BINARY"
-              (format nil "PIC 99 USAGE BINARY OCCURS ~a TIMES"
+              (format nil "PIC 99 USAGE BINARY OCCURS ~d TIMES"
                       (or (eb raw-size-sym) size))))
          ((and (eq kind :byte) (> size 1))
-          (format nil "PIC 99 USAGE BINARY OCCURS ~a TIMES"
+          (format nil "PIC 99 USAGE BINARY OCCURS ~d TIMES"
                   (or (eb raw-size-sym) size)))
          ((and (eq kind :word) (> size 2))
-          (format nil "PIC 9999 USAGE BINARY OCCURS ~a TIMES"
+          (format nil "PIC 9999 USAGE BINARY OCCURS ~d TIMES"
                   (or (eb raw-size-sym) (/ size 2))))
          (t nil)))
       ((eq (first annotation) :object-ref)
-       (format nil "OBJECT REFERENCE ~a" (pascal-to-eightbol-name (second annotation))))
+       (format nil "OBJECT REFERENCE ~a" (header-case (second annotation))))
       ((eq (first annotation) :varchar)
        ;; Correct COBOL: PIC X OCCURS 0 TO n TIMES DEPENDING ON size-field.
        ;; Size-field does not get a picture.
-       (format nil "PIC X OCCURS 0 TO ~a TIMES DEPENDING ON ~a"
+       (format nil "PIC X OCCURS 0 TO ~d TIMES DEPENDING ON ~a"
                (second annotation)
                (pascal-to-eightbol-name (third annotation))))
       ((eq (first annotation) :pic)
@@ -245,9 +245,8 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
                    (when item (push item results)))))))
     (nreverse results)))
 
-(defun make-globals-copybook (&key (root-dir #p"./")
-                                   output-path
-                                   (game-name (when (boundp '*game*) *game*)))
+(defun write-globals-copybook (&key (root-dir #p"./")
+                                    output-path)
   "Generate a platform-specific globals copybook from 64tass source files.
 
 Uses (machine-directory-name) for directory components (*MACHINE* is numeric, not for paths).
@@ -259,110 +258,105 @@ Output: Source/Generated/{machine}/Classes/{GAME}-Globals.cpy  (or OUTPUT-PATH i
 Game name comes from JSON (Game key) via load-project.json; used for filenames.
 
 @table @asis
-@item GAME-NAME
 Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cpy).
 @end table"
-  (let* ((effective-name (or game-name (when (boundp '*game*) *game*))))
-    (unless (and effective-name (plusp (length (string effective-name))))
-      (error "Game name required for globals copybook. Add \"Game\" key to Project.{port}.json ~
-              (e.g. {\"Game\": \"Phantasia\", ...}) or pass :game-name."))
-    (let* ((machine-dir (machine-directory-name))
-           (common   (merge-pathnames
-                      (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
-                      root-dir))
-           (zero-page-path
-            (or (probe-file (merge-pathnames "ZeroPage.s" common))
-                (probe-file (merge-pathnames "ZP.s" common))))
-           (sysram-path
-            (or (probe-file (merge-pathnames "SysRAM.s" common))
-                (probe-file (merge-pathnames "Variables.s" common))))
-           (cartram-path
-            (or (probe-file (merge-pathnames "CartRAM.s" common))
-                (probe-file (merge-pathnames "OOPS-RAM.s" common))))
-           (enums-path
-            (probe-file (merge-pathnames "Enums.s" common)))
-           (constants-path
-            (or (probe-file (merge-pathnames "Constants.s" common))
-                (probe-file (merge-pathnames "OOPS-Constants.s" common))))
-           (*parsed-constants*
-            (remove nil
-                    (mapcar (lambda (item)
-                              (when (and (eq :const (getf item :kind)) (getf item :value))
-                                (cons (string (getf item :name)) (getf item :value))))
-                            (or (parse-assembly-globals
-                                 constants-path)
-                                ()))))
-           (out-dir  (merge-pathnames
-                      (make-pathname :directory `(:relative "Source" "Generated" ,machine-dir "Classes"))
-                      root-dir))
-           (out-name (format nil "~a-Globals" effective-name))
-           (out-path (or output-path
-                         (merge-pathnames
-                          (make-pathname :name out-name :type "cpy")
-                          out-dir))))
+  (let* ((machine-dir (machine-directory-name))
+         (common   (merge-pathnames
+                    (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
+                    root-dir))
+         (zero-page-path
+           (or (probe-file (merge-pathnames "ZeroPage.s" common))
+               (probe-file (merge-pathnames "ZP.s" common))))
+         (sysram-path
+           (or (probe-file (merge-pathnames "SysRAM.s" common))
+               (probe-file (merge-pathnames "Variables.s" common))))
+         (cartram-path
+           (or (probe-file (merge-pathnames "CartRAM.s" common))
+               (probe-file (merge-pathnames "OOPS-RAM.s" common))))
+         (enums-path
+           (probe-file (merge-pathnames "Enums.s" common)))
+         (constants-path
+           (or (probe-file (merge-pathnames "Constants.s" common))
+               (probe-file (merge-pathnames "OOPS-Constants.s" common))))
+         (*parsed-constants*
+           (remove nil
+                   (mapcar (lambda (item)
+                             (when (and (eq :const (getf item :kind)) (getf item :value))
+                               (cons (string (getf item :name)) (getf item :value))))
+                           (or (parse-assembly-globals
+                                constants-path)
+                               ()))))
+         (out-dir  (merge-pathnames
+                    (make-pathname :directory `(:relative "Source" "Generated" ,machine-dir "Classes"))
+                    root-dir))
+         (out-name (format nil "~a-Globals" effective-name))
+         (out-path (or output-path
+                       (merge-pathnames
+                        (make-pathname :name out-name :type "cpy")
+                        out-dir))))
     (ensure-directories-exist out-path)
     (with-output-to-file (stream out-path :if-exists :supersede)
       (emit-eightbol-comment stream (format nil " ~a-Globals.cpy" effective-name)
                              :leading-newline nil)
-        (emit-eightbol-comment stream " Generated by make-classes-for-oops -- DO NOT EDIT")
-        (emit-eightbol-comment stream
-                            (concatenate 'string " Source: Source/Code/" machine-dir
-                                         "/Common/{{ZeroPage|ZP,SysRAM|Variables,CartRAM|OOPS-RAM,Enums,Constants|OOPS-Constants}}.s"))
-        (emit-eightbol-blank stream)
+      (emit-eightbol-comment stream " Generated by make-classes-for-oops -- DO NOT EDIT")
+      (emit-eightbol-comment stream
+                             (concatenate 'string " Source: Source/Code/" machine-dir
+                                          "/Common/{{ZeroPage|ZP,SysRAM|Variables,CartRAM|OOPS-RAM,Enums,Constants|OOPS-Constants}}.s"))
+      (emit-eightbol-blank stream)
 
-        ;; ZeroPage -> 01 ZERO-PAGE EXTERNAL
-        (let ((items (and zero-page-path
-                          (parse-assembly-globals zero-page-path
-                                                  :skip-conditional-blocks t))))
-          (when items
-            (emit-eightbol-blank stream)
-            (emit-eightbol-section stream 1 "ZERO-PAGE EXTERNAL")
-            (dolist (item items)
-              (if (eq :comment (first item))
-                  (emit-eightbol-comment stream (second item))
-                  (when (not (eq :const (getf item :kind)))
-                    (let ((pic (var-to-eightbol-pic (getf item :kind)
-                                                 (getf item :size)
-                                                 (getf item :annotation)
-                                                 (getf item :raw-size-sym))))
-                      (when pic (emit-eightbol-var 5 (getf item :name) pic stream))))))))
+      ;; ZeroPage -> 01 ZERO-PAGE EXTERNAL
+      (let ((items (and zero-page-path
+                        (parse-assembly-globals zero-page-path
+                                                :skip-conditional-blocks t))))
+        (when items
+          (emit-eightbol-blank stream)
+          (emit-eightbol-section stream 1 "ZERO-PAGE EXTERNAL")
+          (dolist (item items)
+            (if (eq :comment (first item))
+                (emit-eightbol-comment stream (second item))
+                (when (not (eq :const (getf item :kind)))
+                  (let ((pic (var-to-eightbol-pic (getf item :kind)
+                                                  (getf item :size)
+                                                  (getf item :annotation)
+                                                  (getf item :raw-size-sym))))
+                    (when pic (emit-eightbol-var 5 (getf item :name) pic stream))))))))
 
-        ;; SysRAM -> three 01 sections
-        (let ((current-section nil)
-              (depth 0))
-          (when (probe-file sysram-path)
-            (with-input-from-file (sysram sysram-path)
-              (loop for line = (read-line sysram nil nil) while line do
-                    (cond
-                      ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
-                      ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
-                       (when (> depth 0) (decf depth)))
-                      ((> depth 0) nil)
-                      (t
-                       (let* ((t2    (string-trim " " line))
-                              (lbl   (cl-ppcre:regex-replace ":$" t2 ""))
-                              (new-s (cdr (assoc lbl *sysram-section-labels*
-                                                 :test #'string=))))
-                         (if new-s
-                             (progn
-                               (setf current-section new-s)
-                               (emit-eightbol-blank stream)
-                               (emit-eightbol-section stream 1
-                                                   (format nil "~a EXTERNAL" new-s)))
-                             (when current-section
-                               (let ((item (parse-asm-line line)))
-                                 (when item
-                                   (if (eq :comment (first item))
-                                       (emit-eightbol-comment stream (second item))
-                                       (when (not (eq :const (getf item :kind)))
-                                         (let ((pic (var-to-eightbol-pic
-                                                     (getf item :kind)
-                                                     (getf item :size)
-                                                     (getf item :annotation)
-                                                     (getf item :raw-size-sym))))
-                                           (when pic
-                                             (emit-eightbol-var 5 (getf item :name)
-                                                             pic stream))))))))))))))
+      ;; SysRAM -> three 01 sections
+      (let ((current-section nil)
+            (depth 0))
+        (when (probe-file sysram-path)
+          (with-input-from-file (sysram sysram-path)
+            (loop for line = (read-line sysram nil nil) while line do
+              (cond
+                ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
+                ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
+                 (when (> depth 0) (decf depth)))
+                ((> depth 0) nil)
+                (t
+                 (let* ((t2 (string-trim " " line))
+                        (lbl (cl-ppcre:regex-replace ":$" t2 ""))
+                        (new-s (cdr (assoc lbl *sysram-section-labels*
+                                           :test #'string=))))
+                   (if new-s
+                       (progn
+                         (setf current-section new-s)
+                         (emit-eightbol-blank stream)
+                         (emit-eightbol-section stream 1
+                                                (format nil "~a EXTERNAL" new-s)))
+                       (when current-section
+                         (let ((item (parse-asm-line line)))
+                           (when item
+                             (if (eq :comment (first item))
+                                 (emit-eightbol-comment stream (second item))
+                                 (when (not (eq :const (getf item :kind)))
+                                   (let ((pic (var-to-eightbol-pic
+                                               (getf item :kind)
+                                               (getf item :size)
+                                               (getf item :annotation)
+                                               (getf item :raw-size-sym))))
+                                     (when pic
+                                       (emit-eightbol-var 5 (getf item :name)
+                                                          pic stream))))))))))))))
           (unless sysram-path
             (warn "~&Could not read SysRAM.s")))
 
@@ -374,29 +368,29 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
           (when (probe-file cart-path)
             (with-input-from-file (cart cart-path)
               (loop for line = (read-line cart nil nil) while line do
-                    (cond
-                      ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
-                      ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
-                       (when (> depth 0) (decf depth)))
-                      ((> depth 0) nil)
-                      ((cl-ppcre:scan "^\\s+\\.Gap\\b" line)
-                       (incf gap-n) (setf in-gap t)
-                       (emit-eightbol-section stream 5
-                                           (format nil "CART-RAM-GAP-~d" gap-n)))
-                      (in-gap
-                       (let ((item (parse-asm-line line)))
-                         (when item
-                           (if (eq :comment (first item))
-                               (emit-eightbol-comment stream (second item))
-                               (when (not (eq :const (getf item :kind)))
-                                 (let ((pic (var-to-eightbol-pic
-                                       (getf item :kind)
-                                       (getf item :size)
-                                       (getf item :annotation)
-                                       (getf item :raw-size-sym))))
-                             (when pic
-                               (emit-eightbol-var 10 (getf item :name)
-                                               pic stream))))))))))))
+                (cond
+                  ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
+                  ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
+                   (when (> depth 0) (decf depth)))
+                  ((> depth 0) nil)
+                  ((cl-ppcre:scan "^\\s+\\.Gap\\b" line)
+                   (incf gap-n) (setf in-gap t)
+                   (emit-eightbol-section stream 5
+                                          (format nil "CART-RAM-GAP-~d" gap-n)))
+                  (in-gap
+                   (let ((item (parse-asm-line line)))
+                     (when item
+                       (if (eq :comment (first item))
+                           (emit-eightbol-comment stream (second item))
+                           (when (not (eq :const (getf item :kind)))
+                             (let ((pic (var-to-eightbol-pic
+                                         (getf item :kind)
+                                         (getf item :size)
+                                         (getf item :annotation)
+                                         (getf item :raw-size-sym))))
+                               (when pic
+                                 (emit-eightbol-var 10 (getf item :name)
+                                                    pic stream))))))))))))
           (unless cart-path
             (warn "~&Could not read CartRAM.s")))
 
@@ -410,7 +404,7 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                   (emit-eightbol-comment stream (second item))
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 78 (getf item :name)
-                                      (getf item :value) stream))))))
+                                         (getf item :value) stream))))))
 
         ;; Constants -> 77 level (preserve comments from source)
         (let ((items (and constants-path (parse-assembly-globals constants-path))))
@@ -422,7 +416,7 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                   (emit-eightbol-comment stream (second item))
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 77 (getf item :name)
-                                      (getf item :value) stream))))))
+                                         (getf item :value) stream))))))
         (format stream "~%"))
-    (format *trace-output* "~%~&Generated ~a" (enough-namestring out-path))
-    out-path))))
+      (format *trace-output* "~%~&Generated ~a" (enough-namestring out-path))
+      out-path)))

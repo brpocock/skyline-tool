@@ -1278,67 +1278,67 @@ Path of the output @file{.lnx} or @file{.car} image (header plus ROM).
 Path to the raw ROM binary to wrap.
 @end table"
   (ecase *machine*
-          (200
-           (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
-                                                :if-exists :supersede)
-             ;; LYNX header (64 bytes total)
-             (write-byte (char-code #\L) header)
-             (write-byte (char-code #\Y) header)
-             (write-byte (char-code #\N) header)
-             (write-byte (char-code #\X) header)
-             (write-byte 0 header) ;; bank0_page
-             (write-byte 0 header) ;; bank1_page
-             (write-byte 1 header) ;; version
-             ;; cart_name (32 bytes, null-terminated)
-             (let ((name-str (format nil "~a~c" (or *game* "Unknown") #\null)))
-               (loop for i from 0 below 32
-                     do (write-byte (if (< i (length name-str))
-                                        (char-code (aref name-str i))
-                                        0)
-                                    header)))
-             ;; manuf_name (16 bytes, null-terminated)
-             (let ((manuf-str (format nil "~a~c" (or *studio* "Unknown") #\null)))
-               (loop for i from 0 below 16
-                     do (write-byte (if (< i (length manuf-str))
-                                        (char-code (aref manuf-str i))
-                                        0)
-                                    header)))
-             (write-byte #x00 header) ;; rotat_mode low
-             (write-byte #xA0 header) ;; rotat_mode high
-             ;; spare (7 bytes of zeros)
-             (dotimes (i 7)
-               (write-byte 0 header))
-             ;; Append the binary data
-             (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
-               (let ((bytes-written 0))
-                 (loop for byte = (read-byte binary nil nil)
-                       while byte
-                       do (write-byte byte header)
-                          (incf bytes-written))
-                 (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
-          (5200
-           (let* ((size (ql-util:file-size binary-name))
-                  (type-id (%atari800-5200-car-type-id size))
-                  (checksum (%atari800-car-rom-checksum binary-name)))
-             (with-output-to-file (out header-name :element-type '(unsigned-byte 8)
-                                                  :if-exists :supersede)
-               (write-byte (char-code #\C) out)
-               (write-byte (char-code #\A) out)
-               (write-byte (char-code #\R) out)
-               (write-byte (char-code #\T) out)
-               (write-byte 0 out)
-               (write-byte 0 out)
-               (write-byte 0 out)
-               (write-byte type-id out)
-               (write-byte (ldb (byte 8 24) checksum) out)
-               (write-byte (ldb (byte 8 16) checksum) out)
-               (write-byte (ldb (byte 8 8) checksum) out)
-               (write-byte (ldb (byte 8 0) checksum) out)
-               (write-bytes #(0 0 0 0) out)
-               (with-open-file (bin binary-name :element-type '(unsigned-byte 8))
-                 (loop for b = (read-byte bin nil nil)
-                       while b
-                       do (write-byte b out))))))))
+    (200
+     (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                              :if-exists :supersede)
+       ;; LYNX header (64 bytes total)
+       (write-byte (char-code #\L) header)
+       (write-byte (char-code #\Y) header)
+       (write-byte (char-code #\N) header)
+       (write-byte (char-code #\X) header)
+       (write-byte 0 header) ;; bank0_page
+       (write-byte 0 header) ;; bank1_page
+       (write-byte 1 header) ;; version
+       ;; cart_name (32 bytes, null-terminated)
+       (let ((name-str (format nil "~a~c" (or *game-title* "Unknown") #\null)))
+         (loop for i from 0 below 32
+               do (write-byte (if (< i (length name-str))
+                                  (char-code (aref name-str i))
+                                  0)
+                              header)))
+       ;; manuf_name (16 bytes, null-terminated)
+       (let ((manuf-str (format nil "~a~c" (or *studio* "Unknown") #\null)))
+         (loop for i from 0 below 16
+               do (write-byte (if (< i (length manuf-str))
+                                  (char-code (aref manuf-str i))
+                                  0)
+                              header)))
+       (write-byte #x00 header) ;; rotat_mode low
+       (write-byte #xA0 header) ;; rotat_mode high
+       ;; spare (7 bytes of zeros)
+       (dotimes (i 7)
+         (write-byte 0 header))
+       ;; Append the binary data
+       (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
+         (let ((bytes-written 0))
+           (loop for byte = (read-byte binary nil nil)
+                 while byte
+                 do (write-byte byte header)
+                    (incf bytes-written))
+           (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
+    (5200
+     (let* ((size (ql-util:file-size binary-name))
+            (type-id (%atari800-5200-car-type-id size))
+            (checksum (%atari800-car-rom-checksum binary-name)))
+       (with-output-to-file (out header-name :element-type '(unsigned-byte 8)
+                                             :if-exists :supersede)
+         (write-byte (char-code #\C) out)
+         (write-byte (char-code #\A) out)
+         (write-byte (char-code #\R) out)
+         (write-byte (char-code #\T) out)
+         (write-byte 0 out)
+         (write-byte 0 out)
+         (write-byte 0 out)
+         (write-byte type-id out)
+         (write-byte (ldb (byte 8 24) checksum) out)
+         (write-byte (ldb (byte 8 16) checksum) out)
+         (write-byte (ldb (byte 8 8) checksum) out)
+         (write-byte (ldb (byte 8 0) checksum) out)
+         (write-bytes #(0 0 0 0) out)
+         (with-open-file (bin binary-name :element-type '(unsigned-byte 8))
+           (loop for b = (read-byte bin nil nil)
+                 while b
+                 do (write-byte b out))))))))
 
 (defun prepend-fundamental-mode (file)
   (let ((contents (read-file-into-string file)))

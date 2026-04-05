@@ -26,50 +26,31 @@
 
 (defun pascal-to-eightbol-name (name)
   "Convert a PascalCase or hyphenated assembly symbol to a EIGHTBOL NAME in
-UPPERCASE-HYPHENATED form, as required by EIGHTBOL naming conventions.
-A hyphen is inserted before each uppercase letter that follows a lowercase
-letter (or digit); the result is uppercased.
-  \"NameLength\"       → \"NAME-LENGTH\"
-  \"MaxHP\"            → \"MAX-HP\"
-  \"ClassID\"          → \"CLASS-ID\"
-  \"AbsoluteDeltaX\"   → \"ABSOLUTE-DELTA-X\"
-  \"HP\"               → \"HP\"
-  \"WorkFitness\"      → \"WORK-FITNESS\"
-  \"work-fitness\"     → \"WORK-FITNESS\"   (already hyphenated)
-  \"WORK-FITNESS\"     → \"WORK-FITNESS\"   (already correct)"
-  (string-upcase
-   (with-output-to-string (out)
-     (loop for i from 0 below (length name)
-           for ch = (char name i)
-           do (when (and (> i 0)
-                         (upper-case-p ch)
-                         (lower-case-p (char name (1- i))))
-                (write-char #\- out))
-              (write-char ch out)))))
+Uppercase-Hyphenated form, as required by EIGHTBOL naming conventions.
+"
+  (header-case name))
 
 (defun pascal-to-copybook-filename (name)
   "Convert PascalCase to Title-And-Hyphens for copybook filenames.
    NonPlayerCharacter → Non-Player-Character
    Character → Character
    Uses hyphens (not spaces) so Makefile dependencies parse correctly."
-  (format nil "~{~a~^-~}"
-          (mapcar #'string-capitalize
-                  (split-sequence #\- (param-case name)))))
+  (header-case name))
 
 (defun eightbol-slot-name (pascal-name)
   "Convert PascalCase slot name to EIGHTBOL copybook form. Avoids reserved words
 that would conflict with eightbol grammar (e.g. CLASS-ID -> OBJ-CLASS-ID,
 POINTER -> ZP-POINTER, SIZE -> OBJ-SIZE, METHOD -> OBJ-METHOD,
 REMAINDER -> CART-REMAINDER, TRUE -> CONST-TRUE)."
-  (let ((base (pascal-to-eightbol-name pascal-name)))
+  (let ((base (string-upcase (param-case pascal-name))))
     (case (intern base :keyword)
-      ((:class-id) "OBJ-CLASS-ID")
-      ((:pointer) "ZP-POINTER")
-      ((:size) "OBJ-SIZE")
-      ((:method) "OBJ-METHOD")
-      ((:remainder) "CART-REMAINDER")
-      ((:true) "CONST-TRUE")
-      (t base))))
+      ((:class-id) "Obj-Class-Id")
+      ((:pointer) "Zp-Pointer")
+      ((:size) "Obj-Size")
+      ((:method) "Obj-Method")
+      ((:remainder) "Cart-Remainder")
+      ((:true) "Const-True")
+      (t (header-case pascal-name)))))
 
 (defun parse-slot-annotation (parts)
   "Parse the annotation portion of a slot definition (everything after size).
