@@ -3032,28 +3032,21 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
   (format t "~% C\" ~a\"" (prepare-dialogue text))
   (when (speech-supported-p)
     (restart-case
-        (format t "~% SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-                (convert-for-atarivox text))
-      (reload-dictionary ()
-        :report "Reload the AtariVox (SpeakJet) dictionary"
-        (reload-atarivox-dictionary)
-        (fountain/write-speech text))))
-  (restart-case
-      (progn
-        (format t "
+        (progn
+          (format t "
   C\" ~a\"
   SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-                (prepare-dialogue text)
-                (convert-for-atarivox text))
-        ;; Include IntelliVoice phonemes for Intellivision
-         (format t "
+                  (prepare-dialogue text)
+                  (convert-for-atarivox text))
+          ;; Include IntelliVoice phonemes for Intellivision
+          (format t "
   IntelliVoice[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]IntelliVoice"
                   (convert-for-speech text :intellivoice)))
-    (reload-dictionary ()
-      :report "Reload the speech dictionaries"
-      (reload-atarivox-dictionary)
-      (reload-intellivoice-dictionary)
-      (fountain/write-speech text)))
+      (reload-dictionary ()
+        :report "Reload the speech dictionaries"
+        (reload-atarivox-dictionary)
+        (reload-intellivoice-dictionary)
+        (fountain/write-speech text))))
   (format t "~% ( ~s ) do-dialogue"
           text))
 

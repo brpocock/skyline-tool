@@ -434,7 +434,7 @@ ProjectionTables:~20t.block")
 
 (defun write-inventory-tables (&optional (source-text (merge-pathnames "Source/Tables/Inventory.txt" (project-root)))
                                          (source-code (merge-pathnames (format nil "Source/Generated/~a/InventoryLabels.s" (skyline-tool::machine-directory-name))
-                                                                      (project-root)))
+                                                                       (project-root)))
                                          (label "Item"))
   "Collect the names of all inventory items and write them out"
   (format *trace-output* "~&Reading inventory ~(~a~) names from ~a…"
@@ -460,13 +460,13 @@ ProjectionTables:~20t.block")
       (format *trace-output* " …read ~:d ~(~a~) name~:p (of ~:d max), done.~%"
               counter label (* 16 8))
       (format code "~10tEndOf~aNames := *
-~10tAll~aNames=(~{~a~x~^,~})
+~10tAll~aNames=(~{~a~^,~})
 Low:~10t.byte <(All~aNames), <EndOf~aNames
 High:~10t.byte >(All~aNames), >EndOf~aNames
 ~10t.bend
 ;;; end of file~%"
               label label
-              (loop for i from 0 below counter collecting i)
+              (loop for i from 0 below counter collecting (format nil "~a~x" label i))
               label label label label))))
 
 (defun write-keys-tables ()

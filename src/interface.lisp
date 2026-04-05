@@ -102,7 +102,7 @@ Loads test system, runs tests, exits the Lisp process
   (declare (ignore args))
   (handler-case
       (progn
-          (asdf:load-system :skyline-tool/test)
+        (asdf:load-system :skyline-tool/test)
         ;; Run all tests and exit with appropriate code
         (let ((all-passed (fiveam:run-all-tests :summary :end)))
           (if all-passed
@@ -455,10 +455,10 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
             :interactive prompt-function
             (setf *default-pathname-defaults* new-directory)
             (sb-posix:chdir new-directory))
-          (invoke-make (target)
-            :report "Ask GNU Make to generate a file"
-            :interactive prompt-function
-            (uiop:run-program (list "make" "-r" target "AUTOCONTINUE=t")))
+          #+ () (invoke-make ()
+                  :report "Ask GNU Make to generate a file"
+                  ;; FIXME: figure out which file
+                  (uiop:run-program (list "make" "-r" "game" "AUTOCONTINUE=t")))
           (gimp (file)
             :report "Edit a file in Gimp"
             :interactive prompt-function
@@ -546,7 +546,7 @@ documentation also.
   (if commands
       (dolist (command commands)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase command))))
-            (format *trace-output* "~2% • ~(~a~)~2%~a"
+          (format *trace-output* "~2% • ~(~a~)~2%~a"
                   command (or (documentation fun 'function)
                               "(no documentation yet)"))
           (format *trace-output* "~% • ~a: unknown ?" command)))
@@ -597,7 +597,7 @@ See COPYING for details
 
 (defun find-default-port ()
   (with-open-file (makefile (merge-pathnames "Makefile" (project-root))
-                    :external-format :utf-8)
+                            :external-format :utf-8)
     (loop for line = (read-line makefile nil nil)
           while line
           when (search "PORT=" line)
@@ -649,12 +649,12 @@ See COPYING for details
 
 (defun run-for-port (port-label &rest subcommand)
   (load-project.json port-label
-    (lambda ()
-      (format *trace-output* "~&Running for port: ~a" port-label)
-      (destructuring-bind (verb &rest args) subcommand
-        (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-          (apply fun args)
-          (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))))
+                     (lambda ()
+                       (format *trace-output* "~&Running for port: ~a" port-label)
+                       (destructuring-bind (verb &rest args) subcommand
+                         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+                           (apply fun args)
+                           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)
   "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."

@@ -1323,41 +1323,54 @@ Checks for files in Generated directories with specific names or containing 'Pal
     (ecase *machine*
       ((7800 2609 5200 400 800) (destructuring-bind (kind name) (asset-kind/name asset-indicator)
 				  (cond ((equal kind "Songs")
-					 (assert (not (null video)))
-					 (format nil "Object/~a/Assets/Song.~a.~a.o" machine-dir name video))
-					((equal kind "Maps")
-					 (assert (not (null video)))
-					 (format nil "Object/~a/Assets/Map.~a.~a.o" machine-dir (substitute #\. #\/ name) video))
-					((equal kind "Scripts")
-					 (format nil "Source/Generated/~a/Assets/Script.~a.s" machine-dir (substitute #\. #\/ name)))
-					((equal kind "Blobs")
-					 (format nil "Source/Generated/~a/Assets/Blob.~a.s" machine-dir name))
+				         (assert (not (null video)))
+				         (format nil "Object/~a/Assets/Song.~a.~a.o"
+                                                         machine-dir name video))
+				        ((equal kind "Maps")
+				         (assert (not (null video)))
+				         (format nil "Object/~a/Assets/Map.~a.~a.o"
+                                                         machine-dir (substitute #\. #\/ name) video))
+				        ((equal kind "Scripts")
+				         (format nil "Source/Generated/~a/Assets/Script.~a.s"
+                                                         machine-dir (substitute #\. #\/ name)))
+				        ((equal kind "Blobs")
+				         (format nil "Source/Generated/~a/Assets/Blob.~a.s"
+                                                         machine-dir name))
 					(t
 					 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
       ((64 128) (destructuring-bind (kind name) (asset-kind/name asset-indicator)
 		  (cond ((equal kind "Songs")
-			 (format nil "Object/~a/Assets/Song.~a.~a.CBM.o" machine-dir name video))
+		         (format nil "Object/~a/Assets/Song.~a.~a.CBM.o"
+                                     machine-dir name video))
 			((equal kind "Maps")
-			 (format nil "Object/~a/Assets/Map.~a.~a.CBM.o" machine-dir (substitute #\. #\/ name) video))
+			 (format nil "Object/~a/Assets/Map.~a.~a.CBM.o"
+                                       machine-dir (substitute #\. #\/ name) video))
 			((equal kind "Scripts")
-			 (format nil "Source/Generated/~a/Assets/Script.~a.CBM.s" machine-dir (substitute #\. #\/ name)))
+			 (format nil "Source/Generated/~a/Assets/Script.~a.CBM.s"
+                                       machine-dir (substitute #\. #\/ name)))
 			((equal kind "Blobs")
-			 (format nil "Source/Generated/~a/Assets/Blob.~a.CBM.s" machine-dir name))
+			 (format nil "Source/Generated/~a/Assets/Blob.~a.CBM.s"
+                                       machine-dir name))
 			(t
-			 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
+			 (format nil "Object/~a/Assets/~a.~a.o"
+                                       machine-dir kind name)))))
       (9918 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
 	      (cond ((equal kind "Songs")
 		     (assert (not (null video)))
-		     (format nil "Object/~a/Assets/Song.~a.~a.ClcV.o" machine-dir name video))
-		    ((equal kind "Maps")
-		     (assert (not (null video)))
-		     (format nil "Object/~a/Assets/Map.~a.~a.ClcV.o" machine-dir (substitute #\. #\/ name) video))
-		    ((equal kind "Scripts")
-		     (format nil "Source/Generated/~a/Assets/Script.~a.ClcV.s" machine-dir (substitute #\. #\/ name)))
-		    ((equal kind "Blobs")
-		     (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s" machine-dir name))
-		    (t
-		     (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
+		     (format nil "Object/~a/Assets/Song.~a.~a.ClcV.o"
+                                 machine-dir name video))
+		  ((equal kind "Maps")
+		   (assert (not (null video)))
+		   (format nil "Object/~a/Assets/Map.~a.~a.ClcV.o"
+                               machine-dir (substitute #\. #\/ name) video))
+		  ((equal kind "Scripts")
+		   (format nil "Source/Generated/~a/Assets/Script.~a.ClcV.s"
+                               machine-dir (substitute #\. #\/ name)))
+		  ((equal kind "Blobs")
+		   (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s"
+                               machine-dir name))
+		  (t
+		   (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
 
 (defun asset->deps-list (asset-indicator build)
   "Return a list of one-line dependency path strings for ASSET-INDICATOR in BUILD.
@@ -1639,8 +1652,8 @@ Reads the assets index (cached) and overwrites the three output files.
 		       do (format
                            outfile
                            (if (eql kind :script)
-			       "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC 9999 USAGE IS BINARY VALUE IS CONSTANT x'~2,'0x'."
-			       "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC 99 USAGE IS BINARY VALUE IS CONSTANT x'~2,'0x'.")
+			 "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC 9999 USAGE IS BINARY VALUE IS x'~2,'0x'."
+			 "~%~8t77 ~:(~a~)--~{~a~^_~}--ID PIC 99 USAGE IS BINARY VALUE IS x'~2,'0x'.")
                            kind (mapcar #'string-capitalize
                                         (mapcar #'param-case
                                                 (split-sequence #\/ asset-name)))
