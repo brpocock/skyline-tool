@@ -328,6 +328,6 @@ the dictionary lacks an entry."
       (let* ((frame (clim:make-application-frame 'read-script-frame))
              (*read-script-frame* frame))
         (setf (clim:frame-pretty-name frame)
-              (format nil "~a: Read Script" (cl-change-case:title-case *game*)))
+              (format nil "~a: Read Script" (cl-change-case:title-case *game-title*)))
         (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
-                     :name "Script Reader (launcher)"))))
+                               :name "Script Reader (launcher)"))))

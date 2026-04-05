@@ -114,7 +114,7 @@
   (asdf:system-relative-pathname :skyline-tool #p"../"))
 
 (defvar *project.json*)
-(defvar *game*)
+(defvar *game-title*)
 (defvar *part-number*)
 (defvar *studio*)
 (defvar *publisher*)

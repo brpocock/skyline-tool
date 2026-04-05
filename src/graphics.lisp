@@ -1645,16 +1645,18 @@ Shape:~{~{~a~}~2%~}
 
 (defun zx7-compress (bytes
                      &key (base-name (string (gensym "ZX7CompressTemp-"))))
-  (format *trace-output* "~&Calling external compressor: ")
+  (format *trace-output* "~&Calling external compressor for ~a: " base-name)
   (finish-output *trace-output*)
   (let ((output (let ((*standard-output* *trace-output*)
                       (*error-output* *trace-output*)
                       (bin-pathname (make-pathname :name base-name
                                                    :type "bin"
-                                                   :directory '(:relative "Object" "Assets")))
+                                                   :directory `(:relative "Object" "Assets"
+									  ,(machine-directory-name))))
                       (zx7-pathname (make-pathname :name base-name
                                                    :type "zx7"
-                                                   :directory '(:relative "Object" "Assets"))))
+                                                   :directory `(:relative "Object" "Assets"
+									  ,(machine-directory-name)))))
                   (ensure-directories-exist bin-pathname)
                   (ensure-directories-exist zx7-pathname)
                   (write-byte-vector-into-file bytes bin-pathname :if-exists :overwrite

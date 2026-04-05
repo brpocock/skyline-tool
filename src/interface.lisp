@@ -59,7 +59,6 @@
         :labels-to-mame 'labels-to-mame
         :labels-to-include 'labels-to-include
         :make-classes-for-oops 'make-classes-for-oops
-        :write-globals-copybook 'write-globals-copybook
         :prepend-fundamental-mode 'prepend-fundamental-mode
         :push-7800gd 'push-7800gd-bin
         :patch-7800gd 'push-7800gd-bin-no-execute
@@ -75,6 +74,7 @@
         :write-equipment-index 'write-equipment-index
         :write-flags-tables 'write-flags-tables
         :write-gimp-palettes 'write-gimp-palettes
+        :write-globals-copybook 'write-globals-copybook
         :write-inventory-tables 'write-inventory-tables
         :write-keys-tables 'write-keys-tables
         :write-orchestration 'write-orchestration
@@ -213,7 +213,7 @@ User input string with whitespace trimmed
   (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
-       (lambda () (prompt "restart with this parameter (e.g. filename) ?")))
+       (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
       #-mcclim nil
       (prompt "provide a value for this restart")))
 
@@ -230,15 +230,15 @@ User input string with whitespace trimmed
                     :process-name title)
           #'break)
       (progn
-        (format t "~&~% ? ~a ?~%" title)
+        (format t "~&~% “~a”~%" title)
         (apply #'format t message args)
         (fresh-line)
         (force-output))))
 
 (defun friendly-offer-single-restart (restart)
-  (if (y-or-n-p "~%Would you like to run this restart? (Say ?N? to quit)
+  (if (y-or-n-p "~%Would you like to run this restart? (Say ‘N’ to quit)
 ~s: ~a
-? "
+⇒ "
                 restart
                 restart)
       (invoke-restart-interactively restart)
@@ -257,7 +257,7 @@ User input string with whitespace trimmed
                                (restart-name restart)
                                restart))
                        restarts)))
-     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ? ")
+     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ⇒ ")
      (finish-output *query-io*)
      (let* ((reply (read-line *query-io*))
             (reply-number (ignore-errors (parse-integer reply :junk-allowed t)))
@@ -275,29 +275,29 @@ User input string with whitespace trimmed
          ((and reply-number (<= 1 reply-number (length restarts)))
           (invoke-restart-interactively (elt restarts (1- reply-number))))
          ((= 1 (length reply-name-matches))
-          (format *query-io* "?~a?" (first reply-name-matches))
+          (format *query-io* "“~a”" (first reply-name-matches))
           (finish-output *query-io*)
           (invoke-restart-interactively (first reply-name-matches)))
          (reply-name-matches
-          (format *query-io* "?~a? is the name of ~r restart~:p."
+          (format *query-io* "“~a” is the name of ~r restart~:p."
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-matches)
-            (when (y-or-n-p "You want to ?~a??~%  ([3m~a[0m) ? "
+            (when (y-or-n-p "You want to “~a”?~%  ([3m~a[0m) ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (reply-name-partials
-          (format *query-io* "?~a? matches ~r restart name~:p (partially)"
+          (format *query-io* "“~a” matches ~r restart name~:p (partially)"
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-partials)
-            (when (y-or-n-p "~&You want to ?~a??~%  ([3m~a[0m)  ? "
+            (when (y-or-n-p "~&You want to “~a”?~%  ([3m~a[0m)  ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (t
-          (format *error-output* "~&I'm sorry, I don't see any restart like ?~a.?" reply)
+          (format *error-output* "~&I'm sorry, I don't see any restart like ‘~a.’" reply)
           (finish-output *error-output*))))))
 
 (defvar *system-debugger* *debugger-hook*)
@@ -377,7 +377,7 @@ When true, print error + backtrace and exit instead of waiting for input."
           (format *error-output* "~%~|
 [31;1mAn error of type ~:(~a~) was signalled,
 but a CONTINUE restart was available and AUTOCONTINUE=T.[0m
-~a ? ~a
+~a → ~a
 "
                   (class-name (class-of condition))
                   condition restart))
@@ -486,7 +486,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                      :report "Edit in Climacs"
                      :interactive prompt-function
                      (edit-myself-in-climacs file)
-                     (format t "Climacs now open ? ~
+                     (format t "Climacs now open — ~
 recompile when you've corrected the error. (C-c C-k) and restart.")
                      (go do-over))
           (recompile-tool ()
@@ -518,10 +518,10 @@ Supply a list of verb(s) to see detailed documentation"
   (format *trace-output* "~&
 
  Skyline-Tool
- ????????????
+ ————————————
 
-Copyright ? 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright ? 2024-2026 Interworldly Adventuring, LLC.
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -532,7 +532,7 @@ Machine: ~a, type: ~a,~%	version ~a
 
 Usage: the first  parameter must be a verb;  following parameters depend
 on the verb being invoked. You almost certainly want to just look at the
-Makefile for an example, but you can try ?help? + command-name for the
+Makefile for an example, but you can try ‘help’ + command-name for the
 documentation also.
 
 "
@@ -546,13 +546,13 @@ documentation also.
   (if commands
       (dolist (command commands)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase command))))
-          (format *trace-output* "~2% ? ~(~a~)~2%~a"
+            (format *trace-output* "~2% • ~(~a~)~2%~a"
                   command (or (documentation fun 'function)
                               "(no documentation yet)"))
-          (format *trace-output* "~% ? ~a: unknown ?" command)))
+          (format *trace-output* "~% • ~a: unknown ?" command)))
       (dolist (verb (sort (remove-if-not #'keywordp *invocation*)
                           #'string-lessp))
-        (format *trace-output* "~% ? ~(~a~): ~a"
+        (format *trace-output* "~% • ~(~a~): ~a"
                 verb (or (first-line (documentation (getf *invocation* verb)
                                                     'function))
                          "(no documentation yet)")))))
@@ -584,8 +584,8 @@ To see specifics about one command, add its name to the end, e.g.
 
 If you need more help, ask support@interworldly.com
 
-Copyright ? 2016-2024, Bruce-Robert Pocock
-Copyright ? 2024-2026, Interworldly Adventuring, LLC
+Copyright © 2016-2024, Bruce-Robert Pocock
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -618,7 +618,7 @@ See COPYING for details
         (when v (return-from project-json-value v))))))
 
 (defun load-project.json (&optional (port-label (find-default-port)) thunk)
-  "Load Project.{port}.json and run THUNK with *game*, *machine*, etc. bound via let.
+  "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
    Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
   (let* ((effective-port (if (or (null port-label) (string-equal port-label "nil"))
@@ -630,22 +630,22 @@ See COPYING for details
                         json-path
                         (merge-pathnames json-name (uiop:pathname-directory-pathname
                                                     (uiop:getcwd)))))
-         (project-data (json:decode-json-from-source json-path))
-         (*project.json* project-data)
-         (*game* (assocdr :*game project-data))
-         (*part-number* (assocdr :*part-number project-data))
-         (*studio* (assocdr :*studio project-data))
-         (*publisher* (assocdr :*publisher project-data))
-         (*machine* (or (assocdr :*machine project-data)
-                       (ignore-errors (machine-number-by-tag effective-port))))
-         (*sound* (assocdr :*sound project-data))
-         (*common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) '())))
-         (*default-skin-color* (assocdr :*default-skin-color project-data))
-         (*default-hair-color* (assocdr :*default-hair-color project-data))
-         (*default-clothes-color* (assocdr :*default-clothes-color project-data))
-         (*region* (intern (string-upcase (string (or (assocdr :*region project-data) "ntsc")))
-                          :keyword)))
-    (funcall thunk)))
+         (project-data (json:decode-json-from-source json-path)))
+    (setf *project.json* project-data
+          *game-title* (assocdr :*game project-data)
+          *part-number* (assocdr :*part-number project-data)
+          *studio* (assocdr :*studio project-data)
+          *publisher* (assocdr :*publisher project-data)
+          *machine* (or (assocdr :*machine project-data)
+                        (ignore-errors (machine-number-by-tag effective-port)))
+          *sound* (assocdr :*sound project-data)
+          *common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) '()))
+          *default-skin-color* (assocdr :*default-skin-color project-data)
+          *default-hair-color* (assocdr :*default-hair-color project-data)
+          *default-clothes-color* (assocdr :*default-clothes-color project-data)
+          *region* (intern (string-upcase (string (or (assocdr :*region project-data) "ntsc")))
+                           :keyword))
+    (when thunk (funcall thunk))))
 
 (defun run-for-port (port-label &rest subcommand)
   (load-project.json port-label
@@ -654,7 +654,7 @@ See COPYING for details
       (destructuring-bind (verb &rest args) subcommand
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (apply fun args)
-          (error "Command not recognized: ?~a? (try ?help?)" verb))))))
+          (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)
   "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."
@@ -666,8 +666,8 @@ See COPYING for details
 (defun command (argv)
   "Main entry point for Skyline-Tool command-line interface.
 
-Processes command-line arguments and dispatches to appropriate subcommands.
-This is the function called by buildapp as the entry point.
+Processes   command-line  arguments   and   dispatches  to   appropriate
+subcommands. This is the function called by buildapp as the entry point.
 
 @table @asis
 @item ARGV
@@ -678,14 +678,13 @@ Executes the requested command, may exit the process
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
   ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
+  (unless (and (boundp '*machine*) *machine* *game-title*)
+    (load-project.json))
   (when (skyline-debug-backtrace-p)
     (sb-ext:disable-debugger))
-  (format t "~&Skyline tool (? 2026) invoked:
-(Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
+  (format t "~&Skyline tool (© 2026) invoked:
+(Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (unless (or (and (< 1 (length argv)) (string-equal "--port" (second argv)))
-              (and (boundp '*machine*) *machine*))
-    (error "No --port specified in ~s and no *MACHINE* value set" argv))
   (let ((sb-impl::*default-external-format* :utf-8)
         (*command-line* (and (< 1 (length argv)) (subseq argv 1))))
     (with-happy-restarts
@@ -699,8 +698,8 @@ Executes the requested command, may exit the process
         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
           (flet ((runner ()
                    (unless (char= #\- (char verb 0))
-                     (format *trace-output* "~&Running for game ?~a? for ~a" 
-                                            *game* (machine-long-name))
+                     (format *trace-output* "~&Running for game ‘~a’ for ~a" 
+                             *game-title* (machine-long-name))
                      (finish-output *trace-output*))
                    (apply fun (remove-if (curry #'string= self)
                                          (flatten invocation)))
@@ -715,7 +714,7 @@ Executes the requested command, may exit the process
                          invocation))
                 #-mcclim nil
                 (funcall #'runner)))
-          (error "Command not recognized: ?~a? (try ?help?)" verb))
+          (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
         (fresh-line)))))
 
 (defun c (&rest args)
