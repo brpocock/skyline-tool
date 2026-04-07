@@ -80,6 +80,7 @@
       (clim:present entry 'nullary-function-name :stream pane)))
 
 (defmethod display-launcher-menu ((frame launcher-frame) (pane clim:pane))
+  (load-project.json)
   (clim:with-text-size (pane :larger)
     (display-launcher-menu-item (copy-list +launcher-entries+) pane))
   (clim:with-text-size (pane :small)
