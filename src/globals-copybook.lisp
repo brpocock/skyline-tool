@@ -76,6 +76,8 @@ Returns NIL, (:object-ref cls), (:pic string), or (:varchar n f)."
     (cond
       ((and (> (length s) 1) (char= #\@ (char s 0)))
        (list :object-ref (string-trim " " (subseq s 1))))
+      ((and (> (length s) 1) (char= #\% (char s 0)))
+       (list :object-instance (string-trim " " (subseq s 1))))
       ((and (> (length s) 2)
             (char= #\= (char s 0))
             (member (char s 1) (list #\Space #\Tab)))
@@ -113,24 +115,24 @@ Returns plist :name :kind :size :value :annotation :raw-size-sym,
         (return-from parse-asm-line nil))
       ;; Label: .DIRECTIVE args
       (let ((m (nth-value 1 (cl-ppcre:scan-to-strings
-                             "^([\\w.]+):\\s+\\.([A-Za-z]+)\\s*(.*?)\\s*$"
+                             "^([\\w.]+):\\s+\\.?([A-Za-z]*)\\s*(.*?)\\s*$"
                              code))))
         (when m
-          (let ((name  (aref m 0))
-                (kw    (string-downcase (aref m 1)))
-                (args  (aref m 2)))
+          (let ((name (aref m 0))
+                (declaration (string-downcase (aref m 1)))
+                (args (aref m 2)))
             (cond
-              ((string= kw "byte")
+              ((string= declaration "byte")
                (return-from parse-asm-line
                  (list :name name :kind :byte
                        :size (length (cl-ppcre:split "," args))
                        :annotation annotation)))
-              ((string= kw "word")
+              ((string= declaration "word")
                (return-from parse-asm-line
                  (list :name name :kind :word
                        :size (* 2 (length (cl-ppcre:split "," args)))
                        :annotation annotation)))
-              ((string= kw "fill")
+              ((string= declaration "fill")
                (let* ((parts (mapcar (lambda (a) (string-trim " " a))
                                      (cl-ppcre:split "," args)))
                       (count-str (find-if (lambda (a) (string/= a "?")) parts))
@@ -148,18 +150,18 @@ Returns plist :name :kind :size :value :annotation :raw-size-sym,
               (t nil)))))
       ;; Name = integer  (constant/enum)
       (let ((m2 (nth-value 1 (cl-ppcre:scan-to-strings
-                               "^(\\w+)\\s*=\\s*(.+)$" code))))
+                              "^(\\w+)\\s*=\\s*(.+)$" code))))
         (when m2
           (let* ((name    (aref m2 0))
                  (val-str (string-trim " " (aref m2 1)))
                  (intval  (ignore-errors
-                            (cond
-                              ((and (> (length val-str) 1)
-                                    (char= #\$ (char val-str 0)))
-                               (parse-integer (subseq val-str 1) :radix 16))
-                              ((every #'digit-char-p val-str)
-                               (parse-integer val-str))
-                              (t nil)))))
+                           (cond
+                             ((and (> (length val-str) 1)
+                                   (char= #\$ (char val-str 0)))
+                              (parse-integer (subseq val-str 1) :radix 16))
+                             ((every #'digit-char-p val-str)
+                              (parse-integer val-str))
+                             (t nil)))))
             (when intval
               (return-from parse-asm-line
                 (list :name name :kind :const
@@ -212,13 +214,15 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
                   (or (eb raw-size-sym) (/ size 2))))
          (t nil)))
       ((eq (first annotation) :object-ref)
-       (format nil "OBJECT REFERENCE ~a" (pascal-to-eightbol-name (second annotation))))
+       (format nil "USAGE OBJECT REFERENCE ~a" (header-case (second annotation))))
+      ((eq (first annotation) :object-instance)
+       (format nil "USAGE OBJECT INSTANCE ~a" (header-case (second annotation))))
       ((eq (first annotation) :varchar)
        ;; Correct COBOL: PIC X OCCURS 0 TO n TIMES DEPENDING ON size-field.
        ;; Size-field does not get a picture.
        (format nil "PIC X OCCURS 0 TO ~a TIMES DEPENDING ON ~a"
                (second annotation)
-               (pascal-to-eightbol-name (third annotation))))
+               (header-case (third annotation))))
       ((eq (first annotation) :pic)
        (second annotation))
       (t "PIC 99 USAGE BINARY"))))
@@ -231,17 +235,18 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
       (return-from parse-assembly-globals (nreverse results)))
     (with-input-from-file (stream path)
       (loop for line = (read-line stream nil nil) while line do
-            (cond
-              (skip-conditional-blocks
-               (cond
-                 ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
-                 ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
-                  (when (> depth 0) (decf depth)))
-                 ((> depth 0) nil)
-                 (t (let ((item (parse-asm-line line)))
-                      (when item (push item results))))))
-              (t (let ((item (parse-asm-line line)))
-                   (when item (push item results)))))))
+        (cond
+          (skip-conditional-blocks
+           (cond
+             ((cl-ppcre:scan "^\\s+\\.if\\b" line)
+              (incf depth))
+             ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
+              (when (> depth 0) (decf depth)))
+             ((> depth 0) nil)
+             (t (let ((item (parse-asm-line line)))
+                  (when item (push item results))))))
+          (t (let ((item (parse-asm-line line)))
+               (when item (push item results)))))))
     (nreverse results)))
 
 (defun write-globals-copybook (&key (root-dir #p"./")
@@ -261,8 +266,13 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
 @end table"
   (let* ((machine-dir (machine-directory-name))
          (common (merge-pathnames
-                  (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
+                  (make-pathname :directory `(:relative "Source" "Code"
+                                                        ,machine-dir "Common"))
                   root-dir))
+         (generated (merge-pathnames
+                     (make-pathname :directory `(:relative "Source" "Generated"
+                                                           ,machine-dir))
+                     root-dir))
          (zero-page-path
            (or (probe-file (merge-pathnames "ZeroPage.s" common))))
          (sysram-path
@@ -274,6 +284,12 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
            (probe-file (merge-pathnames "Enums.s" common)))
          (constants-path
            (probe-file (merge-pathnames "Constants.s" common)))
+         (class-ids-path
+           (probe-file (merge-pathnames "ClassConstants.s" generated)))
+         (asset-ids-path
+           (probe-file (merge-pathnames "AssetIDs.s" generated)))
+         (mailbox-path
+           (probe-file (merge-pathnames #p"../Stagehand/StagehandMailbox.s" common)))
          (*parsed-constants*
            (remove nil
                    (mapcar (lambda (item)
@@ -283,7 +299,8 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                                 constants-path)
                                ()))))
          (out-dir  (merge-pathnames
-                    (make-pathname :directory `(:relative "Source" "Generated" ,machine-dir "Classes"))
+                    (make-pathname :directory `(:relative "Source" "Generated"
+                                                          ,machine-dir "Classes"))
                     root-dir))
          (out-name (format nil "~a-Globals" (header-case *game-title*)))
          (out-path (or output-path (merge-pathnames
@@ -385,13 +402,13 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                                (when pic
                                  (emit-eightbol-var 10 (getf item :name)
                                                     pic stream)))))))))))))
-
+        
         ;; Enums -> 78 level (preserve comments from source)
         (let ((items (and enums-path (parse-assembly-globals enums-path))))
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-comment stream " Enumerated values")
-            (princ "~%        01 ENUMS EXTERNAL.~%" stream)
+            (format stream "~%        01 ENUMS EXTERNAL.~%")
             (dolist (item items)
               (if (eq :comment (first item))
                   (emit-eightbol-comment stream (second item))
@@ -404,13 +421,53 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-comment stream " Constants")
-            (princ "~%        01 CONSTANTS EXTERNAL.~%" stream)
+            (format stream "~%        01 CONSTANTS EXTERNAL.~%")
             (dolist (item items)
               (if (eq :comment (first item))
                   (emit-eightbol-comment stream (second item))
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 77 (getf item :name)
                                          (getf item :value) stream))))))
-        (format stream "~%"))
+        (let ((items (parse-assembly-globals class-ids-path)))
+          (when items
+            (emit-eightbol-blank stream)
+            (emit-eightbol-comment stream " Class IDs")
+            (format stream "~%        01 CLASS-IDS EXTERNAL.~%")
+            (dolist (item items)
+              (if (eq :comment (first item))
+                  (emit-eightbol-comment stream (second item))
+                  (when (and (eq :const (getf item :kind)) (getf item :value))
+                    (emit-eightbol-const 78 (getf item :name)
+                                         (getf item :value) stream))))))
+        (let ((items (parse-assembly-globals asset-ids-path)))
+          (when items
+            (emit-eightbol-blank stream)
+            (emit-eightbol-comment stream " Asset IDs")
+            (format stream "~%        01 ASSET-IDS EXTERNAL.~%")
+            (dolist (item items)
+              (if (eq :comment (first item))
+                  (emit-eightbol-comment stream (second item))
+                  (when (and (eq :const (getf item :kind)) (getf item :value))
+                    (emit-eightbol-const 78 (getf item :name)
+                                         (getf item :value) stream))))))
+
+        (let ((items (parse-assembly-globals mailbox-path
+                                             :skip-conditional-blocks t)))
+          (when items
+            (emit-eightbol-blank stream)
+            (emit-eightbol-section stream 1 "STAGEHAND EXTERNAL")
+            (emit-eightbol-section stream 2 "MAILBOXES EXTERNAL")
+            (dolist (item items)
+              (if (eq :comment (first item))
+                  (emit-eightbol-comment stream (second item))
+                  (when (not (eq :const (getf item :kind)))
+                    (let ((pic (var-to-eightbol-pic (getf item :kind)
+                                                    (getf item :size)
+                                                    (getf item :annotation)
+                                                    (getf item :raw-size-sym))))
+                      (when pic (emit-eightbol-var 5 (getf item :name) pic stream)))))))))
+      (format stream "~2&~
+999998 COPY Special-Globals.
+999999~%")
       (format *trace-output* "~%~&Generated ~a" (enough-namestring out-path))
       out-path)))

@@ -3470,11 +3470,8 @@ code for the game's scripting engine.
                     character-character-i-d character-speech-pitch
                     character-speech-bend character-speech-speed
                     character-speech-color
-                    non-player-character-tactical-goal
-                    non-player-character-tactical-object
-                    non-player-character-strategic-goal
-                    non-player-character-strategic-object
                     character-name-length))
+    ;; FIXME goals
     (format t "~2%~10t* = Character_~a + ~a~%~a"
             (pascal-case (string name)) (pascal-case (string column))
             (output-actor-value actor (make-keyword (string-upcase (string column))))))

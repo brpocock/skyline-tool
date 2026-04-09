@@ -303,7 +303,8 @@ Slot annotation conventions in Classes.Defs:
                                                        ,(machine-directory-name) "Classes"))
                             #p"./")))
         (ensure-directories-exist generated-dir)
-        (with-output-to-file (out (merge-pathnames (make-pathname :name "Classes" :type "cpy")
+        (with-output-to-file (out (merge-pathnames (make-pathname :name "Classes"
+                                                                  :type "cpy")
                                                    generated-dir)
                                   :if-exists :supersede)
           (format out "~
@@ -314,9 +315,9 @@ Slot annotation conventions in Classes.Defs:
 "
                   (title-case *game-title*)
                   (mapcar #'header-case all-classes)))
-        (dolist (class-name all-classes)
+        (dolist (class-name (mapcar #'header-case all-classes))
           (let ((cpy-path (merge-pathnames
-                           (make-pathname :name (concatenate 'string (header-case class-name) "-Slots")
+                           (make-pathname :name (concatenate 'string class-name "-Slots")
                                           :type "cpy")
                            generated-dir)))
             (with-output-to-file (out cpy-path :if-exists :supersede)
@@ -334,11 +335,11 @@ Slot annotation conventions in Classes.Defs:
                         class-name
                         class-name
                         class-name)
-                (let ((content (reverse (gethash class-name *class-content-order* '())))
+                (let ((content (reverse (gethash (pascal-case class-name) *class-content-order* '())))
                       (sizes-hash (or (and *slot-sizes* (hash-table-p *slot-sizes*)
-                                           (gethash class-name *slot-sizes*))
+                                           (gethash (pascal-case class-name) *slot-sizes*))
                                       (make-hash-table :test 'equal)))
-                      (annot-hash (gethash class-name *slot-annotations*)))
+                      (annot-hash (gethash (pascal-case class-name) *slot-annotations*)))
                   (when content
                     (emit-eightbol-blank out)
                     (dolist (item content)
