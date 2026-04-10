@@ -60,7 +60,8 @@ Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID).
   (let ((pic (cond ((< value 256)   "PIC 99 USAGE BINARY")
                    ((< value 65536) "PIC 9999 USAGE BINARY")
                    (t               "PIC 9(8) USAGE BINARY"))))
-    (format stream "~%~6t ~a~2,'0d ~a ~a VALUE x'~x'."
+    (format stream "~2%~6T* ~a = ~:d = x'~x' = o'~o' = b'~b'~%~6t ~a~2,'0d ~a ~a VALUE x'~x'."
+            (eightbol-slot-name name) value value value value
             (eightbol-level-indent level) level (eightbol-slot-name name) pic value)))
 
 (defparameter *sysram-section-labels*
