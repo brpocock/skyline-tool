@@ -228,7 +228,8 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
        (second annotation))
       (t "PIC 99 USAGE BINARY"))))
 
-(defun parse-assembly-globals (path &key skip-conditional-blocks)
+(defun parse-assembly-globals (path
+                               &key skip-conditional-blocks)
   "Return variable/constant plists parsed from 64tass source file PATH."
   (let (results (depth 0))
     (unless (probe-file path)
