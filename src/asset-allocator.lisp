@@ -1917,14 +1917,13 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%~10t~a~^ \\~}
 
 (defparameter *7800-a78-header-shared-script-lines*
   "set supergame
-set bankset
+set hsc
+set savekey
+set pokey@450
 set ram@4000
 unset composite
 set 7800joy1
 unset 7800joy2
-set hsc
-set savekey
-set pokey@450
 fix
 save
 exit
