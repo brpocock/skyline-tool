@@ -93,7 +93,7 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
      (cond
        ((= size 1) "PIC 99 USAGE BINARY")
        ((= size 2) "PIC 9999 USAGE BINARY")
-       (t          (format nil "PIC 99 USAGE BINARY OCCURS ~d TIMES" size))))
+       (t (format nil "PIC 99 USAGE BINARY OCCURS ~d TIMES" size))))
     ((eq (car annotation) :object-ref)
      (format nil "USAGE OBJECT REFERENCE ~a" (second annotation)))
     ((eq (car annotation) :varchar)
@@ -111,7 +111,7 @@ Returns a string like \"PIC 9999 USAGE BINARY\" or \"OBJECT REFERENCE Actor\"."
 (defun compute-class-size-during-parse (class-name)
   "Return the size of CLASS-NAME (parent's size + own slots). Uses *class-bases*, *class-size*, *slot-sizes*, *class-slots-order*.
 
-When any of these specials is @code{NIL} or not a hash-table (e.g. tests that bind only a subset), treat missing tables as empty so @code{gethash} is never called with @code{NIL} as the table argument."
+When any of these specials is NIL or not a hash-table (e.g. tests that bind only a subset), treat missing tables as empty so gethash is never called with NIL as the table argument."
   (unless (or (string= class-name "BasicObject")
               (and *class-bases* (hash-table-p *class-bases*)
                    (gethash class-name *class-bases*)))
@@ -146,9 +146,9 @@ Single inheritance only. E.g. for Character: (\"BasicObject\" \"Entity\" \"Actor
     (&optional (class-defs-pathname #p"./Source/Classes/Classes.Defs"))
   "Return alist of (INTRODUCING-CLASS . METHOD-NAME) for each # line in CLASS-DEFS-PATHNAME.
 
-Each METHOD-NAME is the OOPS hash key (text after #), e.g. @code{GetBounds} for a
-@code{#GetBounds} line. Parsing matches @code{make-classes-for-oops}: a class
-line @code{Child < Parent} sets the current class; each @code{#} line at column
+Each METHOD-NAME is the OOPS hash key (text after #), e.g. GetBounds for a
+#GetBounds line. Parsing matches make-classes-for-oops: a class
+line Child < Parent sets the current class; each # line at column
 zero binds the method to that class. Comment and blank lines are ignored.
 
 @table @asis
@@ -158,9 +158,9 @@ Path to @file{Classes.Defs} (default @file{./Source/Classes/Classes.Defs}).
 
 @table @asis
 @item Return value
-A fresh list of @code{(cons introducing-class method-name-string)} in file order.
-Does not include @code{Destroy} on BasicObject (runtime assembly); only explicit
-@code{#} lines appear.
+A fresh list of (cons introducing-class method-name-string) in file order.
+Does  not  include  Destroy  on  BasicObject  (runtime  assembly);  only explicit
+# lines appear.
 @end table"
   (let ((result '())
         ;; Match make-classes-for-oops: method lines before first class decl bind to BasicObject.

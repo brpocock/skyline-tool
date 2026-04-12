@@ -441,17 +441,6 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 78 (getf item :name)
                                          (getf item :value) stream))))))
-        (let ((items (parse-assembly-globals asset-ids-path)))
-          (when items
-            (emit-eightbol-blank stream)
-            (emit-eightbol-comment stream " Asset IDs")
-            (format stream "~%        01 ASSET-IDS EXTERNAL.~%")
-            (dolist (item items)
-              (if (eq :comment (first item))
-                  (emit-eightbol-comment stream (second item))
-                  (when (and (eq :const (getf item :kind)) (getf item :value))
-                    (emit-eightbol-const 78 (getf item :name)
-                                         (getf item :value) stream))))))
 
         (let ((items (parse-assembly-globals mailbox-path
                                              :skip-conditional-blocks t)))

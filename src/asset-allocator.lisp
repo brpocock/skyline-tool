@@ -1657,11 +1657,12 @@ Reads the assets index (cached) and overwrites the three output files.
 		   do (format
                            outfile
                            (if (eql kind :script)
-			 "~%~10t77 ~:(~a~)--~{~a~^_~}--ID PIC 9999 USAGE IS BINARY VALUE IS x'~2,'0x'."
-			 "~%~10t77 ~:(~a~)--~{~a~^_~}--ID PIC 99 USAGE IS BINARY VALUE IS x'~2,'0x'.")
-                           kind (mapcar #'string-capitalize
-                                        (mapcar #'param-case
-                                                (split-sequence #\/ asset-name)))
+			 "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 9999
+~6T-~20TUSAGE IS BINARY VALUE IS x'~4,'0x'."
+			 "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 99
+~6T-~20TUSAGE IS BINARY VALUE IS x'~2,'0x'.")
+                           kind (mapcar #'header-case
+                                        (split-sequence #\/ asset-name))
                            asset-hash)))))))
 
 (defun write-asset-bank-makefile (bank &key build video)
@@ -1797,12 +1798,12 @@ Object/${PORT}/Bank~a.~a.~a.o:
   (format t "~%
 Dist/$(PORT)/~a.Test.a78: Dist/$(PORT)/~:*~a.Test.bin
 	cp $^ $@
-	bin/7800header -f Source/Generated/header.Test.script $@
+	bin/7800header -f Source/Generated/$(PORT)/header.Test.script $@
 	bin/7800sign -w $@
 
 Dist/$(PORT)/~:*~a.Test.bin: \\~
 ~{~%~10tObject/${PORT}/Bank~a.Test.o~^ \\~}
-	mkdir -p Dist
+	mkdir -p Dist/${PORT}
 	cat $^ > $@
 
 ~0@*Dist/$(PORT)/~a.Test.a78: .EXTRA_PREREQS = bin/7800header bin/7800sign
@@ -1819,7 +1820,7 @@ Dist/$(PORT)/~:*~a.Test.bin: \\~
     (7800 (format t "~%
 Dist/$(PORT)/~a.~a.~a.a78: ~0@* Dist/$(PORT)/~a.~a.~a.bin
 	cp $^ $@
-	bin/7800header -f Source/Generated/header.~1@*~a.~a.script $@
+	bin/7800header -f Source/Generated/$(PORT)/header.~1@*~a.~a.script $@
 	bin/7800sign -w $@
 
 ~0@*
