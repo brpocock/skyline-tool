@@ -60,7 +60,7 @@
   (loop for char = (read-char *standard-input* nil nil)
         with string = (make-array 32 :element-type 'character :fill-pointer 0 :adjustable t)
         if (char= #\" char)
-          do (let ((tag (dialogue-hash string)))
+          do (let ((tag (dialogue-hash string :minifont)))
                (format t "
 ~10t.section BankData
 ~10t.weak
@@ -83,7 +83,8 @@
   (loop for word = (read-forth-word)
         with string = (list)
         if (equal word "]SpeakJet")
-          do (let ((tag (dialogue-hash (reduce (curry #'concatenate 'string) string))))
+          do (let ((tag (dialogue-hash (reduce (curry #'concatenate 'string) string)
+                                       :speakjet)))
                (format t "
 ~10t.section BankData
 ~10t.weak
@@ -128,7 +129,8 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
   (loop for word = (read-forth-word)
         with string = (list)
         if (equal word "]IntelliVoice")
-          do (let ((tag (format nil "~a_IV" (dialogue-hash (reduce (curry #'concatenate 'string) string)))))
+          do (let ((tag (dialogue-hash (reduce (curry #'concatenate 'string) string)
+                                       :intellivoice)))
                (format t "
 ~10t.section BankData
 ~10t.weak
@@ -301,47 +303,48 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
   (multiple-value-bind (def foundp) (gethash word *words*)
     (if (and foundp def)
         (destructuring-bind (run compile &optional metadata) def
-      #+ () (format *trace-output* "~& \ forth-interpret ~a found definition from ~a"
-                    word (getf metadata :source))
-      (cond
-        (run
-         (if-let (num (and (= 1 (length run))
-                           (or (numberp (first run))
-                               (ignore-errors
-                                (parse-integer (first run) :radix *forth-base*)))))
-           (if (< num #x100)
-               (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d constant: ~a"
-                       (logand #xff num)
-                       (logand #xff num)
-                       word)
-               (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x ; $~4,'0x ~:*~5d constant: ~a"
-                       (logand #xff num)
-                       (ash (logand #xff00 num) -8)
-                       (logand #xffff num)
-                       word)))
-         ;; Handle inline vs regular word definitions
-         (let ((inline-p (getf metadata :inline)))
-           (let (*forth-input-stuffing*)
-             (when (< 1 (length run))
-               (format t "~%;;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
-                       word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
-             (dolist (w (reverse (copy-list run)))
-               (push w *forth-input-stuffing*))
-             (loop while *forth-input-stuffing*
-                   do (forth-interpret (read-forth-word)))
-             (when (< 1 (length run))
-               (format t "~%;;; end of ~a~@[ (inline)~]" word (and inline-p "")))))
-         (force-output *standard-output*))
-        (compile
-         (forth-eval compile))
-        (t nil)))
+          #+ () (format *trace-output* "~& \ forth-interpret ~a found definition from ~a"
+                        word (getf metadata :source))
+          (cond
+            (run
+             (if-let (num (and (= 1 (length run))
+                               (or (numberp (first run))
+                                   (ignore-errors
+                                    (parse-integer (first run) :radix *forth-base*)))))
+               (if (< num #x100)
+                   (format t "~%~10T.byte ForthPushByte, $~2,'0x~32T; $~2,'0x ~:*~3d constant: ~a"
+                           (logand #xff num)
+                           (logand #xff num)
+                           word)
+                   (format t "~%~10T.byte ForthPushWord, $~2,'0x, $~2,'0x~32T; $~4,'0x ~:*~5d constant: ~a"
+                           (logand #xff num)
+                           (ash (logand #xff00 num) -8)
+                           (logand #xffff num)
+                           word))
+               ;; Handle inline vs regular word definitions
+               (let ((inline-p (getf metadata :inline)))
+                 (let (*forth-input-stuffing*)
+                   (when (< 1 (length run))
+                     (format t "~%~10T;; start of ~a~@[ (inline)~] from ~a~@[ ~a~]"
+                             word (and inline-p "") (getf metadata :source "?") (getf metadata :source-file nil)))
+                   (dolist (w (reverse (copy-list run)))
+                     (push w *forth-input-stuffing*))
+                   (loop while *forth-input-stuffing*
+                         do (forth-interpret (read-forth-word)))
+                   (when (< 1 (length run))
+                     (format t "~%~10T;; end of ~a~@[ (inline)~]" word (and inline-p ""))))))
+             (force-output *standard-output*))
+            (compile
+             (forth-eval compile))
+            (t nil)))
         ;; else: No def
         (if-let (asm-def (gethash (mangle-word-for-internals word) *words*))
           (destructuring-bind (run compile &optional metadata) asm-def
             (declare (ignore metadata))
             (if run
                 (let ((num (parse-integer (first run))))
-                  (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute ; $~4,'0x ~:*~5d internal: ~a (~a)"
+                  (format t "~%~10T.byte ForthPushWord, $~2,'0x, $~2,'0x, ForthExecute
+~12T;; $~4,'0x ~:*~5d internal: ~a (~a)"
                           (logand #xff num)
                           (ash (logand #xff00 num) -8)
                           (logand #xffff num)
@@ -349,10 +352,10 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                 (forth-eval compile)))
           (if-let (num (ignore-errors (parse-integer word :radix *forth-base*)))
             (if (< num #x100)
-                (format t "~%~10t.byte ForthPushByte, $~2,'0x ; $~2,'0x ~:*~3d"
+                (format t "~%~10T.byte ForthPushByte, $~2,'0x~32T; $~2,'0x ~:*~3d"
                         (logand #xff num)
                         (logand #xff num))
-                (format t "~%~10t.byte ForthPushWord, $~2,'0x, $~2,'0x~32t ; $~4,'0x ~:*~5d"
+                (format t "~%~10T.byte ForthPushWord, $~2,'0x, $~2,'0x~32T; $~4,'0x ~:*~5d"
                         (logand #xff num)
                         (ash (logand #xff00 num) -8)
                         (logand #xffff num)))
@@ -362,7 +365,7 @@ COMMAND-START should be either \"SpeakJet[\" or \"IntelliVoice[\"."
                           word (mangle-word-for-internals word))
                  (continue ()
                    :report "Continue, using a literal zero"
-                   (format t "~%~10t.byte ForthPushByte, 0~32t; XXX unknown word ~a (~a)"
+                   (format t "~%~10T.byte ForthPushByte, 0~32T; XXX unknown word ~a (~a)"
                            word
                            (mangle-word-for-internals word)))
                  (words ()

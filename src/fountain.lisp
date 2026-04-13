@@ -703,16 +703,18 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (defvar *stage-direction-parser* nil)
 
-(setf *common-palette* (let ((json-path (merge-pathnames #p"Project.7800.json"
-                                                         (make-pathname :directory
-                                                                        (append (pathname-directory (asdf:system-source-directory :skyline-tool))
-                                                                                '(:up))))))
-                         (with-input-from-file (input json-path)
-                           (let ((data (json:decode-json-from-source input)))
-                             (mapcar #'intern (or (cdr (assoc :*common-palette data))
-                                                  (cdr (assoc :|*CommonPalette| data))
-                                                  (cdr (assoc :common-palette data))
-                                                  '()))))))
+(setf *common-palette*
+      (let ((json-path
+              (merge-pathnames #p"Project.7800.json"
+                               (make-pathname :directory
+                                              (append (pathname-directory
+                                                       (asdf:system-source-directory :skyline-tool))
+                                                      '(:up))))))
+        (with-input-from-file (input json-path)
+          (let ((data (json:decode-json-from-source input)))
+            (mapcar #'intern (or (cdr (assoc :*common-palette data))
+                                 (cdr (assoc :|*CommonPalette| data))
+                                 (cdr (assoc :common-palette data)) ()))))))
 (eval (let ((terminals (concatenate 'list +stage-direction-words+
                                    '(number quoted actor variable)
                                    *common-palette*)))
@@ -3050,16 +3052,24 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
   (format t "~% ( ~s ) do-dialogue"
           text))
 
-(defun dialogue-hash (text)
+(defun dialogue-format-token-string (format-token)
+  (ecase format-token
+    (:speakjet "SJ")
+    (:intellivoice "IV")
+    (:minifont "MF")
+    (:branch "BR")))
+
+(defun dialogue-hash (text format)
   (let ((intro (format nil "~{~a~}"
                        (mapcar #'string-capitalize
                                (mapcar (lambda (word)
                                          (remove-if-not #'alpha-char-p word))
                                        (split-sequence #\Space text)))))
         (hash (format nil "~36r" (sxhash text))))
-    (format nil "~a_~a"
+    (format nil "~a_~a_~a"
             (subseq intro 0 (min (length intro) 24))
-            (subseq hash 0 (min (length hash) 6)))))
+            (subseq hash 0 (min (length hash) 6))
+            (dialogue-format-token-string format))))
 
 (defun fountain/write-speech-branch (option text)
   "Write the speech data for TEXT in text and SpeakJet forms as the label for script destination OPTION"
@@ -3082,7 +3092,7 @@ do-branching-dialogue ~a"
               (concatenate 'string "ScriptLabel_"
                            (pascal-case option))))
   (return-from fountain/write-speech-branch
-    (dialogue-hash text)))
+    (dialogue-hash text :branch)))
 
 (defun write-off-camera-speaker (actor-name)
   (unless (find-actor actor-name)
@@ -3227,9 +3237,9 @@ code for the game's scripting engine.
                   (go top))
                 (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
                   (load-npc-stats)
-                  (go top))))))
-    (unless victoryp
-      (ignore-errors (delete-file forth)))))
+                  (go top)))))
+      (unless victoryp
+        (ignore-errors (delete-file forth))))))
 
 (defvar *npc-stats* nil)
 
@@ -3482,11 +3492,7 @@ code for the game's scripting engine.
   (format t "~&;;; Generated character prototype data from NPC Stats file")
   (format t "~%~10tAllActors := []")
   (dolist (actor (load-npc-stats))
-    (destructuring-bind (&key name decal hp ac pitch speed
-                              hair-color skin-color clothes-color
-                              speech-color bend
-                              head body character-id class
-                         &allow-other-keys)
+    (destructuring-bind (&key name class &allow-other-keys)
         actor
       (when (> (length (string name)) 12)
         (let ((trunc (subseq (string name) 0 12)))
@@ -3567,4 +3573,4 @@ ActorClassSize:
               (unless (member name '(player narrator) :test 'string-equal)
                 (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
                         (pascal-case (string name)) character-id))))
-          (format *trace-output* " …done."*))))))
+          (format *trace-output* " …done.~%"))))))
