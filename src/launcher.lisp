@@ -55,6 +55,7 @@
        analyze-faults-from-dump
        show-dialogue-buffers
        show-map
+       show-all-stacks
        show-forth-stack)
       (core-dump-objects
        show-player-object

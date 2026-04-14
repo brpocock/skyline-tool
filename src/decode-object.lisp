@@ -655,6 +655,85 @@ Room for objects:
                                        :height 500
                                        :process-name "Room for Objects"))
 
+(defun echo-all-stacks ()
+  (fresh-line)
+  (loop for thread in '("Main" "Script" "Stagehand" "Forth")
+        do (clim:surrounding-output-with-border
+               (t :shape :drop-shadow)
+             (format t "~a Thread stack:" thread)
+             (let* ((stack-page (if (string= "Forth" thread)
+                                    (logand #xff00 (nth-value 1 (dump-peek "ParamStack")))
+                                    #x100))
+                    (stack-top (+ stack-page
+                                  (find-label-from-files (format nil "~aStackTop" thread))))
+                    (stack-bottom (+ stack-page
+                                     (find-label-from-files (format nil "~aStackBottom" thread))))
+                    (stack-pointer (+ stack-page
+                                      (dump-peek (format nil "~aStack" thread))))
+                    (canary (find-label-from-files (format nil "~aStackCanary" thread))))
+               (format t "~%Top: $~4,'0x … %sp = $~4,'0x … Bottom $~4,'0x  "
+                       stack-top stack-pointer stack-bottom)
+               (unless (>= stack-top stack-pointer stack-bottom)
+                 (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                         :ink clim:+red+)
+                   (format t "⚠ Stack pointer out of range")))
+               (if (string= "Forth" thread)
+                   (if (= stack-pointer stack-top)
+                       (format t "~%Ø~%")
+                       (loop for stack from stack-top above stack-pointer
+                             do (format t "~%$~4,'0x: $~,'0x" stack
+                                        (+ (dump-peek stack) (* #x100 (dump-peek (1- stack)))))))
+                   (if (= stack-pointer stack-top)
+                       (format t "~%Ø~%")
+                       (loop for stack from stack-top above stack-pointer
+                             do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
+                             when (> stack (1+ stack-pointer))
+                               do (format t "~10T($~4,'0x)"
+                                          (+ (dump-peek stack) (* #x100 (dump-peek (1- stack))))))))
+               (unless (= canary (if (string= "Forth" thread)
+                                     (nth-value 1 (dump-peek (1+ stack-bottom)))
+                                     (dump-peek stack-bottom)))
+                 (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                         :ink clim:+red+)
+                   (format t "⚠ Stack canary $~2,'0x overwritten with $~2,'0x"
+                           canary (dump-peek stack-bottom))))))
+        do (fresh-line)))
+
+(defun show-all-stacks ()
+  "Show the stacks in a window"
+  (clim-simple-echo:run-in-simple-echo #'echo-all-stacks
+                                       :width 500 :height 1000
+                                       :process-name "Stacks"))
+
+(defun actual-forth-stack ()
+  (terpri)
+  (if (= #x81 (dump-peek "ForthStack"))
+      (format t "~2%     Ø~2%(empty stack)")
+      (let ((i (dump-peek "ForthStack")))
+        (clim:formatting-table
+            (t)
+          (loop while (< i #x81)
+                do (clim:formatting-row
+                       (t)
+                     (clim:formatting-cell
+                         (t)
+                       (format t "$~4,'0x "
+                               (+ i (find-label-from-files "ParamStack"))))
+                     (clim:formatting-cell
+                         (t)
+                       (format t " $~2,'0x:  " i))
+                     (clim:formatting-cell
+                         (t)
+                       (format t " $~4,'0x "
+                               (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
+                                  (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                     (clim:formatting-cell
+                         (t)
+                       (format t " ~:d"
+                               (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
+                                  (dump-peek (+ i (find-label-from-files "ParamStack")))))))
+                do (incf i 2))))))
+
 (defun echo-forth-stack ()
   "Print the status of the Forth stack"
   (fresh-line)
@@ -671,33 +750,7 @@ Room for objects:
             (format t "ParamStack at $~4,'0x" (find-label-from-files "ParamStack"))
             (format t "~%ForthStack: $~2,'0x" (dump-peek "ForthStack"))
             (format t "~%     Depth: ~d" (/ (- #x81 (dump-peek "ForthStack")) 2)))
-          (terpri)
-          (if (= #x81 (dump-peek "ForthStack"))
-              (format t "~2%     Ø~2%(empty stack)")
-              (let ((i (dump-peek "ForthStack")))
-                (clim:formatting-table
-                    (t)
-                  (loop while (< i #x81)
-                        do (clim:formatting-row
-                               (t)
-                             (clim:formatting-cell
-                                 (t)
-                               (format t "$~4,'0x "
-                                       (+ i (find-label-from-files "ParamStack"))))
-                             (clim:formatting-cell
-                                 (t)
-                               (format t " $~2,'0x:  " i))
-                             (clim:formatting-cell
-                                 (t)
-                               (format t " $~4,'0x "
-                                       (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                          (dump-peek (+ i (find-label-from-files "ParamStack"))))))
-                             (clim:formatting-cell
-                                 (t)
-                               (format t " ~:d"
-                                       (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                          (dump-peek (+ i (find-label-from-files "ParamStack")))))))
-                        do (incf i 2)))))))
+          (actual-forth-stack)))
       (clim:formatting-cell
           (t)
         (clim:surrounding-output-with-border
@@ -788,14 +841,14 @@ Room for objects:
                    (+ (find-label-from-files "DialogueSpeakerName")
                       (elt dump (find-label-from-files "DialogueSpeakerNameLength"))))))
   (let ((last-line (dump-peek "DialogueTextLines")))
-   (dotimes (line 12)
-     (format t "~%“~a”"
-             (or (ignore-errors (minifont->unicode
-                                 (subseq dump (find-label-from-files (format nil "DialogueLine~x" (1+ line)))
-                                         (+ 32 (find-label-from-files (format nil "DialogueLine~x" (1+ line)))))))
-                 "✗"))
-     (when (= (1+ line) last-line)
-       (format t "~%—"))))
+    (dotimes (line 12)
+      (format t "~%“~a”"
+              (or (ignore-errors (minifont->unicode
+                                  (subseq dump (find-label-from-files (format nil "DialogueLine~x" (1+ line)))
+                                          (+ 32 (find-label-from-files (format nil "DialogueLine~x" (1+ line)))))))
+                  "✗"))
+      (when (= (1+ line) last-line)
+        (format t "~%—"))))
   (format t "~%
 DialogueLines: ~d …ToShow: ~d …Target: ~d …Shown: ~d …
 
