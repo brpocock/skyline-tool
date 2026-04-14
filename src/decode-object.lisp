@@ -743,6 +743,11 @@ Room for objects:
               (find-label-from-files "ForthStackCanary")
               (nth-value 2 (dump-peek "ParamStack"))))))
 
+(defvar *forth-window* nil)
+
+(define-anim-buffer-frame-command (com-refresh-forth :menu t :name t) ()
+  (clim:redisplay-frame-panes *forth-window*))
+
 (defun echo-forth-stack ()
   "Print the status of the Forth stack"
   (fresh-line)
@@ -759,7 +764,8 @@ Room for objects:
             (format t "ParamStack at $~4,'0x" (find-label-from-files "ParamStack"))
             (format t "~%ForthStack: $~2,'0x" (dump-peek "ForthStack"))
             (format t "~%     Depth: ~d" (/ (- #x81 (dump-peek "ForthStack")) 2)))
-          (actual-forth-stack)))
+          (actual-forth-stack))
+        )
       (clim:formatting-cell
           (t)
         (clim:surrounding-output-with-border
@@ -806,14 +812,13 @@ Room for objects:
                        (clim:formatting-cell
                            (t)
                          (format t "~a" (pascal-case (string (case (dump-peek forth-cursor)
-                                                               (0 'e-o-l)
+                                                               (0 'end)
                                                                (13 'push-byte) (1 'push-word)
                                                                (2 'set-byte) (3 'set-word)
                                                                (4 'get-byte) (5 'get-word)
                                                                (6 'execute) (11 'go)
                                                                (7 'dup) (8 'drop) (12 'swap)
                                                                (9 'unless) (10 'when)
-
                                                                (otherwise "⚠"))))))
                        (clim:formatting-cell
                            (t)
@@ -837,9 +842,11 @@ Room for objects:
 
 (defun show-forth-stack ()
   "Show the Forth stack in a window"
-  (clim-simple-echo:run-in-simple-echo #'echo-forth-stack
-                                       :width 700 :height 1000
-                                       :process-name "Forth Stack"))
+  (setf *forth-window*
+        (clim-simple-echo:run-in-simple-echo #'echo-forth-stack
+                                             :width 700 :height 1000
+                                             :process-name "Forth Stack")))
+
 (defun decode-dialogue (&optional (dump (load-dump-into-mem)))
   (format t "~2%~a: "
           (minifont->unicode
