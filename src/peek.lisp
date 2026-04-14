@@ -1,8 +1,8 @@
 (in-package :skyline-tool)
 
 (defun find-label-from-files (goal
-                              &optional (low-bank-pathname #p"Object/Bank02.Public.NTSC.o.LABELS.txt")
-                                        (last-bank-pathname #p"Object/Bank3f.Public.NTSC.o.LABELS.txt"))
+                              &optional (low-bank-pathname #p"Object/7800/Bank02.Public.NTSC.o.LABELS.txt")
+                                        (last-bank-pathname #p"Object/7800/Bank3f.Public.NTSC.o.LABELS.txt"))
   (dolist (pathname (list low-bank-pathname last-bank-pathname))
     (when (probe-file pathname)
     (with-input-from-file (labeled pathname :if-does-not-exist :error)
