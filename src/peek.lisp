@@ -22,7 +22,8 @@
   (when-let ((address (etypecase label
                         (string (find-label-from-files label))
                         (number label))))
-    (values (elt dump address) address)))
+    (values (elt dump address) address
+            (+ (elt dump address) (* #x100 (elt dump (1+ address)))))))
 
 (defun ppeek (label &optional (dump (load-dump-into-mem)))
   (multiple-value-bind (value address) (dump-peek label dump)

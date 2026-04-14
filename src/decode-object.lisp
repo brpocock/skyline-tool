@@ -655,6 +655,9 @@ Room for objects:
                                        :height 500
                                        :process-name "Room for Objects"))
 
+(defun flip-bytes (value)
+  (logior (ash (logand value #xff00) -8) (ash (logand value #x00ff) 8)))
+
 (defun echo-all-stacks ()
   (fresh-line)
   (loop for thread in '("Main" "Script" "Stagehand" "Forth")
@@ -662,7 +665,7 @@ Room for objects:
                (t :shape :drop-shadow)
              (format t "~a Thread stack:" thread)
              (let* ((stack-page (if (string= "Forth" thread)
-                                    (nth-value 1 (dump-peek "ParamStack"))
+                                    (nth-value 2 (dump-peek "ParamStack"))
                                     #x100))
                     (stack-top (+ stack-page
                                   (find-label-from-files (format nil "~aStackTop" thread))))
@@ -686,9 +689,15 @@ Room for objects:
                          (format t "~%Ø~%")
                          (loop for stack from stack-top above stack-pointer
                                do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
-                               when (> stack (1+ stack-pointer))
-                                 do (format t "~10T($~4,'0x)"
-                                            (+ (dump-peek stack) (* #x100 (dump-peek (1- stack)))))))
+                               when (> stack-top stack (1- stack-pointer))
+                                 do (format t "~10T($~4,'0x; $~4,'0x)"
+                                            (flip-bytes (nth-value 2 (dump-peek stack)))
+                                            (- (flip-bytes (nth-value 2 (dump-peek stack))) 2))
+                               when (and (> stack (+ 3 stack-pointer))
+                                         (= (nth-value 2 (dump-peek stack))
+                                            (nth-value 2 (dump-peek (- stack 2)))))
+                                 do (format t " ⚠")))
+                     (terpri)
                      (unless (= canary (dump-peek stack-bottom))
                        (clim:surrounding-output-with-border (t :shape :drop-shadow
                                                                :ink clim:+red+)
@@ -722,20 +731,19 @@ Room for objects:
                      (clim:formatting-cell
                          (t)
                        (format t " $~4,'0x "
-                               (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                  (dump-peek (+ i (find-label-from-files "ParamStack"))))))
+                               (nth-value 2 (dump-peek (+ i (find-label-from-files "ParamStack"))))))
                      (clim:formatting-cell
                          (t)
                        (format t " ~:d"
-                               (+ (nth-value 1 (dump-peek (+ i (find-label-from-files "ParamStack"))))))))
+                               (+ (nth-value 2 (dump-peek (+ i (find-label-from-files "ParamStack"))))))))
                 do (incf i 2)))))
   (unless (= (find-label-from-files (format nil "ForthStackCanary"))
-             (nth-value 1 (dump-peek (1+ (find-label-from-files "ParamStackBottom")))))
+             (nth-value 2 (dump-peek "ParamStack")))
     (clim:surrounding-output-with-border (t :shape :drop-shadow
                                             :ink clim:+red+)
       (format t "⚠ Stack canary $~4,'0x overwritten with $~4,'0x"
-              (find-label-from-files (format nil "ForthStackCanary"))
-              (nth-value 1 (dump-peek (1+ (find-label-from-files "ParamStackBottom"))))))))
+              (find-label-from-files "ForthStackCanary")
+              (nth-value 2 (dump-peek "ParamStack"))))))
 
 (defun echo-forth-stack ()
   "Print the status of the Forth stack"
@@ -761,9 +769,9 @@ Room for objects:
           (format t "ForthCursor (@$~4,'0x): $~2,'0x:~4,'0x"
                   (find-label-from-files "ForthCursor")
                   (dump-peek "CurrentBank")
-                  (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
-                     (dump-peek (find-label-from-files "ForthCursor"))))
-          (format t "~&ForthExecuteOneOpcode: $~4,'0x" (find-label-from-files "ForthExecuteOneOpcode")))
+                  (nth-value 2 (dump-peek (1+ (find-label-from-files "ForthCursor")))))
+          (format t "~&ForthExecuteOneOpcode: $~4,'0x"
+                  (find-label-from-files "ForthExecuteOneOpcode")))
         (terpri)
         (clim:surrounding-output-with-border
             (t :shape :drop-shadow)
@@ -788,13 +796,12 @@ Room for objects:
             (loop for i from 1 upto 32
                   with done-yet-p = nil
                   while (and (< i 32) (not done-yet-p))
-                  for forth-cursor from (+ (* #x100 (dump-peek (1+ (find-label-from-files "ForthCursor"))))
-                                           (dump-peek (find-label-from-files "ForthCursor")))
+                  for forth-cursor from (nth-value 2 (dump-peek "ForthCursor"))
                   do (clim:formatting-row
                          (t)
                        (clim:formatting-cell
                            (t)
-                         (format t "$~2,'0x:" forth-cursor))
+                         (format t "$~4,'0x:" forth-cursor))
                        (clim:formatting-cell
                            (t)
                          (format t "$~2,'0x" (dump-peek forth-cursor)))
@@ -814,8 +821,7 @@ Room for objects:
                            (t)
                          (format t "~@[$~4,'0x~]"
                                  (case (dump-peek forth-cursor)
-                                   ((1 9 10 11) (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                                   (dump-peek (+ 1 forth-cursor))))
+                                   ((1 9 10 11) (nth-value 2 (dump-peek (+ 1 forth-cursor))))
                                    (13 (dump-peek (+ 1 forth-cursor)))
                                    (otherwise nil))))
                        (clim:formatting-cell
@@ -824,8 +830,7 @@ Room for objects:
                                  (case (dump-peek forth-cursor)
                                    (0 (setf done-yet-p t) nil)
                                    ((1 9 10 11) (prog1
-                                                    (+ (* #x100 (dump-peek (+ 2 forth-cursor)))
-                                                       (dump-peek (+ 1 forth-cursor)))
+                                                    (nth-value 2 (dump-peek (+ 1 forth-cursor)))
                                                   (incf forth-cursor 2)))
                                    (13 (prog1
                                            (dump-peek (+ 1 forth-cursor))
