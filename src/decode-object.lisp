@@ -662,7 +662,7 @@ Room for objects:
                (t :shape :drop-shadow)
              (format t "~a Thread stack:" thread)
              (let* ((stack-page (if (string= "Forth" thread)
-                                    (logand #xff00 (nth-value 1 (dump-peek "ParamStack")))
+                                    (nth-value 1 (dump-peek "ParamStack"))
                                     #x100))
                     (stack-top (+ stack-page
                                   (find-label-from-files (format nil "~aStackTop" thread))))
@@ -680,23 +680,20 @@ Room for objects:
                (if (string= "Forth" thread)
                    (if (= stack-pointer stack-top)
                        (format t "~%Ø~%")
-                       (loop for stack from stack-top above stack-pointer
-                             do (format t "~%$~4,'0x: $~,'0x" stack
-                                        (+ (dump-peek stack) (* #x100 (dump-peek (1- stack)))))))
-                   (if (= stack-pointer stack-top)
-                       (format t "~%Ø~%")
-                       (loop for stack from stack-top above stack-pointer
-                             do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
-                             when (> stack (1+ stack-pointer))
-                               do (format t "~10T($~4,'0x)"
-                                          (+ (dump-peek stack) (* #x100 (dump-peek (1- stack))))))))
-               (unless (= canary (if (string= "Forth" thread)
-                                     (nth-value 1 (dump-peek (1+ stack-bottom)))
-                                     (dump-peek stack-bottom)))
-                 (clim:surrounding-output-with-border (t :shape :drop-shadow
-                                                         :ink clim:+red+)
-                   (format t "⚠ Stack canary $~2,'0x overwritten with $~2,'0x"
-                           canary (dump-peek stack-bottom))))))
+                       (actual-forth-stack))
+                   (progn
+                     (if (= stack-pointer stack-top)
+                         (format t "~%Ø~%")
+                         (loop for stack from stack-top above stack-pointer
+                               do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
+                               when (> stack (1+ stack-pointer))
+                                 do (format t "~10T($~4,'0x)"
+                                            (+ (dump-peek stack) (* #x100 (dump-peek (1- stack)))))))
+                     (unless (= canary (dump-peek stack-bottom))
+                       (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                                               :ink clim:+red+)
+                         (format t "⚠ Stack canary $~2,'0x overwritten with $~2,'0x"
+                                 canary (dump-peek stack-bottom))))))))
         do (fresh-line)))
 
 (defun show-all-stacks ()
@@ -730,9 +727,15 @@ Room for objects:
                      (clim:formatting-cell
                          (t)
                        (format t " ~:d"
-                               (+ (* #x100 (dump-peek (+ 1 i (find-label-from-files "ParamStack"))))
-                                  (dump-peek (+ i (find-label-from-files "ParamStack")))))))
-                do (incf i 2))))))
+                               (+ (nth-value 1 (dump-peek (+ i (find-label-from-files "ParamStack"))))))))
+                do (incf i 2)))))
+  (unless (= (find-label-from-files (format nil "ForthStackCanary"))
+             (nth-value 1 (dump-peek (1+ (find-label-from-files "ParamStackBottom")))))
+    (clim:surrounding-output-with-border (t :shape :drop-shadow
+                                            :ink clim:+red+)
+      (format t "⚠ Stack canary $~4,'0x overwritten with $~4,'0x"
+              (find-label-from-files (format nil "ForthStackCanary"))
+              (nth-value 1 (dump-peek (1+ (find-label-from-files "ParamStackBottom"))))))))
 
 (defun echo-forth-stack ()
   "Print the status of the Forth stack"
