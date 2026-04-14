@@ -50,7 +50,7 @@
     (palette-selector)
   ())
 
-(defun read-labels-for-decal-info (&optional (pathname #p"./Object/Bank00.Public.NTSC.o.LABELS.txt"))
+(defun read-labels-for-decal-info (&optional (pathname #p"./Object/7800/Bank00.Public.NTSC.o.LABELS.txt"))
   (with-input-from-file (label-file pathname :if-does-not-exist :error)
     (loop for line = (read-line label-file nil nil)
           while line

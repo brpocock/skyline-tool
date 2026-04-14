@@ -655,16 +655,16 @@ Room for objects:
                                        :height 500
                                        :process-name "Room for Objects"))
 
-(defun flip-bytes (value)
+(defun swap-bytes (value)
   (logior (ash (logand value #xff00) -8) (ash (logand value #x00ff) 8)))
 
 (defun echo-all-stacks ()
   (fresh-line)
-  (loop for thread in '("Main" "Script" "Stagehand" "Forth")
+  (loop for thread in '("Main" "Script" "Stagehand")
         do (clim:surrounding-output-with-border
                (t :shape :drop-shadow)
              (format t "~a Thread stack:" thread)
-             (let* ((stack-page (if (string= "Forth" thread)
+             (let* ((stack-page (if (string= "Param" thread)
                                     (nth-value 2 (dump-peek "ParamStack"))
                                     #x100))
                     (stack-top (+ stack-page
@@ -680,10 +680,8 @@ Room for objects:
                  (clim:surrounding-output-with-border (t :shape :drop-shadow
                                                          :ink clim:+red+)
                    (format t "⚠ Stack pointer out of range")))
-               (if (string= "Forth" thread)
-                   (if (= stack-pointer stack-top)
-                       (format t "~%Ø~%")
-                       (actual-forth-stack))
+               (if (string= "Param" thread)
+                   (actual-forth-stack)
                    (progn
                      (if (= stack-pointer stack-top)
                          (format t "~%Ø~%")
@@ -691,8 +689,8 @@ Room for objects:
                                do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
                                when (> stack-top stack (1- stack-pointer))
                                  do (format t "~10T($~4,'0x; $~4,'0x)"
-                                            (flip-bytes (nth-value 2 (dump-peek stack)))
-                                            (- (flip-bytes (nth-value 2 (dump-peek stack))) 2))
+                                            (swap-bytes (nth-value 2 (dump-peek stack)))
+                                            (- (swap-bytes (nth-value 2 (dump-peek stack))) 2))
                                when (and (> stack (+ 3 stack-pointer))
                                          (= (nth-value 2 (dump-peek stack))
                                             (nth-value 2 (dump-peek (- stack 2)))))
