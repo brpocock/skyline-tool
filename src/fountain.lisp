@@ -3031,7 +3031,6 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
   (assert (< (length text) #x100) (text)
           "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
           (length text))
-  (format t "~% C\" ~a\"" (prepare-dialogue text))
   (when (speech-supported-p)
     (restart-case
         (progn
