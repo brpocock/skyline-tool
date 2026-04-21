@@ -3337,10 +3337,10 @@ code for the game's scripting engine.
   (format nil "~10t.byte $ff"))
 
 (defmethod output-actor-value (actor (column (eql :character-h-p)))
-  (format nil "~10t.word ~5,'0d" (or (getf actor :hp) 2)))
+  (format nil "~10t.word ~5,'0d" (floor (* #x100 (ensure-number (getf actor :hp #x200))))))
 
 (defmethod output-actor-value (actor (column (eql :character-max-h-p)))
-  (format nil "~10t.byte 0, ~3,'0d" (or (getf actor :hp) 2)))
+  (format nil "~10t.word ~5,'0d" (floor (* #x100 (ensure-number (getf actor :hp #x200))))))
 
 (defmethod output-actor-value (actor (column (eql :character-action)))
   (format nil "~10t.byte ActionIdle"))
