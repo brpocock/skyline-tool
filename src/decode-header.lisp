@@ -118,7 +118,9 @@
         do (incf y offset)
         while (and (< dll-address (+ start-address 511))
                    (<= (- y offset) 262))
-        do (progn (format t " (Y = ~d…~d)" (1+ (- y offset)) y)
+        do (progn (format t " [DLL $~4,'0x] (Y = ~d…~d)"
+                          dll-address
+                          (1+ (- y offset)) y)
                   (when dll-pointer
                     (decode-display-list mem :offset dll-pointer)))))
 

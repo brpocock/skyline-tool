@@ -1348,17 +1348,20 @@ Returns @code{0} if no known prefix matches (FIXME #125)."
                    "Indoor" 6
                    "JungleIsland" 7
                    "Ancient" 8
-                   "Mechanism" 9
+                   "Mechanism" 98
                    "Cityscape" #xa
                    "Arturos" #xb
                    "Shipboard" #xc
                    "Undersea" #xd)
             by #'cddr
             when (some (lambda (match)
-                         (search string (or (assocdr "source" (second match)) "")))
+                         (search (string-downcase string)
+                                 (string-downcase (first (or (assocdr "source" (second match)
+                                                                      :test #'string-equal)
+                                                             '(""))))))
                        (xml-matches "tileset" xml))
               do (return id))
-      0))
+      (error "Can't identify tileset used by ~s" (xml-matches "tileset" xml))))
 
 (defun write-binary-animations-list (animations-list s &key frame-rate)
   #+ () (format *trace-output* "~%WRITE-BINARY-ANIMATIONS-LIST: ~2%~s~2%" animations-list)

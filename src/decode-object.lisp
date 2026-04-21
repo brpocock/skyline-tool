@@ -688,9 +688,9 @@ Room for objects:
                          (loop for stack from stack-top above stack-pointer
                                do (format t "~%$~4,'0x: $~2,'0x" stack (dump-peek stack))
                                when (> stack-top stack (1- stack-pointer))
-                                 do (format t "~10T($~4,'0x; $~4,'0x)"
-                                            (swap-bytes (nth-value 2 (dump-peek stack)))
-                                            (- (swap-bytes (nth-value 2 (dump-peek stack))) 2))
+                                 do (format t "~12T($~4,'0x / $~4,'0x)"
+                                            (nth-value 2 (dump-peek stack))
+                                            (- (nth-value 2 (dump-peek stack)) 2))
                                when (and (> stack (+ 3 stack-pointer))
                                          (= (nth-value 2 (dump-peek stack))
                                             (nth-value 2 (dump-peek (- stack 2)))))

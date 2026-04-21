@@ -46,6 +46,7 @@
        shove-binary-into-running-7800-game-drive)
       (core-dump-display
        show-dll-from-dump
+       show-other-dll-from-dump
        show-dlbam
        copy-dump-as-dump2
        compare-dlls-from-dumps
@@ -108,6 +109,14 @@
                                        :process-name "Display List List decoded"
                                        :height 768))
 
+(defun show-other-dll-from-dump ()
+  "Show the decoded back buffer Display List List from the core dump"
+  (clim-simple-echo:run-in-simple-echo (lambda () (decode-dll-from-dump
+                                                   #p"/tmp/dump"
+                                                   (logxor #x80 (detect-active-dll #p"/tmp/dump"))))
+                                       :process-name "Back Buffer Display List List decoded"
+                                       :height 768))
+
 (defun show-dlbam ()
   "Show the status of the BAM for Display Lists"
   (clim-simple-echo:run-in-simple-echo #'decode-dlbam
@@ -147,7 +156,7 @@ asset) changes, this may work."
    :process-name "Shove binary into running system"))
 
 (defun explain-error-code (error-code)
-  (let ((codes-file (make-pathname :directory (list :relative "Dist")
+  (let ((codes-file (make-pathname :directory (list :relative "Dist" "7800")
 			     :name (format nil "~a.error.codes" *game-title*)
                                    :type "tsv")))
     (unless (probe-file codes-file)
