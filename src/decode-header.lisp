@@ -103,7 +103,7 @@
                (return-from decode-display-list nil))
              (hex-dump string)
              (when (and (not (emptyp string))
-                        (every (lambda (byte) (< byte #x40)) string)) 
+                        (every (lambda (byte) (< byte #x80)) string)) 
                (format t "~&    =“~a”" (minifont->unicode string)))
              (incf dl-entry dl-increment))))
 
