@@ -591,16 +591,21 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
   (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
     (loop for row in table
           when (and row (not (emptyp (string-trim #(#\Space) (getf row :instrument)))))
-            collecting (list :instrument (getf row :instrument)
-                             :distortion (make-keyword (string-upcase (getf row :distortion)))
-                             :attack-addend (parse-number-or-fraction (getf row :attack-addend))
-                             :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
-                             :decay-duration (parse-number-or-fraction (getf row :decay-duration))
-                             :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
-                             :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))))))
+            collecting
+            (list :instrument (getf row :instrument)
+                  :distortion (make-keyword (string-upcase (getf row :distortion)))
+                  :attack-addend (parse-number-or-fraction (getf row :attack-addend))
+                  :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
+                  :decay-duration (parse-number-or-fraction (getf row :decay-duration))
+                  :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
+                  :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))
+                  :vibrato (parse-number-or-fraction (getf row :vibrato))
+                  :tremolo (parse-number-or-fraction (getf row :tremolo))))))
 
-(defun write-orchestration (&optional (input #p"Source/Tables/Orchestration.ods")
-                                      (output (format nil "Source/Generated/~a/Orchestration.s" (machine-directory-name))))
+(defun write-orchestration (&optional
+                              (input #p"Source/Tables/Orchestration.ods")
+                              (output (format nil "Source/Generated/~a/Orchestration.s"
+                                              (machine-directory-name))))
   "Write the orchestration tables to a source code file.
 
 INPUT & OUTPUT pathnames can be given."
@@ -608,13 +613,10 @@ INPUT & OUTPUT pathnames can be given."
     (with-output-to-file (out output :if-exists :supersede)
       (format *trace-output* "~&Going to write orchestration tables from ~a to source code file ~a…"
               (enough-namestring input) (enough-namestring output))
-      (format out ";;;; Phantasia ~a~%;;; This file is generated from ~a~2%"
-              (enough-namestring output) (enough-namestring input))
+      (format out ";;;; ~:(~a~) ~a~%;;; This file is generated from ~a~2%"
+              *game-title* (enough-namestring output) (enough-namestring input))
       (let ((table (read-orchestration input)))
         (format out "~2%~10tNumInstruments = ~d" (length table))
-        (format out "~2%;;; FIXME: #1236 PAL support
-;;; (multiple-value-bind (int fract) (floor (/ (* 1.0 60) 50)) (list int (floor (* fract #x100))))
-;;; FIXME: #1236 PAL support")
         (format out "~2%InstrumentHokeyDistortion:")
         (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
@@ -626,174 +628,186 @@ INPUT & OUTPUT pathnames can be given."
                   (getf row :tia-distortion)
                   (title-case (getf row :instrument))))
         (format out "~2%InstrumentAttackAddend:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (format out "~%~10t.if TV == NTSC")
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (getf row :attack-addend))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.else")
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (multiple-value-bind (int fract)
                       (floor (/ 60.0 50.0))
                     (declare (ignore fract))
                     (getf row :attack-addend)
                     int)
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.fi"))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
         (format out "~2%InstrumentAttackFraction:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (format out "~%~10t.if TV == NTSC")
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (* #x100 (nth-value 1 (floor (getf row :attack-addend)))))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.else")
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (multiple-value-bind (int fract)
                       (floor (/ 60.0 50.0))
                     (declare (ignore int))
                     (getf row :attack-addend)
                     (floor (* #x100 fract)))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.fi"))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
         (format out "~2%InstrumentDecaySubtrahend:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (format out "~%~10t.if TV == NTSC")
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (getf row :decay-subtrahend))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.else")
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)          
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (multiple-value-bind (int fract)
                       (floor (/ 60.0 50.0))
                     (declare (ignore fract))
                     (getf row :decay-subtrahend)
                     int)
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.fi"))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
         (format out "~2%InstrumentDecayFraction:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (dolist (row table)
-            (format out "~%~10t.if TV == NTSC")
-            (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                    (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
-                    (title-case (getf row :instrument)))
-            (format out "~%~10t.else")
-            (format out "~%~10t.byte $~2,'0x~40t; ~a"
-                    (multiple-value-bind (int fract)
-                        (floor (/ 60.0 50.0))
-                      (declare (ignore int))
-                      (getf row :decay-subtrahend)
-                      (floor (* #x100 fract)))
-                    (title-case (getf row :instrument)))
-            (format out "~%~10t.fi")))
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)
+          (format out "~%~10t.byte $~2,'0x~40t; ~a"
+                  (multiple-value-bind (int fract)
+                      (floor (/ 60.0 50.0))
+                    (declare (ignore int))
+                    (getf row :decay-subtrahend)
+                    (floor (* #x100 fract)))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
         (format out "~2%InstrumentDecayDuration:")
         (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (getf row :decay-duration))
                   (title-case (getf row :instrument))))
         (format out "~2%InstrumentReleaseSubtrahend:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (format out "~%~10t.if TV == NTSC")
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (getf row :release-subtrahend))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.else")
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (multiple-value-bind (int fract)
                       (floor (/ 60.0 50.0))
                     (declare (ignore fract))
                     (getf row :release-subtrahend)
                     int)
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.fi"))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
         (format out "~2%InstrumentReleaseFraction:")
+        (format out "~%~10t.if TV == NTSC")
         (dolist (row table)
-          (format out "~%~10t.if TV == NTSC")
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (floor (* #x100 (nth-value 1 (floor (getf row :release-subtrahend)))))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.else")
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.else")
+        (dolist (row table)
           (format out "~%~10t.byte $~2,'0x~40t; ~a"
                   (multiple-value-bind (int fract)
                       (floor (/ 60.0 50.0))
                     (declare (ignore int))
                     (getf row :release-subtrahend)
                     (floor (* #x100 fract)))
-                  (title-case (getf row :instrument)))
-          (format out "~%~10t.fi"))
+                  (title-case (getf row :instrument))))
+        (format out "~%~10t.fi")
+        (format out "~2%InstrumentVibratoTremelo:~%~10t;; vibrato in high nybble, tremolo in low")
+        (dolist (row table)
+          (format out "~%~10t.byte $~x~x~40t; ~a"
+                  (floor (min 15 (max 0 (getf row :vibrato 0))))
+                  (floor (min 15 (max 0 (getf row :tremolo 0))))
+                  (title-case (getf row :instrument))))
         (format out "~2%;;; End of Orchestration~2%")))))
 
-(defun write-equipment-index (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/EquipmentIndex.s" (machine-directory-name)) (project-root))))
+(defun write-equipment-index (&optional
+                                (pathname (format nil "Source/Generated/~a/EquipmentIndex.s"
+                                                  (machine-directory-name))))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
-  (format *trace-output* "~&Machine: ~a, Directory: ~a, Pathname: ~a, Full: ~s~%" *machine* (machine-directory-name) pathname (namestring pathname))
-    (format *trace-output* "~&Reading equipment attributes from ~a…" #p"Source/Tables/EquipmentIndex.ods")
-    (finish-output *trace-output*)
-    (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
-      (let* ((equipment-stats (remove-if-not (lambda (record)
-                                               (loop for (key value) on record
-                                                     by #'cddr
-                                                     unless (str:blankp value)
-                                                       return t
-                                                     finally (return nil)))
-                                             (ss->lol (first sheet)))))
-        (ensure-directories-exist pathname)
-        (with-output-to-file (output pathname :if-exists :supersede)
-          (format *trace-output* "writing ~a …" (enough-namestring pathname))
-          (finish-output *trace-output*)
-          (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
-          (flet ((always (format value)
-                   (declare (ignore value))
-                   format)
-                 (here? (format s)
-                   (if (str:blankp s) ".byte 0" format))
-                 (dec (format s)
-                   (if (str:blankp s)
-                       ".byte $ff"
-                       format))
-                 (hex (format s)
-                   (if (str:blankp s)
-                       ".byte $ff"
-                       format))
-                 (drawing-mode-filter (format s)
-                   (declare (ignore format))
-                   (if (string-equal "160B" (string-trim #(#\Space) s))
-                       ".byte Decal160B"
-                       ".byte 0")))
-            (loop for (format validator field-info)
-                    on
-                    (list ".byte $~2,'0x" #'hex :index
-                          ".byte $~2,'0x" #'hex :decal-bank
-                          ".byte ~aClass" #'here? '(:entity-class :entity)
-                          ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
-                          ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
-                          "" #'drawing-mode-filter :drawing-mode
-                          ".byte ~aClass" #'here? '(:course-class :course)
-                          ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
-                          ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
-                          ".byte Song_~a_ID" #'here? :sound
-                          ".byte $~2,'0x" #'hex :up
-                          ".byte $~2,'0x" #'hex :down
-                          ".byte $~2,'0x" #'hex :left
-                          ".byte $~2,'0x" #'hex :right
-                          ".byte ~d << PaletteShift" #'dec :palette
-                          ".byte ~d" #'dec :displace-up
-                          ".byte ~d" #'dec :displace-down
-                          ".byte ~d" #'dec :displace-left
-                          ".byte ~d" #'dec :displace-right
-                          ".byte >~a" #'here? :decal-sheet)
-                  by #'cdddr
+  (format *trace-output* "~&Reading equipment attributes from Source/Tables/EquipmentIndex.ods…")
+  (finish-output *trace-output*)
+  (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
+    (let* ((equipment-stats (remove-if-not (lambda (record)
+                                             (loop for (key value) on record
+                                                   by #'cddr
+                                                   unless (str:blankp value)
+                                                     return t
+                                                   finally (return nil)))
+                                           (ss->lol (first sheet)))))
+      (ensure-directories-exist pathname)
+      (with-output-to-file (output pathname :if-exists :supersede)
+        (format *trace-output* "writing ~a …" (enough-namestring pathname))
+        (finish-output *trace-output*)
+        (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
+        (flet ((always (format value)
+                 (declare (ignore value))
+                 format)
+               (here? (format s)
+                 (if (str:blankp s) ".byte 0" format))
+               (dec (format s)
+                 (if (str:blankp s)
+                     ".byte $ff"
+                     format))
+               (hex (format s)
+                 (if (str:blankp s)
+                     ".byte $ff"
+                     format))
+               (drawing-mode-filter (format s)
+                 (declare (ignore format))
+                 (if (string-equal "160B" (string-trim #(#\Space) s))
+                     ".byte Decal160B"
+                     ".byte 0")))
+          (loop for (format validator field-info)
+                  on
+                  (list ".byte $~2,'0x" #'hex :index
+                        ".byte $~2,'0x" #'hex :decal-bank
+                        ".byte ~aClass" #'here? '(:entity-class :entity)
+                        ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
+                        ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
+                        "" #'drawing-mode-filter :drawing-mode
+                        ".byte ~aClass" #'here? '(:course-class :course)
+                        ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
+                        ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
+                        ".byte Song_~a_ID" #'here? :sound
+                        ".byte $~2,'0x" #'hex :up
+                        ".byte $~2,'0x" #'hex :down
+                        ".byte $~2,'0x" #'hex :left
+                        ".byte $~2,'0x" #'hex :right
+                        ".byte ~d << PaletteShift" #'dec :palette
+                        ".byte ~d" #'dec :displace-up
+                        ".byte ~d" #'dec :displace-down
+                        ".byte ~d" #'dec :displace-left
+                        ".byte ~d" #'dec :displace-right
+                        ".byte >~a" #'here? :decal-sheet)
+                by #'cdddr
 
-                  for field-name = (if (listp field-info)
-                                       (first field-info)
-                                       field-info)
-                  for field-asm-name = (if (listp field-info)
-                                           (second field-info)
-                                           field-info)
-                  do (format output "~2%~a:" (pascal-case (string field-asm-name)))
-                  do (dolist (item equipment-stats)
-                       (let ((value (getf item field-name)))
-                         (format output "~%~10t~?~40t; ~a"
-                                 (funcall validator format value)
-                                 (cons value nil)
-                                 (title-case (getf item :item-name)))))))
-          (format output "~2%~10t.bend~%")))))
+                for field-name = (if (listp field-info)
+                                     (first field-info)
+                                     field-info)
+                for field-asm-name = (if (listp field-info)
+                                         (second field-info)
+                                         field-info)
+                do (format output "~2%~a:" (pascal-case (string field-asm-name)))
+                do (dolist (item equipment-stats)
+                     (let ((value (getf item field-name)))
+                       (format output "~%~10t~?~40t; ~a"
+                               (funcall validator format value)
+                               (cons value nil)
+                               (title-case (getf item :item-name)))))))
+        (format output "~2%~10t.bend~%")))))
