@@ -1806,9 +1806,9 @@ as
               prepared))
     prepared))
 
-    (assert (handler-case (prepare-dialogue "Para¶check")
-    (error (c)
-    (not (search "string contains a non-printable character" (princ-to-string c))))))
+(assert (handler-case (prepare-dialogue "Para¶check")
+          (error (c)
+            (not (search "string contains a non-printable character" (princ-to-string c))))))
 
 (defvar *atarivox-dictionary* nil
   "A cache for the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic")
