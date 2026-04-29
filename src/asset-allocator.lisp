@@ -1321,56 +1321,57 @@ Checks for files in Generated directories with specific names or containing 'Pal
 (defun asset->object-name (asset-indicator &key (video (when (boundp *region*) *region*)))
   (let ((machine-dir (machine-directory-name)))
     (ecase *machine*
-      ((7800 2609 5200 400 800) (destructuring-bind (kind name) (asset-kind/name asset-indicator)
-				  (cond ((equal kind "Songs")
-				         (assert (not (null video)))
-				         (format nil "Object/~a/Assets/Song.~a.~a.o"
-                                                         machine-dir name video))
-				        ((equal kind "Maps")
-				         (assert (not (null video)))
-				         (format nil "Object/~a/Assets/Map.~a.~a.o"
-                                                         machine-dir (substitute #\. #\/ name) video))
-				        ((equal kind "Scripts")
-				         (format nil "Source/Generated/~a/Assets/Script.~a.s"
-                                                         machine-dir (substitute #\. #\/ name)))
-				        ((equal kind "Blobs")
-				         (format nil "Source/Generated/~a/Assets/Blob.~a.s"
-                                                         machine-dir name))
-					(t
-					 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
+      ((7800 2609 5200 400 800)
+       (destructuring-bind (kind name) (asset-kind/name asset-indicator)
+         (cond ((equal kind "Songs")
+	      (assert (not (null video)))
+	      (format nil "Object/~a/Assets/Song.~a.~a.o"
+                        machine-dir name video))
+	     ((equal kind "Maps")
+	      (assert (not (null video)))
+	      (format nil "Object/~a/Assets/Map.~a.~a.o"
+                        machine-dir (substitute #\. #\/ name) video))
+	     ((equal kind "Scripts")
+	      (format nil "Source/Generated/~a/Assets/Script.~a.s"
+                        machine-dir (substitute #\. #\/ name)))
+	     ((equal kind "Blobs")
+	      (format nil "Source/Generated/~a/Assets/Blob.~a.s"
+                        machine-dir name))
+	     (t
+	      (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
       ((64 128) (destructuring-bind (kind name) (asset-kind/name asset-indicator)
-		  (cond ((equal kind "Songs")
-		         (format nil "Object/~a/Assets/Song.~a.~a.CBM.o"
-                                     machine-dir name video))
-			((equal kind "Maps")
-			 (format nil "Object/~a/Assets/Map.~a.~a.CBM.o"
-                                       machine-dir (substitute #\. #\/ name) video))
-			((equal kind "Scripts")
-			 (format nil "Source/Generated/~a/Assets/Script.~a.CBM.s"
-                                       machine-dir (substitute #\. #\/ name)))
-			((equal kind "Blobs")
-			 (format nil "Source/Generated/~a/Assets/Blob.~a.CBM.s"
-                                       machine-dir name))
-			(t
-			 (format nil "Object/~a/Assets/~a.~a.o"
-                                       machine-dir kind name)))))
-      (9918 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
-	      (cond ((equal kind "Songs")
-		     (assert (not (null video)))
-		     (format nil "Object/~a/Assets/Song.~a.~a.ClcV.o"
+	        (cond ((equal kind "Songs")
+		     (format nil "Object/~a/Assets/Song.~a.~a.CBM.o"
                                  machine-dir name video))
-		  ((equal kind "Maps")
-		   (assert (not (null video)))
-		   (format nil "Object/~a/Assets/Map.~a.~a.ClcV.o"
-                               machine-dir (substitute #\. #\/ name) video))
-		  ((equal kind "Scripts")
-		   (format nil "Source/Generated/~a/Assets/Script.~a.ClcV.s"
-                               machine-dir (substitute #\. #\/ name)))
-		  ((equal kind "Blobs")
-		   (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s"
-                               machine-dir name))
-		  (t
-		   (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
+		    ((equal kind "Maps")
+		     (format nil "Object/~a/Assets/Map.~a.~a.CBM.o"
+                                 machine-dir (substitute #\. #\/ name) video))
+		    ((equal kind "Scripts")
+		     (format nil "Source/Generated/~a/Assets/Script.~a.CBM.s"
+                                 machine-dir (substitute #\. #\/ name)))
+		    ((equal kind "Blobs")
+		     (format nil "Source/Generated/~a/Assets/Blob.~a.CBM.s"
+                                 machine-dir name))
+		    (t
+		     (format nil "Object/~a/Assets/~a.~a.o"
+                                 machine-dir kind name)))))
+      (9918 (destructuring-bind (kind name) (asset-kind/name asset-indicator)
+	    (cond ((equal kind "Songs")
+		 (assert (not (null video)))
+		 (format nil "Object/~a/Assets/Song.~a.~a.ClcV.o"
+                             machine-dir name video))
+		((equal kind "Maps")
+		 (assert (not (null video)))
+		 (format nil "Object/~a/Assets/Map.~a.~a.ClcV.o"
+                             machine-dir (substitute #\. #\/ name) video))
+		((equal kind "Scripts")
+		 (format nil "Source/Generated/~a/Assets/Script.~a.ClcV.s"
+                             machine-dir (substitute #\. #\/ name)))
+		((equal kind "Blobs")
+		 (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s"
+                             machine-dir name))
+		(t
+		 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
 
 (defun asset->deps-list (asset-indicator build)
   "Return a list of one-line dependency path strings for ASSET-INDICATOR in BUILD.
@@ -1436,17 +1437,17 @@ and target platform. Handles special cases for different machines and video mode
         ((equal kind "Songs")
          (ecase *machine*
            (16 ; TG16
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HUC6280 ~a $@" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HUC6280 ~a $@" video))
            (222 ; Apple IIGS
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DOC ~a $@" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DOC ~a $@" video))
            ((5200 7800 400 800)
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            (2609 ; Intellivision — AY-3-8910 PSG (STIC is display only; not used for music)
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< AY-3-8910 ~a $@" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< AY-3-8910 ~a $@" video))
            ((3010 9918 1000) ; SMS, ColecoVision, SG-1000 — SN76489 PSG
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< SN76489 ~a $@" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< SN76489 ~a $@" video))
            (35902 ; DMG
-	    (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DMG ~a $@" video))))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DMG ~a $@" video))))
         ((equal kind "Scripts")
          ;; One shell line for compile-script (FROM and FORTH); next line compile-forth.
          ;; Do not split compile-script across lines without a shell @samp{\\} — a folded
@@ -1456,8 +1457,8 @@ and target platform. Handles special cases for different machines and video mode
                  machine-dir name machine-dir name))
         ((equal kind "Blobs")
          (if (= *machine* 2609)
-	     (format nil "bin/skyline-tool --port ${PORT} compile-blob-intv $< $@")
-	     (format nil "bin/skyline-tool --port ${PORT} dispatch-png $< Object/~a/Assets" machine-dir)))
+	   (format nil "bin/skyline-tool --port ${PORT} compile-blob-intv $< $@")
+	   (format nil "bin/skyline-tool --port ${PORT} dispatch-png $< Object/~a/Assets" machine-dir)))
         (t (error "Asset kind ~a not known" kind))))))
 
 (defun write-asset-compilation/music (asset-indicator)
@@ -1494,10 +1495,10 @@ and target platform. Handles special cases for different machines and video mode
 ~10tSource/Assets.index bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	~a"
-	      (asset->object-name asset-indicator :video video)
-	      (asset->source-name asset-indicator)
-	      machine-dir
-	      (asset-compilation-line asset-indicator :video video)))))
+	    (asset->object-name asset-indicator :video video)
+	    (asset->source-name asset-indicator)
+	    machine-dir
+	    (asset-compilation-line asset-indicator :video video)))))
 
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
@@ -1507,7 +1508,7 @@ and target platform. Handles special cases for different machines and video mode
 ~10tSource/Assets.index bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	~a"
-	      (asset->object-name asset-indicator :video video)
+	    (asset->object-name asset-indicator :video video)
 	      (asset->source-name asset-indicator)
 	      machine-dir
 	      (asset-compilation-line asset-indicator :video video)))))
@@ -1826,7 +1827,7 @@ Dist/$(PORT)/~a.~a.~a.a78: ~0@* Dist/$(PORT)/~a.~a.~a.bin
 ~0@*
 Dist/$(PORT)/~a.~a.~a.bin: \\~
 ~{~%~10tObject/${PORT}/Bank~a.~a.~a.o~^ \\~}
-	mkdir -p Dist
+	mkdir -p Dist/${PORT}
 	cat $^ > $@
 
 ~0@*Dist/$(PORT)/~a.~a.~a.a78: .EXTRA_PREREQS = bin/7800header bin/7800sign
@@ -1844,7 +1845,7 @@ Dist/$(PORT)/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 
 Object/Phantasia.CBM.zip: \\~
 ~{~%~10tObject/Phantasia.CBM/~a ~^ \\~}
-	mkdir -p Dist
+	mkdir -p Dist/${PORT}
 	zip $@ $^
 
 "
@@ -1856,7 +1857,7 @@ Dist/$(PORT)/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 
 Object/Phantasia.CBM.zip: \\~
 ~{~%~10tObject/Phantasia.CBM/~a ~^ \\~}
-	mkdir -p Dist
+	mkdir -p Dist/${PORT}
 	zip $@ $^
 
 "
@@ -1865,7 +1866,7 @@ Object/Phantasia.CBM.zip: \\~
     ((5200 400 800) (format t "~%
 Dist/$(PORT)/~a.~a.~a.bin: \\~
 ~{~%~10tObject/${PORT}/Bank~a.~a.~a.o~^ \\~}
-	mkdir -p Dist
+	mkdir -p Dist/${PORT}
 	cat $^ > $@.wip
 	dd if=$@.wip of=$@ bs=1048576 conv=sync
 	rm -f $@.wip
@@ -2569,13 +2570,11 @@ Binary: .binary \"Map.~a.~a.PAL.o\"
 ~10t.fi
 EndOfBinary = *
 ~10t* = Binary + 2~32t; mark up relative pointers to be actual ROM positions
-~10t.word ( (Binary[2] + Binary[3] * $100) + Binary )
-~10t.word ( (Binary[4] + Binary[5] * $100) + Binary )
-~10t.word ( (Binary[6] + Binary[7] * $100) + Binary )
-~10t.word ( (Binary[8] + Binary[9] * $100) + Binary )
-~10t.word ( (Binary[10] + Binary[11] * $100) + Binary )
-~10t.word ( (Binary[12] + Binary[13] * $100) + Binary )
-~10t.word ( (Binary[14] + Binary[15] * $100) + Binary )
+~10t.word ( (Binary[2] + Binary[3] * $100) + Binary ) ; compressed art/attributes
+~10t.word ( (Binary[4] + Binary[5] * $100) + Binary ) ; scenery decals
+~10t.word ( (Binary[6] + Binary[7] * $100) + Binary ) ; object prototypes
+~10t* = Binary + 13~32t; one last pointer
+~10t.word ( (Binary[13] + Binary[14] * $100) + Binary ) ; run-commands
 ~10t* = EndOfBinary
 ~10t.pend
 ~10t.send
