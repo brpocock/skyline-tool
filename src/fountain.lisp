@@ -1743,39 +1743,42 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                (cl-ppcre:regex-replace-all
                 "fi"
                 (cl-ppcre:regex-replace-all
-                 "li"
+                 "ij"
                  (cl-ppcre:regex-replace-all
-                  "’r"
+                  "li"
                   (cl-ppcre:regex-replace-all
-                   "ll"
+                   "’r"
                    (cl-ppcre:regex-replace-all
-                    "I’"
+                    "ll"
                     (cl-ppcre:regex-replace-all
-                     "I’ll"
+                     "I’"
                      (cl-ppcre:regex-replace-all
-                      "—"
+                      "I’ll"
                       (cl-ppcre:regex-replace-all
-                       "[ \\t\\n]+"
+                       "—"
                        (cl-ppcre:regex-replace-all
-                        "(\\.\\.\\.+)"
+                        "[ \\t\\n]+"
                         (cl-ppcre:regex-replace-all
-                         "(\\b[A-Za-z0-9-']+\\b *)\\[[a-z ]*\\]( *)"
+                         "(\\.\\.\\.+)"
                          (cl-ppcre:regex-replace-all
-                          "\\'"
+                          "(\\b[A-Za-z0-9-']+\\b *)\\[[a-z ]*\\]( *)"
                           (cl-ppcre:regex-replace-all
-                           "\\[.*\\]"
-                           string
-                           "")
-                          "’")
-                         "\\1\\2")
-                        "…")
-                       " ")
-                      "-")
-                     "{i’ll}")
-                    "{i’}")
-                   "{ll}")
-                  "{’r}")
-                 "{li}")
+                           "\\'"
+                           (cl-ppcre:regex-replace-all
+                            "\\[.*\\]"
+                            string
+                            "")
+                           "’")
+                          "\\1\\2")
+                         "…")
+                        " ")
+                       "-")
+                      "{i’ll}")
+                     "{i’}")
+                    "{ll}")
+                   "{’r}")
+                  "{li}")
+                 "{ij}")
                 "{fi}")
                "{’s}")
               "{'t}")
