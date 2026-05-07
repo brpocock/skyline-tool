@@ -1712,10 +1712,10 @@ Shape:~{~{~a~}~2%~}
 ~{~%;;; ~{~a~}~}
 
 Shape:
-~{~%~10t.byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^,  $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}
+~%~10t.text x\"~{~2,'0x~}\"
 CoLu:
 ~{~%~10t;; ~{~15a ~15a ~15a ~15a~}~}
-~{~%~10t.byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^,  $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}
+~%~10t.text x\"~{~2,'0x~}\"
  .bend
 "
                 (enough-namestring png-file)
@@ -4152,8 +4152,7 @@ Binary graphics data and updated asset index for game engine loading.
   (format t "~%~|~%TilesScan~d:
  ;; ~:(~:*~:r~) three scan-lines (of 7 triples) in each group of 21"
           (1+ scan-line))
-  (format t "~{~%	.byte $~2,'0x~^, ~2,'0x~^, ~2,'0x~^, ~2,'0x~^,~
- ~2,'0x~^, ~2,'0x~^, ~2,'0x~^, ~2,'0x~}"
+  (format t "~%	.text x\"~{~2,'0x~}\""
           (loop
             for i from 0 below (array-dimension tile-bitmaps 0)
             collect (let ((byte (aref tile-bitmaps i scan-line)))
@@ -5971,14 +5970,13 @@ Malformed lines (e.g. missing mode) are skipped."
             (let ((tile-bytes (compile-tg16-tile-data palette-pixels tile-x tile-y)))
               ;; Output 4 bitplanes of 8 bytes each
               (dotimes (bitplane 4)
-                (format src-file "    .byte ")
+                (format src-file "~&          .text x\"")
                 (dotimes (byte 8)
                   (let ((byte-index (+ (* bitplane 8) byte)))
-                    (if (= byte 7)
-                        (format src-file "$~2,'0X~%" (aref tile-bytes byte-index))
-                        (format src-file "$~2,'0X, " (aref tile-bytes byte-index))))))))
-
-        (format src-file "~2%;;; Sprite descriptor for HuC6270 VDC
+                    (format src-file "~2,'0x" (aref tile-bytes byte-index))))
+                (format src-file "\""))))
+          
+          (format src-file "~2%;;; Sprite descriptor for HuC6270 VDC
 ~A_sprite_descriptor:
     .byte ~D  ; Width in tiles
     .byte ~D  ; Height in tiles
