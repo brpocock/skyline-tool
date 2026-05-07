@@ -56,6 +56,7 @@
        analyze-faults-from-dump
        show-dialogue-buffers
        show-map
+       show-sound-system-info
        show-all-stacks
        show-forth-stack)
       (core-dump-objects

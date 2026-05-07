@@ -658,12 +658,150 @@ Room for objects:
 (defun swap-bytes (value)
   (logior (ash (logand value #xff00) -8) (ash (logand value #x00ff) 8)))
 
+(defun music-source-kind (value)
+  (case value
+    (0 "Background Music")
+    (1 "Foley Sound")
+    (2 "Incidental Sound")
+    (3 "Incidental Music")
+    (#x80 "Vacant sound channel")
+    (otherwise (format nil "(invalid source, value $~2,'0x)" value))))
+
+(defun look-up-song-id (value)
+  (or (when-let (key (assocdr value
+                              (reverse
+                               (hash-table-alist
+                                (gethash :song
+                                         (nth-value 1
+                                                    (read-assets-list)))))))
+        (format nil "“~a”" (title-case key)))
+      (format nil "Song # $~2,'0x" value)))
+
+(defun envelope-stage-name (value)
+  (case value
+    (0 "Attack") (1 "Sustain") (2 "Decay") (3 "Release")
+    (otherwise (format nil "(Invalid envelope stage ~d)" value))))
+
+(defun instrument-name (value)
+  (let ((orchestra (get-orchestration)))
+    (if (< value (length orchestra))
+        (getf (elt orchestra value) :instrument)
+        (format nil "Undefined instrument # ~d" value))))
+
+(defun echo-music-stats ()
+  (fresh-line)
+  (clim:with-text-size (t :large)
+    (format t "Music Stats"))
+  (terpri)
+  (clim:surrounding-output-with-border
+      (t :shape :drop-shadow)
+    (clim:with-text-size (t :large)
+      (format t "Sound Channels"))
+    (let ((source (find-label-from-files "SoundChannelSource"))
+          (bank (find-label-from-files "SoundChannelBank"))
+          (h (find-label-from-files "SoundChannelH"))
+          (l (find-label-from-files "SoundChannelL"))
+          (timer (find-label-from-files "SoundChannelTimer"))
+          (head (find-label-from-files "SoundChannelHead"))
+          (tail (find-label-from-files "SoundChannelTail")))
+      (dotimes (i (find-label-from-files "MaxSoundChannels"))
+        (if (plusp (dump-peek (+ h i)))
+            (format t "~%Channel ~d. ~a $~2,'0x:~2,'0x~2,'0x
+~10TTime: ~d frame~:p; Head $~2,'0x; Tail $~2,'0x (length ~d)"
+                    i (music-source-kind (dump-peek (+ source i)))
+                    (dump-peek (+ bank i)) (dump-peek (+ h i)) (dump-peek (+ l i))
+                    (dump-peek (+ timer i)) (dump-peek (+ head i)) (dump-peek (+ tail i))
+                    (mod (- (+ #x100 (dump-peek (+ tail i))) (dump-peek (+ head i))) #x100))
+            (format t "~%Channel ~d. (open)" i)))))
+  (terpri)
+  (clim:surrounding-output-with-border
+      (t :shape :drop-shadow)
+    (clim:with-text-size (t :large)
+      (format t "Voices"))
+    (let ((last-hokey (find-label-from-files "LastHokeyVoice"))
+          (source (find-label-from-files "VoiceSource"))
+          (f (find-label-from-files "VoiceF"))
+          (error-low (find-label-from-files "VoiceErrorLow"))
+          (error-high (find-label-from-files "VoiceErrorHigh"))
+          (error-phase (find-label-from-files "VoiceErrorPhase"))
+          (time (find-label-from-files "VoiceTime"))
+          (instrument (find-label-from-files "VoiceInstrument"))
+          (max-volume (find-label-from-files "VoiceMaxVolume"))
+          (volume (find-label-from-files "VoiceVolume"))
+          (volume-fraction (find-label-from-files "VoiceVolumeFraction"))
+          (envelope-stage (find-label-from-files "VoiceEnvelopeStage"))
+          (envelope-timer (find-label-from-files "VoiceEnvelopeTimer"))
+          (tremor (find-label-from-files "VoiceTremor"))
+          (vibe (find-label-from-files "VoiceVibe")))
+      (dotimes (i (find-label-from-files "NumVoices"))
+        (let ((voice-id (if (<= i last-hokey)
+                            (format nil "Hokey ~d" i)
+                            (format nil "TIA ~d" (- i last-hokey)))))
+          (if (zerop (logand #x80 (dump-peek (+ source i))))
+              (format t "~%Voice ~a. ~a
+~10tF: $~2,'0x; Error: ~3,3f ($~2,'0x)
+~10tTime: ~d frame~:p; ~a
+~10tVolume: ~3,3f (max: ~d)
+~10t~a, ~d frame~:p
+~10tTremor $~2,'0x; Vibe: $~2,'0x"
+                      voice-id (music-source-kind (dump-peek (+ source i)))
+                      (dump-peek (+ f i))
+                      (+ (dump-peek (+ error-high i))
+                         (/ (dump-peek (+ error-low i)) #x100))
+                      (dump-peek (+ error-phase i))
+                      (dump-peek (+ time i))
+                      (instrument-name (dump-peek (+ instrument i)))
+                      (+ (dump-peek (+ volume i))
+                         (/ (dump-peek (+ volume-fraction i)) #x100))
+                      (dump-peek (+ max-volume i))
+                      (envelope-stage-name (dump-peek (+ envelope-stage i)))
+                      (dump-peek (+ envelope-timer i))
+                      (dump-peek (+ tremor i))
+                      (dump-peek (+ vibe i)))
+              (format t "~%Voice ~a. (open)" voice-id))))))
+  (terpri)
+  (when (plusp (logand #x80 (dump-peek "LoopMusicP")))
+    (clim:surrounding-output-with-border
+        (t :shape :drop-shadow)
+      (clim:with-text-size (t :large)
+        (format t "Music Requeue Requested"))
+      (format t "~%Song: ~a"
+              (look-up-song-id (dump-peek "LoopMusicSong")))
+      (format t "~%Source: ~a"
+              (music-source-kind (dump-peek "LoopMusicSource"))))
+    (terpri))
+  (when-let (song (dump-peek "CurrentBackgroundSong"))
+    (unless (zerop song)
+      (clim:surrounding-output-with-border (t :shape :drop-shadow)
+        (format t "Background Song: ~a~%"
+                (look-up-song-id song)))
+      (terpri)))
+  (when (plusp (dump-peek "NumIncidentalSongs"))
+    (clim:surrounding-output-with-border
+        (t :shape :drop-shadow)
+      (clim:with-text-size (t :large)
+        (format t "Incidental Songs Enqueued"))
+      (let ((queue (find-label-from-files "IncidentalSongQueue")))
+        (dotimes (i (dump-peek "NumIncidentalSongs"))
+          (format t "~%~d. ~a" i (look-up-song-id (dump-peek (+ queue i)))))))
+    (terpri))
+  (when (plusp (dump-peek "MusicOffP"))
+    (clim:with-text-size (t :large)
+      (format t "Music is OFF."))))
+
+(defun show-sound-system-info ()
+  "Examine songs, channels, voices in a window"
+  (clim-simple-echo:run-in-simple-echo #'echo-music-stats
+                                       :width 600 :height 1000
+                                       :process-name "Sound System"))
+
 (defun echo-all-stacks ()
   (fresh-line)
   (loop for thread in '("Main" "Script" "Stagehand")
         do (clim:surrounding-output-with-border
                (t :shape :drop-shadow)
-             (format t "~a Thread stack:" thread)
+             (clim:with-text-size (t :large)
+               (format t "~a Thread stack" thread))
              (let* ((stack-page (if (string= "Param" thread)
                                     (nth-value 2 (dump-peek "ParamStack"))
                                     #x100))
