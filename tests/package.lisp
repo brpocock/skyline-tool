@@ -33,6 +33,8 @@
            #:intv-gram-tests
            #:run-intv-gram-tests
            #:lynx-tests
+           #:lynx-cart-tests
+           #:run-lynx-cart-tests
            #:zx81-tests
            #:spectrum-tests
            #:snes-tests
@@ -144,6 +146,12 @@ Width and height specify dimensions, pattern can be:
     stamp))
 
 ;;; Convenience functions for running test suites
+
+(defun run-lynx-cart-tests ()
+  "Run only the Phantasia Lynx (machine 200) cart-pipeline regression
+tests added against issue #1323."
+  (let ((skyline-tool::*machine* 200))
+    (fiveam:run! 'lynx-cart-tests)))
 
 (defun run-sega-tests ()
   "Run all Sega platform tests"

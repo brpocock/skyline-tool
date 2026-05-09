@@ -1244,6 +1244,41 @@ then use $f9 (512kiB) banking."
           while b
           sum b)))
 
+(defun %lynx-page-size-bank0 (byte-size)
+  "Return the LNX header @samp{page_size_bank0} value for a ROM of BYTE-SIZE.
+
+The K. Wilkins / Handy LNX format addresses the cartridge as 256 sequential
+pages, so @samp{page_size_bank0} = @code{BYTE-SIZE / 256}.  For the
+homebrew sizes documented at
+@url{https://atarilynxvault.com/pages/atari-lynx-cartridge-reader-writer-board-software},
+this gives:
+
+@table @asis
+@item 64 KiB
+256 (@code{#x0100})
+@item 128 KiB
+512 (@code{#x0200})
+@item 256 KiB
+1024 (@code{#x0400})
+@item 512 KiB
+2048 (@code{#x0800})
+@item 1024 KiB
+4096 (@code{#x1000})
+@end table
+
+@table @asis
+@item BYTE-SIZE
+Raw ROM size in bytes; must be a multiple of 256 and one of the supported
+homebrew capacities.
+@item Return
+Integer page-size value to be written little-endian into LNX header bytes
+4-5.  Bank 1 is unused for single-bank carts (page_size_bank1 = 0).
+@end table"
+  (assert (zerop (mod byte-size 256)) (byte-size)
+          "Lynx ROM size ~D must be a multiple of 256 (LNX header expects 256 pages)."
+          byte-size)
+  (truncate byte-size 256))
+
 (defun %atari800-5200-car-type-id (byte-size)
   "Map raw ROM size in bytes to Atari800 @file{cartridge_info.h} type id (low byte).
 
@@ -1279,43 +1314,52 @@ Path to the raw ROM binary to wrap.
 @end table"
   (ecase *machine*
     (200
-     (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
-                                              :if-exists :supersede)
-       ;; LYNX header (64 bytes total)
-       (write-byte (char-code #\L) header)
-       (write-byte (char-code #\Y) header)
-       (write-byte (char-code #\N) header)
-       (write-byte (char-code #\X) header)
-       (write-byte 0 header) ;; bank0_page
-       (write-byte 0 header) ;; bank1_page
-       (write-byte 1 header) ;; version
-       ;; cart_name (32 bytes, null-terminated)
-       (let ((name-str (format nil "~a~c" (or *game-title* "Unknown") #\null)))
-         (loop for i from 0 below 32
-               do (write-byte (if (< i (length name-str))
-                                  (char-code (aref name-str i))
-                                  0)
-                              header)))
-       ;; manuf_name (16 bytes, null-terminated)
-       (let ((manuf-str (format nil "~a~c" (or *studio* "Unknown") #\null)))
-         (loop for i from 0 below 16
-               do (write-byte (if (< i (length manuf-str))
-                                  (char-code (aref manuf-str i))
-                                  0)
-                              header)))
-       (write-byte #x00 header) ;; rotat_mode low
-       (write-byte #xA0 header) ;; rotat_mode high
-       ;; spare (7 bytes of zeros)
-       (dotimes (i 7)
-         (write-byte 0 header))
-       ;; Append the binary data
-       (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
-         (let ((bytes-written 0))
+     ;; --- Atari Lynx LNX header (K. Wilkins / Handy / No-Intro) ----------------
+     ;;
+     ;;   Offset Size Field
+     ;;   ------ ---- -----------------------------------------------------------
+     ;;   0x00    4   Magic bytes "LYNX"
+     ;;   0x04    2   page_size_bank0 (LE)
+     ;;   0x06    2   page_size_bank1 (LE) — 0 for single-bank carts
+     ;;   0x08    2   version (LE) — must be 1
+     ;;   0x0A   32   cart_name (NUL-padded ASCII)
+     ;;   0x2A   16   manuf_name (NUL-padded ASCII)
+     ;;   0x3A    1   rotation (0 = normal, 2 = vertical)
+     ;;   0x3B    5   spare (zero)
+     ;;
+     ;; See Phantasia issue #1323 for the regression history.  The previous
+     ;; implementation wrote single bytes for the 16-bit fields and so emitted
+     ;; an off-by-three header; mednafen tolerated it but Handy and No-Intro
+     ;; tools did not.
+     (let* ((rom-size (with-open-file (s binary-name :element-type '(unsigned-byte 8))
+                        (file-length s)))
+            (page-size (%lynx-page-size-bank0 rom-size)))
+       (with-output-to-file (header header-name :element-type '(unsigned-byte 8)
+                                                :if-exists :supersede)
+         (flet ((write-le-word (value stream)
+                  (write-byte (ldb (byte 8 0) value) stream)
+                  (write-byte (ldb (byte 8 8) value) stream))
+                (write-padded-string (string length stream)
+                  (loop for i from 0 below length
+                        do (write-byte (if (< i (length string))
+                                           (char-code (aref string i))
+                                           0)
+                                       stream))))
+           (write-byte (char-code #\L) header) ; 0x00
+           (write-byte (char-code #\Y) header) ; 0x01
+           (write-byte (char-code #\N) header) ; 0x02
+           (write-byte (char-code #\X) header) ; 0x03
+           (write-le-word page-size header)    ; 0x04..05 page_size_bank0
+           (write-le-word 0         header)    ; 0x06..07 page_size_bank1
+           (write-le-word 1         header)    ; 0x08..09 version
+           (write-padded-string (or *game-title* "Unknown") 32 header) ; 0x0A..29
+           (write-padded-string (or *studio*     "Unknown") 16 header) ; 0x2A..39
+           (write-byte 0 header)                                       ; 0x3A rotation
+           (dotimes (i 5) (write-byte 0 header)))                      ; 0x3B..3F spare
+         (with-open-file (binary binary-name :element-type '(unsigned-byte 8))
            (loop for byte = (read-byte binary nil nil)
                  while byte
-                 do (write-byte byte header)
-                    (incf bytes-written))
-           (format *trace-output* "~&DEBUG: Wrote ~D bytes of binary data~%" bytes-written)))))
+                 do (write-byte byte header))))))
     (5200
      (let* ((size (ql-util:file-size binary-name))
             (type-id (%atari800-5200-car-type-id size))

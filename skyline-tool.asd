@@ -102,6 +102,7 @@
                              (:file "interface-tests" :depends-on ("package"))
                              (:file "intv-gram-tests" :depends-on ("package"))
                              (:file "lynx-tests" :depends-on ("package"))
+                             (:file "lynx-cart-tests" :depends-on ("package"))
                              (:file "multiplatform-tests" :depends-on ("package"))
                              (:file "music-compilation-tests" :depends-on ("package"))
                              (:file "music-tests" :depends-on ("package" "test-data-generators"))

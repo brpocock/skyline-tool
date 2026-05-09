@@ -353,6 +353,10 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
   (ecase *machine*
     (2600 #x1000)
     (7800 #x4000)
+    ;; Atari Lynx (Phantasia #1321 / Phase 1 #1322): 16 KiB logical bank,
+    ;; 32 banks × 16 KiB = 512 KiB total cart, packaged via LNX header
+    ;; produced by @code{write-cart-header} (machine 200).
+    (200 #x4000)
     ;; 32 KiB per bank × 32 banks = 1 MiB SuperCart-style image (5200, 400, 800).
     ((5200 400 800) #x8000)
     ;; Z80 targets: placeholder 16 KiB per bank until cartridge map is fixed per title.
@@ -506,6 +510,8 @@ available ROM banks. Uses brute-force search for optimal packing.
   "Return the list of video types supported by MACHINE.
    Filters out unsupported video types for specific machines."
   (case machine
+    ;; Lynx is a portable single-region device; Makefile + asset names avoid NTSC/PAL suffixes (see asset->object-name).
+    (200 '(:ntsc))
     (5200 '(:ntsc))
     ((400 800 20 64 128 7800) '(:ntsc :pal))
     (t '(:ntsc :pal :secam))))
@@ -608,6 +614,11 @@ Uses the same path layout as @code{bank-source-pathname}
             ((equal build "Test") 64)
             (t 64)))
     ((5200 400 800) 32)
+    ;; Atari Lynx (Phantasia #1321 / Phase 1 #1322): 32 logical 16 KiB banks
+    ;; produce a 512 KiB cart image, matching @file{Project.Lynx.json}
+    ;; @samp{CartBankCount}.  All builds (Demo/Test/Public) use the same
+    ;; 32-bank layout for now.
+    (200 32)
     ;; Intellivision: placeholder bank count for asset Makefile layout (see
     ;; @code{write-master-makefile-for-machine} for 2609).
     (2609 8)
@@ -1319,6 +1330,26 @@ Checks for files in Generated directories with specific names or containing 'Pal
    (all-portable-assets)))
 
 (defun asset->object-name (asset-indicator &key (video (when (boundp *region*) *region*)))
+  "Return the generated Makefile target path for ASSET-INDICATOR.
+
+@table @asis
+@item ASSET-INDICATOR
+Asset identifier such as @code{Blobs/TitleCard}, @code{Scripts/Title},
+@code{Songs/Title}, or @code{Maps/Solace/AncientBurialSite2}.
+@item VIDEO
+Video standard keyword for assets whose object files vary by video mode
+(used for Maps and Songs on machines that emit per-video objects).
+@end table
+
+@table @asis
+@item Return
+String naming the generated Makefile target for the current
+@code{*machine*}.  For Atari Lynx (machine 200) Maps and Songs targets
+are video-independent because Lynx is a portable single-region device,
+and Blobs/Scripts are emitted into @file{Source/Generated/Lynx/Assets/}.
+@item Faults
+Signals @code{ECASE} failure for unsupported machines.
+@end table"
   (let ((machine-dir (machine-directory-name)))
     (ecase *machine*
       ((7800 2609 5200 400 800)
@@ -1339,6 +1370,28 @@ Checks for files in Generated directories with specific names or containing 'Pal
                         machine-dir name))
 	     (t
 	      (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
+      ;; Atari Lynx (Phantasia issue #1321 / #1323).  Lynx has no NTSC/PAL
+      ;; variant — it is a portable single-region device — so Maps and Songs
+      ;; targets are emitted without a video suffix.  Blobs and Scripts are
+      ;; placed alongside other generated sources for the @file{Lynx} port
+      ;; under @file{Source/Generated/Lynx/Assets/}.
+      (200
+       (destructuring-bind (kind name) (asset-kind/name asset-indicator)
+         (cond ((equal kind "Songs")
+                (format nil "Object/~a/Assets/Song.~a.o"
+                        machine-dir name))
+               ((equal kind "Maps")
+                (format nil "Object/~a/Assets/Map.~a.o"
+                        machine-dir (substitute #\. #\/ name)))
+               ((equal kind "Scripts")
+                (format nil "Source/Generated/~a/Assets/Script.~a.s"
+                        machine-dir (substitute #\. #\/ name)))
+               ((equal kind "Blobs")
+                (format nil "Source/Generated/~a/Assets/Blob.~a.s"
+                        machine-dir (substitute #\. #\/ name)))
+               (t
+                (format nil "Object/~a/Assets/~a.~a.o"
+                        machine-dir kind name)))))
       ((64 128) (destructuring-bind (kind name) (asset-kind/name asset-indicator)
 	        (cond ((equal kind "Songs")
 		     (format nil "Object/~a/Assets/Song.~a.~a.CBM.o"
@@ -1440,6 +1493,9 @@ and target platform. Handles special cases for different machines and video mode
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HUC6280 ~a $@" video))
            (222 ; Apple IIGS
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DOC ~a $@" video))
+           ;; FIXME: Dedicated Mikey / Lynx song backend; HOKEY path is a stub so master Makefiles can be emitted and parsed.
+           (200
+            (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            ((5200 7800 400 800)
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            (2609 ; Intellivision — AY-3-8910 PSG (STIC is display only; not used for music)
@@ -1559,9 +1615,7 @@ and target platform. Handles special cases for different machines and video mode
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (ecase *machine*
-    ((2600 7800 2609) t) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
-    (t nil))) ; All others: false
+  (member *machine* '(2600 7800 2609))) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
@@ -1879,7 +1933,15 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 # Intellivision (CP1610): cartridge image @file{Dist/$(PORT)/Intv/$(GAME).Public.rom} is
 # produced by @code{make -f Source/Build/Intv.mak game}, not by catting bank .o
 # files. Rules below still emit @file{Object/Intv/…} asset prerequisites.
-"))))
+"))
+    ;; Atari Lynx (Phantasia issue #1321 / Phase 1 #1322 / SkylineTool #1323).
+    ;; The runnable @file{.lnx} image is built by @file{Source/Build/Lynx.mak}
+    ;; (LNX header + concatenated bank objects), not by emitting an a78-style
+    ;; rule here.  We only need a banner comment so the generated Makefile
+    ;; remains self-documenting.
+    (200 (format t "~%~
+# --- Atari Lynx (200): runnable @file{.lnx} images are assembled via @file{Source/Build/Lynx.mak}.~%~
+# Generated rules below only list per-bank asset prerequisites for this port.~%"))))
 
 (defvar *assets-for-builds* (make-hash-table :test 'equalp)
   "A cache of assets and in which builds they are used.")
