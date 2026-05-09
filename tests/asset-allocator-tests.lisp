@@ -157,7 +157,8 @@
   "Test machine-number-by-tag function"
   (is (= (skyline-tool::machine-number-by-tag "2600") 2600) "2600 tag should map to 2600")
   (is (= (skyline-tool::machine-number-by-tag "nes") 8) "nes tag should map to 8")
-  (is (= (skyline-tool::machine-number-by-tag "5200") 5200) "5200 tag should map to 5200"))
+  (is (= (skyline-tool::machine-number-by-tag "5200") 5200) "5200 tag should map to 5200")
+  (is (= (skyline-tool::machine-number-by-tag "VCS800") 7850) "VCS800 tag should map to 7850"))
 
 ;; Test extract-palette function
 (test extract-palette-existence

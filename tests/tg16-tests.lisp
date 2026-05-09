@@ -78,7 +78,7 @@
       ;; Set some test colors (0-15 for 4-bit)
       (dotimes (y 8)
         (dotimes (x 8)
-          (setf (aref test-palette x y) (mod (+ x y) 16))))
+          (setf (aref test-palette x y) (mod (+ x y) 16))))))
 
       ;; Test tile conversion
       (let ((tile-bytes (compile-tg16-tile-data test-palette 0 0)))

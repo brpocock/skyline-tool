@@ -81,7 +81,7 @@
       ;; Fill with some test pattern
       (dotimes (y 200)
         (dotimes (x 320)
-          (setf (aref mock-palette x y) (mod (+ x y) 16))))
+          (setf (aref mock-palette x y) (mod (+ x y) 16))))))
       ;; This should not error
       (finishes
        (compile-a2gs-super-hires #p"test-super-hires" temp-dir 200 320 mock-palette)))))

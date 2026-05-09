@@ -1544,22 +1544,38 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               (starts-with-subseq "EXT " line)
               (starts-with-subseq "INT. " line)
               (starts-with-subseq "EXT. " line))
-          (let ((scene-name (mapcar (lambda (part)
-                                      (pascal-case
-                                       (string-trim #(#\Space #\Tab) part)))
-                                    (split-sequence
-                                     #\-
-                                     (subseq line 4 (position #\# line))
-                                     :count 2))))
-            (with-simple-restart (check-for-scene-again "Check again for ~{~a~^/~}.tmx" scene-name)
-              (unless (and (= 2 (length scene-name))
-                           (probe-file (make-pathname
-                                        :directory (list :relative "Source" "Maps" (first scene-name))
-                                        :name (second scene-name)
-                                        :type "tmx")))
-                (error "Scene map file not found: Source/Maps/~{~a~^/~}.tmx ?"
-                       scene-name)))
-            (return (list 'scene scene-name))))
+          (let* ((scene-fragment
+                   (string-trim #(#\Space #\Tab)
+                                (subseq line
+                                        4
+                                        (or (position #\# line)
+                                            (length line)))))
+                 (blob-screen-p
+                   (and (<= 6 (length scene-fragment))
+                        (string-equal "(BLOB)"
+                                      (subseq scene-fragment
+                                              (- (length scene-fragment) 6))))))
+            (if blob-screen-p
+                (let ((blob-screen-name
+                        (pascal-case
+                         (string-trim #(#\Space #\Tab #\.)
+                                      (subseq scene-fragment
+                                              0
+                                              (- (length scene-fragment) 6))))))
+                  (return (list 'blob-screen blob-screen-name)))
+                (let ((scene-name (mapcar (lambda (part)
+                                            (pascal-case
+                                             (string-trim #(#\Space #\Tab) part)))
+                                          (split-sequence #\- scene-fragment :count 2))))
+                  (with-simple-restart (check-for-scene-again "Check again for ~{~a~^/~}.tmx" scene-name)
+                    (unless (and (= 2 (length scene-name))
+                                 (probe-file (make-pathname
+                                              :directory (list :relative "Source" "Maps" (first scene-name))
+                                              :name (second scene-name)
+                                              :type "tmx")))
+                      (error "Scene map file not found: Source/Maps/~{~a~^/~}.tmx ?"
+                             scene-name)))
+                  (return (list 'scene scene-name))))))
          ((every (lambda (char) (char= char (char-upcase char))) line)
           (destructuring-bind (kind name)
               (if (find #\( line)
@@ -3029,6 +3045,15 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
 
   (setf *actors* nil))
 
+(defun fountain/write-blob-screen (blob-screen-name)
+  "Emit code to show a blob screen named by BLOB-SCREEN-NAME.
+
+Expected Fountain syntax is @code{INT NAME (BLOB)} (or @code{EXT}),
+which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
+  (setf *actors* nil)
+  (format t "~% Blob_~a_ID scripted-blob-screen"
+          (pascal-case blob-screen-name)))
+
 (defun fountain/write-speech (text)
   "Write the speech data for TEXT in text, SpeakJet, and IntelliVoice forms"
   (assert (< (length text) #x100) (text)
@@ -3140,6 +3165,8 @@ do-branching-dialogue ~a"
                        (pascal-case value)))
               (scene
                (fountain/write-scene-start value))
+              (blob-screen
+               (fountain/write-blob-screen value))
               (speaker-oc
                (destructuring-bind (&key name &allow-other-keys) (require-actor value)
                  (write-off-camera-speaker name)))

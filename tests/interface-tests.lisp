@@ -92,6 +92,18 @@
     (is-true command-function "command function should exist")
     (is (fboundp command-function) "command should be bound to a function")))
 
+(test makefile-port-assignment-rhs-acceptable-p/skips-recipe-junk
+  "PORT= scan must ignore sub-make lines that embed PORT= after PROJECT_JSON=."
+  (is-true (skyline-tool::makefile-port-assignment-rhs-acceptable-p "7800"))
+  (is-true (skyline-tool::makefile-port-assignment-rhs-acceptable-p "Lynx"))
+  (is-false (skyline-tool::makefile-port-assignment-rhs-acceptable-p ""))
+  (is-false (skyline-tool::makefile-port-assignment-rhs-acceptable-p
+             "Project.7800.json PORT=7800 CPUDIR=6502 host-bytecode-ir"))
+  (is-false (skyline-tool::makefile-port-assignment-rhs-acceptable-p "a b"))
+  (is-false (skyline-tool::makefile-port-assignment-rhs-acceptable-p "$(PORT)"))
+  (is-false (skyline-tool::makefile-port-assignment-rhs-acceptable-p
+             "$(PROJECT_JSON) PORT=$(PORT) CPUDIR=$(CPUDIR) host-bytecode-ir")))
+
 ;; Test load-project.json extracts game name from JSON (:*game key)
 (test load-project-json-game-name
   "load-project.json sets *game-title* from :*game key."
@@ -427,6 +439,60 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
         (is (zerop exit)
             "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
             (namestring makefile) exit)))))
+
+(test write-master-makefile-lynx-make-n-parses
+  "Near-term (Lynx): generated master makefile must parse under GNU make -n"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set to run make -n test"))
+    (let ((skyline-tool::*machine* 200))
+      (skyline-tool::write-master-makefile 200))
+    (let ((makefile (merge-pathnames "Source/Generated/Lynx/Makefile" root)))
+      (unless (probe-file makefile)
+        (fiveam:skip "Lynx Makefile must exist at ~s" (namestring makefile)))
+      (multiple-value-bind (stdout stderr exit)
+          (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
+                            :directory root
+                            :ignore-error-status t
+                            :output :string
+                            :error-output :string)
+        (declare (ignore stdout stderr))
+        (is (zerop exit)
+            "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
+            (namestring makefile) exit)))))
+
+(test write-master-makefile-intv-make-n-parses
+  "Near-term (Intellivision): generated master makefile must parse under GNU make -n"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set to run make -n test"))
+    (let ((skyline-tool::*machine* 2609))
+      (skyline-tool::write-master-makefile 2609))
+    (let ((makefile (merge-pathnames "Source/Generated/Intv/Makefile" root)))
+      (unless (probe-file makefile)
+        (fiveam:skip "Intv Makefile must exist at ~s" (namestring makefile)))
+      (multiple-value-bind (stdout stderr exit)
+          (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
+                            :directory root
+                            :ignore-error-status t
+                            :output :string
+                            :error-output :string)
+        (declare (ignore stdout stderr))
+        (is (zerop exit)
+            "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
+            (namestring makefile) exit)))))
+
+(test write-intv-asset-includes-emits-blob-includes
+  "Test Intv AssetIncludes pulls generated BLOB assembly into the cartridge"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set to run Intv include test"))
+    (let ((out (merge-pathnames "Source/Generated/Intv/AssetIncludes.s" root)))
+      (skyline-tool::write-intv-asset-includes)
+      (unless (probe-file out)
+        (fiveam:skip "Intv AssetIncludes must exist at ~s" (namestring out)))
+      (let ((content (uiop:read-file-string out)))
+        (is (search "INCLUDE \"Source/Generated/Intv/Assets/Blob.TitleCard.s\"" content)
+            "Generated Intv BLOB assembly should be included by AssetIncludes")
+        (is (null (search "Blob.Intv/" content))
+            "Generated BLOB include paths must not duplicate the port directory")))))
 
 ;; WRITE-GIMP-PALETTES TESTS
 

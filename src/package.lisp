@@ -93,6 +93,8 @@
            #:write-projection-tables.s
            #:write-sound-effects-file
            #:write-master-makefile
+           #:cbm-petscii-docs
+           #:geos-vlir-stub-pack
            #:run-for-port
            #:run-gui
            #:run-repl

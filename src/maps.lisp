@@ -434,9 +434,11 @@ Each tileset contributes GIDs from @code{(tileset-gid)} through
 (defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
   "Load tileset PNG for the current machine, with sensible fallbacks.
 
-Prefer @file{Source/Maps/Tiles/@var{machine}/}, then @file{7800/} (same 8×16
-Maria-style sheets as other 6502 Atari ports), then @file{Hicolor/}, then the
-machine-specific path for a clear missing-file error."
+Prefer @file{Source/Maps/Tiles/@var{machine}/}, then @file{Hicolor/}. For all
+machines except Atari VCS800 (@code{7850}), also try @file{7800/} (legacy
+Maria-style 8×16 sheets). VCS800 (@code{7850}) uses only the port directory and
+@file{Hicolor/}---never @file{7800/}. If none match, use the machine-specific
+path so missing-file errors stay tied to the port."
   (let* ((name (pathname-name pathname$))
          (root (or (project-root)
                    (uiop:pathname-directory-pathname (uiop:getcwd))))
@@ -445,20 +447,20 @@ machine-specific path for a clear missing-file error."
                                                         (machine-directory-name))
                                        :name name :type "png")
                         root))
-         (7800-path (merge-pathnames
-                     (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
-                                                     "7800")
-                                    :name name :type "png")
-                     root))
          (hicolor-path (merge-pathnames
                         (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
                                                         "Hicolor")
                                        :name name :type "png")
-                        root)))
+                        root))
+         (7800-path (merge-pathnames
+                     (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                     "7800")
+                                    :name name :type "png")
+                     root)))
     (load-tileset-image
      (cond ((probe-file machine-path) machine-path)
-           ((probe-file 7800-path) 7800-path)
            ((probe-file hicolor-path) hicolor-path)
+           ((and (not (eql *machine* 7850)) (probe-file 7800-path)) 7800-path)
            (t machine-path)))))
 
 (let ((tileset-image-cached nil)
@@ -474,8 +476,7 @@ machine-specific path for a clear missing-file error."
           (let* ((png (png-read:read-png-file pathname))
                  (height (png-read:height png))
                  (width (png-read:width png))
-                 (α (png-read:transparency png))
-                 (*machine* 7800))
+                 (α (png-read:transparency png)))
             (png->palette height width
                           (png-read:image-data png)
                           α)))))
@@ -1656,8 +1657,7 @@ Binary data suitable for MARIA graphics chip, stored as object files for linking
 @example
 (compile-tileset #p\"Source/Tilesets/Overworld.tsx\")
 @end example"
-  (let ((*machine* 7800)
-        (outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
+  (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                 :name (format nil "Tileset.~a" (pathname-name pathname))
                                 :type "o")))
     (ensure-directories-exist outfile)

@@ -67,8 +67,38 @@
   "Test machine-palette returns appropriate palettes"
   (let ((skyline-tool::*machine* 2600))
     (let ((palette (skyline-tool::machine-palette)))
-      (is (listp palette) "Should return a list")
-      (is (> (length palette) 0) "Should not be empty"))))
+    (is (listp palette) "Should return a list")
+    (is (> (length palette) 0) "Should not be empty"))))
+
+(test machine-palette-400-800-matches-5200
+  "Atari 400/800 cart graphics use the same ProSystem palettes as 5200"
+  (dolist (region '(:ntsc :pal))
+    (is (equalp (skyline-tool::machine-palette 400 region)
+                (skyline-tool::machine-palette 5200 region))
+        "400 palette should match 5200 for ~a" region)
+    (is (equalp (skyline-tool::machine-palette 800 region)
+                (skyline-tool::machine-palette 5200 region))
+        "800 palette should match 5200 for ~a" region)
+    (is (equalp (skyline-tool::machine-palette 400 region)
+                (skyline-tool::machine-palette 800 region))
+        "400 palette should match 800 for ~a" region)))
+
+(test machine-colors-400-800-match-5200-length
+  "machine-colors for 400/800 uses ProSystem names and matches 5200 list lengths"
+  (dolist (region '(:ntsc :pal))
+    (let ((skyline-tool::*region* region))
+      (dolist (machine '(400 800 5200))
+        (let* ((skyline-tool::*machine* machine)
+               (colors (skyline-tool::machine-colors)))
+          (is (listp colors) "machine-colors should return a list for ~a ~a" machine region)
+          (is (= (length colors) (length (skyline-tool::machine-palette machine region)))
+              "machine-colors length should match palette length for ~a ~a" machine region)))
+      (is (= (length (let ((skyline-tool::*machine* 400)) (skyline-tool::machine-colors)))
+             (length (let ((skyline-tool::*machine* 5200)) (skyline-tool::machine-colors))))
+          "400 and 5200 should expose the same number of named colors for ~a" region)
+      (is (equalp (let ((skyline-tool::*machine* 400)) (skyline-tool::machine-colors))
+                  (let ((skyline-tool::*machine* 5200)) (skyline-tool::machine-colors)))
+          "400 and 5200 color names should match for ~a" region))))
 
 (test machine-colors-basic
   "Test machine-colors returns color information"

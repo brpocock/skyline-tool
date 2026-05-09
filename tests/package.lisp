@@ -16,6 +16,7 @@
            #:animation-preview-tests
            #:graphics-tests
            #:misc-tests
+           #:cbm-tooling-tests
            #:asset-allocator-tests
            #:comprehensive-graphics-tests
            #:eightbol-tests
@@ -35,6 +36,8 @@
            #:lynx-tests
            #:lynx-cart-tests
            #:run-lynx-cart-tests
+           #:near-term-makefile-parse-tests
+           #:run-near-term-makefile-parse-tests
            #:zx81-tests
            #:spectrum-tests
            #:snes-tests

@@ -440,10 +440,16 @@ List of RGB color triples for the machine's palette
                (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
-               ;; 5200: same Maria-class palette indices as 7800 (tile PNGs use ProSystem mapping).
-               (5200 (ecase region
+               ;; VCS800 native host: map tile PNG conversion uses same ProSystem indices as 7800
+               ;; (see @file{Source/Code/VCS800/Parity7800.texf}).
+               (7850 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
+               ;; Maria-class cart ports (400/800 delegate PNG dispatch to 5200 Mode E): same
+               ;; ProSystem palette indices as 5200/7800 (tile PNGs use ProSystem mapping).
+               ((400 800 5200) (ecase region
+                                 (:ntsc +prosystem-ntsc-palette+)
+                                 (:pal +prosystem-pal-palette+)))
                (264 +ted-palette+)
                (16 +tg16-palette+))))
 
@@ -458,13 +464,18 @@ the currently selected machine (*machine*).
 List of color name strings for the current machine's palette
 @item Depends on
 * @var{*machine*} - current target machine
+* @var{*region*} - :ntsc or :pal for Maria / ProSystem-class machines (400, 800, 5200, 7800, 7850)
 @end table
 
-@xref{fun:machine-palette}, @xref{var:*machine*}."
+@xref{fun:machine-palette}, @xref{var:*machine*}, @xref{var:*region*}."
   (ecase *machine*
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
-    (2609 +intv-color-names+)))
+    (2609 +intv-color-names+)
+    ((400 800 5200 7800 7850)
+     (ecase *region*
+       (:ntsc (prosystem-ntsc-color-names))
+       (:pal (prosystem-pal-color-names))))))
 
 (defun square (n)
   "Calculate the square of N.
@@ -2140,10 +2151,11 @@ If two GROM cards share the same bitmap, the lower card index wins."
 (defun compile-blob-intv-screen (png-file output-path palette-pixels width height)
   "Write OUTPUT-PATH assembly: deduplicated GRAM 8×8 cards + row-major tile map.
 
-Each cell in the WIDTH×HEIGHT image (both multiples of 8) is one 8×8 tile.
+Each cell in the WIDTH×HEIGHT image is one 8×8 tile. Trailing pixels that do
+not form a complete 8×8 tile are cropped from the right or bottom edge.
 Tiles that match a built-in GROM card (from bundled @file{minigrom.bin}) use
-that card index (0–255) and consume no GRAM slot.  Other identical tiles
-share one GRAM definition.  At most 64 unique non-GROM tiles (Intv GRAM).
+that card index (0–255) and consume no GRAM slot. Other identical tiles share
+one GRAM definition. At most 64 unique non-GROM tiles (Intv GRAM).
 
 @code{*_TILE_MAP} entries: @code{$0000}–@code{$00FF} = GROM card number;
 @code{$0100}–@code{$013F} = GRAM slot 0–63 (see @code{*_TILE_MAP_GRAM_BASE}).
@@ -2156,13 +2168,20 @@ Destination @file{.s} file
 @item PALETTE-PIXELS
 2D array from @code{png->palette}
 @item WIDTH @itemx HEIGHT
-Pixel dimensions (multiples of 8)
+Pixel dimensions; partial trailing tile edges are cropped down to multiples of
+8.
 @end table"
   (check-type output-path (or pathname string))
-  (assert (and (zerop (mod width 8)) (zerop (mod height 8)))
-          (width height)
-          "Intellivision blob ~A dimensions must be multiples of 8×8, got ~D×~D"
-          png-file width height)
+  (let* ((original-width width)
+         (original-height height))
+    (setf width (- width (mod width 8)))
+    (setf height (- height (mod height 8)))
+    (when (or (< width 8) (< height 8))
+      (error "Intellivision blob ~A dimensions must include at least one complete 8×8 tile, got ~D×~D"
+             png-file original-width original-height))
+    (when (or (/= width original-width) (/= height original-height))
+      (warn "Intellivision blob ~A cropped from ~D×~D to ~D×~D to fit 8×8 tiles"
+            png-file original-width original-height width height)))
   (let* ((cols (/ width 8))
          (rows (/ height 8))
          (total-cells (* cols rows))
@@ -2196,7 +2215,7 @@ Pixel dimensions (multiples of 8)
               (incf idx))))))
     (let ((nuniq (length uniq)))
       (assert (= nuniq (hash-table-count ht)))
-      (ensure-directories-exist (pathname-directory (merge-pathnames output-path)))
+      (ensure-directories-exist (merge-pathnames output-path))
       (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
                                                       :external-format :utf-8)
         (format src ";;; Intellivision blob: tile-mapped screen + GRAM cards~%")

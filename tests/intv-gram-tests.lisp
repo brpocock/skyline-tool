@@ -90,6 +90,18 @@
         (setf (aref array x y) default-color)))
     array))
 
+(test intv-blob-crops-partial-edge-tiles
+  "Test Intv BLOB compiler crops trailing pixels that do not form a full tile"
+  (with-temp-gram-output (output-path "blob-cropped.s")
+    (let ((test-array (make-test-palette-array 160 161 0))
+          (test-png "Source/Blobs/Intv/TitleCard.png"))
+      (finishes
+        (skyline-tool::compile-blob-intv-screen test-png output-path test-array 160 161)
+        "Should crop a 160x161 BLOB to a whole 8x8 tile grid")
+      (let ((content (uiop:read-file-string output-path)))
+        (is (search "Grid: 20×20 tiles (160×160 px)" content)
+            "Generated BLOB should report the cropped 160x160 tile grid")))))
+
 ;; Test 3: Dimension validation - flooring and minimum card size
 (test gram-compiler-dimension-validation
   "Test that dimensions are properly validated and floored"

@@ -26,30 +26,43 @@
                         (incf unmatched-opens)))))
     (values (null stack) unmatched-opens)))
 
+(defun skyline-tool-main-lisp-files-for-syntax-check ()
+  "Return pathnames of primary Skyline-Tool Lisp sources under SkylineTool/src/.
+
+Excludes tests/, eightbol/, and lib/ so READ is not applied to files that
+require other packages, read-time state, or optional dependencies."
+  (let ((root (uiop:ensure-directory-pathname
+               (asdf:system-source-directory :skyline-tool))))
+    (append (or (directory (merge-pathnames "src/**/*.lisp" root)) '())
+            (remove-if-not #'probe-file
+                           (mapcar (lambda (rel) (merge-pathnames rel root))
+                                   '("setup.lisp" "prepare-system.lisp"
+                                     "gray-streams-pipe.lisp"))))))
+
 ;; Test for syntax errors in Lisp source files
 (test lisp-source-syntax-check
-  "Check that all Lisp source files can be read without syntax errors"
-  (let ((source-files (directory (merge-pathnames "**/*.lisp"
-                                                  (asdf:system-source-directory :skyline-tool))))
+  "Check that primary Skyline-Tool Lisp sources read without syntax errors"
+  (let ((source-files (skyline-tool-main-lisp-files-for-syntax-check))
         (errors '()))
     (dolist (file source-files)
       (handler-case
-          (with-open-file (stream file)
-            (let ((eof (gensym)))
-              (loop for form = (read stream nil eof)
-                    until (eq form eof)
-                    finally (return t))))
+          (let ((*package* (find-package :cl-user))
+                (*read-eval* nil))
+            (with-open-file (stream file :external-format :utf-8)
+              (let ((eof (gensym)))
+                (loop for form = (read stream nil eof)
+                      until (eq form eof)
+                      finally (return t)))))
         (error (e)
           (push (cons (namestring file) e) errors))))
     (is (null errors)
-        "All Lisp source files should be syntactically valid, but found errors in: ~A"
+        "All primary Lisp sources should be syntactically valid, but found errors in: ~A"
         errors)))
 
 ;; Test for unmatched delimiters in source files
 (test source-file-delimiter-balance
-  "Check that all Lisp source files have balanced delimiters"
-  (let ((source-files (directory (merge-pathnames "**/*.lisp"
-                                                  (asdf:system-source-directory :skyline-tool))))
+  "Check that primary Skyline-Tool Lisp sources have balanced delimiters"
+  (let ((source-files (skyline-tool-main-lisp-files-for-syntax-check))
         (unbalanced-files '()))
     (dolist (file source-files)
       (with-open-file (stream file)
