@@ -122,6 +122,45 @@
     path)
   "Default test file path for file I/O tests")
 
+(defparameter *unit-test-midi-stub-data*
+  '((:note-on :channel 0 :key 60 :velocity 100 :time 0)
+    (:note-off :channel 0 :key 60 :velocity 0 :time 100))
+  "Readable sexp stub written to Source/Songs scratch .midi files for unit tests.")
+
+(defun unit-test-midi-input-pathname ()
+  "Pathname for scratch MIDI input under Source/Songs (SkylineUnitTestInput.midi)."
+  (merge-pathnames (pathname "Source/Songs/SkylineUnitTestInput.midi")
+                   (skyline-tool::project-root)))
+
+(defun unit-test-midi-input-path ()
+  "NAMESTRING for `unit-test-midi-input-pathname'."
+  (namestring (unit-test-midi-input-pathname)))
+
+(defun unit-test-missing-midi-path ()
+  "NAMESTRING for a Source/Songs .midi path that must not exist (negative tests)."
+  (namestring (merge-pathnames (pathname "Source/Songs/NoSuchSkylineUnitTestInput.midi")
+                               (skyline-tool::project-root))))
+
+(defun unit-test-missing-midi-nested-path ()
+  "NAMESTRING for a nested Source/Songs .midi path that must not exist."
+  (namestring (merge-pathnames (pathname "Source/Songs/DeepDir/NoSuchSkylineUnitTestInput.midi")
+                               (skyline-tool::project-root))))
+
+(defun format-unit-test-midi-scratch-path ()
+  "Unique NAMESTRING under Source/Songs for a writable .midi scratch file."
+  (namestring (merge-pathnames
+               (pathname (format nil "Source/Songs/SkylineScratch-~D.midi"
+                                 (get-universal-time)))
+               (skyline-tool::project-root))))
+
+(defun ensure-unit-test-midi-input-file (&optional (data *unit-test-midi-stub-data*))
+  "Write DATA readably to `unit-test-midi-input-pathname'; return its NAMESTRING."
+  (let ((pn (unit-test-midi-input-pathname)))
+    (ensure-directories-exist pn)
+    (with-open-file (out pn :direction :output :if-exists :supersede)
+      (write data :stream out :readably t))
+    (namestring pn)))
+
 (defun make-test-stamp (width height pattern)
   "Create a test graphics stamp (2D array) with the specified pattern.
 Width and height specify dimensions, pattern can be:

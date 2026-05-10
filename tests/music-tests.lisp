@@ -23,8 +23,9 @@
   (let ((temp-file (merge-pathnames "test-gb-music.s" (uiop:temporary-directory))))
     (unwind-protect
         (progn
+          (ensure-unit-test-midi-input-file)
           (finishes
-            (compile-music-dmg temp-file "dummy-input.mid"))
+            (compile-music-dmg temp-file (unit-test-midi-input-path)))
           (is (probe-file temp-file)
               "DMG music compilation should create output file"))
         (when (probe-file temp-file)
@@ -41,8 +42,9 @@
   (let ((temp-file (merge-pathnames "test-nes-music.s" (uiop:temporary-directory))))
     (unwind-protect
         (progn
+          (ensure-unit-test-midi-input-file)
           (finishes
-            (compile-music-nes temp-file "dummy-input.mid"))
+            (compile-music-nes temp-file (unit-test-midi-input-path)))
           (is (probe-file temp-file)
               "NES music compilation should create output file"))
         (when (probe-file temp-file)
@@ -59,8 +61,9 @@
   (let ((temp-file (merge-pathnames "test-snes-music.s" (uiop:temporary-directory))))
     (unwind-protect
         (progn
+          (ensure-unit-test-midi-input-file)
           (finishes
-            (compile-music-snes temp-file "dummy-input.mid"))
+            (compile-music-snes temp-file (unit-test-midi-input-path)))
           (is (probe-file temp-file)
               "SNES music compilation should create output file"))
         (when (probe-file temp-file)
@@ -110,7 +113,8 @@
     (format t "~&Testing compilation of ~D note sequence..." (length large-sequence))
     (time
      (with-temp-file (temp-file "music-perf" "s")
-       (finishes (skyline-tool::compile-music-sms temp-file "dummy-input.mid"))))))
+       (ensure-unit-test-midi-input-file)
+       (finishes (skyline-tool::compile-music-sms temp-file (unit-test-midi-input-path)))))))
 
 ;;; Fuzz Testing for Music
 
@@ -141,11 +145,12 @@
 
 (test music-full-compilation-pipeline
   "Test complete music compilation pipeline"
+  (ensure-unit-test-midi-input-file)
   (dolist (system '("sms" "nes" "dmg" "snes"))
     (with-temp-file (temp-file (format nil "~a-music" system) "s")
       (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
         (when (fboundp compile-fn)
-          (finishes (funcall compile-fn temp-file "dummy-input.mid"))
+          (finishes (funcall compile-fn temp-file (unit-test-midi-input-path)))
           (is-true (probe-file temp-file)
                   (format nil "~A music compilation should create output file" system)))))))
 
@@ -156,7 +161,7 @@
     (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
       (when (fboundp compile-fn)
         (with-temp-file (temp-file (format nil "consistency-~a" system) "s")
-          (finishes (funcall compile-fn temp-file "dummy-input.mid")))))))
+          (finishes (funcall compile-fn temp-file (unit-test-midi-input-path))))))))
 
 ;;; Error Handling and Edge Cases
 
@@ -165,14 +170,15 @@
   (dolist (system '(sms nes dmg snes))
     (let ((compile-fn (intern (format nil "COMPILE-MUSIC-~A" system) :skyline-tool)))
       (when (fboundp compile-fn)
-        (signals error (funcall compile-fn "/tmp/nonexistent-output.s" "/tmp/nonexistent-input.mid"))))))
+        (signals error (funcall compile-fn "/tmp/nonexistent-output.s" (unit-test-missing-midi-path)))))))
 
 (test music-error-handling-invalid-output-paths
   "Test music compilation with invalid output paths"
+  (ensure-unit-test-midi-input-file)
   (let ((invalid-paths '("/dev/null/invalid" "/root/invalid" "/etc/passwd" "" nil)))
     (dolist (path invalid-paths)
       (when path
-        (signals error (skyline-tool::compile-music-sms path "dummy-input.mid"))))))
+        (signals error (skyline-tool::compile-music-sms path (unit-test-midi-input-path)))))))
 
 ;; Test ColecoVision music functions
 (test colecovision-music-compilation
@@ -185,8 +191,9 @@
   (let ((temp-file (merge-pathnames "test-cv-music.s" (uiop:temporary-directory))))
     (unwind-protect
         (progn
+          (ensure-unit-test-midi-input-file)
           (finishes
-            (compile-music-colecovision temp-file "dummy-input.mid"))
+            (compile-music-colecovision temp-file (unit-test-midi-input-path)))
           (is (probe-file temp-file)
               "ColecoVision music compilation should create output file"))
         (when (probe-file temp-file)
@@ -204,7 +211,7 @@
     (unwind-protect
         (progn
           (finishes
-            (compile-music-sg1000 temp-file "dummy-input.mid"))
+            (compile-music-sg1000 temp-file (unit-test-midi-input-path)))
           (is (probe-file temp-file)
               "SG-1000 music compilation should create output file"))
         (when (probe-file temp-file)
@@ -221,12 +228,13 @@
   "Test platform-specific music features"
   ;; Test that different platforms have different register sets
   ;; This is tested by ensuring the functions don't error on basic calls
+  (ensure-unit-test-midi-input-file)
   (finishes
     (let ((*machine* 35902))  ; DMG
-      (compile-music-dmg (merge-pathnames "dummy-dmg.s" (uiop:temporary-directory)) "dummy.mid")))
+      (compile-music-dmg (merge-pathnames "dummy-dmg.s" (uiop:temporary-directory)) (unit-test-midi-input-path))))
   (finishes
     (let ((*machine* 9918))   ; ColecoVision
-      (compile-music-colecovision (merge-pathnames "dummy-cv.s" (uiop:temporary-directory)) "dummy.mid"))))
+      (compile-music-colecovision (merge-pathnames "dummy-cv.s" (uiop:temporary-directory)) (unit-test-midi-input-path)))))
 
 ;; Test music utility functions
 (test music-utilities
@@ -239,7 +247,7 @@
   "Test error handling in music functions"
   ;; Test with non-existent input files
   (signals error
-    (compile-music-dmg "/tmp/nonexistent-output.s" "/tmp/nonexistent-input.mid"))
+    (compile-music-dmg "/tmp/nonexistent-output.s" (unit-test-missing-midi-path)))
   ;; Test with invalid parameters
   (signals error
     (compile-music-dmg nil nil)))

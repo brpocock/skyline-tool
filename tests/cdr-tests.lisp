@@ -123,7 +123,8 @@
       "Test Commander X-16 music compilation"
       ;; Test YM2151 music compilation
       (let ((temp-file "Object/CDR/test-ym2151.s")
-            (input-file "test-input.mid"))
+            (input-file (unit-test-midi-input-path)))
+        (ensure-directories-exist (merge-pathnames "Source/Songs/" (skyline-tool::project-root)))
         (unwind-protect
              ;; Create minimal test input
              (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -150,7 +151,8 @@
 (test cdr-psg-music-compilation
   "Test Commander X-16 PSG music compilation"
   (let ((temp-file "Object/CDR/test-psg.s")
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
+    (ensure-directories-exist (merge-pathnames "Source/Songs/" (skyline-tool::project-root)))
     (unwind-protect
          (progn
            (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -174,7 +176,8 @@
 (test cdr-unknown-sound-chip
   "Test Commander X-16 handles unknown sound chips gracefully"
   (let ((temp-file "Object/CDR/test-unknown.s")
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
+    (ensure-directories-exist (merge-pathnames "Source/Songs/" (skyline-tool::project-root)))
     (unwind-protect
          (progn
            (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -201,7 +204,8 @@
       
       ;; Test invalid sound chip
       (let ((temp-file "Object/CDR/test-error.s")
-            (input-file "test-input.mid"))
+            (input-file (unit-test-midi-input-path)))
+        (ensure-directories-exist (merge-pathnames "Source/Songs/" (skyline-tool::project-root)))
         (unwind-protect
              (with-open-file (out input-file :direction :output :if-exists :supersede)
                (write '((:note-on :channel 0 :key 60 :velocity 100 :time 0)) :stream out :readably t))

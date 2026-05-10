@@ -117,7 +117,7 @@ When VICE @command{petcat} is available, the build should use it instead
 (e.g. @samp{petcat -text -w2 -o OUT.seq -- MASTER.txt} per the VICE manual)
 for ASCII→PETSCII @code{SEQ} and @samp{-w@var{version}} for tokenized BASIC.
 This command duplicates the fixed retail/demo @file{SEQ} layout from UTF-8
-masters under @file{Source/Distribution/CBM/petscii/} if @command{petcat} is
+masters under @file{Source/Code/CBM/Reference/petscii/} if @command{petcat} is
 absent or unsuitable.
 
 @table @asis
@@ -138,7 +138,7 @@ Creates DIRECTORY, writes two @code{SEQ} binaries, prints byte counts
         (error "Missing required --out-dir"))
       (ensure-directories-exist (pathname out-dir))
       (let ((root (merge-pathnames
-                   #p"Source/Distribution/CBM/petscii/"
+                   #p"Source/Code/CBM/Reference/petscii/"
                    (project-root)))
             (pairs '(("MANUAL-RETAIL-MASTER.txt" . "PHANTASIA.DOC.MANUAL.SEQ")
                      ("DEMO-ZIP-MASTER.txt" . "PHANTASIA.DOC.DEMO.SEQ"))))

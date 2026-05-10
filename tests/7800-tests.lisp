@@ -159,7 +159,7 @@
                "compile-music-7800 function should exist")
 
       ;; Test that it properly handles invalid inputs
-      (signals error (skyline-tool::compile-music-7800 temp-file "/nonexistent.mid" :tia :binary)
+      (signals error (skyline-tool::compile-music-7800 temp-file (unit-test-missing-midi-path) :tia :binary)
                "compile-music-7800 should signal error for missing MIDI file"))))
 
 ;; Test 7800 graphics conversion correctness
@@ -293,7 +293,7 @@
   ;; Test compile-music-7800 (will fail due to missing files but should not crash)
   (signals error (skyline-tool::compile-music-7800
                    (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
-                   "/nonexistent.mid" :tia :binary)
+                   (unit-test-missing-midi-path) :tia :binary)
             "compile-music-7800 should signal error for missing MIDI file"))
 
 ;; Test 7800 platform constants

@@ -30,7 +30,8 @@
   ;; Currently just signals error, but shouldn't crash
   (signals error (skyline-tool::compile-music-nes
                    (format nil "Object/~a/test-~a.s" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8))
-                   (format nil "Object/~a/test-~a.mid" (skyline-tool::machine-directory-name) (skyline-tool::generate-secure-random-id 8)))
+                   (format nil "Source/Songs/nes-compile-missing-~a.midi"
+                           (skyline-tool::generate-secure-random-id 8)))
            "compile-music-nes should signal error (not yet implemented)"))
 
 ;; Test NES monochrome detection

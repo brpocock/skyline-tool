@@ -35,7 +35,7 @@
 (test 2600-music-compilation-validation
   "Test that Atari 2600 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2600/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -57,7 +57,7 @@
 (test 5200-music-compilation-validation
   "Test that Atari 5200 music compilation produces correct binary output"
   (let ((output-file (format nil "Object/5200/test-music-~a.bin" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -96,7 +96,7 @@
 (test 2609-music-compilation-validation
   "Test that Intellivision music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2609/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -137,7 +137,7 @@
 (test 64-c64-music-compilation-validation
   "Test that Commodore 64 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/64/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -159,7 +159,7 @@
 (test 128-c128-music-compilation-validation
   "Test that Commodore 128 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/128/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -181,7 +181,7 @@
 (test 2-apple2-mockingboard-music-compilation-validation
   "Test that Apple II Mockingboard music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -203,7 +203,7 @@
 (test 2-apple2-beeper-music-compilation-validation
   "Test that Apple II beeper music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2/test-beeper-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -225,7 +225,7 @@
 (test 10-apple2gs-music-compilation-validation
   "Test that Apple IIGS music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/10/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -247,7 +247,7 @@
 (test 81-zx81-music-compilation-validation
   "Test that ZX81 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/81/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -269,7 +269,7 @@
 (test 2068-spectrum-music-compilation-validation
   "Test that ZX Spectrum music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2068/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -293,7 +293,7 @@
 (test unimplemented-platform-error-signaling
   "Test that unimplemented platforms signal appropriate errors"
   (let ((output-file (format nil "Object/3/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -333,7 +333,7 @@
 (test platform-parameter-validation
   "Test that platforms receive correct parameters and validate inputs"
   (let ((output-file (format nil "Object/2600/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
         (with-open-file (out input-file :direction :output :if-exists :supersede)
@@ -355,7 +355,7 @@
 (test nes-music-compilation-validation
   "Test that NES music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/8/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -382,7 +382,7 @@
 (test snes-music-compilation-validation
   "Test that SNES music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/88/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -409,7 +409,7 @@
 (test sms-music-compilation-validation
   "Test that SMS music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/3010/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -434,7 +434,7 @@
 (test colecovision-music-compilation-validation
   "Test that ColecoVision music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/9918/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            (ensure-directories-exist output-file)
@@ -460,7 +460,7 @@
 (test sg1000-music-compilation-validation
   "Test that SG-1000 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/1000/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -485,7 +485,7 @@
 (test 200-lynx-music-compilation-validation
   "Test that Atari Lynx music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/200/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -513,7 +513,7 @@
 (test 264-c16-music-compilation-validation
   "Test that Commodore 16/Plus4 music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/264/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file "test-input.mid"))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file

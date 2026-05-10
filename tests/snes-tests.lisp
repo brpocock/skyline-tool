@@ -252,7 +252,7 @@
 (test snes-music-compilation-validation
   "Test SNES music compilation produces correct SPC700 assembly with functional BRR data"
   (let ((output-file (format nil "/tmp/snes-music-test-~X.s" (sxhash (get-universal-time))))
-        (input-file (format nil "/tmp/test-music-~X.mid" (sxhash (get-universal-time)))))
+        (input-file (format-unit-test-midi-scratch-path)))
     (unwind-protect
          (progn
            ;; Create a minimal test input file

@@ -16,7 +16,7 @@
 (test spectrum-music-compilation-validation
   "Test ZX Spectrum music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2068/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
-        (input-file (format nil "/tmp/test-music-~a.mid" (get-universal-time))))
+        (input-file (format-unit-test-midi-scratch-path)))
     (ensure-directories-exist (pathname (directory-namestring output-file)))
     ;; Create minimal input file (Spectrum method does not read it, only uses name in header)
     (unless (probe-file input-file)

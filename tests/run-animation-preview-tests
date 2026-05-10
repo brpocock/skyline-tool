@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Run animation preview tests for Skyline-Tool
 
 cd "$(dirname "$0")/.."
