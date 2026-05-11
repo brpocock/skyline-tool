@@ -37,7 +37,7 @@
     (5200 "5200")
     (7800 "7800")
     (9918 "Coleco")
-    (359020 "GBC")))
+    (20953 "GBC")))
 
 (defgeneric asset-loader-size (kind record-count machine)
   (:method ((kind (eql :overhead)) record-count (machine (eql 7800)))
@@ -68,7 +68,7 @@
     (2600 #x1000)
     (7800 #x4000)
     (9918 #x8000)
-    (359020 #x8000)))
+    (20953 #x8000)))
 
 (defun supported-video-types (&optional (machine *machine*))
   (case machine

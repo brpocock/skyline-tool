@@ -319,7 +319,7 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
     (asset-loader-size kind record-count 5200))
   (:method ((kind (eql :map)) record-count (machine (eql 800)))
     (asset-loader-size kind record-count 5200))
-  (:method ((kind (eql :script)) record-count (machine (eql 359020)))
+  (:method ((kind (eql :script)) record-count (machine (eql 20953)))
     (+ 96 (* (1+ record-count) 3))))
 
 (defun bank-size (asset-size-hash)
@@ -729,7 +729,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (1601 "SMD")
     (1624 "32X")
     (2068 "Spc")
-    ((837 2110) "GG")
+    (837 "GG")
     (2600 "2600")
     (2609 "Intv")
     (3000 "Vx")
@@ -748,6 +748,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (9001 "PSX")
     (9918 "ClcV")
     (2416 "CDR")
+    (20953 "CGB")
     (35902 "DMG")))
 
 (defun machine-number-by-tag (tag)
@@ -801,7 +802,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (:|ClcV| 9918)
     (:|CDR| 2416)
     (:|DMG| 35902)
-    (:|CGB| 359020)
+    (:|CGB| 20953)
     ((:nil :|nil|) nil)))
 
 (defun include-paths-for-current-bank (&key cwd testp)
@@ -880,7 +881,7 @@ Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	bin/skyline-tool --port ${PORT} blob-rip-7800 $<"
                machine-dir blob-name blob-png-path machine-dir))
-      ((35902 359020) ; Game Boy (DMG) and Game Boy Color
+      ((35902 20953) ; Game Boy (DMG) and Game Boy Color
        ;; Check if this is an SGB frame
        (if (search "SGB" (string-upcase blob-name))
            (format t "~%
@@ -888,14 +889,14 @@ Source/Generated/~a/Assets/Blob.SGB.~a.s: ~a~%	bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	bin/skyline-tool --port ~a compile-sgb-frame $@ $<"
                    machine-dir blob-name blob-path machine-dir
-                   (if (= *machine* 359020) "CGB" "DMG"))
+                   (if (= *machine* 20953) "CGB" "DMG"))
            ;; Regular blob processing
            (format t "~%
 Source/Generated/~a/Assets/Blob.~a.s: ~a~%	bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	bin/skyline-tool --port ~a dispatch-png $< Source/Generated/~a/Assets"
                    machine-dir blob-name blob-path machine-dir
-                   (if (= *machine* 359020) "CGB" "DMG") machine-dir)))
+                   (if (= *machine* 20953) "CGB" "DMG") machine-dir)))
       (2609 ; Intellivision — tile-mapped blob screen + GRAM cards
        (format t "~%
 Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
@@ -950,7 +951,7 @@ Object/~a/Assets/Art.~a.s: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
                (mapcar (compose #'enough-namestring #'first)
                        (skyline-tool::read-intv-art-index pathname))
                machine-dir))
-      (359020 ; Game Boy Color
+      (20953 ; Game Boy Color
        (format t "~%
 Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
@@ -1625,15 +1626,16 @@ and target platform. Handles special cases for different machines and video mode
           ((map-asset-p asset-indicator)
            (write-asset-compilation/map asset-indicator))
           ((blob-asset-p asset-indicator)
-           (ecase *machine*
-	     (200 ; Lynx platform
-	      (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
-	      (write-asset-compilation/blob-lynx asset-indicator))
-	     (2609 ; Intellivision — tile map + GRAM (see @code{compile-blob-intv})
-	      (format *trace-output* "~&(Write-Asset-Compilation processing INTV BLOB ~a)" asset-indicator)
-	      (write-asset-compilation/blob asset-indicator))
-	     ((1 2 8 16 20 64 88 128 222 223 264 1601 2600 3010 5200 400 800 7800 7850) ; Other machines - ignore blobs for now
-	      (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)" asset-indicator *machine*))))
+           (case *machine*
+	   (200 ; Lynx platform
+	    (format *trace-output* "~&(Write-Asset-Compilation processing LYNX BLOB ~a)" asset-indicator)
+	    (write-asset-compilation/blob-lynx asset-indicator))
+	   (2609 ; Intellivision — tile map + GRAM (see @code{compile-blob-intv})
+	    (format *trace-output* "~&(Write-Asset-Compilation processing INTV BLOB ~a)" asset-indicator)
+	    (write-asset-compilation/blob asset-indicator))
+	   (otherwise ; Other machines - ignore blobs for now
+	    (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)"
+                      asset-indicator *machine*))))
           ((script-asset-p asset-indicator)
            (format t "~%
 ~a: ~a~@[ \\~%~10t~a~] \\
@@ -2428,7 +2430,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-bank-makefile bank-source))
         (t (write-asset-bank-makefile *bank*))))))
 
-(defmethod write-master-makefile-for-machine ((machine (eql 359020)))
+(defmethod write-master-makefile-for-machine ((machine (eql 20953)))
   "Write makefile content for Game Boy Color"
   (dolist (build +all-builds+)
     (dolist (video (supported-video-types machine))

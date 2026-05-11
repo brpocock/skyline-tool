@@ -2559,7 +2559,7 @@ compilation but for sprites that can be positioned anywhere on screen."
 (defun compile-tileset (png-file out-dir height width image-nybbles)
   (case *machine*
     ((64 128) (compile-tileset-64 png-file out-dir height width image-nybbles))
-    (359020 (compile-tileset-cgb png-file out-dir height width image-nybbles))
+    (20953 (compile-tileset-cgb png-file out-dir height width image-nybbles))
     (otherwise (error "Tile set compiler not set up yet for ~a" (machine-long-name)))))
 
 (defun monochrome-lines-p (palette-pixels height width)
@@ -5855,7 +5855,7 @@ Malformed lines (e.g. missing mode) are skipped."
 
 (defun compile-art-cgb (index-out index-in)
   "Compile art assets for Game Boy Color platform"
-  (let ((*machine* 359020))
+  (let ((*machine* 20953))
     (write-cgb-tile-data index-out
                          (parse-into-cgb-tile-data
                           (read-cgb-art-index index-in)))))
@@ -6012,7 +6012,7 @@ Malformed lines (e.g. missing mode) are skipped."
 
 (defun compile-sgb-frame (frame-out frame-in)
   "Compile Super Game Boy frame/border graphics"
-  (let ((*machine* 359020)) ; SGB works with both DMG and CGB
+  (let ((*machine* 35902)) ; SGB works with both DMG and CGB
     (write-sgb-frame-data frame-out
                           (parse-sgb-frame frame-in))))
 
