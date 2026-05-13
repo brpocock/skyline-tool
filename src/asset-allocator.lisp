@@ -637,7 +637,7 @@ Uses the same path layout as @code{bank-source-pathname}
     (200 32)
     ;; Intellivision: placeholder bank count for asset Makefile layout (see
     ;; @code{write-master-makefile-for-machine} for 2609).
-    (2609 8)
+    (2609 32)
     ;; Z80 (SMS, Game Gear, ColecoVision, SG-1000): placeholder bank count until banking layout is finalized.
     ((3010 837 2110 9918 1000) 32)
     ;; Atari VCS800 (native / bundle host): placeholder bank count for tooling symmetry.
@@ -1981,7 +1981,7 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 		        (loop for bank below (number-of-banks build video)
 			    appending (list (format nil "~2,'0x" bank) build video))))
     (2609 (format t "~%
-# Intellivision (CP1610): cartridge image @file{Dist/$(PORT)/Intv/$(GAME).Public.rom} is
+# Intellivision (CP1610): cartridge image @file{Dist/$(PORT)/Intv/$(GAME).Public.int} is
 # produced by @code{make -f Source/Build/Intv.mak game}, not by catting bank .o
 # files. Rules below still emit @file{Object/Intv/…} asset prerequisites.
 "))
@@ -2106,13 +2106,17 @@ consume a true argument, mis-binding later @code{~a} directives (@code{~{ …
                            :type "s")))
         (when (= *bank* *last-bank*)
           (format t "~%
-Object/${PORT}/Bank~2,'0x.Test.o.LABELS.txt: Object/${PORT}/Bank~:*~2,'0x.Test.o
-	$(MAKE) -f Source/Generated/${PORT}/Makefile $<
-
 Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s: Object/${PORT}/Bank~2,'0x.Test.o Object/${PORT}/Bank~:*~2,'0x.Test.o.LABELS.txt
 	bin/skyline-tool --port ${PORT} labels-to-include Object/${PORT}/Bank~:*~2,'0x.Test.o.LABELS.txt \\
 		c000 ffff LastBankDefs.Test.NTSC"
                   *bank* *bank*))
+        ;; LABELS are a side effect of assembling Bank*.Test.o; without an explicit
+        ;; prerequisite chain, QuitOnVictory.mame can stay stale while .LABELS.txt exists.
+        (unless (and (= #x3f *last-bank*) (= #x3e *bank*))
+          (format t "~%
+Object/${PORT}/Bank~2,'0x.Test.o.LABELS.txt: Object/${PORT}/Bank~:*~2,'0x.Test.o
+	$(MAKE) -f Source/Generated/${PORT}/Makefile $<
+" *bank*))
         (if (and (= #x3f *last-bank*)
                  (= #x3e *bank*))
 	    (format t "~%
@@ -2456,11 +2460,11 @@ Asset rules (@code{write-makefile-for-art}, tilesets, etc.) appear earlier in
 @code{write-master-makefile}.  Per-bank @file{Object/Intv/Bank*.o} recipes are
 not emitted here: @code{write-bank-makefile} targets 64tass, while Intv uses
 as1600 (@file{Source/Build/Intv.mak}).  The cartridge binary is
-@file{Dist/$(PORT)/Intv/$(GAME).Public.rom}."
+@file{Dist/$(PORT)/Intv/$(GAME).Public.int}."
   (format t "~%
 # --- Intellivision (2609): CP1610 cartridge build ---
 # Runnable ROM:  make -f Source/Build/Intv.mak game
-# Emulator:      bin/jzintv -J1 Dist/$(PORT)/Intv/$(GAME).Public.rom
+# Emulator:      bin/jzintv -J1 Dist/$(PORT)/Intv/$(GAME).Public.int
 # (Intellicart-style .int/.bin+.cfg is a different container; as1600 outputs .rom.)
 "))
 

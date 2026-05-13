@@ -1,13 +1,13 @@
 (in-package :skyline-tool)
 
-;;; 64tass assembly -> EIGHTBOL copybook generator
+;;; 64tass assembly → EIGHTBOL copybook generator
 ;;; Parses ZeroPage.s, SysRAM.s, CartRAM.s, Enums.s, Constants.s
 ;;; Outputs a platform-specific Source/Generated/Classes/{Machine}-Globals.cpy.
 ;;;
 ;;; Variable annotation syntax (add to assembly source as needed):
-;;;   Label: .byte ?  ; @ClassName          -> OBJECT REFERENCE ClassName
-;;;   Label: .fill n, ? ; = PIC X(n)        -> explicit PIC clause
-;;;   Label: .fill n, ? ; = VARCHAR(n) DEPENDING ON LenField -> varchar
+;;;   Label: .byte ?  ; @ClassName          → OBJECT REFERENCE ClassName
+;;;   Label: .fill n, ? ; = PIC X(n)        → explicit PIC clause
+;;;   Label: .fill n, ? ; = VARCHAR(n) DEPENDING ON LenField → varchar
 ;;;
 ;;; Generated files follow EIGHTBOL fixed-format record layout:
 ;;;   Cols  1-6  : 6-digit sequence number (increments by 10)
@@ -50,13 +50,15 @@ Cols 1-6: sequence field (blanks when optional). Col 7: *."
 
 (defun emit-eightbol-var (level name pic stream)
   "Emit a EIGHTBOL data description entry.
-Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID)."
+Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID → OBJ-CLASS-ID)."
   (format stream "~%~6t ~a~2,'0d ~a ~a."
           (eightbol-level-indent level) level (eightbol-slot-name name) pic))
 
 (defun emit-eightbol-const (level name value stream)
   "Emit a EIGHTBOL constant (77 or 78 level) with VALUE.
-Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID -> OBJ-CLASS-ID)."
+Uses eightbol-slot-name to avoid reserved words (e.g. CLASS-ID → OBJ-CLASS-ID)."
+  (unless (numberp value)
+    (return-from emit-eightbol-const))
   (let ((pic (cond ((< value 256)   "PIC 99 USAGE BINARY")
                    ((< value 65536) "PIC 9999 USAGE BINARY")
                    (t               "PIC 9(8) USAGE BINARY"))))
@@ -228,10 +230,46 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
        (second annotation))
       (t "PIC 99 USAGE BINARY"))))
 
+(defun parse-as1600-line (line)
+  "Parse one as1600 source line (NAME EQU $hex, LABEL DS n, RPT n, VALUE)."
+  (let* ((trimmed (string-right-trim " " line))
+         (st (string-trim " " trimmed)))
+    (when (or (zerop (length st))
+              (and (plusp (length st))
+                   (member (char st 0) '(#\; #\#))))
+      (return-from parse-as1600-line nil))
+    (let* ((semi-pos (position #\; st))
+           (code (string-trim " " (if semi-pos (subseq st 0 semi-pos) st)))
+           (comment (if semi-pos (string-trim " " (subseq st (1+ semi-pos))) ""))
+           (annotation (parse-asm-annotation comment)))
+      (cond
+        ((cl-ppcre:register-groups-bind (name val)
+             ("(?i)^([A-Za-z][\\w]*)\\s+EQU\\s+(\\$[0-9A-Fa-f]+|\\d+)" code)
+           (list :name name :kind :const :size 2
+                 :value (if (char= #\$ (char val 0))
+                            (parse-integer val :start 1 :radix 16)
+                            (parse-integer val))
+                 :annotation annotation)))
+        ((cl-ppcre:register-groups-bind (name count)
+             ("(?i)^([A-Za-z][\\w]*)\\s+DS\\s+(\\d+)" code)
+           (list :name name :kind :word :size (* 2 (parse-integer count))
+                 :annotation annotation)))
+        ((cl-ppcre:register-groups-bind (name count _val)
+             ("(?i)^([A-Za-z][\\w]*)\\s+RPT\\s+(\\d+)\\s*,\\s*(.+)" code)
+           (declare (ignore _val))
+           (list :name name :kind :fill :size (parse-integer count)
+                 :annotation annotation)))
+        (t nil)))))
+
 (defun parse-assembly-globals (path
-                               &key skip-conditional-blocks)
-  "Return variable/constant plists parsed from 64tass source file PATH."
-  (let (results (depth 0))
+                               &key skip-conditional-blocks (cpu nil))
+  "Return variable/constant plists parsed from assembly source file PATH.
+Uses as1600 parser when CPU is 1610 (cp1610), else 64tass."
+  (let* ((use-as1600 (or (= *machine* 2609)
+                         (member cpu '(:cp1610 1610))))
+        (parse-fn (if use-as1600 #'parse-as1600-line #'parse-asm-line))
+        (results nil)
+        (depth 0))
     (unless (probe-file path)
       (warn "~&Could not read ~a (file not found)" path)
       (return-from parse-assembly-globals (nreverse results)))
@@ -240,14 +278,13 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
         (cond
           (skip-conditional-blocks
            (cond
-             ((cl-ppcre:scan "^\\s+\\.if\\b" line)
-              (incf depth))
-             ((cl-ppcre:scan "^\\s+\\.fi\\b" line)
+             ((cl-ppcre:scan "(?i)^\\s*\\.if\\b" line) (incf depth))
+             ((cl-ppcre:scan "(?i)^\\s*\\.fi\\b" line)
               (when (> depth 0) (decf depth)))
              ((> depth 0) nil)
-             (t (let ((item (parse-asm-line line)))
+             (t (let ((item (funcall parse-fn line)))
                   (when item (push item results))))))
-          (t (let ((item (parse-asm-line line)))
+          (t (let ((item (funcall parse-fn line)))
                (when item (push item results)))))))
     (nreverse results)))
 
@@ -255,18 +292,23 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
                                     output-path)
   "Generate a platform-specific globals copybook from 64tass source files.
 
-Uses (machine-directory-name) for directory components (*MACHINE* is numeric, not for paths).
+Uses  (machine-directory-name) for  directory  components (*MACHINE*  is
+numeric, not for paths).
 
-Input:  Source/Code/{machine}/Common/{ZeroPage,SysRAM,CartRAM,Enums,Constants}.s
+Input:
+Source/Code/{machine}/Common/{ZeroPage,SysRAM,CartRAM,Enums,Constants}.s
 
-Output: Source/Generated/{machine}/Classes/{GAME}-Globals.cpy  (or OUTPUT-PATH if given)
+Output:     Source/Generated/{machine}/Classes/{GAME}-Globals.cpy    (or
+OUTPUT-PATH if given)
 
-Game name comes from JSON (Game key) via load-project.json; used for filenames.
+Game  name  comes  from  JSON (Game  key)  via  load-project.json;  used
+for filenames.
 
 @table @asis
 Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cpy).
 @end table"
   (let* ((machine-dir (machine-directory-name))
+         (asm-cpu (if (= *machine* 2609) :cp1610 nil))
          (common (merge-pathnames
                   (make-pathname :directory `(:relative "Source" "Code"
                                                         ,machine-dir "Common"))
@@ -298,7 +340,7 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                              (when (and (eq :const (getf item :kind)) (getf item :value))
                                (cons (string (getf item :name)) (getf item :value))))
                            (or (parse-assembly-globals
-                                constants-path)
+                                constants-path :cpu asm-cpu)
                                ()))))
          (out-dir  (merge-pathnames
                     (make-pathname :directory `(:relative "Source" "Generated"
@@ -322,7 +364,8 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
       ;; ZeroPage -> 01 ZERO-PAGE EXTERNAL
       (let ((items (and zero-page-path
                         (parse-assembly-globals zero-page-path
-                                                :skip-conditional-blocks t))))
+                                                :skip-conditional-blocks t
+                                                :cpu asm-cpu))))
         (when items
           (emit-eightbol-blank stream)
           (emit-eightbol-section stream 1 "ZERO-PAGE EXTERNAL")
@@ -379,7 +422,14 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
           (emit-eightbol-blank stream)
           (emit-eightbol-section stream 1 "CART-RAM EXTERNAL")
           (when (probe-file cart-path)
-            (with-input-from-file (cart cart-path)
+            (if (eq asm-cpu :cp1610)
+                (dolist (item (parse-assembly-globals cart-path :cpu :cp1610))
+                  (when (and (listp item)
+                             (eq :const (getf item :kind))
+                             (getf item :value))
+                    (emit-eightbol-const 78 (getf item :name)
+                                         (getf item :value) stream)))
+                (with-input-from-file (cart cart-path)
               (loop for line = (read-line cart nil nil) while line do
                 (cond
                   ((cl-ppcre:scan "^\\s+\\.if\\b" line)  (incf depth))
@@ -403,10 +453,10 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                                          (getf item :raw-size-sym))))
                                (when pic
                                  (emit-eightbol-var 10 (getf item :name)
-                                                    pic stream)))))))))))))
+                                                    pic stream))))))))))))
         
         ;; Enums -> 78 level (preserve comments from source)
-        (let ((items (and enums-path (parse-assembly-globals enums-path))))
+        (let ((items (and enums-path (parse-assembly-globals enums-path :cpu asm-cpu))))
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-comment stream " Enumerated values")
@@ -419,7 +469,8 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                                          (getf item :value) stream))))))
         
         ;; Constants -> 77 level (preserve comments from source)
-        (let ((items (and constants-path (parse-assembly-globals constants-path))))
+        (let ((items (and constants-path
+                          (parse-assembly-globals constants-path :cpu asm-cpu))))
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-comment stream " Constants")
@@ -430,7 +481,8 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 77 (getf item :name)
                                          (getf item :value) stream))))))
-        (let ((items (parse-assembly-globals class-ids-path)))
+        (let ((items (and class-ids-path
+                          (parse-assembly-globals class-ids-path :cpu asm-cpu))))
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-comment stream " Class IDs")
@@ -441,9 +493,11 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                   (when (and (eq :const (getf item :kind)) (getf item :value))
                     (emit-eightbol-const 78 (getf item :name)
                                          (getf item :value) stream))))))
-
-        (let ((items (parse-assembly-globals mailbox-path
-                                             :skip-conditional-blocks t)))
+        
+        (let ((items (and mailbox-path
+                          (parse-assembly-globals mailbox-path
+                                                  :skip-conditional-blocks t
+                                                  :cpu asm-cpu))))
           (when items
             (emit-eightbol-blank stream)
             (emit-eightbol-section stream 1 "STAGEHAND EXTERNAL")
@@ -457,8 +511,8 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
                                                     (getf item :annotation)
                                                     (getf item :raw-size-sym))))
                       (when pic (emit-eightbol-var 5 (getf item :name) pic stream)))))))))
-      (format stream "~2&~
+          (format stream "~2&~
 999998 COPY Special-Globals.
 999999~%")
-      (format *trace-output* "~%~&Generated ~a" (enough-namestring out-path))
-      out-path)))
+          (format *trace-output* "~%~&Generated ~a" (enough-namestring out-path))
+          out-path)))))
