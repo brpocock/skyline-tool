@@ -606,28 +606,40 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
 (defun orchestration-psg-tone-byte (row)
   "Return 0 for tonal PSG voices, 1 for the white-noise generator path.
 
-Uses @code{PSG Tone} from @var{ROW} when present; otherwise infers from
-@code{Distortion} (Hokey pure-tone @code{10} → tonal)."
-  (let ((psg (getf row :psg-tone)))
+Uses @code{PSG Tone} from @var{ROW} when present (@code{0}/tone = tonal,
+@code{1}/noise = noise).  When blank, percussion instrument names and
+@code{Snare Drum} / @code{Wood Blocks} default to noise; all others default
+to tonal (Hokey @code{Distortion} is not used on Intellivision)."
+  (let ((psg (getf row :psg-tone))
+        (name (string-downcase (string (getf row :instrument "")))))
     (cond
+      ((or (search "snare" name)
+           (search "wood block" name)
+           (search "kick" name)
+           (search "hi-hat" name)
+           (search "cymbal" name))
+       1)
       ((and psg (stringp psg) (not (str:blankp psg))
             (or (search "noise" (string-downcase psg))
                 (string-equal psg "1")))
        1)
       ((and psg (stringp psg) (not (str:blankp psg))
-            (search "tone" (string-downcase psg)))
+            (or (search "tone" (string-downcase psg))
+                (string-equal psg "0")))
        0)
       (psg
        (let ((n (ignore-errors (parse-number-or-fraction psg))))
-         (if (and n (>= n 10)) 0 1)))
-      (t
-       (if (string-equal "10" (string (getf row :distortion))) 0 1)))))
+         (cond ((null n) 0)
+               ((<= n 0) 0)
+               ((= n 1) 1)
+               (t 0))))
+      (t 0))))
 
 (defun write-intv-orchestration (&optional
                                    (input #p"Source/Tables/Orchestration.ods")
                                    (output (format nil "Source/Generated/~a/Orchestration.s"
                                                    (machine-directory-name))))
-  "Write cp1610 orchestration tables for Intellivision (PSG voice map only)."
+  "Write cp1610 orchestration tables for Intellivision (PSG ADSR + voice map)."
   (with-output-to-file (out output :if-exists :supersede)
     (format *trace-output* "~&Going to write Intellivision orchestration from ~a to ~a…"
             (enough-namestring input) (enough-namestring output))
@@ -635,7 +647,48 @@ Uses @code{PSG Tone} from @var{ROW} when present; otherwise infers from
             *game-title* (enough-namestring output) (enough-namestring input))
     (let ((table (read-orchestration input)))
       (format out "NumInstruments~32tEQU     ~d~2%" (length table))
-      (format out "InstrumentPSGTone:")
+      (format out "InstrumentAttackAddend:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (getf row :attack-addend))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentAttackFraction:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (* #x100 (nth-value 1 (floor (getf row :attack-addend)))))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentDecaySubtrahend:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (getf row :decay-subtrahend))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentDecayFraction:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (* #x100 (nth-value 1 (floor (getf row :decay-subtrahend)))))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentDecayDuration:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (getf row :decay-duration))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentReleaseSubtrahend:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (getf row :release-subtrahend))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentReleaseFraction:")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~2,'0x~40t; ~a"
+                (floor (* #x100 (nth-value 1 (floor (getf row :release-subtrahend)))))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentVibratoTremelo:~%~12t;; vibrato in high nybble, tremolo in low")
+      (dolist (row table)
+        (format out "~%~12tBYTE $~x~x~40t; ~a"
+                (floor (min 15 (max 0 (getf row :vibrato 0))))
+                (floor (min 15 (max 0 (getf row :tremolo 0))))
+                (title-case (getf row :instrument))))
+      (format out "~2%InstrumentPSGTone:~%~12t;; 0 = tonal voice, 1 = white noise")
       (dolist (row table)
         (format out "~%~12tBYTE ~d~40t; ~a"
                 (orchestration-psg-tone-byte row)

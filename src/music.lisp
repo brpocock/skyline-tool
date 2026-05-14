@@ -1929,7 +1929,8 @@ to frame counts using 60 (NTSC) or 50 (PAL/SECAM) frames per second.
 
 Compiled notes carry orchestration @strong{instrument IDs}, not PSG channel
 numbers; the runtime assigns tonal or noise voices dynamically."
-  (let ((fps (ecase (if (keywordp output-coding)
+  (let ((*orchestra* (get-orchestration))
+        (fps (ecase (if (keywordp output-coding)
                          output-coding
                          (make-keyword (string-upcase (string output-coding))))
                (:ntsc 60)
@@ -1948,15 +1949,21 @@ numbers; the runtime assigns tonal or noise voices dynamically."
                (let* ((time-sec (float (or time 0) 1.0d0))
                       (dur-sec (float (or duration 0) 1.0d0))
                       (t-frames (floor (* time-sec fps)))
-                      (d-frames (max 1 (floor (* dur-sec fps))))
                       (vel (or velocity 127))
                       (instrument-id (orchestration-instrument-id
-                                      (or instrument track-instrument))))
+                                      (or instrument track-instrument)))
+                      (max-vol (min 15 (floor (* 15 (/ vel 127)))))
+                      (sustain-duration
+                        (nth-value 0
+                          (calculate-duration-for
+                           (make-hokey-note :duration dur-sec
+                                            :volume (/ vel 127.0)
+                                            :instrument instrument-id)
+                           instrument-id))))
                  (let* ((frequency (freq<-midi-key key))
                         (period (frequency-to-ay-period frequency +intv-ay-clock-hz+)))
-                   ;; (time-frames instrument-id period-lo period-hi volume duration-frames)
                    (push (list t-frames instrument-id (logand period #xff) (ash period -8)
-                               (min 15 (floor (* 15 (/ vel 127)))) d-frames)
+                               max-vol (max 1 sustain-duration))
                          notes)))))))))
     (setf notes (sort notes #'< :key #'first))
     (let ((result (make-array (list (length notes) 6))))

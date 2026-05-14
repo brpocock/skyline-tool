@@ -508,10 +508,24 @@ available ROM banks. Uses brute-force search for optimal packing.
 
 (defun supported-video-types (&optional (machine *machine*))
   "Return the list of video types supported by MACHINE.
-   Filters out unsupported video types for specific machines."
+
+Portable and single-region handheld devices return a one-element list
+@code{(:ntsc)} so that Makefile generation iterates only once and
+@code{asset->object-name} emits a single video-suffix-free target.
+TV-connected machines with both NTSC and PAL releases return
+@code{(:ntsc :pal)}; the catch-all additionally includes SECAM."
   (case machine
-    ;; Lynx is a portable single-region device; Makefile + asset names avoid NTSC/PAL suffixes (see asset->object-name).
-    (200 '(:ntsc))
+    ;; Portable/single-region devices: Lynx, Game Boy family, Game Gear,
+    ;; WonderSwan family, Virtual Boy.  All emit video-independent objects.
+    ((200    ; Lynx
+      810    ; VB
+      837    ; GG
+      3296   ; GBA
+      4800   ; WS
+      6800   ; WSC
+      20953  ; CGB
+      35902) ; DMG
+     '(:ntsc))
     (5200 '(:ntsc))
     ((400 800 20 64 128 7800 7850) '(:ntsc :pal))
     (t '(:ntsc :pal :secam))))
@@ -752,7 +766,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (35902 "DMG")))
 
 (defun machine-number-by-tag (tag)
-  (ecase (make-keyword tag)
+  (ecase (make-keyword (string-upcase tag))
     (:|Oric| 1)
     (:|A2| 2)
     (:|A3| 3)
@@ -1376,22 +1390,77 @@ The final component of @var{NAME}.
 Asset identifier such as @code{Blobs/TitleCard}, @code{Scripts/Title},
 @code{Songs/Title}, or @code{Maps/Solace/AncientBurialSite2}.
 @item VIDEO
-Video standard keyword for assets whose object files vary by video mode
-(used for Maps and Songs on machines that emit per-video objects).
+Video standard keyword (e.g.@: @code{:ntsc}, @code{:pal}) for assets
+whose object files vary by video mode.  Required for Songs and Maps on
+all machines except portable/single-region devices and Intellivision.
 @end table
 
 @table @asis
 @item Return
-String naming the generated Makefile target for the current
-@code{*machine*}.  For Atari Lynx (machine 200) Maps and Songs targets
-are video-independent because Lynx is a portable single-region device,
-and Blobs/Scripts are emitted into @file{Source/Generated/Lynx/Assets/}.
+String naming the generated Makefile target for @code{*machine*}.
+Machines are divided into three naming conventions:
+
+@itemize
+@item
+@strong{Standard video-dependent} — Atari 7800/VCS800/5200/400/800 and
+all TV-connected ports (NES, SNES, SMS, TG16, etc.): object paths include
+the video-standard suffix, e.g.@:
+@file{Object/NES/Assets/Song.Title.ntsc.o}.
+
+@item
+@strong{Portable/single-region} — Atari Lynx and all handheld/portable
+ports (DMG, CGB, GBA, GG, WS, WSC, VB): object paths omit the video
+suffix, e.g.@: @file{Object/DMG/Assets/Song.Title.o}.  Blobs and Scripts
+are placed under @file{Source/Generated/@var{PORT}/Assets/}.
+
+@item
+@strong{Special-cased platforms} — Intellivision (Songs emitted as
+@file{.s} source), CBM (C64/C128, @file{.CBM} suffix), and ClcV
+(ColecoVision, @file{.ClcV} suffix).
+@end itemize
+
 @item Faults
-Signals @code{ECASE} failure for unsupported machines.
+Signals @code{simple-error} for any @code{*machine*} value not
+registered in @code{machine-directory-name}.
 @end table"
   (let ((machine-dir (machine-directory-name)))
     (ecase *machine*
-      ((7800 7850 5200 400 800)
+      ;; Standard video-dependent machines: Atari family plus all TV-connected
+      ;; ports.  Object-file names include the video-standard suffix so that
+      ;; NTSC and PAL builds produce distinct targets.
+      ((7800 7850 5200 400 800
+        ;; Additional TV-connected ports:
+        1      ; Oric
+        2      ; A2
+        3      ; A3
+        8      ; NES
+        9      ; NG
+        15     ; F
+        16     ; TG16
+        20     ; VIC20
+        23     ; A2e
+        81     ; ZX81
+        88     ; SNES
+        222    ; 2gs
+        223    ; BBC
+        264    ; C16
+        920    ; NNG
+        1000   ; SG1000
+        1080   ; ST
+        1200   ; 1200
+        1601   ; SMD
+        1624   ; 32X
+        2068   ; Spc
+        2416   ; CDR
+        2600   ; 2600
+        3000   ; Vx
+        3010   ; SMS
+        4386   ; HS
+        6122   ; Vs
+        7600   ; O2
+        7801   ; SC
+        8011   ; Jag
+        9001)  ; PSX
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
          (cond ((equal kind "Songs")
 	      (assert (not (null video)))
@@ -1426,12 +1495,19 @@ Signals @code{ECASE} failure for unsupported machines.
                         machine-dir (%asset-leaf-name name)))
                (t
                 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
-      ;; Atari Lynx (Phantasia issue #1321 / #1323).  Lynx has no NTSC/PAL
-      ;; variant — it is a portable single-region device — so Maps and Songs
-      ;; targets are emitted without a video suffix.  Blobs and Scripts are
-      ;; placed alongside other generated sources for the @file{Lynx} port
-      ;; under @file{Source/Generated/Lynx/Assets/}.
-      (200
+      ;; Portable/single-region devices: Atari Lynx plus all handheld ports
+      ;; (DMG, CGB, GBA, GG, WS, WSC, VB).  These have no NTSC/PAL variant —
+      ;; the hardware has its own display — so Maps and Songs targets are
+      ;; emitted without a video suffix.  Blobs and Scripts go under
+      ;; Source/Generated/<PORT>/Assets/.
+      ((200    ; Lynx
+        810    ; VB (Virtual Boy)
+        837    ; GG (Game Gear)
+        3296   ; GBA (Game Boy Advance)
+        4800   ; WS (WonderSwan)
+        6800   ; WSC (WonderSwan Color)
+        20953  ; CGB (Game Boy Color)
+        35902) ; DMG (Game Boy)
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
          (cond ((equal kind "Songs")
                 (format nil "Object/~a/Assets/Song.~a.o"
@@ -2586,6 +2662,57 @@ This Makefile handles everything not covered by the top-level Makefile."
                                       :junk-allowed t)))))))
   0)
 
+(defun %intv-read-map-equ (map-source lab suffix)
+  "Read integer @code{LAB_SUFFIX} EQU from generated @file{Map.*.s}, else 0.
+
+@table @asis
+@item MAP-SOURCE
+Pathname of the generated map assembly file.
+@item LAB
+The assembly label prefix (e.g. @samp{Map_Global_TheOpenSeas}).
+@item SUFFIX
+The EQU name suffix (e.g. @samp{MAP_WIDTH}).
+@end table"
+  (when (probe-file map-source)
+    (with-open-file (s map-source :direction :input)
+      (let ((needle (format nil "~a_~a EQU " lab suffix)))
+        (loop for line = (read-line s nil nil)
+              while line
+              when (search needle line :test #'char-equal)
+                do (let ((pos (+ (length needle) (search needle line :test #'char-equal))))
+                     (return-from %intv-read-map-equ
+                       (parse-integer (string-trim '(#\space #\tab) (subseq line pos))
+                                      :junk-allowed t)))))))
+  0)
+
+(defun %intv-map-catalog-entries (root)
+  "Return sorted alists for compiled Intv map @file{Map.*.s} files on disk.
+
+Each entry has @code{:id}, @code{:sym}, @code{:gram} (0), @code{:map}
+(@code{LAB_MAP_HEADER} pointer), @code{:cols} (width), @code{:rows} (height),
+@code{:ngram} (0).  Uses @code{read-assets-list} IDs for @code{:map} kind only."
+  (read-assets-list)
+  (let ((gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+        (id-table (gethash :map *asset-ids-seen*))
+        (entries nil))
+    (when (and gen-dir id-table)
+      (loop for id being the hash-keys of id-table
+            for name = (gethash id id-table)
+            for lab = (asset->symbol-name (format nil "Maps/~a" name))
+            for gen-s = (merge-pathnames
+                         (make-pathname :name (format nil "Map.~a" (substitute #\. #\/ name))
+                                        :type "s")
+                         gen-dir)
+            when (probe-file gen-s)
+              do (let ((w (%intv-read-map-equ gen-s lab "MAP_WIDTH"))
+                       (h (%intv-read-map-equ gen-s lab "MAP_HEIGHT")))
+                   (push (list :id id :sym lab
+                               :gram 0
+                               :map (format nil "~a_MAP_HEADER" lab)
+                               :cols w :rows h :ngram 0)
+                         entries))))
+    (sort entries #'< :key (lambda (e) (getf e :id)))))
+
 (defun %intv-blob-catalog-entries (root)
   "Return sorted alists for Intv BLOB PNGs on disk.
 
@@ -2651,7 +2778,8 @@ unique ID only. Requires @code{--port Intv} so @code{*machine*} is 2609."
   (let* ((root (uiop:ensure-directory-pathname (project-root)))
          (out (merge-pathnames output-path root))
          (entries (sort (append (%intv-blob-catalog-entries root)
-                                (%intv-song-catalog-entries root))
+                                (%intv-song-catalog-entries root)
+                                (%intv-map-catalog-entries root))
                         #'< :key (lambda (e) (getf e :id)))))
     (ensure-directories-exist out)
     (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
@@ -2720,16 +2848,34 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
                 (let ((stem (pathname-name b)))
                   (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Blob.~A.s\"~%"
                           port-dir stem)))
-              (let ((song-dir (merge-pathnames #p"Source/Songs/" root)))
-                (when (uiop:directory-exists-p song-dir)
-                  (dolist (song '("ZeroPage" "AtariToday"))
+              (let ((song-dir (merge-pathnames #p"Source/Songs/" root))
+                    (id-table (progn (read-assets-list) (gethash :song *asset-ids-seen*))))
+                (when (and (uiop:directory-exists-p song-dir) id-table)
+                  (dolist (song (sort (loop for name being the hash-values of id-table
+                                           collect name)
+                                     #'string<))
                     (let ((mscz (merge-pathnames (make-pathname :name song :type "mscz") song-dir))
                           (gen-s (merge-pathnames (format nil "Source/Generated/~a/Assets/Song.~a.s"
                                                           port-dir song)
                                                   root)))
                       (when (and (probe-file mscz) (%intv-song-asm-ready-p gen-s))
                         (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Song.~A.s\"~%"
-                                port-dir song)))))))
+                                port-dir song))))))
+              ;; Include compiled Intv map assemblies
+              (let* ((map-id-table (gethash :map *asset-ids-seen*))
+                     (gen-dir (merge-pathnames (format nil "Source/Generated/~a/Assets/" port-dir)
+                                              root)))
+                (when map-id-table
+                  (dolist (name (sort (loop for n being the hash-values of map-id-table
+                                           collect n)
+                                     #'string<))
+                    (let* ((dot-name (substitute #\. #\/ name))
+                           (gen-s (merge-pathnames (make-pathname :name (format nil "Map.~a" dot-name)
+                                                                  :type "s")
+                                                   gen-dir)))
+                      (when (probe-file gen-s)
+                        (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Map.~A.s\"~%"
+                                port-dir dot-name)))))))
             (format s ";;; (no Source/Art/~a/*.art or Source/Blobs/Intv/*.png yet)~%" port-dir))))
     (format *trace-output* "~&Wrote ~a~%" out)
     (write-intv-asset-catalog)))

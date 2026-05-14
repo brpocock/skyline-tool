@@ -96,6 +96,7 @@
                              (:file "5200-tests" :depends-on ("package"))
                              (:file "7800-tests" :depends-on ("package"))
                              (:file "action-tests" :depends-on ("package"))
+                             (:file "asset-allocator-tests" :depends-on ("package"))
                              (:file "animation-preview-tests" :depends-on ("package"))
                              (:file "build-tests" :depends-on ("package"))
                              (:file "cbm-tooling-tests" :depends-on ("package"))

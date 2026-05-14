@@ -2101,19 +2101,34 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                              (setf byte (logior byte (ash 1 (- 7 x))))))
                   byte)))
 
+(defun intv-invert-tile-row-bytes (key)
+  "Return KEY with each of the 8 row bytes bitwise-complemented (XOR #xFF).
+
+This is an involution: @code{(intv-invert-tile-row-bytes (intv-invert-tile-row-bytes key))}
+equals KEY for any valid 8-byte tile key.
+
+@table @asis
+@item KEY
+List of 8 bytes (row bitmaps from @code{intv-tile-row-bytes}).
+@end table"
+  (mapcar (lambda (b) (logxor b #xFF)) key))
+
 (defvar *intv-grom-bytes-cache* nil
   "Cached 2048-byte GROM image (256×8 bytes) or NIL if unavailable.")
 
 (defun intv-grom-bin-path ()
-  "Return pathname to bundled minigrom.bin (jzIntv), or NIL if missing.
+  "Return pathname to the Intellivision GROM binary, or NIL if not found.
+
+Checks @file{Tools/Intv/grom.bin} (project-level) first, then falls back
+to the jzIntv emscripten @file{minigrom.bin}.
 
 The file is 2048 bytes: 256 GROM cards × 8 row bytes each, same layout as
 @code{intv-tile-row-bytes} for monochrome art."
-  (let ((rel (merge-pathnames
-              #p"../Tools/jzIntv/src/emscripten/minigrom.bin"
-              (asdf:system-source-directory :skyline-tool))))
-    (when (probe-file rel)
-      rel)))
+  (flet ((try (rel)
+           (let ((p (merge-pathnames rel (asdf:system-source-directory :skyline-tool))))
+             (when (probe-file p) p))))
+    (or (try #p"../Tools/Intv/grom.bin")
+        (try #p"../Tools/jzIntv/src/emscripten/minigrom.bin"))))
 
 (defun intv-grom-bytes ()
   "Load and cache Intellivision GROM bytes (2048), or NIL if file missing.
@@ -2147,6 +2162,29 @@ If two GROM cards share the same bitmap, the lower card index wins."
           do (unless (gethash key ht)
                (setf (gethash key ht) card)))
     ht))
+
+(defun intv-grom-lookup (key grom-map)
+  "Look up KEY in GROM-MAP, also trying the bitwise-inverted tile.
+
+Returns @code{(values card-index invert-p found-p)}.  When the inverted
+tile matches, @code{invert-p} is @code{T} and @code{card-index} is the
+original (non-inverted) GROM card.  When neither matches,
+@code{found-p} is @code{NIL}.
+
+@table @asis
+@item KEY
+8-byte row-bitmap list from @code{intv-tile-row-bytes}.
+@item GROM-MAP
+@code{equal} hash from @code{intv-grom-key-to-card-map}.
+@end table"
+  (multiple-value-bind (card found) (gethash key grom-map)
+    (if found
+        (values card nil t)
+        (let ((inv-key (intv-invert-tile-row-bytes key)))
+          (multiple-value-bind (inv-card inv-found) (gethash inv-key grom-map)
+            (if inv-found
+                (values inv-card t t)
+                (values nil nil nil)))))))
 
 (defun compile-blob-intv-screen (png-file output-path palette-pixels width height)
   "Write OUTPUT-PATH assembly: deduplicated GRAM 8×8 cards + row-major tile map.
@@ -2223,7 +2261,6 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
                     (setf (aref tile-ids idx) (+ #x100 gram-id))))
               (incf idx))))))
     (let ((nuniq (length uniq)))
-      (assert (= nuniq (hash-table-count ht)))
       (ensure-directories-exist (merge-pathnames output-path))
       (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
                                                       :external-format :utf-8)
@@ -2247,6 +2284,22 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
                            for byte-second = (nth (+ (* i 2) 1) bytes-list)
                            for word = (logior (ash byte-first 8) byte-second)
                            do (format src "    DECLE   $~4,'0X~%" word)))))
+        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
+        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
+        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
+        (format src "~A_TILE_CSTK:~%" lab)
+        (dotimes (i total-cells)
+          (let* ((raw-id (aref tile-ids i))
+                 (gram-slot-p (>= raw-id #x100))
+                 (card-id raw-id)
+                 (color (if gram-slot-p
+                            (intv-dominant-stic-color
+                             palette-pixels
+                             (* (mod i cols) 8)
+                             (* (floor i cols) 8))
+                            7))
+                 (cstk (intv-cstk-word card-id color nil)))
+            (format src "    DECLE   $~4,'0X~%" cstk)))
         (format src "~A_TILE_MAP:~%" lab)
         (dotimes (i total-cells)
           (format src "    DECLE   $~4,'0X~%" (aref tile-ids i)))
@@ -2299,6 +2352,60 @@ Ignores palette index 0 (background). Defaults to @code{7} (white) when empty."
       (setf (gethash key ht) gram-id)
       (vector-push-extend key uniq))
     gram-id))
+
+(defun intv-gram-lookup-or-allocate (key uniq ht)
+  "Look up or allocate a GRAM slot for KEY, deduplicating against the inverted tile.
+
+Returns @code{(values gram-id invert-p)}.  If KEY is already in HT,
+returns its slot with @code{invert-p = NIL}.  If the bitwise-complement
+of KEY is in HT, returns that slot with @code{invert-p = T} (one GRAM
+slot serves both orientations).  Otherwise allocates a new slot for KEY
+and returns it with @code{invert-p = NIL}.
+
+@table @asis
+@item KEY
+8-byte row-bitmap list from @code{intv-tile-row-bytes}.
+@item UNIQ
+Adjustable vector of allocated keys (fill-pointer = slot count).
+@item HT
+@code{equal} hash table mapping KEY to slot index.
+@end table"
+  (multiple-value-bind (gram-id found) (gethash key ht)
+    (if found
+        (values gram-id nil)
+        (let* ((inv-key (intv-invert-tile-row-bytes key))
+               (inv-id (gethash inv-key ht)))
+          (if inv-id
+              (values inv-id t)
+              (progn
+                (when (>= (length uniq) 64)
+                  (error "Intellivision GRAM overflow: more than 64 unique 8×8 tiles"))
+                (setf gram-id (length uniq))
+                (setf (gethash key ht) gram-id)
+                (vector-push-extend key uniq)
+                (values gram-id nil)))))))
+
+(defun intv-cstk-word (card-id color invert)
+  "Return the 16-bit BACKTAB CSTK word for CARD-ID, COLOR, and INVERT flag.
+
+CARD-ID is the unified card space: @code{$0000}–@code{$00FF} for GROM
+cards, @code{$0100}–@code{$013F} for GRAM slots 0–63.  COLOR is the
+STIC palette index 0–15.  When INVERT is non-nil, bit 14 (@code{$4000})
+is set.
+
+@table @asis
+@item CARD-ID
+Unified card index: @code{< $100} = GROM, @code{>= $100} = GRAM slot
+@code{(- card-id #x100)}.
+@item COLOR
+STIC foreground color 0–15.
+@item INVERT
+When non-nil, sets the hardware invert bit (@code{$4000}).
+@end table"
+  (let ((base (if (>= card-id #x100)
+                  (+ #x1000 (* (- card-id #x100) 8) color)
+                  (+ (* card-id 8) color))))
+    (logior base (if invert #x4000 0))))
 
 (defun intv-quadrant-card-and-cstk (palette-pixels sx sy grom-map uniq ht)
   "Return (values CARD-ID CSTK-WORD) for one 8×8 quadrant at (SX,SY).
@@ -2385,19 +2492,53 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
                 tile-count nuniq (enough-namestring output-path))))))
 
 (defun compile-map-intv-screen (map-name output-path width height tile-grid tileset-records
-                                &key spawn-table)
-  "Write OUTPUT-PATH assembly stub map: header + TL/TR/BL/BR CSTK per logical cell.
+                                &key spawn-table stic-override-grid stic-override-table)
+  "Write OUTPUT-PATH assembly for an Intellivision map: 4-word header, quadrant
+CSTK DECLEs, STIC override table/indices, and spawn records.
 
 TILESET-RECORDS is a vector of BACKTAB color-stack words (four per global tile
 id, 0-based), each embedding a GROM (@code{$0000}–@code{$00FF}) or GRAM
 (@code{$0100}+) card index plus STIC color as produced by
 @code{compile-tileset-intv-screen}. Empty tile id 0 maps to four zero words.
 
-When SPAWN-TABLE is supplied, append a spawn section after quadrant data using
-the same 5-byte records as 7800 map binaries (@pxref{Asset Formats Map Spawns})."
+Header layout (4 DECLEs): width, height, spawn-count, spawn-ptr.
+Spawn data uses DECLE (one word per byte) for direct runtime addressing.
+@code{MapCompiledHeaderWords EQU 4} in @file{Constants.s}; quadrant data
+starts at @code{MAP_QUADRANTS} (offset 4 from @code{MAP_HEADER}).
+
+STIC-OVERRIDE-GRID and STIC-OVERRIDE-TABLE, when supplied, emit
+@code{MAP_STIC_TABLE} and @code{MAP_STIC_INDICES} labels for future
+@code{PlotMapViewport} override patching (@pxref{Asset Formats Intellivision
+STIC Region Overrides}); the runtime stub does not apply them yet.
+
+@table @asis
+@item MAP-NAME
+Canonical map name string for comments.
+@item OUTPUT-PATH
+Pathname for the generated @file{Map.*.s} assembly file.
+@item WIDTH, HEIGHT
+Logical 16×16 tile dimensions.
+@item TILE-GRID
+2-D array of tile IDs, @code{(aref tile-grid x y 0)}.
+@item TILESET-RECORDS
+Vector of pre-encoded BACKTAB CSTK words (4 per tile ID, or empty).
+@item SPAWN-TABLE
+List of @code{(x y kind ref-id)} spawn entries.
+@item STIC-OVERRIDE-GRID
+2-D array of 8-byte override slot indices per logical tile (may be nil).
+@item STIC-OVERRIDE-TABLE
+List of 8-byte override entries (may be nil).
+@end table"
   (check-type output-path (or pathname string))
-  (let ((lab (substitute #\_ #\. (pathname-name (merge-pathnames output-path))))
-        (quadrants (make-array (* width height 4) :element-type '(unsigned-byte 16))))
+  (let* ((lab (substitute #\_ #\. (pathname-name (merge-pathnames output-path))))
+         (quadrants (make-array (* width height 4) :element-type '(unsigned-byte 16)))
+         (spawns (or spawn-table nil))
+         (stic-table (or stic-override-table nil))
+         (stic-grid stic-override-grid)
+         (has-stic (and stic-table stic-grid
+                        (some (lambda (entry)
+                                (some (lambda (b) (not (zerop b))) entry))
+                              stic-table))))
     (dotimes (y height)
       (dotimes (x width)
         (let* ((tile-id (or (aref tile-grid x y 0) 0))
@@ -2411,22 +2552,55 @@ the same 5-byte records as 7800 map binaries (@pxref{Asset Formats Map Spawns}).
     (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
                                                     :external-format :utf-8)
       (format src ";;; Intellivision map: ~A (~D×~D logical tiles)~%" map-name width height)
+      (format src ";;; Header: [width, height, spawn_count, spawn_ptr] (~
+MapCompiledHeaderWords=4)~%")
       (format src "~A_MAP_WIDTH EQU ~D~%" lab width)
       (format src "~A_MAP_HEIGHT EQU ~D~%" lab height)
+      (format src "~A_MAP_SPAWN_COUNT EQU ~D~%" lab (length spawns))
       (format src "~A_MAP_HEADER:~%" lab)
-      (format src "    DECLE   ~D, ~D~%" width height)
+      (if (zerop (length spawns))
+          (format src "    DECLE   ~D, ~D, 0, 0~%" width height)
+          (format src "    DECLE   ~D, ~D, ~D, ~A_MAP_SPAWNS~%"
+                  width height (length spawns) lab))
       (format src "~A_MAP_QUADRANTS:~%" lab)
       (dotimes (i (* width height 4))
         (format src "    DECLE   $~4,'0X~%" (aref quadrants i)))
-      (let ((spawns (or spawn-table nil)))
-        (format src "~A_MAP_SPAWN_COUNT EQU ~D~%" lab (length spawns))
+      (when (zerop (length spawns))
+        (format src "~A_MAP_SPAWNS:~%" lab))
+      (when (plusp (length spawns))
         (format src "~A_MAP_SPAWNS:~%" lab)
-        (format src "    BYTE    ~D~%" (length spawns))
         (dolist (entry spawns)
-          (format src "    BYTE    ~{~D~^, ~}~%"
-                  (encode-map-spawn-entry (first entry) (second entry)
-                                          (third entry) (fourth entry)))))
-      (format *trace-output* "~&Wrote Intellivision map ~A to ~A." map-name (enough-namestring output-path)))))
+          (destructuring-bind (sx sy kind ref-id) entry
+            (format src "    DECLE   ~D, ~D, ~D, ~D, ~D~%"
+                    sx sy
+                    (ecase kind
+                      (:character 0)
+                      (:object 1))
+                    (ldb (byte 8 0) ref-id)
+                    (ldb (byte 8 8) ref-id)))))
+      ;; STIC override sections (runtime stub TODO; emitted for future use)
+      (if has-stic
+          (progn
+            (format src "~A_MAP_STIC_COUNT EQU ~D~%" lab (length stic-table))
+            (format src "~A_MAP_STIC_TABLE:~%" lab)
+            (dolist (entry stic-table)
+              (format src "    DECLE   ~{~D~^, ~}~%"
+                      (coerce entry 'list)))
+            (format src "~A_MAP_STIC_INDICES:~%" lab)
+            (dotimes (y height)
+              (dotimes (x width)
+                (let ((idx (if (and stic-grid
+                                    (< x (array-dimension stic-grid 0))
+                                    (< y (array-dimension stic-grid 1)))
+                               (aref stic-grid x y)
+                               0)))
+                  (format src "    DECLE   ~D~%" idx)))))
+          (progn
+            (format src "~A_MAP_STIC_COUNT EQU 0~%" lab)
+            (format src "~A_MAP_STIC_TABLE:~%" lab)
+            (format src "~A_MAP_STIC_INDICES:~%" lab)))
+      (format *trace-output* "~&Wrote Intellivision map ~A (~Dx~D, ~D spawn~:p) to ~A."
+              map-name width height (length spawns) (enough-namestring output-path)))))
 
 (defun compile-gram-intv (png-file out-dir &key height width palette-pixels)
   "Compile GRAM cards from PNG image PNG-FILE to OUT-DIR.

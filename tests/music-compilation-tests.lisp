@@ -135,6 +135,20 @@
                      "AY binary should have header plus ≥1 note (6 bytes)"))
         (when (probe-file bin) (delete-file bin))))))
 
+(test intv-orchestration-psg-tone-mapping
+  "PSG tone bytes: melodic instruments use tonal channel, percussion uses noise."
+  (let ((rows (skyline-tool::read-orchestration)))
+    (let ((piano (find "Piano" rows :key (lambda (r) (getf r :instrument)) :test #'string-equal))
+          (snare (find "Snare Drum" rows :key (lambda (r) (getf r :instrument)) :test #'string-equal))
+          (wood (find "Wood Blocks" rows :key (lambda (r) (getf r :instrument)) :test #'string-equal))
+          (saw (find "Saw Synthesizer" rows :key (lambda (r) (getf r :instrument)) :test #'string-equal)))
+      (is-true piano "orchestration should include Piano")
+      (is-true snare "orchestration should include Snare Drum")
+      (is (= 0 (skyline-tool::orchestration-psg-tone-byte piano)) "Piano should be tonal")
+      (is (= 0 (skyline-tool::orchestration-psg-tone-byte saw)) "Saw synth should be tonal")
+      (is (= 1 (skyline-tool::orchestration-psg-tone-byte snare)) "Snare should use noise")
+      (is (= 1 (skyline-tool::orchestration-psg-tone-byte wood)) "Wood blocks should use noise"))))
+
 (test intv-ay-period-uses-ntsc-master-clock
   "Intellivision AY period uses 3.579545 MHz master clock (jzIntv ay8910.c)"
   (let ((period (skyline-tool::frequency-to-ay-period 440.0d0 skyline-tool::+intv-ay-clock-hz+)))

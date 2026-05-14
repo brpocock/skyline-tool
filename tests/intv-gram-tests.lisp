@@ -120,12 +120,89 @@
               "One 16×16 tile should produce four quadrant DECLE lines"))))))
 
 (test intv-dominant-stic-color-helper
-  "Dominant STIC color ignores background index 0"
+  "Dominant STIC color is the lighter duochrome ink"
   (let ((pixels (make-test-palette-array 8 8 0)))
     (dotimes (x 8)
       (dotimes (y 8)
         (setf (aref pixels x y) 5)))
     (is (= 5 (skyline-tool::intv-dominant-stic-color pixels 0 0)))))
+
+(test intv-duochrome-row-bytes-default
+  "Darker ink is bit 0 and lighter ink is bit 1 in intv-tile-row-bytes"
+  (let ((pixels (make-test-palette-array 8 8 0)))
+    ;; Top half blue (1), bottom half white (7); blue is darker than white.
+    (dotimes (x 8)
+      (dotimes (y 4)
+        (setf (aref pixels x y) 1))
+      (dotimes (y 4)
+        (setf (aref pixels x (+ y 4)) 7)))
+    (let ((rows (skyline-tool::intv-tile-row-bytes pixels 0 0)))
+      (is (= 8 (length rows)))
+      (is (= #x00 (first rows)) "Top row (blue) should be all bit 0")
+      (is (= #xFF (nth 4 rows)) "First white row should be all bit 1"))))
+
+(test intv-duochrome-invert-roundtrip
+  "intv-invert-tile-row-bytes is involutory on 8-byte keys"
+  (let* ((key '(#xAA #x55 #x00 #xFF #x12 #xED #x34 #xCB))
+         (inv (skyline-tool::intv-invert-tile-row-bytes key))
+         (twice (skyline-tool::intv-invert-tile-row-bytes inv)))
+    (is (equal key twice))))
+
+(test intv-grom-bin-loads-from-tools-intv
+  "GROM bytes load from Tools/Intv/grom.bin (2048 bytes)"
+  (let ((bytes (progn
+                 (setf skyline-tool::*intv-grom-bytes-cache* nil)
+                 (skyline-tool::intv-grom-bytes))))
+    (is-true bytes "grom.bin should load")
+    (is (= 2048 (length bytes)) "GROM image should be 2048 bytes")))
+
+(test intv-grom-invert-lookup
+  "Inverted monochrome tile matches same GROM card with invert flag"
+  (let* ((grom-map (let ((ht (make-hash-table :test 'equal)))
+                     (setf (gethash '(#xAA #x55 #xAA #x55 #xAA #x55 #xAA #x55) ht) 42)
+                     ht))
+         (key '(#x55 #xAA #x55 #xAA #x55 #xAA #x55 #xAA)))
+    (multiple-value-bind (card invert found)
+        (skyline-tool::intv-grom-lookup key grom-map)
+      (is-true found "Inverted pattern should match GROM card 42")
+      (is (= 42 card) "Should return original GROM card index")
+      (is-true invert "Inverted hit should set invert flag"))))
+
+(test intv-gram-invert-dedup-shares-slot
+  "GRAM dedup stores normal and inverted bitmaps in one slot"
+  (let* ((uniq (make-array 64 :adjustable t :fill-pointer 0))
+         (ht (make-hash-table :test 'equal))
+         (key '(#x00 #xFF #x00 #xFF #x00 #xFF #x00 #xFF))
+         (inv-key (skyline-tool::intv-invert-tile-row-bytes key)))
+    (multiple-value-bind (id-a inv-a)
+        (skyline-tool::intv-gram-lookup-or-allocate key uniq ht)
+      (multiple-value-bind (id-b inv-b)
+          (skyline-tool::intv-gram-lookup-or-allocate inv-key uniq ht)
+        (is (= id-a id-b) "Inverted twins should share GRAM slot")
+        (is (not inv-a) "Canonical orientation stored without invert")
+        (is-true inv-b "Complement orientation should request invert")
+        (is (= 1 (length uniq)) "Only one unique GRAM bitmap should be stored")))))
+
+(test intv-cstk-invert-bit
+  "CSTK word sets $4000 invert without changing color field"
+  (is (= #x4007 (skyline-tool::intv-cstk-word 0 7 t))
+      "GROM card 0 white inverted")
+  (is (= #x1007 (skyline-tool::intv-cstk-word #x100 7 nil))
+      "GRAM slot 0 white"))
+
+(test intv-blob-emits-tile-cstk-and-mob-reservation
+  "BLOB compile emits TILE_CSTK and MOB GRAM reservation constants"
+  (with-temp-gram-output (output-path "blob-format.s")
+    (let ((test-array (make-test-palette-array 8 8 0))
+          (test-png "test-blob.png"))
+      (setf (aref test-array 0 0) 7)
+      (skyline-tool::compile-blob-intv-screen test-png output-path test-array 8 8)
+      (let ((content (uiop:read-file-string output-path)))
+        (is (search "TILE_CSTK" content) "BLOB should define TILE_CSTK")
+        (is (search "GRAM_MOB_SLOT_BASE EQU 56" content)
+            "BLOB should reserve MOB GRAM slots from 56")
+        (is (search "GRAM_MAP_SLOTS_MAX EQU 56" content)
+            "BLOB should cap map GRAM slots at 56")))))
 
 ;; Test 3: Dimension validation - flooring and minimum card size
 (test gram-compiler-dimension-validation
@@ -741,6 +818,17 @@
   (let ((color-names (symbol-value (find-symbol "+INTV-COLOR-NAMES+" :skyline-tool))))
     (is-true (listp color-names) "+intv-color-names+ should be a list")
     (is (= 16 (length color-names)) "+intv-color-names+ should have 16 color names")))
+
+(test intv-stic-region-parse
+  "Parse TMX STIC region color lists into eight-byte override records"
+  (let ((two (skyline-tool::parse-stic-region-value "white, black")))
+    (is (= 8 (length two)))
+    (is (every (lambda (b) (= 7 b)) (subseq two 0 4)))
+    (is (every (lambda (b) (= 0 b)) (subseq two 4 8))))
+  (let ((eight (skyline-tool::parse-stic-region-value
+                "red, tan, blue, cyan, green, yellow, pink, magenta")))
+    (is (equalp #(2 3 0 9 5 6 12 15) eight)))
+  (signals error (skyline-tool::parse-stic-region-value "only-one-color")))
 
 ;; Test 22: File I/O error handling
 (test intv-file-io-error-handling

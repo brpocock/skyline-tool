@@ -189,6 +189,99 @@ Each tileset contributes GIDs from @code{(tileset-gid)} through
                                              :tile-width tile-width))))
   attributes)
 
+(defun parse-stic-color-token (token)
+  "Parse TOKEN into a STIC color index (@code{0}–@code{15}).
+
+TOKEN may be a decimal/hex numeral or an @code{+intv-color-names+} keyword
+(case-insensitive, hyphens allowed). Returns @code{NIL} when TOKEN is empty."
+  (let ((trimmed (string-trim " \t\n\r," token)))
+    (unless (zerop (length trimmed))
+      (or (ignore-errors (parse-integer trimmed))
+          (ignore-errors (parse-integer trimmed :radix 16))
+          (position (string-downcase (substitute #\- #\_ trimmed))
+                    +intv-color-names+
+                    :test #'string=)
+          (error "Unrecognized Intellivision STIC color token “~a”" token)))))
+
+(defun parse-stic-region-value (string)
+  "Parse a TMX @code{STIC} region property STRING into eight color bytes.
+
+Order: @strong{TL fg}, @strong{TL bg}, @strong{TR fg}, @strong{TR bg},
+@strong{BL fg}, @strong{BL bg}, @strong{BR fg}, @strong{BR bg}.  When exactly
+two color names are given, the first is repeated for every quadrant foreground
+slot and the second for every background slot.  Sixteen tokens expand each
+quadrant to @code{fg}, @code{bg-light}, @code{bg-black} (light then black).
+
+Returns an 8-element vector of STIC indices (@code{0}–@code{15})."
+  (let* ((tokens (remove-if (lambda (s) (zerop (length s)))
+                            (mapcar (lambda (part) (string-trim " \t\n\r," part))
+                                    (split-sequence #\, string))))
+         (colors (mapcar #'parse-stic-color-token tokens))
+         (out (make-array 8 :element-type '(unsigned-byte 8))))
+    (ecase (length colors)
+      (2 (dotimes (q 4)
+           (setf (aref out q) (first colors))
+           (setf (aref out (+ q 4)) (second colors))))
+      (8 (dotimes (i 8)
+           (setf (aref out i) (elt colors i))))
+      (16 (dotimes (q 4)
+            (setf (aref out q) (elt colors (* q 3)))
+            (setf (aref out (+ q 4)) (elt colors (+ (* q 3) 1)))))
+      (otherwise
+       (error "STIC region expects 2, 8, or 16 colors (got ~:d): “~a”"
+              (length colors) string)))
+    out))
+
+(defun stic-override-all-default-p (bytes)
+  "Return true when BYTES is absent or every slot is @code{#xff} (no override)."
+  (or (null bytes)
+      (every (lambda (b) (= #xff b)) bytes)))
+
+(defun make-stic-override-default-entry ()
+  "Return the canonical “no STIC override” eight-byte table entry."
+  (make-array 8 :element-type '(unsigned-byte 8) :initial-element #xff))
+
+(defun assign-stic-override (bytes table)
+  "Insert BYTES into deduplicated STIC-override TABLE; return table index.
+
+Index @code{0} is reserved for the all-@code{#xff} default entry."
+  (if (stic-override-all-default-p bytes)
+      0
+      (or (position bytes table :test #'equalp)
+          (prog1 (length table)
+            (setf (cdr (last table)) (cons bytes nil))))))
+
+(defun find-effective-stic-override (x y objects &key tile-width)
+  "Merge @code{STIC} region overlays for logical tile (@code{X}, @code{Y}).
+
+Later covering objects win per slot, analogous to @code{Palette} on 7800."
+  (let ((override (make-stic-override-default-entry)))
+    (dolist (object (remove-if-not (lambda (el)
+                                     (and (equal "object" (car el))
+                                          (object-covers-tile-p x y el :tile-width tile-width)))
+                                   objects))
+      (when-let (stic$ (assocdr "STIC" (second object)))
+        (let ((parsed (parse-stic-region-value stic$)))
+          (dotimes (i 8)
+            (setf (aref override i) (aref parsed i))))))
+    override))
+
+(defun build-stic-override-grid (width height objects &key tile-width)
+  "Build per-tile STIC override indices and a deduplicated override table.
+
+Returns @code{(values GRID TABLE)} where @code{GRID} is a @code{WIDTH}×@code{HEIGHT}
+array of one-byte indices into @code{TABLE}, and @code{TABLE} entry @code{0} is the
+all-default (@code{#xff}) record."
+  (let ((grid (make-array (list width height) :element-type '(unsigned-byte 8)))
+        (table (list (make-stic-override-default-entry))))
+    (dotimes (y height)
+      (dotimes (x width)
+        (setf (aref grid x y)
+              (assign-stic-override
+               (find-effective-stic-override x y objects :tile-width tile-width)
+               table))))
+    (values grid table)))
+
 (defun add-alt-tile-attributes (tile-attributes alt-tile-attributes)
   "Adds ALT-TILE-ATTRIBUTES into TILE-ATTRIBUTES"
   (let ((wall-bits (logand #x0f (aref alt-tile-attributes 0))))
@@ -1483,11 +1576,14 @@ eventually compile to four independently deduplicated 8×8 STIC quadrants
 or GRAM (@code{$0100}+) card ID per @code{compile-blob-intv-screen} rules;
 @code{*_GRAM_DATA}-style bitmap upload applies only to non-GROM quadrants.
 Per-quadrant color is embedded in each tileset entry (no separate palette
-assets). For machine @code{2609}, @code{compile-map} currently emits a stub
-@code{compile-map-intv-screen} assembly map: uncompressed header plus
-row-major quadrant @code{DECLE}s (CSTK words per 8×8 cell; tileset linkage and
-GRAM upload wiring remain TODO). The 7800 ZX7 @code{.o} binary path is not used
-for machine @code{2609}.
+assets). TMX object regions may override those colors with a @code{STIC}
+property (@pxref{Asset Formats Intellivision STIC Region Overrides}), stored in
+a deduplicated eight-byte table analogous to 7800 palette indices in
+@code{MapAttributes}. For machine @code{2609}, @code{compile-map} emits
+@code{compile-map-intv-screen} assembly: uncompressed header, row-major quadrant
+@code{DECLE}s (CSTK words per 8×8 cell), STIC override indices/table, and spawn
+bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
+@code{.o} binary path is not used for machine @code{2609}.
 
 @strong{Example:}
 @example
@@ -1555,8 +1651,12 @@ for machine @code{2609}.
                              :directory `(:relative "Source" "Generated"
                                            ,(machine-directory-name) "Assets")
                              :type "s")))
-              (compile-map-intv-screen canon-name outfile width height tile-grid #()
-                                       :spawn-table spawn-table)
+              (multiple-value-bind (stic-grid stic-table)
+                  (build-stic-override-grid width height objects :tile-width tile-width)
+                (compile-map-intv-screen canon-name outfile width height tile-grid #()
+                                         :spawn-table spawn-table
+                                         :stic-override-grid stic-grid
+                                         :stic-override-table stic-table))
               (return-from compile-map nil)))
           (dolist (tv '(:ntsc :pal))
             (format *trace-output* "~&About to write map ~a for ~a… "
