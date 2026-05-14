@@ -1953,7 +1953,7 @@ numbers; the runtime assigns tonal or noise voices dynamically."
                       (instrument-id (orchestration-instrument-id
                                       (or instrument track-instrument))))
                  (let* ((frequency (freq<-midi-key key))
-                        (period (frequency-to-ay-period frequency)))
+                        (period (frequency-to-ay-period frequency +intv-ay-clock-hz+)))
                    ;; (time-frames instrument-id period-lo period-hi volume duration-frames)
                    (push (list t-frames instrument-id (logand period #xff) (ash period -8)
                                (min 15 (floor (* 15 (/ vel 127)))) d-frames)
@@ -2063,10 +2063,12 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
           return channel
         finally (return nil)))
 
-(defun frequency-to-ay-period (frequency)
-  "Convert frequency in Hz to AY-3-8910 period value"
-  (let ((clock-frequency 2000000)) ; AY-3-8910 clock is 2MHz
-    (max 1 (min #xffff (round (/ clock-frequency (* 16 frequency)))))))
+(defun frequency-to-ay-period (frequency &optional (clock-frequency 2000000))
+  "Convert FREQUENCY in Hz to a 12-bit AY-3-8910 tone period for CLOCK-FREQUENCY Hz."
+  (max 1 (min #xffff (round (/ clock-frequency (* 16 frequency))))))
+
+(defconstant +intv-ay-clock-hz+ 3579545
+  "NTSC Intellivision AY-3-8914 master clock (jzIntv @file{ay8910.c}).")
 
 (defun write-song-data-to-ay-3-8910 (notes source-out)
   "Write AY-3-8910 PSG music data to assembly source"

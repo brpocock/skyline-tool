@@ -308,15 +308,46 @@ Each tileset contributes GIDs from @code{(tileset-gid)} through
 
 (defun collect-prototype-object (object prototypes base-tileset decal-tileset
                                  &key (tile-width 8))
-  (declare (ignore prototypes))
+  (declare (ignore prototypes base-tileset decal-tileset))
   (let ((x (floor (parse-number (or (assocdr "x" (second object)) "0")) tile-width))
-        (y (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16)))
-        (name (or (assocdr "name" (second object)) "(Unnamed object)")))
-    (when-let (gid$ (assocdr "gid" (second object)))
-      (let ((prototype (or (assocdr "Prototype" (second object)) name)))
-        (format *trace-output* "~&Object @(~3d, ~3d) prototype “~a”"
-                x y prototype)
-        (return-from collect-prototype-object (list x y prototype))))))
+        (y (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16))))
+    (cond
+      ((assocdr "Character" (second object))
+       (let ((name (assocdr "Character" (second object))))
+         (format *trace-output* "~&Character spawn @(~3d, ~3d) “~a”" x y name)
+         (return-from collect-prototype-object (list x y :character name))))
+      ((assocdr "Object" (second object))
+       (let ((name (assocdr "Object" (second object))))
+         (format *trace-output* "~&Object spawn @(~3d, ~3d) “~a”" x y name)
+         (return-from collect-prototype-object (list x y :object name))))
+      ((assocdr "Prototype" (second object))
+       (let ((name (assocdr "Prototype" (second object))))
+         (format *trace-output* "~&Prototype spawn @(~3d, ~3d) “~a” (legacy property)" x y name)
+         (return-from collect-prototype-object (list x y :character name)))))))
+
+(defun map-spawn-table (prototypes-table)
+  "Resolve raw TMX spawn rows to encoded spawn alists for binary output."
+  (loop for entry in prototypes-table
+        for (x y kind name) = entry
+        collect (list x y kind (resolve-map-spawn-ref kind name))))
+
+(defun resolve-map-spawn-ref (kind name)
+  "Return spawn reference id for KIND (@code{:character} or @code{:object}) and NAME."
+  (ecase kind
+    (:character
+     (or (loop for actor in (load-npc-stats)
+               for actor-name = (getf actor :name)
+               when (string-equal actor-name name)
+                 return (getf actor :character-id))
+         (error "Unknown character prototype name ~s in NPC stats" name)))
+    (:object (object-prototype-index name))))
+
+(defun write-map-spawn-bytes (stream spawn-table)
+  "Write spawn count and SPAWN-TABLE records to binary STREAM."
+  (write-byte (length spawn-table) stream)
+  (dolist (entry spawn-table)
+    (destructuring-bind (x y kind ref) entry
+      (write-bytes (encode-map-spawn-entry x y kind ref) stream))))
 
 (defun collect-invisible-decals-for-tile (x y objects &key tile-width)
   (loop for object in objects
@@ -1435,6 +1466,9 @@ engine. The compilation includes:
 @itemize
 @item Tile layer processing and tile ID mapping
 @item Object layer conversion to game object data
+@item TMX object properties @code{Character} (NPC stats name), @code{Object}
+(@file{Source/Objects/} basename), and legacy @code{Prototype} → map spawn list
+(@pxref{Asset Formats Map Spawns})
 @item Collision data extraction and optimization
 @item Attribute layer compression
 @item Run-command script integration
@@ -1442,6 +1476,18 @@ engine. The compilation includes:
 
 The compiled  output is  stored in the  Object/$(PORT)/Assets/ directory
 with appropriate naming for the game engine to load.
+
+For machine @code{2609} (Intellivision), each logical 16×16 map tile must
+eventually compile to four independently deduplicated 8×8 STIC quadrants
+(2×2: TL, TR, BL, BR). Each quadrant stores a GROM (@code{$0000}–@code{$00FF})
+or GRAM (@code{$0100}+) card ID per @code{compile-blob-intv-screen} rules;
+@code{*_GRAM_DATA}-style bitmap upload applies only to non-GROM quadrants.
+Per-quadrant color is embedded in each tileset entry (no separate palette
+assets). For machine @code{2609}, @code{compile-map} currently emits a stub
+@code{compile-map-intv-screen} assembly map: uncompressed header plus
+row-major quadrant @code{DECLE}s (CSTK words per 8×8 cell; tileset linkage and
+GRAM upload wiring remain TODO). The 7800 ZX7 @code{.o} binary path is not used
+for machine @code{2609}.
 
 @strong{Example:}
 @example
@@ -1500,11 +1546,24 @@ with appropriate naming for the game engine to load.
                               attributes-table decals-table
                               exits-table prototypes-table)
             (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
+          (when (= *machine* 2609)
+            (let* ((width (array-dimension tile-grid 0))
+                   (height (array-dimension tile-grid 1))
+                   (spawn-table (map-spawn-table prototypes-table))
+                   (outfile (make-pathname
+                             :name (format nil "Map.~a" canon-name)
+                             :directory `(:relative "Source" "Generated"
+                                           ,(machine-directory-name) "Assets")
+                             :type "s")))
+              (compile-map-intv-screen canon-name outfile width height tile-grid #()
+                                       :spawn-table spawn-table)
+              (return-from compile-map nil)))
           (dolist (tv '(:ntsc :pal))
             (format *trace-output* "~&About to write map ~a for ~a… "
                     (title-case canon-name) tv)
             (let* ((width (array-dimension tile-grid 0))
                    (height (array-dimension tile-grid 1))
+                   (spawn-table (map-spawn-table prototypes-table))
                    (display-name (or
                                   (gethash (substitute #\/ #\. canon-name) *maps-display-names*)
                                   (error "Can't figure out the display name for ~a" canon-name)))
@@ -1591,8 +1650,8 @@ with appropriate naming for the game engine to load.
                     (format *trace-output*
                             "~&~{ • Decal at ~d, ~d gid $~2,'0x attributes $~8,'0x~}"
                             (coerce decal 'list)))
-                  ;; prototypes list
-                  (write-byte 0 object) ; TODO
+                  ;; prototypes / spawn list (5 bytes per entry after count)
+                  (write-map-spawn-bytes object spawn-table)
                   (format *trace-output* " end of file at $~4,'0x … "
                           (file-position object))
                   (force-output *trace-output*)))

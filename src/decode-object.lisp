@@ -83,18 +83,6 @@
 
 (clim:define-presentation-type ext-file-link () :inherit-from 'pathname)
 
-(define-show-decal-frame-command (com-open-ext-file :name t :menu t)
-    ((pathname 'ext-file-link))
-  (clim-sys:make-process (lambda () (uiop:run-program (list "xdg-open" (enough-namestring pathname))))
-               :name (format nil "Edit spreadsheet ~a" (enough-namestring pathname))))
-
-(clim:define-presentation-to-command-translator click-for-ext-file
-    (ext-file-link com-open-ext-file show-decal-frame
-                   :gesture :edit :menu nil
-                   :documentation "Open spreadsheet file for editing")
-  (pathname)
-  (list pathname))
-
 (defvar *inventory-items* nil)
 
 (defun load-inventory-items (&optional (pathname #p"Source/Tables/Inventory.txt"))

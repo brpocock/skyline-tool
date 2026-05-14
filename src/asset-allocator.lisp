@@ -1230,6 +1230,7 @@ file ~a.s in bank $~2,'0x~
 
 (define-constant +skyline-writes-files+
     (list "ActorPrototypes" 'write-actor-prototypes
+          "ObjectPrototypes" 'write-object-prototypes
           "AnimationTable" 'compile-animation-sequences
           "AssetIDs" 'write-asset-ids
           "Asset-IDs" 'write-asset-ids
@@ -1886,8 +1887,7 @@ Object/${PORT}/Bank~a.~a.~a.o ~
  ~0@*Object/${PORT}/Bank~a.~a.~a.out | ~
  cut -d',' -f2)\" > ~
  ~0@*Source/Generated/Bank~a.~a.~a.size
-	bin/skyline-tool --port ${PORT} prepend-fundamental-mode \\
-                      ~0@* Object/${PORT}/Bank~a.~a.~a.o.list.txt
+	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~a.~a.~a.o.list.txt
 	[ -f $@ ]
 "
 	  bank-hex build video (recursive-read-deps bank-source)
@@ -2258,9 +2258,9 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.bas \\
         ((probe-file cob)
          (let ((post-sed (cond
                            ((string-equal class-id "Intercardinal-Course")
-                            "~%	sed -i 's/Lib\\.IntercardinalCourse/IntercardinalCourse/g' $@")
+                            (format nil "~%	sed -i 's/Lib\\.IntercardinalCourse/IntercardinalCourse/g' $@"))
                            ((string-equal class-id "Non-Player-Character")
-                            "~%	sed -i -e 's/MoveXh/MoveXH/g' -e 's/MoveYh/MoveYH/g' -e 's/MoveXl/MoveXL/g' -e 's/MoveYl/MoveYL/g' -e 's/DecalXh/DecalXH/g' -e 's/DecalYh/DecalYH/g' -e 's/NpcMovementSpeed/NPCMovementSpeed/g' $@")
+                            (format nil "~%	sed -i -e 's/MoveXh/MoveXH/g' -e 's/MoveYh/MoveYH/g' -e 's/MoveXl/MoveXL/g' -e 's/MoveYl/MoveYL/g' -e 's/DecalXh/DecalXH/g' -e 's/DecalYh/DecalYH/g' -e 's/NpcMovementSpeed/NPCMovementSpeed/g' $@"))
                            (t ""))))
            (format t "
 Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
@@ -2499,6 +2499,26 @@ as1600 (@file{Source/Build/Intv.mak}).  The cartridge binary is
 # (Intellicart-style .int/.bin+.cfg is a different container; as1600 outputs .rom.)
 "))
 
+(defun %scrub-makefile-nul-bytes (pathname)
+  "Remove embedded @code{#\\Nul} bytes from PATHNAME if present.
+
+Generated master Makefiles must be plain UTF-8 text; a stray NUL (e.g. from a
+bad @code{FORMAT} argument) makes GNU Make warn and abort parsing."
+  (let ((bytes (with-open-file (in pathname :direction :input
+				     :element-type '(unsigned-byte 8))
+		 (let ((buf (make-array (file-length in) :element-type '(unsigned-byte 8))))
+		   (read-sequence buf in)
+		   buf))))
+    (when (position 0 bytes)
+      (let ((clean (remove 0 bytes)))
+	(with-open-file (out pathname :direction :output
+			     :if-exists :supersede
+			     :element-type '(unsigned-byte 8))
+	  (write-sequence clean out))
+	(format *trace-output*
+		"~&Warning: removed ~:d NUL byte~:p from ~a~%"
+		(- (length bytes) (length clean)) pathname)))))
+
 (defun write-master-makefile (&optional (*machine* *machine*))
   "Generates the master Makefile for the current platform
 
@@ -2545,6 +2565,7 @@ This Makefile handles everything not covered by the top-level Makefile."
 	    (write-test-header-script)
 	    (write-makefile-test-banks)))
         (write-master-makefile-for-machine *machine*)))
+    (%scrub-makefile-nul-bytes gen-mf)
     (format *trace-output* " … done writing master Makefile.~%")))
 
 (defun %intv-blob-stem (sym)
@@ -2768,8 +2789,9 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
 (defun write-asset-source (kind$ predicate assets source)
   "Write a generic asset stanza for any KIND$ ASSETS (meeting PREDICATE) into bank SOURCE"
   (let ((kind (kind-by-name kind$)))
-    (when (some predicate assets)
-      (when (equal :map kind)
+      (when (some predicate assets)
+      (when (and (equal :map kind)
+                 (not (= *machine* 2609)))
         (format source "~&~10t.include \"ZX7Decompressor.s\""))
       (format source "~&~10t.include \"Load~:(~a~).s\"~2%~:(~a~)s:" kind kind)
       (dolist (asset (remove-if-not predicate assets))

@@ -2153,9 +2153,18 @@ If two GROM cards share the same bitmap, the lower card index wins."
 
 Each cell in the WIDTH×HEIGHT image is one 8×8 tile. Trailing pixels that do
 not form a complete 8×8 tile are cropped from the right or bottom edge.
-Tiles that match a built-in GROM card (from bundled @file{minigrom.bin}) use
-that card index (0–255) and consume no GRAM slot. Other identical tiles share
-one GRAM definition. At most 64 unique non-GROM tiles (Intv GRAM).
+Each cell resolves GROM-first: tiles that match a built-in GROM card (from
+bundled @file{minigrom.bin}) use that card index (@code{$0000}–@code{$00FF})
+and consume no GRAM slot (no bitmap upload at runtime). Other identical tiles
+share one GRAM definition (@code{$0100}–@code{$013F}). At most 64 unique
+non-GROM tiles (Intv GRAM); @code{*_GRAM_DATA} is emitted only for those slots.
+
+Intv @emph{map} tilesets should reuse this GROM/GRAM dedup per 8×8 quadrant;
+each logical 16×16 map tile is four such cells (2×2: TL, TR, BL, BR), each
+storing its own card ID. Tileset records carry per-quadrant color-stack values
+with pattern refs — no separate palette assets (contrast 7800 tileset palette
+blobs). Map export (@code{compile-map-intv} for machine 2609) is not implemented
+yet.
 
 @code{*_TILE_MAP} entries: @code{$0000}–@code{$00FF} = GROM card number;
 @code{$0100}–@code{$013F} = GRAM slot 0–63 (see @code{*_TILE_MAP_GRAM_BASE}).
@@ -2247,8 +2256,10 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
 (defun compile-blob-intv (png-file output-file)
   "Compile BLOB PNG-FILE to OUTPUT-FILE assembly (tile map + GRAM card data).
 
-Blobs are tile-mapped screens: the image is a grid of 8×8 cells.  Duplicate
-tiles share one GRAM definition (see @code{compile-blob-intv-screen})."
+Blobs are tile-mapped screens: the image is a grid of 8×8 cells. Each cell
+stores a GROM (@code{$0000}–@code{$00FF}) or GRAM (@code{$0100}+) card ID;
+@code{*_GRAM_DATA} holds bitmaps only for non-GROM patterns (see
+@code{compile-blob-intv-screen})."
   (check-type png-file (or pathname string))
   (check-type output-file (or pathname string))
   (let* ((png (png-read:read-png-file png-file))
@@ -2259,6 +2270,163 @@ tiles share one GRAM definition (see @code{compile-blob-intv-screen})."
                                        (png-read:image-data png)
                                        α)))
     (compile-blob-intv-screen png-file output-file palette-pixels width height)))
+
+(defun intv-dominant-stic-color (palette-pixels sx sy)
+  "Return dominant STIC color index (0–15) for 8×8 cell at (SX,SY).
+
+Ignores palette index 0 (background). Defaults to @code{7} (white) when empty."
+  (let ((counts (make-array 16 :element-type '(unsigned-byte 16) :initial-element 0)))
+    (loop for y from 0 below 8
+          do (loop for x from 0 below 8
+                   for idx = (aref palette-pixels (+ sx x) (+ sy y))
+                   when (plusp idx)
+                     do (incf (aref counts idx))))
+    (let ((best 7)
+          (best-count 0))
+      (dotimes (c 16)
+        (when (> (aref counts c) best-count)
+          (setf best c)
+          (setf best-count (aref counts c))))
+      best)))
+
+(defun intv-allocate-gram-card (key uniq ht)
+  "Allocate or reuse GRAM slot for bitmap KEY; return GRAM slot index."
+  (multiple-value-bind (gram-id presentp) (gethash key ht)
+    (unless presentp
+      (when (>= (length uniq) 64)
+        (error "Intellivision tileset needs more than 64 unique GRAM 8×8 tiles"))
+      (setf gram-id (length uniq))
+      (setf (gethash key ht) gram-id)
+      (vector-push-extend key uniq))
+    gram-id))
+
+(defun intv-quadrant-card-and-cstk (palette-pixels sx sy grom-map uniq ht)
+  "Return (values CARD-ID CSTK-WORD) for one 8×8 quadrant at (SX,SY).
+
+GROM-first: matching @file{minigrom.bin} patterns yield card @code{$0000}–@code{$00FF}
+(no GRAM slot); otherwise allocates a shared GRAM slot @code{$0100}+. CSTK-WORD
+embeds the card index and STIC color for BACKTAB. Reuses
+@code{intv-grom-key-to-card-map} / GRAM dedup from @code{compile-blob-intv-screen}."
+  (let* ((key (intv-tile-row-bytes palette-pixels sx sy))
+         (color (intv-dominant-stic-color palette-pixels sx sy))
+         (grom-id (when grom-map (gethash key grom-map))))
+    (if grom-id
+        (values grom-id (+ (* grom-id 8) color))
+        (let ((gram-id (intv-allocate-gram-card key uniq ht)))
+          (values (+ #x100 gram-id) (+ #x1000 (* gram-id 8) color))))))
+
+(defun compile-tileset-intv-screen (png-file output-path palette-pixels width height)
+  "Write OUTPUT-PATH assembly: per-logical-tile quadrant CSTK + deduplicated GRAM.
+
+Each 16×16 map tile is four 8×8 quadrants (TL, TR, BL, BR). Each quadrant
+resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
+@code{$0100}+; the emitted CSTK word embeds card index and STIC color.
+@code{*_GRAM_DATA} holds bitmaps only for non-GROM patterns (same encoding as
+@code{compile-blob-intv-screen})."
+  (check-type output-path (or pathname string))
+  (let* ((original-width width)
+         (original-height height))
+    (setf width (- width (mod width 16)))
+    (setf height (- height (mod height 16)))
+    (when (or (< width 16) (< height 16))
+      (error "Intellivision tileset ~A must include at least one 16×16 tile, got ~D×~D"
+             png-file original-width original-height))
+    (when (or (/= width original-width) (/= height original-height))
+      (warn "Intellivision tileset ~A cropped from ~D×~D to ~D×~D for 16×16 tiles"
+            png-file original-width original-height width height)))
+  (let* ((tile-cols (/ width 16))
+         (tile-rows (/ height 16))
+         (tile-count (* tile-cols tile-rows))
+         (uniq (make-array 64 :adjustable t :fill-pointer 0))
+         (ht (make-hash-table :test 'equal))
+         (records (make-array (* tile-count 4) :element-type '(unsigned-byte 16)))
+         (lab (substitute #\_ #\. (pathname-name (merge-pathnames output-path))))
+         (grom-bytes (intv-grom-bytes))
+         (grom-map (when grom-bytes (intv-grom-key-to-card-map grom-bytes))))
+    (let ((idx 0))
+      (dotimes (row tile-rows)
+        (dotimes (col tile-cols)
+          (dolist (q (list (list (* col 16) (* row 16))
+                            (list (+ (* col 16) 8) (* row 16))
+                            (list (* col 16) (+ (* row 16) 8))
+                            (list (+ (* col 16) 8) (+ (* row 16) 8))))
+            (destructuring-bind (sx sy) q
+              (multiple-value-bind (card cstk)
+                  (intv-quadrant-card-and-cstk palette-pixels sx sy grom-map uniq ht)
+                (declare (ignore card))
+                (setf (aref records idx) cstk)
+                (incf idx)))))))
+    (let ((nuniq (length uniq)))
+      (ensure-directories-exist (merge-pathnames output-path))
+      (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
+                                                      :external-format :utf-8)
+        (format src ";;; Intellivision map tileset: quadrant CSTK + GRAM cards~%")
+        (format src ";;; Source: ~A~%" png-file)
+        (format src ";;; Logical tiles: ~D×~D (~D×~D px); ~D unique GRAM card~:P~2%"
+                tile-cols tile-rows width height nuniq)
+        (format src "~A_TILE_COLS EQU ~D~%" lab tile-cols)
+        (format src "~A_TILE_ROWS EQU ~D~%" lab tile-rows)
+        (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
+        (format src "~A_GRAM_DATA:~%" lab)
+        (loop for u from 0 below nuniq
+              for card = (aref uniq u)
+              do (progn
+                   (format src "    ;; GRAM slot ~D~%" u)
+                   (let ((bytes-list (reverse card)))
+                     (loop for i from 0 below 4
+                           for byte-first = (nth (* i 2) bytes-list)
+                           for byte-second = (nth (+ (* i 2) 1) bytes-list)
+                           for word = (logior (ash byte-first 8) byte-second)
+                           do (format src "    DECLE   $~4,'0X~%" word)))))
+        (format src "~A_QUADRANT_CSTK:~%" lab)
+        (dotimes (i (* tile-count 4))
+          (format src "    DECLE   $~4,'0X~%" (aref records i)))
+        (format *trace-output* "~&Wrote Intellivision tileset (~D logical tiles, ~D GRAM) to ~A."
+                tile-count nuniq (enough-namestring output-path))))))
+
+(defun compile-map-intv-screen (map-name output-path width height tile-grid tileset-records
+                                &key spawn-table)
+  "Write OUTPUT-PATH assembly stub map: header + TL/TR/BL/BR CSTK per logical cell.
+
+TILESET-RECORDS is a vector of BACKTAB color-stack words (four per global tile
+id, 0-based), each embedding a GROM (@code{$0000}–@code{$00FF}) or GRAM
+(@code{$0100}+) card index plus STIC color as produced by
+@code{compile-tileset-intv-screen}. Empty tile id 0 maps to four zero words.
+
+When SPAWN-TABLE is supplied, append a spawn section after quadrant data using
+the same 5-byte records as 7800 map binaries (@pxref{Asset Formats Map Spawns})."
+  (check-type output-path (or pathname string))
+  (let ((lab (substitute #\_ #\. (pathname-name (merge-pathnames output-path))))
+        (quadrants (make-array (* width height 4) :element-type '(unsigned-byte 16))))
+    (dotimes (y height)
+      (dotimes (x width)
+        (let* ((tile-id (or (aref tile-grid x y 0) 0))
+               (base (* tile-id 4)))
+          (dotimes (q 4)
+            (setf (aref quadrants (+ (* (+ (* y width) x) 4) q))
+                  (if (and tileset-records (< (+ base q) (length tileset-records)))
+                      (aref tileset-records (+ base q))
+                      0))))))
+    (ensure-directories-exist (merge-pathnames output-path))
+    (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
+                                                    :external-format :utf-8)
+      (format src ";;; Intellivision map: ~A (~D×~D logical tiles)~%" map-name width height)
+      (format src "~A_MAP_WIDTH EQU ~D~%" lab width)
+      (format src "~A_MAP_HEIGHT EQU ~D~%" lab height)
+      (format src "~A_MAP_HEADER:~%" lab)
+      (format src "    DECLE   ~D, ~D~%" width height)
+      (format src "~A_MAP_QUADRANTS:~%" lab)
+      (dotimes (i (* width height 4))
+        (format src "    DECLE   $~4,'0X~%" (aref quadrants i)))
+      (let ((spawns (or spawn-table nil)))
+        (format src "~A_MAP_SPAWN_COUNT EQU ~D~%" lab (length spawns))
+        (format src "~A_MAP_SPAWNS:~%" lab)
+        (format src "    BYTE    ~D~%" (length spawns))
+        (dolist (entry spawns)
+          (format src "    BYTE    ~{~D~^, ~}~%"
+                  (encode-map-spawn-entry (first entry) (second entry)
+                                          (third entry) (fourth entry)))))
+      (format *trace-output* "~&Wrote Intellivision map ~A to ~A." map-name (enough-namestring output-path)))))
 
 (defun compile-gram-intv (png-file out-dir &key height width palette-pixels)
   "Compile GRAM cards from PNG image PNG-FILE to OUT-DIR.
@@ -2767,7 +2935,7 @@ compilation but for sprites that can be positioned anywhere on screen."
 
 (defmethod dispatch-png% ((machine (eql 2609)) png-file target-dir
                           png height width α palette-pixels)
-  "Intellivision: write tile map + deduplicated GRAM cards for an 8×8-aligned blob PNG."
+  "Intellivision: GROM-first tile map + deduplicated GRAM cards for non-GROM 8×8 cells."
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file) :type "s")
                    target-dir)))

@@ -68,6 +68,7 @@
         :run-script 'run-script
         :read-script 'play-script-on-atarivox
         :write-actor-prototypes 'write-actor-prototypes
+        :write-object-prototypes 'write-object-prototypes
         :write-asset-bank 'write-asset-bank
         :write-asset-ids 'write-asset-ids
         :write-cart-header 'write-cart-header

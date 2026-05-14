@@ -79,6 +79,7 @@
            #:run-script
            #:play-script-on-atarivox
            #:write-actor-prototypes
+           #:write-object-prototypes
            #:write-asset-bank
            #:write-asset-ids
            #:write-cart-header

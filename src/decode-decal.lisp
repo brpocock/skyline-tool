@@ -2,6 +2,11 @@
 
 (defvar *show-decal-frame* nil)
 
+(defmacro define-show-decal-frame-command (command args &body body)
+  `(clim:define-command ,command ,args
+     ,@body
+     :command-table show-decal-frame))
+
 (clim:define-application-frame show-decal-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index)
    (%dump :initform (load-dump-into-mem) :accessor decal-from-dump :initarg :dump))
@@ -436,6 +441,20 @@
      :documentation "Show the animation buffer")
     (id)
   (list id))
+
+(define-show-decal-frame-command (com-open-ext-file :name t :menu t)
+    ((pathname 'ext-file-link))
+  (clim-sys:make-process
+   (lambda ()
+     (uiop:run-program (list "xdg-open" (enough-namestring pathname))))
+   :name (format nil "Edit spreadsheet ~a" (enough-namestring pathname))))
+
+(clim:define-presentation-to-command-translator click-for-ext-file
+    (ext-file-link com-open-ext-file show-decal-frame
+                   :gesture :edit :menu nil
+                   :documentation "Open spreadsheet file for editing")
+  (pathname)
+  (list pathname))
 
 (defun show-decal (&optional (index 0) &key (dump (load-dump-into-mem)))
   "Display (from a core dump) the details of a decal's state"

@@ -154,30 +154,13 @@
                                  (get-universal-time)))
                (skyline-tool::project-root))))
 
-(defun write-minimal-unit-test-midi (pathname)
-  "Write a one-note binary MIDI file to PATHNAME for @code{compile-music} tests.
-
-Returns the pathname's @code{namestring}."
-  (let ((midi (make-instance 'midi:midifile
-                             :format 1
-                             :division 480
-                             :tracks (list (list
-                                            (make-instance 'midi:note-on-message
-                                                           :time 0 :status #x90
-                                                           :key 60 :velocity 100)
-                                            (make-instance 'midi:note-off-message
-                                                           :time 480 :status #x80
-                                                           :key 60 :velocity 0))))))
-    (ensure-directories-exist pathname)
-    (midi:write-midi-file midi pathname))
-  (namestring pathname))
-
-(defun ensure-unit-test-midi-input-file (&optional _ignored-stub-data)
-  "Write a minimal binary MIDI file to `unit-test-midi-input-pathname'; return NAMESTRING.
-
-Optional STUB-DATA is ignored (kept for backward compatibility with older tests)."
-  (declare (ignore _ignored-stub-data))
-  (write-minimal-unit-test-midi (unit-test-midi-input-pathname)))
+(defun ensure-unit-test-midi-input-file (&optional (data *unit-test-midi-stub-data*))
+  "Write DATA readably to `unit-test-midi-input-pathname'; return its NAMESTRING."
+  (let ((pn (unit-test-midi-input-pathname)))
+    (ensure-directories-exist pn)
+    (with-open-file (out pn :direction :output :if-exists :supersede)
+      (write data :stream out :readably t))
+    (namestring pn)))
 
 (defun make-test-stamp (width height pattern)
   "Create a test graphics stamp (2D array) with the specified pattern.

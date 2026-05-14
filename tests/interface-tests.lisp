@@ -409,6 +409,11 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
     (let ((makefile (merge-pathnames "Source/Generated/7800/Makefile" root)))
       (unless (probe-file makefile)
         (fiveam:skip "7800 Makefile must exist at ~s" (namestring makefile)))
+      (with-open-file (stream makefile :element-type '(unsigned-byte 8))
+        (let ((buf (make-array (file-length stream) :element-type '(unsigned-byte 8))))
+          (read-sequence buf stream)
+          (is (not (position 0 buf))
+              "7800 Makefile must not contain embedded NUL bytes"))))
       (multiple-value-bind (stdout stderr exit)
           (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
                            :directory root
@@ -419,6 +424,24 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
         (is (zerop exit)
             "make -n -f ~a should exit 0 (Makefile syntax valid); got exit ~s"
             (namestring makefile) exit)))))
+
+(test write-master-makefile-7800-eightbol-post-sed-recipes
+  "EIGHTBOL post-compile sed steps must be separate Makefile recipe lines"
+  (let ((root (skyline-tool::project-root)))
+    (unless root (fiveam:skip "Project root must be set"))
+    (let ((skyline-tool::*machine* 7800))
+      (skyline-tool::write-master-makefile 7800))
+    (let ((makefile (merge-pathnames "Source/Generated/7800/Makefile" root)))
+      (unless (probe-file makefile)
+        (fiveam:skip "7800 Makefile must exist at ~s" (namestring makefile)))
+      (with-open-file (stream makefile)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          (is (not (search "Source/Classes~%" content))
+              "post-sed FORMAT ~% must not appear literally in eightbol -I lines")
+          (is (search (format nil "Source/Classes~%	sed -i 's/Lib\\.IntercardinalCourse/IntercardinalCourse/g' $@")
+                      content)
+              "Intercardinal-Course sed must follow -I Source/Classes on its own line"))))))
 
 (test write-master-makefile-5200-make-n-parses
   "Test that write-master-makefile for 5200 produces a Makefile that make -n can parse"

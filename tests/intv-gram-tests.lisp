@@ -103,6 +103,30 @@
         (is (search "Grid: 20×20 tiles (160×160 px)" content)
             "Generated BLOB should report the cropped 160x160 tile grid")))))
 
+(test intv-tileset-quadrant-cstk
+  "Test Intv tileset compiler emits four quadrant CSTK words per 16×16 tile"
+  (with-temp-gram-output (output-path "tileset-quadrants.s")
+    (let* ((test-array (make-test-palette-array 16 16 0))
+           (test-png "test-tileset.png"))
+      (setf (aref test-array 0 0) 7)
+      (setf (aref test-array 7 7) 7)
+      (skyline-tool::compile-tileset-intv-screen test-png output-path test-array 16 16)
+      (let ((content (uiop:read-file-string output-path)))
+        (is (search "QUADRANT_CSTK" content)
+            "Tileset output should define QUADRANT_CSTK")
+        (let* ((start (or (search "_QUADRANT_CSTK:" content) 0))
+               (section (subseq content start)))
+          (is (= 4 (count-decle-statements section))
+              "One 16×16 tile should produce four quadrant DECLE lines"))))))
+
+(test intv-dominant-stic-color-helper
+  "Dominant STIC color ignores background index 0"
+  (let ((pixels (make-test-palette-array 8 8 0)))
+    (dotimes (x 8)
+      (dotimes (y 8)
+        (setf (aref pixels x y) 5)))
+    (is (= 5 (skyline-tool::intv-dominant-stic-color pixels 0 0)))))
+
 ;; Test 3: Dimension validation - flooring and minimum card size
 (test gram-compiler-dimension-validation
   "Test that dimensions are properly validated and floored"
@@ -764,6 +788,15 @@
             (is (= 8192 decle-count)
                 "Large image should generate 8192 DECLE statements: ~D" decle-count)))))))
 
+(defun gram-decle-hex-values (content)
+  "Return each GRAM/sprite DECLE operand ($XXXX) from assembly CONTENT in order."
+  (loop for line in (uiop:split-string content :separator '(#\Newline))
+        for hex = (multiple-value-bind (match groups)
+                      (cl-ppcre:scan-to-strings "^\\s*DECLE\\s+\\$([0-9A-F]{4})" line)
+                    (declare (ignore match))
+                    (when groups (aref groups 0)))
+        when hex collect (concatenate 'string "$" hex)))
+
 ;; Test 24: Regression test for bit ordering
 (test gram-compiler-bit-ordering-regression
   "Regression test for correct bit ordering in GRAM cards"
@@ -781,15 +814,15 @@
                                         :palette-pixels test-array)
 
         (let ((content (uiop:read-file-string output-path)))
-          (let ((decle-values (cl-ppcre:all-matches-as-strings
-                               "(?m)^\\s*DECLE\\s+\\$([0-9A-F]{4})" content)))
-            ;; Each row should have exactly one bit set
-            ;; Row 0: bit 7 set ($0080), Row 1: bit 6 set ($0040), etc.
-            (let ((expected-values '("$0080" "$0040" "$0020" "$0010"
-                                     "$0008" "$0004" "$0002" "$0001")))
-              (dotimes (i 8)
+          (let ((decle-values (gram-decle-hex-values content)))
+            ;; One 8×8 GRAM card packs two row bytes per DECLE (4 DECLEs total).
+            (is (= 4 (length decle-values))
+                "Diagonal 8×8 GRAM card should produce 4 DECLE values, got ~D"
+                (length decle-values))
+            (let ((expected-values '("$8040" "$2010" "$0804" "$0201")))
+              (dotimes (i (length expected-values))
                 (is (string= (nth i decle-values) (nth i expected-values))
-                    "DECLE ~D should be ~A for single-bit pattern: ~A"
+                    "DECLE ~D should be ~A for diagonal GRAM packing: ~A"
                     i (nth i expected-values) (nth i decle-values))))))))))
 
 ;; Test 25: End-to-end integration test
