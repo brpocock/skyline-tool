@@ -1,5 +1,5 @@
 ;;;; Phantasia SkylineTool/tests/lynx-cart-tests.lisp
-;;;; Copyright (C) 2026 Interworldly Adventuring, LLC.
+;;;; Copyright © 2026 Interworldly Adventuring, LLC.
 ;;;;
 ;;;; Focused regression tests for Atari Lynx (machine 200) cartridge
 ;;;; pipeline support added against Phantasia issue #1323.  These cover

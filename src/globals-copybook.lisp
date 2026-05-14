@@ -245,11 +245,13 @@ Symbol names in OCCURS and DEPENDING ON clauses are converted to EIGHTBOL form."
       (cond
         ((cl-ppcre:register-groups-bind (name val)
              ("(?i)^([A-Za-z][\\w]*)\\s+EQU\\s+(\\$[0-9A-Fa-f]+|\\d+)" code)
-           (list :name name :kind :const :size 2
-                 :value (if (char= #\$ (char val 0))
-                            (parse-integer val :start 1 :radix 16)
-                            (parse-integer val))
-                 :annotation annotation)))
+           (if annotation
+               (list :name name :kind :word :size 2 :annotation annotation)
+               (list :name name :kind :const :size 2
+                     :value (if (char= #\$ (char val 0))
+                                (parse-integer val :start 1 :radix 16)
+                                (parse-integer val))
+                     :annotation nil))))
         ((cl-ppcre:register-groups-bind (name count)
              ("(?i)^([A-Za-z][\\w]*)\\s+DS\\s+(\\d+)" code)
            (list :name name :kind :word :size (* 2 (parse-integer count))
@@ -424,11 +426,17 @@ Override for game name from JSON. When nil, signals error (avoids NIL-Globals.cp
           (when (probe-file cart-path)
             (if (eq asm-cpu :cp1610)
                 (dolist (item (parse-assembly-globals cart-path :cpu :cp1610))
-                  (when (and (listp item)
-                             (eq :const (getf item :kind))
-                             (getf item :value))
-                    (emit-eightbol-const 78 (getf item :name)
-                                         (getf item :value) stream)))
+                  (when (listp item)
+                    (if (eq :const (getf item :kind))
+                        (when (getf item :value)
+                          (emit-eightbol-const 78 (getf item :name)
+                                               (getf item :value) stream))
+                        (let ((pic (var-to-eightbol-pic (getf item :kind)
+                                                        (getf item :size)
+                                                        (getf item :annotation)
+                                                        (getf item :raw-size-sym))))
+                          (when pic
+                            (emit-eightbol-var 5 (getf item :name) pic stream))))))
                 (with-input-from-file (cart cart-path)
               (loop for line = (read-line cart nil nil) while line do
                 (cond

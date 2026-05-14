@@ -403,11 +403,14 @@ Platform-specific binary data for the sound chip
   (:method (output-coding machine-type midi-notes sound-chip)
     (error "No handler for output coding ~s (machine ~s, sound chip ~s); ~
 skipping MIDI music with ~:d track~:p"
-           output-coding machine-type sound-chip (length midi-notes)))
+           output-coding machine-type sound-chip (length midi-notes))))
 
-  ;; Intellivision AY-3-8910 PSG support
-  (:method (output-coding (machine-type (eql 2609)) midi-notes (sound-chip (eql :ay-3-8910)))
-    (midi-to-ay-3-8910 midi-notes output-coding)))
+(defun midi-to-sound-binary-intv (output-coding midi-notes)
+  "Convert MIDI to Intellivision AY-3-8910 note array; signal if conversion fails."
+  (let ((result (midi-to-ay-3-8910 midi-notes output-coding)))
+    (unless (arrayp result)
+      (error "midi-to-ay-3-8910 returned ~s, expected note array" result))
+    (values result nil)))
 
 (defun best-tia-ntsc-note-for (freq &optional (voice 1))
   "Find the best TIA note for NTSC Atari 2600 that matches a given frequency.
@@ -925,10 +928,12 @@ Gathered text:~{~% • ~a~}"
                                   *machine*
                                   (read-midi midi-file-name)
                                   sound-chip)
-          (format *trace-output* "~& - Generated ~:d sound value~:p…" (first (array-dimensions numbers)))
-          (when (plusp (first (array-dimensions numbers)))
-            (setf (gethash symbol-name catalog) numbers
-                  (gethash symbol-name comments-catalog) comments)))))))
+          (when (arrayp numbers)
+            (format *trace-output* "~& - Generated ~:d sound value~:p…"
+                    (first (array-dimensions numbers)))
+            (when (plusp (first (array-dimensions numbers)))
+              (setf (gethash symbol-name catalog) numbers
+                    (gethash symbol-name comments-catalog) comments))))))))
 
 (defun edit-long-notes (table)
   (let ((list (loop for note from 0 below (array-dimension table 0)
@@ -1519,6 +1524,24 @@ Uses @code{compile-music-for-machine} with @code{(parse-integer MACHINE-TYPE$)},
   "Compile music for Sega Game Gear (machine 837). Wrapper for compile-music-for-machine."
   (compile-music-for-machine 837 "SN76489" source-out-name in-file-name "NTSC"))
 
+(defun compile-music-2609 (source-out-name in-file-name
+                          &optional (sound-chip :ay-3-8910) (output-coding "NTSC"))
+  "Compile music for Intellivision (machine 2609). Wrapper for compile-music-for-machine.
+
+SOUND-CHIP defaults to @code{:ay-3-8910}; OUTPUT-CODING defaults to @samp{NTSC}."
+  (compile-music-for-machine 2609 (string-downcase (symbol-name sound-chip))
+                             source-out-name in-file-name output-coding))
+
+(defun compile-speech-2609 (source-out-name in-file-name)
+  "Compile speech for Intellivision (machine 2609).
+
+@table @asis
+@item Side effects
+Signals an error: speech compilation for Intellivision is not implemented yet.
+@end table"
+  (declare (ignore source-out-name in-file-name))
+  (error "compile-speech-2609 is not implemented"))
+
 (defvar *sec/quarter-note* 1/2)
 
 (defun midi-track-decode (track parts/quarter)
@@ -1705,6 +1728,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
                    (max 0 (min 15 (- den num)))))))
 
 (defun score->hokey-notes (score frame-rate)
+  (declare (ignore frame-rate)) ; FIXME: #1231 PAL support
   (remove-if #'null
              (mapcar (lambda (score-note)
                        (let ((key (getf score-note :key)))
@@ -1744,14 +1768,16 @@ A MIDI note number from 0 to 127, or nil if parsing fails
 @table @asis
 @item ITEM
 Plist with @code{:time}, @code{:key}, @code{:duration}, optional @code{:velocity}
+and @code{:instrument}
 @item Returns
-A single @code{(:note :time … :key … :duration … :velocity …)} form
+A single @code{(:note :time … :key … :duration … :velocity … :instrument …)} form
 @end table"
   (list :note
         :time (getf item :time)
         :key (getf item :key)
         :duration (getf item :duration)
-        :velocity (or (getf item :velocity) 127)))
+        :velocity (or (getf item :velocity) 127)
+        :instrument (getf item :instrument :piano)))
 
 (defmethod score->song (score (format (eql :ay-3-8910)) frame-rate)
   "Build AY-3-8910 note array for Intellivision @code{compile-midi} / @code{midi-compile}."
@@ -1777,6 +1803,14 @@ A single @code{(:note :time … :key … :duration … :velocity …)} form
                   (cons (getf row :instrument) i)
                 (incf i)))
             (get-orchestration))))
+
+(defun orchestration-instrument-id (instrument-name)
+  "Map MuseScore instrument name to orchestration table index."
+  (loop for row in (get-orchestration) for i from 0
+        when (string-equal (param-case (string instrument-name))
+                           (param-case (string (getf row :instrument))))
+          return i
+        finally (return 0)))
 
 (defun quieter-note (note)
   (let ((quieter (min 1 (max 0 (* 4/5 (hokey-note-volume note))))))
@@ -1891,43 +1925,55 @@ A single @code{(:note :time … :key … :duration … :velocity …)} form
   "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision
 
 TIME and DURATION in decoded MIDI events are in seconds; they are converted
-to frame counts using 60 (NTSC) or 50 (PAL) frames per second."
-  (let ((fps (ecase output-coding (:ntsc 60) (:pal 50)))
-        (output (list)))
+to frame counts using 60 (NTSC) or 50 (PAL/SECAM) frames per second.
+
+Compiled notes carry orchestration @strong{instrument IDs}, not PSG channel
+numbers; the runtime assigns tonal or noise voices dynamically."
+  (let ((fps (ecase (if (keywordp output-coding)
+                         output-coding
+                         (make-keyword (string-upcase (string output-coding))))
+               (:ntsc 60)
+               (:pal 50)
+               (:secam 50)))
+        (notes (list)))
     (dolist (track midi-notes)
-      (let ((voice-assignments (make-array 3 :initial-element nil))) ; 3 PSG channels
+      (let ((track-instrument :piano))
         (dolist (event track)
           (ecase (first event)
+            (:text
+             (setf track-instrument
+                   (make-keyword (string-upcase (param-case (second event))))))
             (:note
-             (destructuring-bind (&key time key duration velocity) (rest event)
+             (destructuring-bind (&key time key duration velocity instrument) (rest event)
                (let* ((time-sec (float (or time 0) 1.0d0))
                       (dur-sec (float (or duration 0) 1.0d0))
                       (t-frames (floor (* time-sec fps)))
                       (d-frames (max 1 (floor (* dur-sec fps))))
                       (vel (or velocity 127))
-                      (psg-channel (find-free-psg-channel voice-assignments time-sec)))
-                 (when psg-channel
-                   (let* ((frequency (freq<-midi-key key))
-                          (period (frequency-to-ay-period frequency)))
-                     ;; (time-frames channel period-lo period-hi volume duration-frames)
-                     (push (list t-frames psg-channel (logand period #xff) (ash period -8)
-                                 (min 15 (floor (* 15 (/ vel 127)))) d-frames)
-                           output)
-                     (setf (aref voice-assignments psg-channel)
-                           (+ time-sec dur-sec)))))))))))
-    (setf output (sort output #'< :key #'first))
-    ;; Convert to array format expected by the system
-    (let ((result (make-array (list (length output) 6))))
+                      (instrument-id (orchestration-instrument-id
+                                      (or instrument track-instrument))))
+                 (let* ((frequency (freq<-midi-key key))
+                        (period (frequency-to-ay-period frequency)))
+                   ;; (time-frames instrument-id period-lo period-hi volume duration-frames)
+                   (push (list t-frames instrument-id (logand period #xff) (ash period -8)
+                               (min 15 (floor (* 15 (/ vel 127)))) d-frames)
+                         notes)))))))))
+    (setf notes (sort notes #'< :key #'first))
+    (let ((result (make-array (list (length notes) 6))))
       (loop for i from 0
-            for note in output
-            do (destructuring-bind (time channel period-lo period-hi volume duration) note
+            for note in notes
+            do (destructuring-bind (time instrument period-lo period-hi volume duration) note
                  (setf (aref result i 0) (floor time)) ; time in frames
-                 (setf (aref result i 1) channel)       ; PSG channel (0-2)
+                 (setf (aref result i 1) instrument)    ; orchestration instrument ID
                  (setf (aref result i 2) period-lo)     ; period low byte
                  (setf (aref result i 3) period-hi)     ; period high byte
                  (setf (aref result i 4) volume)        ; volume (0-15)
                  (setf (aref result i 5) duration)))    ; duration in frames
-      (values result nil))))
+      result)))
+
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 2609)) midi-notes sound-chip)
+  (declare (ignore sound-chip))
+  (midi-to-sound-binary-intv output-coding midi-notes))
 
 (defun frequency-to-sn76489-period (frequency)
   "Convert frequency in Hz to 10-bit SN76489 tone period (NTSC master clock 3579545 Hz).
@@ -1940,8 +1986,8 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
 (defun midi-to-sn76489-sequences (midi-notes output-coding)
   "Convert MIDI tracks to SN76489 event array (same column layout as AY-3-8910 helper)."
   (let ((fps (ecase (if (keywordp output-coding)
-                         output-coding
-                         (make-keyword (string-upcase (string output-coding))))
+                        output-coding
+                        (make-keyword (string-upcase (string output-coding))))
                (:ntsc 60)
                (:pal 50)
                (:secam 50)))
@@ -2027,14 +2073,14 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
   (format source-out "~2%;;; AY-3-8910 PSG music data")
   (loop for i below (array-dimension notes 0)
         do (let ((time (aref notes i 0))
-                 (channel (aref notes i 1))
+                 (instrument (aref notes i 1))
                  (period-lo (aref notes i 2))
                  (period-hi (aref notes i 3))
                  (volume (aref notes i 4))
                  (duration (aref notes i 5)))
-             (format source-out "~%	.byte ~d, ~d, $~2,'0x, $~2,'0x, ~d, ~d	; Time:~d Ch:~d Vol:~d Dur:~d"
-                     time channel period-lo period-hi volume duration
-                     time channel volume duration))))
+             (format source-out "~%	.byte ~d, ~d, $~2,'0x, $~2,'0x, ~d, ~d	; Time:~d Inst:~d Vol:~d Dur:~d"
+                     time instrument period-lo period-hi volume duration
+                     time instrument volume duration))))
 
 (defmethod write-song-data-to-binary (notes object (machine (eql 2609)) (sound-chip (eql :ay-3-8910)))
   "Write AY-3-8910 binary data for Intellivision"
@@ -2047,13 +2093,13 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
     ;; Write note data
     (loop for i below (array-dimension notes 0)
           do (let ((time (aref notes i 0))
-                   (channel (aref notes i 1))
+                   (instrument (aref notes i 1))
                    (period-lo (aref notes i 2))
                    (period-hi (aref notes i 3))
                    (volume (aref notes i 4))
                    (duration (aref notes i 5)))
                (write-byte time out)
-               (write-byte channel out)
+               (write-byte instrument out)
                (write-byte period-lo out)
                (write-byte period-hi out)
                (write-byte volume out)

@@ -38,8 +38,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "2600" "TIA" "NTSC"))
@@ -60,8 +59,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "5200" "POKEY" "NTSC"))
@@ -89,18 +87,18 @@
       (is (arrayp result) "midi->7800-tia should return an array for 7800")
       (is (= (length result) 2) "7800 TIA should have 2 voices")))
 
-  ;; Test array conversion function
-  (let ((result (skyline-tool::array<-7800-tia-notes-list '((60 100 480)) :ntsc)))
+  ;; Test array conversion function (voice time key duration distortion)
+  (let ((result (skyline-tool::array<-7800-tia-notes-list '((0 0 60 100 4)) :ntsc)))
     (is (vectorp result) "array<-7800-tia-notes-list should return a vector")))
 
 (test 2609-music-compilation-validation
   "Test that Intellivision music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/2609/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
         (input-file (unit-test-midi-input-path)))
+    (ensure-directories-exist (pathname (directory-namestring output-file)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (let ((skyline-tool::*machine* 2609))
@@ -140,8 +138,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "64" "SID" "NTSC"))
@@ -162,8 +159,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "128" "SID" "NTSC"))
@@ -184,8 +180,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test Mockingboard compilation
         (finishes (skyline-tool::compile-music output-file input-file "2" "Mockingboard" "NTSC"))
@@ -206,8 +201,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test beeper compilation
         (finishes (skyline-tool::compile-music output-file input-file "2" "Beeper" "NTSC"))
@@ -228,8 +222,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "10" "Ensoniq" "NTSC"))
@@ -250,8 +243,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "81" "EAR" "NTSC"))
@@ -272,8 +264,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test compilation
         (finishes (skyline-tool::compile-music output-file input-file "2068" "BEEPER" "NTSC"))
@@ -296,8 +287,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test that NES compilation signals error (currently unimplemented)
         (signals error (skyline-tool::compile-music output-file input-file "3" "APU" "NTSC"))
@@ -336,8 +326,7 @@
         (input-file (unit-test-midi-input-path)))
     (unwind-protect
         ;; Create a minimal test input file
-        (with-open-file (out input-file :direction :output :if-exists :supersede)
-          (write *test-midi-data* :stream out :readably t))
+        (ensure-unit-test-midi-input-file)
 
         ;; Test that 2600 ignores sound-chip parameter (should still work)
         (finishes (skyline-tool::compile-music output-file input-file "2600" "INVALID" "INVALID"))
@@ -359,8 +348,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-nes output-file input-file))
@@ -386,8 +374,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-snes output-file input-file))
@@ -413,8 +400,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-sms output-file input-file))
@@ -439,8 +425,7 @@
         (progn
            (ensure-directories-exist output-file)
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-colecovision output-file input-file))
@@ -464,8 +449,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-sg1000 output-file input-file))
@@ -489,8 +473,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-lynx output-file input-file))
@@ -517,8 +500,7 @@
     (unwind-protect
         (progn
            ;; Create a minimal test input file
-           (with-open-file (out input-file :direction :output :if-exists :supersede)
-             (write *test-midi-data* :stream out :readably t))
+           (ensure-unit-test-midi-input-file)
 
            ;; Test compilation
            (finishes (skyline-tool::compile-music-c16 output-file input-file))

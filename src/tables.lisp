@@ -600,7 +600,47 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
                   :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
                   :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))
                   :vibrato (parse-number-or-fraction (getf row :vibrato))
-                  :tremolo (parse-number-or-fraction (getf row :tremolo))))))
+                  :tremolo (parse-number-or-fraction (getf row :tremolo))
+                  :psg-tone (getf row :psg-tone)))))
+
+(defun orchestration-psg-tone-byte (row)
+  "Return 0 for tonal PSG voices, 1 for the white-noise generator path.
+
+Uses @code{PSG Tone} from @var{ROW} when present; otherwise infers from
+@code{Distortion} (Hokey pure-tone @code{10} → tonal)."
+  (let ((psg (getf row :psg-tone)))
+    (cond
+      ((and psg (stringp psg) (not (str:blankp psg))
+            (or (search "noise" (string-downcase psg))
+                (string-equal psg "1")))
+       1)
+      ((and psg (stringp psg) (not (str:blankp psg))
+            (search "tone" (string-downcase psg)))
+       0)
+      (psg
+       (let ((n (ignore-errors (parse-number-or-fraction psg))))
+         (if (and n (>= n 10)) 0 1)))
+      (t
+       (if (string-equal "10" (string (getf row :distortion))) 0 1)))))
+
+(defun write-intv-orchestration (&optional
+                                   (input #p"Source/Tables/Orchestration.ods")
+                                   (output (format nil "Source/Generated/~a/Orchestration.s"
+                                                   (machine-directory-name))))
+  "Write cp1610 orchestration tables for Intellivision (PSG voice map only)."
+  (with-output-to-file (out output :if-exists :supersede)
+    (format *trace-output* "~&Going to write Intellivision orchestration from ~a to ~a…"
+            (enough-namestring input) (enough-namestring output))
+    (format out ";;;; ~:(~a~) ~a~%;;; This file is generated from ~a~2%"
+            *game-title* (enough-namestring output) (enough-namestring input))
+    (let ((table (read-orchestration input)))
+      (format out "NumInstruments~32tEQU     ~d~2%" (length table))
+      (format out "InstrumentPSGTone:")
+      (dolist (row table)
+        (format out "~%~12tBYTE ~d~40t; ~a"
+                (orchestration-psg-tone-byte row)
+                (title-case (getf row :instrument))))
+      (format out "~2%;;; End of Orchestration~%"))))
 
 (defun write-orchestration (&optional
                               (input #p"Source/Tables/Orchestration.ods")
@@ -609,6 +649,8 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
   "Write the orchestration tables to a source code file.
 
 INPUT & OUTPUT pathnames can be given."
+  (when (string-equal (machine-directory-name) "Intv")
+    (return-from write-orchestration (write-intv-orchestration input output)))
   (with-simple-restart (do-over "Re-read the Orchestration.ods file")
     (with-output-to-file (out output :if-exists :supersede)
       (format *trace-output* "~&Going to write orchestration tables from ~a to source code file ~a…"
@@ -733,6 +775,11 @@ INPUT & OUTPUT pathnames can be given."
           (format out "~%~10t.byte $~x~x~40t; ~a"
                   (floor (min 15 (max 0 (getf row :vibrato 0))))
                   (floor (min 15 (max 0 (getf row :tremolo 0))))
+                  (title-case (getf row :instrument))))
+        (format out "~2%InstrumentPSGTone:~%~10t;; 0 = tonal voice, 1 = white noise")
+        (dolist (row table)
+          (format out "~%~10t.byte ~d~40t; ~a"
+                  (orchestration-psg-tone-byte row)
                   (title-case (getf row :instrument))))
         (format out "~2%;;; End of Orchestration~2%")))))
 

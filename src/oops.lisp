@@ -39,9 +39,9 @@ Uppercase-Hyphenated form, as required by EIGHTBOL naming conventions.
 
 (defun eightbol-slot-name (pascal-name)
   "Convert PascalCase slot name to EIGHTBOL copybook form. Avoids reserved words
-that would conflict with eightbol grammar (e.g. CLASS-ID -> OBJ-CLASS-ID,
-POINTER -> ZP-POINTER, SIZE -> OBJ-SIZE, METHOD -> OBJ-METHOD,
-REMAINDER -> CART-REMAINDER, TRUE -> CONST-TRUE)."
+that would conflict with eightbol grammar (e.g. CLASS-ID → OBJ-CLASS-ID,
+POINTER → ZP-POINTER, SIZE → OBJ-SIZE, METHOD → OBJ-METHOD,
+REMAINDER → CART-REMAINDER, TRUE → CONST-TRUE, FALSE → CONST-FALSE)."
   (let ((base (string-upcase (param-case pascal-name))))
     (case (intern base :keyword)
       ((:class-id) "Obj-Class-Id")
@@ -50,6 +50,7 @@ REMAINDER -> CART-REMAINDER, TRUE -> CONST-TRUE)."
       ((:method) "Obj-Method")
       ((:remainder) "Cart-Remainder")
       ((:true) "Const-True")
+      ((:false) "Const-False")
       (t (header-case pascal-name)))))
 
 (defun parse-slot-annotation (parts)
@@ -653,5 +654,17 @@ ClassMethodsH: .byte >(GenericFunctionTables)
                                           "Unrecognized line in class definitions: ~s" line)))))))))
               )
     ;; Generate EIGHTBOL copybooks for all classes
-    (make-eightbol-copybooks class-defs-pathname)))))
+    (make-eightbol-copybooks class-defs-pathname)
+    (let ((classes-cpy (merge-pathnames #p"Classes.cpy"
+                                         (uiop:ensure-directory-pathname output-dir))))
+      (with-output-to-file (out classes-cpy :if-exists :supersede)
+        (format out "000000* Classes copybook for ~a~%      * Includes all data structure definitions.~%~%"
+                (header-case *game-title*))
+        (dolist (cpy (sort (directory (merge-pathnames #p"*-Slots.cpy"
+                                                       (uiop:ensure-directory-pathname output-dir)))
+                           #'string< :key #'pathname-name))
+          (format out "       COPY ~a.~%" (pathname-name cpy)))
+        (format out "999999~%"))
+      (format *trace-output* "~&Generated ~a" (enough-namestring classes-cpy))))))
 
+)

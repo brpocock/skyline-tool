@@ -5,6 +5,7 @@
 (declaim (ftype (function (&optional t) t) write-master-makefile))
 (declaim (ftype (function (&optional t) t) write-intv-asset-includes))
 (declaim (ftype (function (t t) t) compile-blob-intv))
+(declaim (ftype (function (t &rest t) t) compile-music))
 ;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
 ;; undefined-function during buildapp compile when interface loads before oops.
 (declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
@@ -38,6 +39,7 @@
         :compile-forth-z80 'compile-forth-z80
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
+        :compile-music 'compile-music
         :compile-midi 'midi-compile
         :compile-obj 'compile-obj
         :compile-code 'compile-skylisp
@@ -520,10 +522,10 @@ Supply a list of verb(s) to see detailed documentation"
   (format *trace-output* "~&
 
  Skyline-Tool
- ????????????
+ ────────────
 
-Copyright ? 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright ? 2024-2026 Interworldly Adventuring, LLC.
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -586,8 +588,8 @@ To see specifics about one command, add its name to the end, e.g.
 
 If you need more help, ask support@interworldly.com
 
-Copyright ? 2016-2024, Bruce-Robert Pocock
-Copyright ? 2024-2026, Interworldly Adventuring, LLC
+Copyright © 2016-2024, Bruce-Robert Pocock
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -682,6 +684,25 @@ If nothing matches, return @code{\"7800\"}.
                    (from-alist data k))))
         (when v (return-from project-json-value v))))))
 
+(defun port-label-looks-like-subcommand-p (label)
+  "True when @var{LABEL} matches a Skyline-Tool subcommand keyword (not a port)."
+  (and (stringp label)
+       (find (make-keyword (string-upcase label)) *invocation*)))
+
+(defun ensure-valid-port-label (label)
+  "Signal if @var{LABEL} is missing or is a subcommand name instead of a port.
+
+@table @asis
+@item LABEL
+Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
+@end table"
+  (when (or (null label) (string-equal label ""))
+    (error "--port requires a port name (e.g. Intv, 7800, Lynx); the next argument is missing."))
+  (when (port-label-looks-like-subcommand-p label)
+    (error "--port requires a port name before the subcommand; '~a' is a Skyline-Tool command, not a port.~%Example: bin/skyline-tool --port Intv ~a …"
+           label label))
+  label)
+
 (defun load-project.json (&optional (port-label (find-default-port)) thunk)
   "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
@@ -745,8 +766,8 @@ Executes the requested command, may exit the process
 @end table
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
-  ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
-  ;;
+  (when (skyline-debug-backtrace-p)
+    (sb-ext:disable-debugger))
   ;; Parse an explicit --port/-p argument before loading Project.<port>.json.
   ;; The previous eager load used find-default-port on the top-level Makefile,
   ;; which can capture trailing text from generated variable assignments.
@@ -758,10 +779,8 @@ Executes the requested command, may exit the process
                 finally (return nil))))
     (unless (and (boundp '*machine*) *machine* *game-title*)
       (if explicit-port
-          (load-project.json explicit-port)
+          (load-project.json (ensure-valid-port-label explicit-port))
           (load-project.json))))
-  (when (skyline-debug-backtrace-p)
-    (sb-ext:disable-debugger))
   (format t "~&Skyline tool (? 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))

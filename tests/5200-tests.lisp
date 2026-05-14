@@ -22,6 +22,22 @@ ROWS is a sequence of equal-length rows; row 0 is Y=0 (top), each row is X=0..WI
           (setf (aref p x y) (aref (svref rows y) x))))
       p)))
 
+(defun %5200-assembly-shape-hex (content)
+  "Return the hex payload from the first Shape: .text x\"…\" block in CONTENT."
+  (let ((shape-start (search "Shape:" content)))
+    (when shape-start
+      (let ((text-start (search ".text x\"" content :start2 shape-start)))
+        (when text-start
+          (let ((text-end (position #\" content :start (+ text-start 8))))
+            (when text-end
+              (subseq content (+ text-start 8) text-end))))))))
+
+(defun %5200-assembly-has-byte-data-p (content)
+  "True if CONTENT uses .byte or Mode E .text x\"…\" shape/color encoding."
+  (or (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)
+      (cl-ppcre:scan "\\.byte %[01]" content)
+      (%5200-assembly-shape-hex content)))
+
 ;; Test 5200 Mode E bitmap compilation functionality
 (test 5200-mode-e-bitmap-compilation
   "Test that 5200 Mode E bitmap compilation produces correct output"
@@ -71,9 +87,9 @@ ROWS is a sequence of equal-length rows; row 0 is Y=0 (top), each row is X=0..WI
           (is-true (search "CoLu:" content)
                    "Output should contain color data label")
 
-          ;; Check for valid assembly byte directives
-          (is-true (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)
-                   "Output should contain properly formatted .byte directives")
+          ;; Check for valid assembly byte directives (.byte or Mode E .text x\"…\")
+          (is-true (%5200-assembly-has-byte-data-p content)
+                   "Output should contain properly formatted byte data")
 
           ;; Verify dimensions are reported correctly
           (is-true (search "Height = 8" content)
@@ -90,19 +106,22 @@ ROWS is a sequence of equal-length rows; row 0 is Y=0 (top), each row is X=0..WI
           ;; Row 5: [1,1,0,0] -> 01 01 00 00 = $50
           ;; Row 6: [0,0,0,0] + [1,1,1,1] -> $00, $55
           ;; Row 7: [1,1,1,1] + [0,0,0,0] -> $55, $00
-          ;; Shape lines pack multiple .byte on one line; match hex tokens
-          (is-true (search "$00" content)
-                   "All-zero chunks should produce $00 shape bytes")
-          (is-true (search "$55" content)
-                   "All-ones chunks should produce $55 (not $FF)")
-          (is-true (search "$11" content)
-                   "Alternating 0,1 pattern should produce $11 nibble packing")
-          (is-true (search "$44" content)
-                   "Alternating 1,0 pattern should produce $44")
-          (is-true (search "$05" content)
-                   "00 00 01 01 pattern should produce $05")
-          (is-true (search "$50" content)
-                   "01 01 00 00 pattern should produce $50"))))))
+          ;; Shape lines pack bytes as .text x\"…\" hex (or legacy .byte $xx)
+          (let ((shape-hex (%5200-assembly-shape-hex content)))
+            (is-true shape-hex "Shape section should contain .text x hex data")
+            (when shape-hex
+              (is-true (search "00" shape-hex)
+                       "All-zero chunks should produce $00 shape bytes")
+              (is-true (search "55" shape-hex)
+                       "All-ones chunks should produce $55 (not $FF)")
+              (is-true (search "11" shape-hex)
+                       "Alternating 0,1 pattern should produce $11 nibble packing")
+              (is-true (search "44" shape-hex)
+                       "Alternating 1,0 pattern should produce $44")
+              (is-true (search "05" shape-hex)
+                       "00 00 01 01 pattern should produce $05")
+              (is-true (search "50" shape-hex)
+                       "01 01 00 00 pattern should produce $50"))))))))
 
 ;; Test 5200 Mode E bitmap error handling
 (test 5200-mode-e-error-handling
@@ -519,9 +538,8 @@ ROWS is a sequence of equal-length rows; row 0 is Y=0 (top), each row is X=0..WI
                 ;; Malformed = .byte $ not followed by two hex digits
                 (is-false (cl-ppcre:scan "\\.byte \\$(?![0-9a-fA-F]{2})" content)
                           (format nil "~a should not contain malformed .byte directives" name))
-                ;; Mode E uses hex .byte; GTIA player uses binary %.byte
-                (is-true (or (cl-ppcre:scan "\\.byte \\$[0-9a-fA-F]{2}" content)
-                             (cl-ppcre:scan "\\.byte %[01]" content))
+                ;; Mode E uses .text x\"…\"; GTIA player uses binary %.byte
+                (is-true (%5200-assembly-has-byte-data-p content)
                          (format nil "~a should contain properly formatted byte data" name))))))))))
 
 ;; Test 5200 platform validation

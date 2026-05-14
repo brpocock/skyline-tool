@@ -827,8 +827,8 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
 				      (list :relative "Source" "Code" "Atari8" "Common")
 				      (list :relative "Source" "Code" machine-dir "Routines")
 				      (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol .s output
-				      (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
 				      (list :relative "Source" "Code" machine-dir "Classes")
+				      (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
 				      (list :relative "Source" "Code" machine-dir "Stagehand")
 				      (list :relative "Object" machine-dir)
 				      (list :relative "Object" machine-dir "Assets")
@@ -1390,7 +1390,7 @@ Signals @code{ECASE} failure for unsupported machines.
 @end table"
   (let ((machine-dir (machine-directory-name)))
     (ecase *machine*
-      ((7800 7850 2609 5200 400 800)
+      ((7800 7850 5200 400 800)
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
          (cond ((equal kind "Songs")
 	      (assert (not (null video)))
@@ -1408,6 +1408,23 @@ Signals @code{ECASE} failure for unsupported machines.
                         machine-dir (%asset-leaf-name name)))
 	     (t
 	      (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
+      (2609
+       (destructuring-bind (kind name) (asset-kind/name asset-indicator)
+         (cond ((equal kind "Songs")
+                (format nil "Source/Generated/~a/Assets/Song.~a.s"
+                        machine-dir name))
+               ((equal kind "Maps")
+                (assert (not (null video)))
+                (format nil "Object/~a/Assets/Map.~a.~a.o"
+                        machine-dir (substitute #\. #\/ name) video))
+               ((equal kind "Scripts")
+                (format nil "Source/Generated/~a/Assets/Script.~a.s"
+                        machine-dir (substitute #\. #\/ name)))
+               ((equal kind "Blobs")
+                (format nil "Source/Generated/~a/Assets/Blob.~a.s"
+                        machine-dir (%asset-leaf-name name)))
+               (t
+                (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
       ;; Atari Lynx (Phantasia issue #1321 / #1323).  Lynx has no NTSC/PAL
       ;; variant — it is a portable single-region device — so Maps and Songs
       ;; targets are emitted without a video suffix.  Blobs and Scripts are
@@ -1539,7 +1556,7 @@ and target platform. Handles special cases for different machines and video mode
            ((5200 7800 400 800 7850)
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            (2609 ; Intellivision — AY-3-8910 PSG (STIC is display only; not used for music)
-	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< AY-3-8910 ~a $@" video))
+	  (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-music $@ $< 2609 AY-3-8910 ~a" video))
            ((3010 9918 1000) ; SMS, ColecoVision, SG-1000 — SN76489 PSG
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< SN76489 ~a $@" video))
            (35902 ; DMG
@@ -1559,28 +1576,32 @@ and target platform. Handles special cases for different machines and video mode
 
 (defun write-asset-compilation/music (asset-indicator)
   (let* ((machine-dir (machine-directory-name))
-         (basename (last-segment asset-indicator #\/))
-         (source-pathname (make-pathname
-                           :directory (list :relative "Source" "Generated" machine-dir "Assets")
-                           :name (format nil "Song.~a" basename)
-                           :type "s")))
-    (ensure-directories-exist source-pathname)
-    (with-output-to-file (source source-pathname :if-exists :supersede)
-      (format source ";; This is a generated file~2%")
-      (dolist (video (supported-video-types))
-        (format source "~%~10t.if TV == ~a
+         (basename (last-segment asset-indicator #\/)))
+    (unless (= *machine* 2609)
+      (let ((source-pathname (make-pathname
+                              :directory (list :relative "Source" "Generated" machine-dir "Assets")
+                              :name (format nil "Song.~a" basename)
+                              :type "s")))
+        (ensure-directories-exist source-pathname)
+        (with-output-to-file (source source-pathname :if-exists :supersede)
+          (format source ";; This is a generated file~2%")
+          (dolist (video (supported-video-types))
+            (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
-                video basename video)))
+                    video basename video)))))
     (dolist (video (supported-video-types))
       (format t "
 ~a: ~a \\
 ~10tSource/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
-	mkdir -p Object/~a/Assets
+	mkdir -p ~a
 	~a"
 	      (asset->object-name asset-indicator :video video)
 	      (asset->source-name asset-indicator)
-	      machine-dir machine-dir
+	      machine-dir
+	      (if (= *machine* 2609)
+                  (format nil "Source/Generated/~a/Assets" machine-dir)
+                  (format nil "Object/~a/Assets" machine-dir))
 	      (asset-compilation-line asset-indicator :video video)))))
 
 (defun write-asset-compilation/map (asset-indicator)
@@ -1719,9 +1740,13 @@ Reads the assets index (cached) and overwrites the three output files.
           (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
                 do (terpri outfile)
                 do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
-                         do (format outfile "~%~10t~a_ID = $~2,'0x"
-			      (asset->symbol-name (format nil "~:(~a~)s/~a" kind asset-name))
-			      asset-hash)))))))
+                         do (let ((sym (asset->symbol-name
+                                         (format nil "~:(~a~)s/~a" kind asset-name))))
+                              (if (= *machine* 2609)
+                                  (format outfile "~%~a_ID           EQU     $~2,'0x"
+                                          sym asset-hash)
+                                  (format outfile "~%~10t~a_ID = $~2,'0x"
+                                          sym asset-hash)))))))))
 
   (let* ((base (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))
          (resolved-out (merge-pathnames outfile-pathname base))
@@ -1863,7 +1888,8 @@ Object/${PORT}/Bank~a.~a.~a.o ~
  ~0@*Source/Generated/Bank~a.~a.~a.size
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode \\
                       ~0@* Object/${PORT}/Bank~a.~a.~a.o.list.txt
-	[ -f $@ ]"
+	[ -f $@ ]
+"
 	  bank-hex build video (recursive-read-deps bank-source)
 	  (if (= *bank* *last-bank*)
 	      "Source/Generated/${PORT}/Orchestration.s"
@@ -2230,7 +2256,13 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.bas \\
 "
                  pascal class-id class-id))
         ((probe-file cob)
-         (format t "
+         (let ((post-sed (cond
+                           ((string-equal class-id "Intercardinal-Course")
+                            "~%	sed -i 's/Lib\\.IntercardinalCourse/IntercardinalCourse/g' $@")
+                           ((string-equal class-id "Non-Player-Character")
+                            "~%	sed -i -e 's/MoveXh/MoveXH/g' -e 's/MoveYh/MoveYH/g' -e 's/MoveXl/MoveXL/g' -e 's/MoveYl/MoveYL/g' -e 's/DecalXh/DecalXH/g' -e 's/DecalYh/DecalYH/g' -e 's/NpcMovementSpeed/NPCMovementSpeed/g' $@")
+                           (t ""))))
+           (format t "
 Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 		Source/Generated/$(PORT)/Classes/~a-Slots.cpy \\
                     Source/Generated/$(PORT)/Classes/Asset-IDs.cpy \\
@@ -2239,9 +2271,8 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 	mkdir -p Source/Generated/Classes/$(EIGHTBOL_CPUDIR)
 	bin/eightbol $< -m $(EIGHTBOL_CPUDIR) -o $@ \\
          -I Source/Generated/$(PORT)/Classes \\
-         -I Source/Classes
-"
-                 pascal class-id class-id))
+         -I Source/Classes~a"
+                   pascal class-id class-id post-sed)))
         (t nil)))))
 
 (defun bank-source-pathname (&optional (bank *bank*))
@@ -2516,11 +2547,126 @@ This Makefile handles everything not covered by the top-level Makefile."
         (write-master-makefile-for-machine *machine*)))
     (format *trace-output* " … done writing master Makefile.~%")))
 
+(defun %intv-blob-stem (sym)
+  "Return PNG stem (e.g. @code{ZPH}) from catalog symbol @code{Blob_ZPH}."
+  (subseq sym 5))
+
+(defun %intv-read-blob-equ (blob-source sym suffix)
+  "Read integer @code{SYM_SUFFIX} from generated @file{Blob.*.s}, else 0."
+  (when (probe-file blob-source)
+    (with-open-file (s blob-source :direction :input)
+      (let ((needle (format nil "~a_~a EQU " sym suffix)))
+        (loop for line = (read-line s nil nil)
+              while line
+              when (search needle line :test #'char-equal)
+                do (let ((pos (+ (length needle) (search needle line :test #'char-equal))))
+                     (return-from %intv-read-blob-equ
+                       (parse-integer (string-trim '(#\space #\tab) (subseq line pos))
+                                      :junk-allowed t)))))))
+  0)
+
+(defun %intv-blob-catalog-entries (root)
+  "Return sorted alists for Intv BLOB PNGs on disk.
+
+Each entry has @code{:id}, @code{:sym}, @code{:gram}, @code{:map}, @code{:cols},
+@code{:rows}, @code{:ngram}.  Uses @code{read-assets-list} IDs only."
+  (read-assets-list)
+  (let ((blob-dir (merge-pathnames #p"Source/Blobs/Intv/" root))
+        (gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+        (id-table (gethash :blob *asset-ids-seen*))
+        (entries nil))
+    (when (and blob-dir (uiop:directory-exists-p blob-dir) id-table)
+      (loop for id being the hash-keys of id-table
+            for name = (gethash id id-table)
+            for png = (merge-pathnames (make-pathname :name name :type "png") blob-dir)
+            when (probe-file png)
+            do (let* ((sym (asset->symbol-name (format nil "Blobs/~a" name)))
+                      (blob-s (merge-pathnames (make-pathname :name (format nil "Blob.~a" name)
+                                                                :type "s")
+                                               gen-dir)))
+                 (push (list :id id :sym sym
+                             :gram (format nil "~a_GRAM_DATA" sym)
+                             :map (format nil "~a_TILE_MAP" sym)
+                             :cols (%intv-read-blob-equ blob-s sym "TILE_COLS")
+                             :rows (%intv-read-blob-equ blob-s sym "TILE_ROWS")
+                             :ngram (%intv-read-blob-equ blob-s sym "UNIQUE_GRAM_CARDS"))
+                       entries))))
+    (sort entries #'< :key (lambda (e) (getf e :id)))))
+
+(defun %intv-song-catalog-entries (root)
+  "Return sorted alists for Intv AY songs with generated @file{Song.*.s} on disk."
+  (read-assets-list)
+  (let ((song-dir (merge-pathnames #p"Source/Songs/" root))
+        (gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+        (id-table (gethash :song *asset-ids-seen*))
+        (entries nil))
+    (when (and song-dir (uiop:directory-exists-p song-dir) id-table)
+      (loop for id being the hash-keys of id-table
+            for name = (gethash id id-table)
+            for mscz = (merge-pathnames (make-pathname :name name :type "mscz") song-dir)
+            for gen-s = (merge-pathnames (make-pathname :name (format nil "Song.~a" name)
+                                                         :type "s")
+                                         gen-dir)
+            when (and (probe-file mscz) (%intv-song-asm-ready-p gen-s))
+            do (let ((sym (asset->symbol-name (format nil "Songs/~a" name))))
+                 (push (list :id id :sym sym
+                             :gram 0
+                             :map (format nil "~a_DATA" sym)
+                             :cols 0 :rows 0 :ngram 0)
+                       entries))))
+    (sort entries #'< :key (lambda (e) (getf e :id)))))
+
+(defun write-intv-asset-catalog (&optional
+                                 (output-path
+                                  (format nil "Source/Generated/~a/AssetCatalog.s"
+                                          (machine-directory-name))))
+  "Write @file{AssetCatalog.s} for the current @code{*machine*} (Intv / 2609).
+
+Each row is @code{(id, gram, map, cols, rows, nunique, bank)}. Lookup is by
+unique ID only. Requires @code{--port Intv} so @code{*machine*} is 2609."
+  (unless (= *machine* 2609)
+    (error "write-intv-asset-catalog requires Intellivision port (~a); *machine* is ~a"
+           (machine-directory-name) *machine*))
+  (let* ((root (uiop:ensure-directory-pathname (project-root)))
+         (out (merge-pathnames output-path root))
+         (entries (sort (append (%intv-blob-catalog-entries root)
+                                (%intv-song-catalog-entries root))
+                        #'< :key (lambda (e) (getf e :id)))))
+    (ensure-directories-exist out)
+    (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
+      (format s ";;; Intellivision asset catalog (generated by write-intv-asset-includes)~%")
+      (format s ";;; Rows are sorted by unique asset ID; lookup by ID only.~2%")
+      (format s "AssetCatalogStride    EQU     6~%")
+      (format s "AssetCatalogCount     EQU     ~D~2%" (length entries))
+      (format s "AssetCatalog:~%")
+      (dolist (entry entries)
+        (format s "    DECLE   $~4,'0X    ; ~a_ID~%" (getf entry :id) (getf entry :sym))
+        (format s "    DECLE   ~a~%" (getf entry :gram))
+        (format s "    DECLE   ~a~%" (getf entry :map))
+        (format s "    DECLE   ~d           ; cols~%" (getf entry :cols))
+        (format s "    DECLE   ~d           ; rows~%" (getf entry :rows))
+        (format s "    DECLE   ~d           ; unique GRAM cards~%" (getf entry :ngram))
+        (format s "    DECLE   0           ; bank (flat ROM until mapper lands)~%")))
+    (format *trace-output* "~&Wrote ~a (~:d catalog row~:p)~%" out (length entries))
+    out))
+
+(defun %intv-song-asm-ready-p (gen-s)
+  "True when @file{gen-s} is as1600 AY song data (not a 64tass @code{.binary} stub)."
+  (when (probe-file gen-s)
+    (with-open-file (s gen-s :direction :input)
+      (loop for line = (read-line s nil nil)
+            while line
+            when (search "_DATA:" line)
+              do (return t)))))
+
 (defun write-intv-asset-includes (&optional (output-path #p"Source/Generated/Intv/AssetIncludes.s"))
   "Write @file{OUTPUT-PATH} with Intellivision generated asset includes.
 
-Each line includes the matching Skyline output @file{Object/Intv/Assets/Art.<name>.s}
-or @file{Source/Generated/Intv/Assets/Blob.<name>.s} so @file{Phantasia.s} can
+Also writes @file{AssetCatalog.s} beside it. Invoke with @code{--port Intv}
+so @code{*machine*} is 2609 from @file{Project.Intv.json}.
+
+Each line includes the matching Skyline output @file{Object/<port>/Assets/Art.<name>.s}
+or @file{Source/Generated/<port>/Assets/Blob.<name>.s} so @file{Phantasia.s} can
 pull compiled GRAM and fullscreen BLOB data into the cartridge. With no
 generated assets, emits a comment-only stub.
 
@@ -2528,28 +2674,44 @@ generated assets, emits a comment-only stub.
 @item OUTPUT-PATH
 Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes.s})
 @end table"
-  (let ((*machine* 2609)
-        (root (uiop:ensure-directory-pathname (project-root))))
-    (let ((out (merge-pathnames output-path root))
-          (art-dir (merge-pathnames #p"Source/Art/Intv/" root))
-          (blob-dir (merge-pathnames #p"Source/Blobs/Intv/" root)))
-      (ensure-directories-exist out)
-      (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
-        (format s ";;; Intellivision asset includes (generated by write-intv-asset-includes)~%")
-        (let ((arts (when (uiop:directory-exists-p art-dir)
-		      (directory (merge-pathnames #p"*.art" art-dir))))
-              (blobs (when (uiop:directory-exists-p blob-dir)
-                       (directory (merge-pathnames #p"*.png" blob-dir)))))
-          (if (or arts blobs)
-	      (progn
-                (dolist (a (sort arts #'string< :key #'namestring))
+  (unless (= *machine* 2609)
+    (error "write-intv-asset-includes requires Intellivision port (~a); *machine* is ~a"
+           (machine-directory-name) *machine*))
+  (let* ((root (uiop:ensure-directory-pathname (project-root)))
+         (port-dir (machine-directory-name))
+         (out (merge-pathnames output-path root))
+         (art-dir (merge-pathnames (format nil "Source/Art/~a/" port-dir) root))
+         (blob-dir (merge-pathnames #p"Source/Blobs/Intv/" root)))
+    (ensure-directories-exist out)
+    (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
+      (format s ";;; Intellivision asset includes (generated by write-intv-asset-includes)~%")
+      (let ((arts (when (uiop:directory-exists-p art-dir)
+                    (directory (merge-pathnames #p"*.art" art-dir))))
+            (blobs (when (uiop:directory-exists-p blob-dir)
+                     (directory (merge-pathnames #p"*.png" blob-dir)))))
+        (if (or arts blobs)
+            (progn
+              (dolist (a (sort arts #'string< :key #'namestring))
                 (let ((stem (pathname-name a)))
-                    (format s "~%        INCLUDE \"Object/Intv/Assets/Art.~A.s\"~%" stem)))
-                (dolist (b (sort blobs #'string< :key #'namestring))
-                  (let ((stem (pathname-name b)))
-                    (format s "~%        INCLUDE \"Source/Generated/Intv/Assets/Blob.~A.s\"~%" stem))))
-	      (format s ";;; (no Source/Art/Intv/*.art or Source/Blobs/Intv/*.png yet)~%"))))
-      (format *trace-output* "~&Wrote ~a~%" out))))
+                  (format s "~%        INCLUDE \"Object/~a/Assets/Art.~A.s\"~%"
+                          port-dir stem)))
+              (dolist (b (sort blobs #'string< :key #'namestring))
+                (let ((stem (pathname-name b)))
+                  (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Blob.~A.s\"~%"
+                          port-dir stem)))
+              (let ((song-dir (merge-pathnames #p"Source/Songs/" root)))
+                (when (uiop:directory-exists-p song-dir)
+                  (dolist (song '("ZeroPage" "AtariToday"))
+                    (let ((mscz (merge-pathnames (make-pathname :name song :type "mscz") song-dir))
+                          (gen-s (merge-pathnames (format nil "Source/Generated/~a/Assets/Song.~a.s"
+                                                          port-dir song)
+                                                  root)))
+                      (when (and (probe-file mscz) (%intv-song-asm-ready-p gen-s))
+                        (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Song.~A.s\"~%"
+                                port-dir song)))))))
+            (format s ";;; (no Source/Art/~a/*.art or Source/Blobs/Intv/*.png yet)~%" port-dir))))
+    (format *trace-output* "~&Wrote ~a~%" out)
+    (write-intv-asset-catalog)))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
   "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FOR-SEGMENT'"

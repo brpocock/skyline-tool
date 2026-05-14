@@ -23,6 +23,10 @@
     (when (probe-file path)
       (delete-file path))))
 
+(defun count-decle-statements (content)
+  "Count assembly DECLE lines in CONTENT (ignore header comments mentioning DECLE)."
+  (length (cl-ppcre:all-matches-as-strings "(?m)^\\s*DECLE\\s+\\$[0-9A-F]{4}" content)))
+
 (defmacro with-temp-gram-output ((output-var filename) &body body)
   "Create temporary output file path and cleanup after"
   `(let ((,output-var (merge-pathnames ,filename *test-gram-dir*)))
@@ -36,9 +40,10 @@
 (test gram-compiler-output-filename
   "Test that GRAM compiler outputs a file with the correct name"
   (with-temp-gram-output (output-path "test-cards.s")
-    (let ((input-png (make-pathname :name "test-cards" :type "png")))
-      ;; Call the GRAM compiler (function name TBD)
-      (skyline-tool::compile-gram-intv input-png *test-gram-dir* :height 8 :width 8 :palette-pixels nil)
+    (let ((input-png (make-pathname :name "test-cards" :type "png"))
+          (test-array (make-test-palette-array 8 8)))
+      (skyline-tool::compile-gram-intv input-png *test-gram-dir*
+                                       :height 8 :width 8 :palette-pixels test-array)
       ;; Verify output file exists with correct name
       (is-true (probe-file output-path)
                "Output file should exist: ~A" output-path)
@@ -50,36 +55,32 @@
 (test gram-compiler-decle-format
   "Test that GRAM compiler outputs DECLE statements in correct 16-bit format"
   (with-temp-gram-output (output-path "test-card.s")
-    (let ((input-png (make-pathname :name "test-card" :type "png")))
-      ;; Call the GRAM compiler
-      (skyline-tool::compile-gram-intv input-png *test-gram-dir*)
+    (let ((input-png (make-pathname :name "test-card" :type "png"))
+          (test-array (make-test-palette-array 8 8)))
+      (skyline-tool::compile-gram-intv input-png *test-gram-dir*
+                                       :palette-pixels test-array)
       ;; Read the output file
       (let ((output-content (uiop:read-file-string output-path)))
         ;; Verify file contains DECLE keyword
         (is-true (search "DECLE" output-content)
                  "Output file should contain DECLE statements")
         ;; Verify DECLE format uses 4 hex digits (16-bit format: $0000-$FFFF)
-        ;; Pattern: DECLE followed by $ and exactly 4 hex digits
-        (let ((decle-pos (search "DECLE" output-content)))
+        (let ((decle-pos (cl-ppcre:scan "(?m)^\\s*DECLE\\s+\\$" output-content)))
           (is-true decle-pos
-                   "Output file should contain DECLE statements")
-          (let ((after-decle (subseq output-content decle-pos (min (+ decle-pos 30) (length output-content)))))
-            (let ((dollar-pos (position #\$ after-decle)))
-              (is-true dollar-pos
-                       "DECLE statement should include $ prefix")
-              (when dollar-pos
-                (let ((hex-start (+ 1 dollar-pos))
-                      (hex-end (min (+ hex-start 4) (length after-decle))))
-                  (when (>= hex-end hex-start)
-                    (let ((hex-str (subseq after-decle hex-start hex-end)))
-                      ;; Verify exactly 4 hex digits
-                      (is (= 4 (length hex-str))
-                          "DECLE value should have exactly 4 hex digits (16-bit format), found: ~A"
-                          hex-str)
-                      ;; Verify all characters are valid hex digits
-                      (is-true (every (lambda (c) (digit-char-p c 16)) hex-str)
-                               "DECLE value should contain only hex digits: ~A"
-                               hex-str))))))))))))
+                   "Output file should contain DECLE assembly statements")
+          (when decle-pos
+            (let* ((dollar-pos (position #\$ output-content :start decle-pos))
+                   (hex-start (and dollar-pos (1+ dollar-pos)))
+                   (hex-end (and hex-start (min (+ hex-start 4) (length output-content)))))
+              (is-true hex-start "DECLE statement should include $ prefix")
+              (when (and hex-start (>= hex-end hex-start))
+                (let ((hex-str (subseq output-content hex-start hex-end)))
+                  (is (= 4 (length hex-str))
+                      "DECLE value should have exactly 4 hex digits (16-bit format), found: ~A"
+                      hex-str)
+                  (is-true (every (lambda (c) (digit-char-p c 16)) hex-str)
+                           "DECLE value should contain only hex digits: ~A"
+                           hex-str))))))))))
 
 ;; Helper function to create a test palette array
 (defun make-test-palette-array (width height &optional (default-color 0))
@@ -205,7 +206,7 @@
 ;; Test 6: Flooring division for card counts
 (test gram-compiler-card-count-flooring
   "Test that card counts are properly floored"
-  (with-temp-gram-output (output-path "test-card-count.s")
+  (with-temp-gram-output (output-path "test.s")
     (let ((test-png (make-pathname :name "test" :type "png"))
           ;; 17x17 array: should produce 2x2 cards (floor(17/8) = 2)
           (test-array (make-test-palette-array 17 17)))
@@ -217,17 +218,9 @@
       ;; Verify output contains expected number of DECLE statements
       ;; 2x2 cards = 4 cards, each with 4 DECLE = 16 DECLE total
       (let ((content (uiop:read-file-string output-path)))
-        (let ((decle-count 0)
-              (pos 0))
-          (loop
-            (let ((found-pos (search "DECLE" content :start2 pos)))
-              (when (null found-pos)
-                (return))
-              (incf decle-count)
-              (setf pos (+ found-pos 5))))
-          (is (= 16 decle-count)
-              "Expected 16 DECLE statements (2×2 cards × 4 DECLE), got ~D"
-              decle-count))))))
+        (is (= 16 (count-decle-statements content))
+            "Expected 16 DECLE statements (2×2 cards × 4 DECLE), got ~D"
+            (count-decle-statements content))))))
 
 ;; Test 7: Fuzz test - various array sizes
 (test gram-compiler-fuzz-array-sizes
@@ -438,28 +431,20 @@
 ;; Test 9: Regression test - single card output
 (test gram-compiler-regression-single-card
   "Regression test: Single 8×8 card produces exactly 4 DECLE statements"
-  (with-temp-gram-output (output-path "regression-single-card.s")
+  (with-temp-gram-output (output-path "single-card.s")
     (let ((test-png (make-pathname :name "single-card" :type "png"))
           (test-array (make-test-palette-array 8 8)))
       (skyline-tool::compile-gram-intv test-png *test-gram-dir*
                                       :palette-pixels test-array)
       (let ((content (uiop:read-file-string output-path)))
-        (let ((decle-count 0)
-              (pos 0))
-          (loop
-            (let ((found-pos (search "DECLE" content :start2 pos)))
-              (when (null found-pos)
-                (return))
-              (incf decle-count)
-              (setf pos (+ found-pos 5))))
-          (is (= 4 decle-count)
-              "Single card should produce exactly 4 DECLE statements, got ~D"
-              decle-count))))))
+        (is (= 4 (count-decle-statements content))
+            "Single card should produce exactly 4 DECLE statements, got ~D"
+            (count-decle-statements content))))))
 
 ;; Test 10: Regression test - byte packing order
 (test gram-compiler-regression-byte-packing
   "Regression test: Verify byte packing into 16-bit words"
-  (with-temp-gram-output (output-path "regression-byte-packing.s")
+  (with-temp-gram-output (output-path "byte-packing.s")
     (let ((test-png (make-pathname :name "byte-packing" :type "png"))
           ;; Create array with pattern: first row all white (palette index 7), rest black
           (test-array (make-array '(8 8) :element-type '(unsigned-byte 8))))
@@ -652,8 +637,9 @@
            "+intv-palette+ should be defined")
   (is-true (boundp 'skyline-tool::+intv-color-names+)
            "+intv-color-names+ should be defined")
-  (is-true (arrayp skyline-tool::+intv-palette+)
-           "+intv-palette+ should be an array"))
+  (is-true (and (listp skyline-tool::+intv-palette+)
+                (= 16 (length skyline-tool::+intv-palette+)))
+           "+intv-palette+ should be a 16-color list"))
 
 (def-suite intv-comprehensive-suite
   :description "Comprehensive Intellivision functionality tests"
@@ -665,7 +651,7 @@
 (test intv-integration-workflow
   "Test Intellivision integration workflow components"
   ;; Test that all core components are in place
-  (is-true (skyline-tool::check-machine-valid 2609)
+  (is-true (skyline-tool::machine-valid-p 2609)
            "Intellivision should be a valid machine")
 
   ;; Test dispatch system recognizes Intellivision
@@ -673,7 +659,8 @@
 
   ;; Test palette system is ready
   (is-true (and (boundp 'skyline-tool::+intv-palette+)
-                (arrayp skyline-tool::+intv-palette+))
+                (listp skyline-tool::+intv-palette+)
+                (= 16 (length skyline-tool::+intv-palette+)))
            "Intellivision palette system is ready"))
 
 ;; Test 19: Asset allocation pipeline integration
@@ -723,12 +710,12 @@
 
   ;; Test palette has correct structure
   (let ((palette (symbol-value (find-symbol "+INTV-PALETTE+" :skyline-tool))))
-    (is-true (arrayp palette) "+intv-palette+ should be an array")
+    (is-true (listp palette) "+intv-palette+ should be a list")
     (is (= 16 (length palette)) "+intv-palette+ should have 16 colors"))
 
-  ;; Test color names array
+  ;; Test color names list
   (let ((color-names (symbol-value (find-symbol "+INTV-COLOR-NAMES+" :skyline-tool))))
-    (is-true (arrayp color-names) "+intv-color-names+ should be an array")
+    (is-true (listp color-names) "+intv-color-names+ should be a list")
     (is (= 16 (length color-names)) "+intv-color-names+ should have 16 color names")))
 
 ;; Test 22: File I/O error handling
@@ -794,7 +781,8 @@
                                         :palette-pixels test-array)
 
         (let ((content (uiop:read-file-string output-path)))
-          (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
+          (let ((decle-values (cl-ppcre:all-matches-as-strings
+                               "(?m)^\\s*DECLE\\s+\\$([0-9A-F]{4})" content)))
             ;; Each row should have exactly one bit set
             ;; Row 0: bit 7 set ($0080), Row 1: bit 6 set ($0040), etc.
             (let ((expected-values '("$0080" "$0040" "$0020" "$0010"
@@ -949,3 +937,14 @@
   "Run all Intellivision GRAM compiler tests and return results"
   (fiveam:run! 'intv-gram-tests)
   (fiveam:run! 'intv-comprehensive-suite))
+
+(defun run-intv-skyline-tests ()
+  "Run Skyline-Tool tests scoped to the Intellivision port.
+
+Excludes platform-agnostic suites that assume a 7800 build tree (e.g.
+@file{build-tests.lisp}, @file{5200-tests.lisp}) and other near-term ports."
+  (every #'identity
+         (list (fiveam:run! 'intv-gram-tests)
+               (fiveam:run! 'action-tests)
+               (run-near-term-makefile-parse-tests)
+               (fiveam:run! 'write-intv-asset-includes-emits-blob-includes))))

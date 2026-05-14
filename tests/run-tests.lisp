@@ -20,20 +20,21 @@
   ;; merge-pathnames/probe-file for relative paths use it, so align with cwd.
   (setf *default-pathname-defaults*
         (uiop:ensure-directory-pathname (uiop:getcwd)))
-  ;; Set up the machine environment from PLATFORM (defaults to 7800 = Atari 7800 / main tree).
-  ;; Use FIND-SYMBOL so this file can be read before :skyline-tool exists (package-qualified
-  ;; symbols would be resolved at read time and fail).
-  ;; SBCL: (find-package "skyline-tool") is NIL because package names are uppercase;
-  ;; use (find-package :skyline-tool) so the name matches.
-  (setf (symbol-value (find-symbol "*MACHINE*" (find-package :skyline-tool)))
-        (parse-integer (or (uiop:getenv "PLATFORM") "7800")))
-  ;; Run all tests; exit 1 if any suite fails (same idea as run-skyline-tests in interface.lisp).
-  ;; READ-FROM-STRING at runtime so FIVEAM is not resolved while loading this file.
-  (let ((all-passed (eval (read-from-string "(fiveam:run-all-tests :summary :end)"))))
-    (if all-passed
-        (progn
-          (format t "~&All tests passed~%")
-          (uiop:quit 0))
-        (progn
-          (format t "~&Tests failed~%")
-          (uiop:quit 1)))))
+  ;; Set up the machine environment from PLATFORM (port label or machine number).
+  ;; Intv makefiles pass PLATFORM=Intv; numeric strings still work (e.g. 2609).
+  (let* ((platform (or (uiop:getenv "PLATFORM") "7800")))
+    (if (every #'digit-char-p platform)
+        (setf (symbol-value (find-symbol "*MACHINE*" (find-package :skyline-tool)))
+              (parse-integer platform))
+        (funcall (find-symbol "LOAD-PROJECT.JSON" (find-package :skyline-tool)) platform))
+    (let ((all-passed
+           (if (string-equal platform "Intv")
+               (funcall (find-symbol "RUN-INTV-SKYLINE-TESTS" (find-package :skyline-tool/test)))
+               (eval (read-from-string "(fiveam:run-all-tests :summary :end)")))))
+      (if all-passed
+          (progn
+            (format t "~&All tests passed~%")
+            (uiop:quit 0))
+          (progn
+            (format t "~&Tests failed~%")
+            (uiop:quit 1))))))

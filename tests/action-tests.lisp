@@ -13,12 +13,20 @@
 ;; Helper function for testing - avoid make dependencies
 (defun compile-script-from-string (script-string)
   "Compile a Fountain script from a string and return the Forth output"
-  (with-output-to-string (output)
-    (let ((*standard-output* output))
-    ;; This is really bad form, since we're reaching under its
-    ;; skirt and yanking the crank directly, but it seems to work
-    ;; for now, so I'll accept it.
-      (skyline-tool::compile-fountain-string script-string))))
+  (let ((saved-palette skyline-tool::*common-palette*))
+    (unwind-protect
+         (progn
+           ;; Grammar fixtures load NPC stats that reference the 7800 palette (e.g. peach).
+           (unless (member "peach" skyline-tool::*common-palette* :test #'string=)
+             (setf skyline-tool::*common-palette*
+                   (append skyline-tool::*common-palette* '("peach"))))
+           (with-output-to-string (output)
+             (let ((*standard-output* output))
+               ;; This is really bad form, since we're reaching under its
+               ;; skirt and yanking the crank directly, but it seems to work
+               ;; for now, so I'll accept it.
+               (skyline-tool::compile-fountain-string script-string))))
+      (setf skyline-tool::*common-palette* saved-palette))))
 
 
 ;; Test gesture actions
