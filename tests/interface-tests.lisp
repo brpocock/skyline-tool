@@ -413,7 +413,7 @@ Prevents 'Cannot find source for Phantasia-Globals' when tracing deps from Basic
         (let ((buf (make-array (file-length stream) :element-type '(unsigned-byte 8))))
           (read-sequence buf stream)
           (is (not (position 0 buf))
-              "7800 Makefile must not contain embedded NUL bytes"))))
+              "7800 Makefile must not contain embedded NUL bytes")))
       (multiple-value-bind (stdout stderr exit)
           (uiop:run-program (list "make" "-n" "-f" (namestring makefile))
                            :directory root
