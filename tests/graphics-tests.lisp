@@ -100,6 +100,20 @@
                   (let ((skyline-tool::*machine* 5200)) (skyline-tool::machine-colors)))
           "400 and 5200 color names should match for ~a" region))))
 
+(test machine-palette-tms9918-family
+  "TMS9918-class machines (9918 ClcV, 1000, 3010, 837, 2110) share a 16-entry palette; machine-colors must match ecase (regression for falling through on 9918)."
+  (dolist (machine '(9918 1000 3010 837 2110))
+    (let ((ref (skyline-tool::machine-palette 9918 :ntsc)))
+      (dolist (region '(:ntsc :pal))
+        (is (equalp (skyline-tool::machine-palette machine region) ref)
+            "machine-palette ~a ~a should match canonical 9918 :ntsc triples" machine region)))
+    (let ((skyline-tool::*machine* machine))
+      (let ((colors (skyline-tool::machine-colors))
+            (pal (skyline-tool::machine-palette machine)))
+        (is (= 16 (length pal)) "palette length 16 for machine ~a" machine)
+        (is (= (length colors) (length pal))
+            "machine-colors length must match machine-palette for ~a" machine)))))
+
 (test machine-colors-basic
   "Test machine-colors returns color information"
   (let ((skyline-tool::*machine* 2600))

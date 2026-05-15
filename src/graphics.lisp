@@ -285,6 +285,32 @@ Used for NES graphics conversion and palette matching on PAL systems
       (#x00 #x88 #xff)  ; 14 Light Blue
       (#xbb #x77 #xbb)) ; 15 Light Grey
   :test 'equalp)
+
+;;; TMS9918A fixed 16-color palette (indices 0–15).  Same RGB values are used
+;;; for tooling across ColecoVision (9918), SG-1000 (1000), SMS (3010), and
+;;; Game Gear (837 / 2110) when mapping indexed PNG pixels — the VDP color
+;;; numbers are hardware-defined (see Texas Instruments TMS9918A docs; widely
+;;; reproduced on MSX/Coleco references).  Index 0 is transparent on hardware;
+;;; we map it to black for nearest-color matching.
+(define-constant +tms9918-palette+
+    '((#x00 #x00 #x00) (#x00 #x00 #x00) (#x21 #xC8 #x42) (#x5E #xDC #x78)
+      (#x54 #x55 #xED) (#x7D #x76 #xFC) (#xD4 #x52 #x4D) (#x42 #xEB #xF5)
+      (#xFC #x55 #x55) (#xFF #x79 #x7C) (#xD4 #xC1 #x54) (#xE6 #xCE #x80)
+      (#x21 #xB0 #x3B) (#xC9 #x5F #xF5) (#xBB #xBB #xBB) (#xFF #xFF #xFF))
+  :test 'equalp
+  :documentation "TMS9918A VDP 16-color RGB triples for MSX1-class fixed palette.
+
+Used for ColecoVision / ClcV (9918), SG-1000 (1000), SMS (3010), and Game Gear
+(837, 2110) graphics conversion where @code{machine-palette} must return the
+canonical VDP colors.")
+
+(define-constant +tms9918-color-names+
+    '(transparency black medium-green light-green dark-blue light-blue dark-red
+      cyan medium-red light-red dark-yellow light-yellow dark-green magenta gray
+      white)
+  :test 'equalp
+  :documentation "Color names aligned with @ref{constant:+tms9918-palette+} indices.")
+
 (define-constant +vcs-ntsc-palette+
     '((0   0   0) (64  64  64) (108 108 108) (144 144 144) (176 176 176) (200 200 200) (220 220 220) (236 236 236)
       (68  68   0) (100 100  16) (132 132  36) (160 160  52) (184 184  64) (208 208  80) (232 232  92) (252 252 104)
@@ -418,7 +444,9 @@ video region, used for graphics conversion and color matching.
 @item MACHINE
 Machine identifier (default: current *machine*)
 @item REGION
-Video region (:ntsc, :pal, :secam) (default: current *region*)
+Video region (:ntsc, :pal, :secam) (default: current *region*).  For TMS9918-class
+machines (9918, 1000, 3010, 837, 2110) the VDP RGB values are fixed; REGION is
+accepted for a uniform call pattern but does not change the returned list.
 @item Returns
 List of RGB color triples for the machine's palette
 @end table
@@ -440,8 +468,8 @@ List of RGB color triples for the machine's palette
                (7800 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
-               ;; VCS800 native host: map tile PNG conversion uses same ProSystem indices as 7800
-               ;; (see @file{Source/Code/VCS800/Parity7800.texf}).
+               ;; vcs800 native host: map tile PNG conversion uses same ProSystem indices as 7800
+               ;; (see @file{Source/Code/vcs800/Parity7800.texf}).
                (7850 (ecase region
                        (:ntsc +prosystem-ntsc-palette+)
                        (:pal +prosystem-pal-palette+)))
@@ -450,6 +478,7 @@ List of RGB color triples for the machine's palette
                ((400 800 5200) (ecase region
                                  (:ntsc +prosystem-ntsc-palette+)
                                  (:pal +prosystem-pal-palette+)))
+               ((9918 1000 3010 837 2110) +tms9918-palette+)
                (264 +ted-palette+)
                (16 +tg16-palette+))))
 
@@ -464,7 +493,8 @@ the currently selected machine (*machine*).
 List of color name strings for the current machine's palette
 @item Depends on
 * @var{*machine*} - current target machine
-* @var{*region*} - :ntsc or :pal for Maria / ProSystem-class machines (400, 800, 5200, 7800, 7850)
+* @var{*region*} - :ntsc or :pal for Maria / ProSystem-class machines (400, 800, 5200, 7800, 7850).
+For TMS9918-class machines (9918, 1000, 3010, 837, 2110), names match the fixed VDP palette regardless of REGION.
 @end table
 
 @xref{fun:machine-palette}, @xref{var:*machine*}, @xref{var:*region*}."
@@ -472,6 +502,7 @@ List of color name strings for the current machine's palette
     (20 (subseq +c64-names+ 0 7))
     ((64 128) +c64-names+)
     (2609 +intv-color-names+)
+    ((9918 1000 3010 837 2110) +tms9918-color-names+)
     ((400 800 5200 7800 7850)
      (ecase *region*
        (:ntsc (prosystem-ntsc-color-names))
@@ -1158,11 +1189,11 @@ transparent pixels — are copied without coercing @code{NIL} into
          (appendf colors color))
     finally (return (values shapes colors))))
 
-(defun try-to-maintain-palette (new old &optional (overall old))
+(defun try-to-maintain-palette (new old &optional (overall old) &key lenient-p)
   (if (or (null old) (emptyp old))
       (if overall
           (return-from try-to-maintain-palette
-            (try-to-maintain-palette new overall))
+            (try-to-maintain-palette new overall overall :lenient-p lenient-p))
           (return-from try-to-maintain-palette new)))
   ;; Pad shorter palette to match new's length (Mode E rows can have varying color counts)
   (when (< (length old) (length new))
@@ -1187,10 +1218,15 @@ transparent pixels — are copied without coercing @code{NIL} into
                          (setf (elt palette i) (elt overall i))
                          (setf (elt palette i) (pop introductions))))
                 finally (return palette))))
-    (assert (every (lambda (color) (member color offer)) new)
-            (offer) "The offered palette of (~{$~2,'0x~^ ~}) did not contain colors in (~{$~2,'0x~^ ~})
+    (if (every (lambda (color) (member color offer)) new)
+        offer
+        (if lenient-p
+            new
+            (progn
+              (assert (every (lambda (color) (member color offer)) new)
+                      (offer) "The offered palette of (~{$~2,'0x~^ ~}) did not contain colors in (~{$~2,'0x~^ ~})
 (tried to preserve palette indices from (~{$~2,'0x~^ ~})~@[ or (~{$~2,'0x~^ ~})~]" offer new old)
-    offer))
+              offer)))))
 
 (assert (equalp '(0 1 2 3) (try-to-maintain-palette '(3 2 1 0) '(0 1 2 3))))
 (assert (equalp '(0 1 4 3) (try-to-maintain-palette '(3 4 1 0) '(0 1 2 3))))
@@ -1205,7 +1241,7 @@ transparent pixels — are copied without coercing @code{NIL} into
 (assert (equalp '(5 6 7 8) (try-to-maintain-palette '(5 6 7 8) nil '(0 1 2 3))))
 
 (defun mode-e-row-bytes (pixels &key last-row-palette y overall-palette
-                                     enforce-overall-palette-p)
+                                     enforce-overall-palette-p lenient-palette-p)
   (check-type pixels array)
   (assert (= 1 (array-dimension pixels 1)))
   (let ((shape nil)
@@ -1215,7 +1251,8 @@ transparent pixels — are copied without coercing @code{NIL} into
                       (most-popular-colors pixels (array-dimension pixels 0) 1
                                            :count 4)
                       last-row-palette
-                      overall-palette))))
+                      overall-palette
+                      :lenient-p lenient-palette-p))))
     (assert (= (ceiling (array-dimension pixels 0) 4)
                (length (group-into-4 (coerce (pixels-into-palette pixels palette
                                                                   :y0 y :best-fit-p t)
@@ -1231,7 +1268,7 @@ transparent pixels — are copied without coercing @code{NIL} into
     (assert (= (ceiling (array-dimension pixels 0) 4) (length shape)))
     (values (reverse shape) palette)))
 
-(defun mode-e-interpret (pixels &key base-palette (color-per-line-p t))
+(defun mode-e-interpret (pixels &key base-palette (color-per-line-p t) lenient-palette-p)
   (loop with shapes
         with colors
         with last-palette = nil
@@ -1247,7 +1284,8 @@ transparent pixels — are copied without coercing @code{NIL} into
                (mode-e-row-bytes (copy-rect pixels 0 y (array-dimension pixels 0) 1)
                                  :last-row-palette last-palette :y y
                                  :overall-palette overall-palette
-                                 :enforce-overall-palette-p (not color-per-line-p))
+                                 :enforce-overall-palette-p (not color-per-line-p)
+                                 :lenient-palette-p lenient-palette-p)
              (assert (= (length palette) 4))
              (assert (= (length shape) (ceiling (array-dimension pixels 0) 4)))
              (setf last-palette (if color-per-line-p
@@ -1257,11 +1295,9 @@ transparent pixels — are copied without coercing @code{NIL} into
              (push palette colors)
              (assert (= (length shapes) (* 1/4 (array-dimension pixels 0) (1+ y)))))
         finally (return (values shapes
-                                (mapcar (lambda (line)
-                                          (mapcar (lambda (i) (when i (* 2 i))) line))
-                                        (if color-per-line-p
-                                            (reverse colors)
-                                            (list overall-palette)))))))
+                                (if color-per-line-p
+                                    (reverse colors)
+                                    (list overall-palette))))))
 
 (defun 48px-array-to-bytes (pixels)
   (do-collect (column below 6)
@@ -1684,20 +1720,26 @@ Shape:~{~{~a~}~2%~}
 
 (defun compile-5200-mode-e-bitmap (image-pixels &key (png-file (make-pathname :name "tmp5200" :type "png"))
                                                      (target-dir "Object/5200/")
+                                                     output-pathname
+                                                     block-label
                                                      (height (array-dimension image-pixels 1))
                                                      (width (array-dimension image-pixels 0))
                                                      (compressp (< 512 (* height width)))
                                                      (color-per-line-p t)
-                                                     base-palette)
+                                                     base-palette
+                                                     lenient-palette-p)
   (let* ((base-dir (if (typep target-dir 'pathname)
                        (merge-pathnames target-dir (project-root))
                        (merge-pathnames (pathname (or target-dir "Object/5200/"))
                                         (project-root))))
-         (out-file-name (merge-pathnames
-                         (make-pathname :name
-                                        (pathname-name png-file)
-                                        :type "s")
-                         base-dir)))
+         (out-file-name (or output-pathname
+                            (merge-pathnames
+                             (make-pathname :name
+                                            (pathname-name png-file)
+                                            :type "s")
+                             base-dir)))
+         (label-name (or block-label
+                         (assembler-label-name (pathname-name png-file)))))
     (ensure-directories-exist out-file-name)
     (format *trace-output* "~% Ripping Mode ~a pixmap graphics from ~D×~D image…"
             (if (< height 97) "D/E" "E")
@@ -1708,7 +1750,8 @@ Shape:~{~{~a~}~2%~}
       (assert (= width (array-dimension image-pixels 0)))
       (multiple-value-bind (shape colors) (mode-e-interpret image-pixels
                                                             :base-palette base-palette
-                                                            :color-per-line-p color-per-line-p)
+                                                            :color-per-line-p color-per-line-p
+                                                            :lenient-palette-p lenient-palette-p)
         (assert (= (length shape) (/ (* height width) 4)))
         (assert (= (length colors) (if color-per-line-p height 1)))
         (format source-file ";;; -*- fundamental -*-
@@ -1731,7 +1774,7 @@ CoLu:
 "
                 (enough-namestring png-file)
                 (enough-namestring (make-pathname :defaults png-file :type "xcf"))
-                (assembler-label-name (pathname-name png-file))
+                label-name
                 (+ 2 (length shape) (length colors))
                 compressp
                 height width
@@ -4787,6 +4830,99 @@ Blob PNG path; if under @file{Source/Blobs/@var{PORT}/}, output is
                                       (pathname-name merged))
                    :type "s")))
 
+(defun generated-blob-assembly-pathname (png-file)
+  "Pathname for TMS9918-family generated Blob assembly from PNG-FILE.
+
+ColecoVision (machine 9918) uses @file{Blob.<stem>.ClcV.s}; SMS, SG-1000, Game Gear,
+and VS use @file{Blob.<stem>.s} like @code{png-to-blob-pathname}."
+  (let* ((merged (merge-pathnames png-file))
+         (base (png-to-blob-pathname png-file)))
+    (if (= *machine* 9918)
+        (make-pathname :directory (pathname-directory base)
+                       :name (format nil "Blob.~a.ClcV" (pathname-name merged))
+                       :type "s")
+        base)))
+
+(defun blob-rip-tms9918 (png-file)
+  "Write TMS9918-family Z80 blob assembly from PNG-FILE into @code{Source/Generated/…/Assets/}.
+
+Emits a small @code{.block} shaped like Mode~E pixmap stubs so downstream tooling
+can evolve without changing filenames.  @strong{FIXME:} Replace with real
+TMS9918 pattern/color encoding (tiles, bitmap, sprites) per asset kind."
+  (let* ((root (uiop:ensure-directory-pathname (or (project-root) (uiop:getcwd))))
+         (out (merge-pathnames (generated-blob-assembly-pathname png-file) root))
+         (label (assembler-label-name (pathname-name (merge-pathnames png-file)))))
+    (ensure-directories-exist out)
+    (%write-blob-assembly-atomically
+     out
+     (lambda (stream)
+       (format stream ";;; -*- fundamental -*-
+;;; TMS9918-family blob placeholder from ~a
+;;; FIXME: Real TMS9918 encoder for machine ~d.
+
+~a:	.block
+~10tLength = 6
+~10tHeight = 1
+~10tWidth = 8
+Shape:
+~10t.text x\"00000000\"
+CoLu:
+~10t.text x\"00\"
+ .bend
+"
+               (enough-namestring png-file)
+               *machine*
+               label)))
+    (format *trace-output* "~&blob-rip-tms9918: wrote ~a~%" (enough-namestring out))
+    t))
+
+(defun %write-blob-assembly-atomically (output-pathname writer)
+  "Call WRITER with an output character stream, then rename into OUTPUT-PATHNAME.
+
+WRITER is a function of one argument (the stream).  The assembly is written to
+a same-directory unique staging file, then @code{rename-file} installs the final
+name so parallel @command{make} jobs never read a truncated blob @file{.s}.
+
+The staging name includes random bits so two concurrent @command{blob-rip-7800}
+invocations for the same output never share one @file{*.wip} path: a shared name
+plus an initial @code{delete-file} allowed one job to unlink another's staging
+file before @code{rename-file}, yielding @code{truename} errors on the missing
+@file{#wip} path.
+
+Resolve OUTPUT-PATHNAME against @code{(project-root)} (or cwd) before @code{rename-file}:
+SBCL merges a relative destination with @code{*default-pathname-defaults*}, which
+@code{with-output-to-file} can leave set to that directory,
+producing paths like @file{…/Assets/Source/Generated/…/Blob.*.s} and a failed rename."
+  (let* ((root (uiop:ensure-directory-pathname (or (project-root) (uiop:getcwd))))
+         (abs-output (merge-pathnames output-pathname root)))
+    (ensure-directories-exist abs-output)
+    (let* ((dir (uiop:pathname-directory-pathname abs-output))
+           (wip-name (format nil "~A.wip.~36,6,'0R"
+                             (pathname-name abs-output)
+                             (logxor (ash (get-internal-real-time) 16)
+                                     (random #xfffffff))))
+           (part (merge-pathnames
+                  (make-pathname :name wip-name
+                                 :type (pathname-type abs-output))
+                  dir))
+           (dest (merge-pathnames
+                  (make-pathname :name (pathname-name abs-output)
+                                 :type (pathname-type abs-output))
+                  dir))
+           (ok nil))
+      (unwind-protect
+           (progn
+             (with-output-to-file (out part :if-exists :supersede
+                                       :external-format :utf-8)
+               (funcall writer out))
+             (when (probe-file dest)
+               (ignore-errors (delete-file dest)))
+             (rename-file part dest)
+             (setf ok t))
+        (unless ok
+          (when (probe-file part)
+            (ignore-errors (delete-file part))))))))
+
 (defun check-height+width-for-blob (height width palette-pixels)
   (assert (zerop (mod width 4)) (width)
           "BLOB ripper requires width mod 4, not ~d (4 × ~{~d + ~d~})"
@@ -4997,6 +5133,49 @@ Signals assertion errors for invalid dimensions."
             (setf (aref stamp-buffer i)
                   (elt bytes (- 15 byte)))))))))
 
+(defun blob-rip-5200 (png-file)
+  "Rip a Bitmap Large Object Block from PNG-FILE for Atari 5200 Mode E.
+
+@cindex BLOB ripping
+@cindex Mode E graphics
+@cindex ANTIC playfield
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string)
+@item Returns: nil
+@item Side Effects: Creates @file{Source/Generated/5200/Assets/Blob.*.s}
+@end table
+
+5200 BLOBs are 160-pixel-wide ANTIC Mode E playfield bitmaps (four colors per
+scanline, per-row palette in @code{CoLu}), not 7800 MARIA display-list stamps."
+  (let* ((*machine* 5200)
+         (*region* :ntsc)
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette height width
+                                       (png-read:image-data png)))
+         (output-pathname (png-to-blob-pathname png-file))
+         (blob-label (format nil "Blob_~a"
+                             (assembler-label-name (pathname-name png-file)))))
+    (assert (= width 160) ()
+            "5200 BLOB ripper requires 160px width (Mode E), not ~d" width)
+    (assert (zerop (mod width 4)) (width)
+            "5200 Mode E BLOB width must be a multiple of 4, not ~d" width)
+    (format *trace-output* "~&Ripping 5200 Mode E BLOB from ~a (~:d×~:d px)… "
+            (enough-namestring png-file) width height)
+    (finish-output *trace-output*)
+    (compile-5200-mode-e-bitmap palette-pixels
+                                :png-file png-file
+                                :output-pathname output-pathname
+                                :block-label blob-label
+                                :height height
+                                :width width
+                                :compressp t
+                                :lenient-palette-p t)
+    (format *trace-output* " … done!~%")))
+
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
   "Rip a Bitmap Large Object Block from PNG-FILE
 
@@ -5110,8 +5289,8 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
            (stamp-counting 0)
            (next-span-id 0))
       (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-      (ensure-directories-exist output-pathname)
-      (with-output-to-file (output output-pathname :if-exists :supersede)
+      (%write-blob-assembly-atomically output-pathname
+       (lambda (output)
         (format output ";;; Bitmap Large Object Block for Atari 7800
 ;;; Derived from source file ~a. This is a generated file.~3%
 
@@ -5176,7 +5355,7 @@ Blob_~a:~10t.block~2%"
                   finally
                      (emit-span x span last-palette)))
           (format output "~%~10t.word $0000"))
-        (blob/write-spans spans output :imperfectp imperfectp)))
+        (blob/write-spans spans output :imperfectp imperfectp))))
     (format *trace-output* " … done!~%")))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
@@ -5233,8 +5412,8 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
       (force-output *trace-output*)
       (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
       (force-output *trace-output*)
-      (ensure-directories-exist output-pathname)
-      (with-output-to-file (output output-pathname :if-exists :supersede)
+      (%write-blob-assembly-atomically output-pathname
+       (lambda (output)
         (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
 ;;; Derived from source file ~a. This is a generated file.~3%
 
@@ -5313,7 +5492,7 @@ Blob_~a:~10t.block~2%"
           (format output "~%~10t.word $0000"))
         ;; One Spans:/stamp region for the whole blob (same as blob-rip-7800-160a).
         ;; Calling write-spans-320ac inside dotimes duplicated SpanN = * + $… and .bend per zone.
-        (blob/write-spans-320ac spans output :imperfectp imperfectp)))
+        (blob/write-spans-320ac spans output :imperfectp imperfectp))))
     (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
@@ -6205,7 +6384,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun read-cgb-art-index (index-in)
   "Read CGB art index file and return list of (png-name width-px height-px palette-mode)"
   (let ((png-list (list)))
-    (format *trace-output* "~&CGB: reading art index …" (enough-namestring index-in))
+    (format *trace-output* "~&CGB: reading art index ~A…" (enough-namestring index-in))
     (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
             while line
@@ -6719,9 +6898,8 @@ Malformed lines (e.g. missing mode) are skipped."
 (defmethod compile-art-generic ((machine-type (eql 222)) format source-file-base-name art-input)
   "Compile art for Apple IIGS platform"
   (let ((*machine* 222))
-    (declare (ignore format)) ;; Apple IIGS uses standard graphics formats
-    (compile-art-8×8 source-file-base-name "2gs/Fonts" 8 8
-                     (png->palette 8 8 art-input nil))))
+    (declare (ignore format art-input))
+    (compile-atari-8×8 source-file-base-name #p"2gs/Fonts/" 8 8)))
 
 (defun compile-art-264 (index-out index-in)
   "Compile art assets for Commodore 16/Plus4 (TED) platform"
@@ -6732,7 +6910,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun read-ted-art-index (index-in)
   "Read TED art index file and return list of (png-name mode width-px height-px)"
   (let ((png-list (list)))
-    (format *trace-output* "~&TED: reading art index …" (enough-namestring index-in))
+    (format *trace-output* "~&TED: reading art index ~A…" (enough-namestring index-in))
     (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
             while (and line (plusp (length line)) (not (char= #\; (char line 0))))
@@ -6806,7 +6984,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun read-a2-art-index (index-in)
   "Read Apple II HIRES art index file and return list of (png-name width height)"
   (let ((png-list (list)))
-    (format *trace-output* "~&Apple II HIRES: reading art index …" (enough-namestring index-in))
+    (format *trace-output* "~&Apple II HIRES: reading art index ~A…" (enough-namestring index-in))
     (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
             while line
