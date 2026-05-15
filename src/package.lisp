@@ -39,6 +39,7 @@
            #:atari800-label-file
            #:blob-rip-5200-tile
            #:blob-rip-7800
+           #:blob-rip-5200
            #:7800-image-to-160a
            #:7800-image-to-320a
            #:7800-image-to-320c

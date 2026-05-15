@@ -77,6 +77,7 @@
                  (:file "package")
                  (:file "peek" :depends-on ("package"))
                  (:file "runner" :depends-on ("package"))
+                 (:file "sega-constants" :depends-on ("package"))
                  (:file "tables" :depends-on ("package"))
                  (:file "threed" :depends-on ("package"))
                  (:file "utils" :depends-on ("package"))
