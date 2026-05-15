@@ -302,6 +302,20 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
      #|LoadMap|# 1024 #| approx XXX |#
      #| end of table |# 1
      #|per record|# (* record-count 3)))
+  ;; Atari 5200 (same loader tables as 7800 on this port)
+  (:method ((kind (eql :overhead)) record-count (machine (eql 5200)))
+    12)
+  (:method ((kind (eql :song)) record-count (machine (eql 5200)))
+    256)
+  (:method ((kind (eql :script)) record-count (machine (eql 5200)))
+    (+ 128 (* (1+ record-count) 4)))
+  (:method ((kind (eql :blob)) record-count (machine (eql 5200)))
+    (+ 284 1 (* record-count 3)))
+  (:method ((kind (eql :map)) record-count (machine (eql 5200)))
+    (+
+     #|LoadMap|# 1024 #| approx XXX |#
+     #| end of table |# 1
+     #|per record|# (* record-count 3)))
   ;; Atari 400/800 delegate to 5200
   (:method ((kind (eql :song)) record-count (machine (eql 400)))
     (asset-loader-size kind record-count 5200))
@@ -439,13 +453,18 @@ Returns the size in bytes required for the asset in ROM."
                             "Don't know how to estimate size of “~a”"
                             (enough-namestring asset-file))
                     8192))))
+    (when (zerop n)
+      (setf n (max 8192 (or (ignore-errors (ql-util:file-size asset-file)) 8192))))
     (when file-sizes
-      (if (< (* 12 1024) n)
-          (warn "Asset file “~a” is over 12kiB (~~~:dkiB) and will not be included"
-                (enough-namestring asset-file)
-                (round n 1024))
-          (setf (gethash asset-file file-sizes) n)))
+      (when (< (* 12 1024) n)
+        (warn "Asset file “~a” is over 12kiB (~~~:dkiB); ROM packing may be tight"
+              (enough-namestring asset-file)
+              (round n 1024)))
+      (setf (gethash asset-file file-sizes) n))
     n))
+
+(defconstant +permutation-allocation-limit+ 12
+  "Above this many assets, @code{map-permutations} overflows the stack.")
 
 (defun find-best-allocation (assets &key build video)
   "Finds the optimal allocation of ASSETS into ROM banks for BUILD and VIDEO mode.
@@ -466,8 +485,9 @@ Two values: hash table mapping assets to bank numbers, and file sizes hash table
 
 @table @asis
 @item Behavior
-Tries all permutations of asset ordering to find one that fits within
-available ROM banks. Uses brute-force search for optimal packing.
+For at most @code{+PERMUTATION-ALLOCATION-LIMIT+} assets, tries all
+permutations of asset ordering to find one that fits within available ROM
+banks.  Larger builds use a small set of greedy orderings instead.
 @end table"
   (format *trace-output*
           "~&Finding best allocation for ~:d asset~:p (build ~s, video ~s)"
@@ -485,18 +505,33 @@ available ROM banks. Uses brute-force search for optimal packing.
                                   2
                                   1)))
           (tries 0))
-      (format *trace-output*
-              "~&Will try every possible permutation to find one that fits into ~:d ROM bank~:p … "
-              available-banks)
-      (map-permutations
-       (lambda (sequence)
-         (incf tries)
-         (let ((try (try-allocation-sequence sequence file-sizes
-                                             :video video)))
-           (when (<= (hash-table-count try) available-banks)
-             (format *trace-output* " got a fit in ~:d tr~:@p" tries)
-             (return-from find-best-allocation (values try file-sizes)))))
-       assets)
+      (flet ((try-fit (sequence)
+               (incf tries)
+               (let ((try (try-allocation-sequence sequence file-sizes
+                                                   :video video)))
+                 (when (<= (hash-table-count try) available-banks)
+                   (format *trace-output* " got a fit in ~:d tr~:@p" tries)
+                   (return-from find-best-allocation (values try file-sizes))))))
+        (if (> (length assets) +permutation-allocation-limit+)
+            (progn
+              (format *trace-output*
+                      "~&~:d assets: skipping brute-force permutations; ~
+trying greedy orderings for ~:d ROM bank~:p … "
+                      (length assets) available-banks)
+              (try-fit assets)
+              (try-fit (sort (copy-list assets) #'>
+                             :key (lambda (asset)
+                                    (gethash (asset-file asset :video video)
+                                             file-sizes))))
+              (try-fit (sort (copy-list assets) #'<
+                             :key (lambda (asset)
+                                    (gethash (asset-file asset :video video)
+                                             file-sizes)))))
+            (progn
+              (format *trace-output*
+                      "~&Will try every possible permutation to find one that fits into ~:d ROM bank~:p … "
+                      available-banks)
+              (map-permutations #'try-fit assets))))
       (error "Unable to fit ~:d asset~:p into ~:d bank~:p of ROM, tried ~:d permutation~:p"
              (length assets) available-banks tries))))
 
@@ -536,6 +571,53 @@ TV-connected machines with both NTSC and PAL releases return
   "During @code{write-master-makefile}, EQ hash table keyed by
 @code{(bank build video kind)} to skip duplicate GNU Make rules for the same
 @file{Object/$(PORT)/Bank…} targets (avoids “overriding recipe” warnings).")
+
+(defvar *asset-bank-list-batch* nil
+  "Integer bank numbers for which @file{BankNN.*.list} rules are deferred.
+
+@code{write-asset-bank-makefile} records banks here; @code{emit-grouped-asset-bank-list-rules}
+emits one GNU Make rule for all pending @file{*.list} targets so
+@command{allocate-assets} runs once per build/video.  That avoids parallel
+@command{make -j} invoking @command{allocate-assets} concurrently (each run
+rewrites every bank list file, which previously truncated or corrupted outputs).")
+
+(defun reset-asset-bank-list-batch ()
+  "Clear @code{*ASSET-BANK-LIST-BATCH*} before scanning banks for one build/video."
+  (setf *asset-bank-list-batch* nil))
+
+(defun note-asset-bank-list-target (bank)
+  "Record BANK for a later grouped @file{BankNN.*.list} Makefile rule."
+  (push bank *asset-bank-list-batch*))
+
+(defun emit-grouped-asset-bank-list-rules (build video)
+  "Emit one Makefile rule for every pending @file{Source/Generated/$(PORT)/Bank*.list}.
+
+Prerequisites match the former per-bank rules; the recipe runs
+@command{allocate-assets} exactly once for BUILD and VIDEO, then clears the batch."
+  (when *asset-bank-list-batch*
+    (let* ((banks (sort (remove-duplicates *asset-bank-list-batch*) #'<))
+           (all-assets (all-assets-for-build build))
+           (asset-objects (apply #'nconc (mapcar (rcurry #'asset->deps-list build) all-assets)))
+           (target-lines
+            (loop for b in banks
+                  collect (format nil "Source/Generated/${PORT}/Bank~a.~a.~a.list"
+                                  (string-upcase (format nil "~2,'0x" b))
+                                  build video))))
+      (format t "~%# Batched Bank*.list targets: allocate-assets writes every bank list;~%")
+      (format t "# one recipe per build/video avoids parallel make clobbering those files.~%")
+      ;; One physical target line (all BankNN…list files, space-separated), then
+      ;; @samp{: Source/Assets.index \\}.  GNU Make 4.4 rejects some multi-line
+      ;; multi-target groupings (``multiple target patterns'') when the first line
+      ;; ends with @samp{\\} before any @samp{:} appears on the continued logical line.
+      (format t "~{~a~^ ~}: Source/Assets.index \\~%" target-lines)
+      (format t "          bin/skyline-tool \\~%")
+      (loop for dep on asset-objects
+            do (if (cdr dep)
+                    (format t "          ~a \\~%" (car dep))
+                    (format t "          ~a~%" (car dep))))
+      (format t "	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} allocate-assets ~a~%"
+              build))
+    (setf *asset-bank-list-batch* nil)))
 
 (defun %makefile-game-title ()
   "Returns the game title used in generated Makefile target names.
@@ -585,56 +667,64 @@ Uses the same path layout as @code{bank-source-pathname}
                                build video)
                  :type "size"))
 
-(defun allocate-assets (build &optional (*machine* 7800))
-  "allocate the banks for assets for BUILD (AA, Public, &c)"
-  (assert (member build +all-builds+ :test 'equal) (build)
-          "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
-  (let ((assets-list (all-assets-for-build build)))
-    (dolist (video (supported-video-types))
-      (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
-              build video)
-      (loop with allocation = (find-best-allocation assets-list
-                                                    :build build :video video)
-            for bank-offset being the hash-keys of allocation
-            for bank = (+ (first-assets-bank build) bank-offset)
-            for assets = (gethash bank-offset allocation)
-            for allocation-list-name = (allocation-list-name bank build video)
-            for allocation-size-name = (allocation-size-name bank build video)
-            unless (and assets (plusp (hash-table-count assets)))
-            do (error "No assets assigned to bank ~2,'0x" bank)
-            do (ensure-directories-exist allocation-list-name)
-            do (with-output-to-file (allocation-file allocation-list-name
-                                                     :if-exists :supersede)
-                 (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
-                         bank (length (hash-table-keys assets)))
-                 (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
-            do (ensure-directories-exist allocation-size-name)
-            do (with-output-to-file (allocation-file allocation-size-name
-                                                     :if-exists :supersede)
-                 (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
-                         (hash-table-plist assets)
-                         (reduce #'+ (hash-table-values assets))))
-            finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
-                             (1- (number-of-banks build video)))
-                      (format *trace-output* "~&… and blank asset lists for: Bank ")
-                      (let ((empty-banks (list)))
-                        (loop for bank from (+ (first-assets-bank build)
-                                               (length (hash-table-keys allocation)))
-                              below (1- (number-of-banks build video))
-                              for allocation-list-name = (allocation-list-name bank build video)
-                              for allocation-size-name = (allocation-size-name bank build video)
-                              do (ensure-directories-exist allocation-list-name)
-                              do (with-output-to-file (allocation-file allocation-list-name
-                                                                       :if-exists :supersede)
-                                   (push bank empty-banks)
-                                   (fresh-line allocation-file))
-                              do (ensure-directories-exist allocation-size-name)
-                              do (with-output-to-file (allocation-file allocation-size-name
-                                                                       :if-exists :supersede)
-                                   (format allocation-file "@	0~%")))
-                        (format *trace-output* "~{~a~^, ~}"
-                                (apply #'compress-sequential-numbers
-                                       (sort empty-banks #'<)))))))))
+(defun allocate-assets (build &optional supplied-machine)
+  "Allocate ROM bank lists for BUILD (Demo, AA, Public, Test).
+
+Uses special @code{*machine*} from the loaded @code{--port} unless
+SUPPLIED-MACHINE overrides it for tests; defaults to machine 7800 when no port
+binding exists."
+  (let ((*machine* (or supplied-machine
+                        (when (boundp '*machine*)
+                          *machine*)
+                        7800)))
+    (assert (member build +all-builds+ :test 'equal) (build)
+            "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
+    (let ((assets-list (all-assets-for-build build)))
+      (dolist (video (supported-video-types))
+        (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
+                build video)
+        (loop with allocation = (find-best-allocation assets-list
+                                                      :build build :video video)
+              for bank-offset being the hash-keys of allocation
+              for bank = (+ (first-assets-bank build) bank-offset)
+              for assets = (gethash bank-offset allocation)
+              for allocation-list-name = (allocation-list-name bank build video)
+              for allocation-size-name = (allocation-size-name bank build video)
+              unless (and assets (plusp (hash-table-count assets)))
+              do (error "No assets assigned to bank ~2,'0x" bank)
+              do (ensure-directories-exist allocation-list-name)
+              do (with-output-to-file (allocation-file allocation-list-name
+                                                       :if-exists :supersede)
+                   (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
+                           bank (length (hash-table-keys assets)))
+                   (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
+              do (ensure-directories-exist allocation-size-name)
+              do (with-output-to-file (allocation-file allocation-size-name
+                                                       :if-exists :supersede)
+                   (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
+                           (hash-table-plist assets)
+                           (reduce #'+ (hash-table-values assets))))
+              finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
+                               (1- (number-of-banks build video)))
+                        (format *trace-output* "~&… and blank asset lists for: Bank ")
+                        (let ((empty-banks (list)))
+                          (loop for bank from (+ (first-assets-bank build)
+                                                 (length (hash-table-keys allocation)))
+                                below (1- (number-of-banks build video))
+                                for allocation-list-name = (allocation-list-name bank build video)
+                                for allocation-size-name = (allocation-size-name bank build video)
+                                do (ensure-directories-exist allocation-list-name)
+                                do (with-output-to-file (allocation-file allocation-list-name
+                                                                         :if-exists :supersede)
+                                     (push bank empty-banks)
+                                     (fresh-line allocation-file))
+                                do (ensure-directories-exist allocation-size-name)
+                                do (with-output-to-file (allocation-file allocation-size-name
+                                                                         :if-exists :supersede)
+                                     (format allocation-file "@	0~%")))
+                          (format *trace-output* "~{~a~^, ~}"
+                                  (apply #'compress-sequential-numbers
+                                         (sort empty-banks #'<))))))))))
 
 (defun number-of-banks (build video)
   (declare (ignore video))
@@ -654,7 +744,7 @@ Uses the same path layout as @code{bank-source-pathname}
     (2609 32)
     ;; Z80 (SMS, Game Gear, ColecoVision, SG-1000): placeholder bank count until banking layout is finalized.
     ((3010 837 2110 9918 1000) 32)
-    ;; Atari VCS800 (native / bundle host): placeholder bank count for tooling symmetry.
+    ;; Atari vcs800 (native / bundle host): placeholder bank count for tooling symmetry.
     (7850 32)))
 
 (defun included-file (line)
@@ -756,7 +846,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (6800 "WSC")
     (7600 "O2")
     (7800 "7800")
-    (7850 "VCS800")
+    (7850 "vcs800")
     (7801 "SC")
     (8011 "Jag")
     (9001 "PSX")
@@ -809,7 +899,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (:|WSC| 6800)
     (:|O2| 7600)
     (:|7800| 7800)
-    (:|VCS800| 7850)
+    (:|vcs800| 7850)
     (:|SC| 7801)
     (:|Jag| 8011)
     (:|PSX| 9001)
@@ -879,21 +969,21 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
       (200 ; Lynx
        (format t "~%
 Source/Generated/Lynx/Assets/Blob/~a.s: ~a \\
-~10tbin/skyline-tool
+          bin/skyline-tool
 	mkdir -p Source/Generated/Lynx/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Source/Generated/Lynx/Assets"
                blob-name blob-path))
       (7800 ; Atari 7800
        (format t "~%
-Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	bin/skyline-tool --port 7800 blob-rip-7800 $<"
                machine-dir blob-name blob-png-path machine-dir))
-      ((5200 400 800) ; Atari 8-bit cart ports (same blob pipeline as 7800; ripper is 7800-named)
+      ((5200 400 800) ; Maria-class cart ports — ANTIC Mode E BLOBs, not 7800 DLHeader stamps
        (format t "~%
-Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
-	bin/skyline-tool --port ${PORT} blob-rip-7800 $<"
+	bin/skyline-tool --port ${PORT} blob-rip-5200 $<"
                machine-dir blob-name blob-png-path machine-dir))
       ((35902 20953) ; Game Boy (DMG) and Game Boy Color
        ;; Check if this is an SGB frame
@@ -913,10 +1003,23 @@ Source/Generated/~a/Assets/Blob.~a.s: ~a~%	bin/skyline-tool
                    (if (= *machine* 20953) "CGB" "DMG") machine-dir)))
       (2609 ; Intellivision — tile-mapped blob screen + GRAM cards
        (format t "~%
-Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%~10tbin/skyline-tool
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"
-               machine-dir blob-name blob-png-path machine-dir)))))
+               machine-dir blob-name blob-png-path machine-dir))
+      ((3010 9918 1000 837 2110) ; Z80 + TMS9918 family (SMS, ClcV, SG-1000, GG, VS)
+       ;; ColecoVision uses Blob.<stem>.ClcV.s (see asset->object-name); others Blob.<stem>.s.
+       (if (= *machine* 9918)
+           (format t "~%
+Source/Generated/~a/Assets/Blob.~a.ClcV.s: ~a\\~%          bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
+                   machine-dir blob-name blob-png-path machine-dir)
+           (format t "~%
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
+                   machine-dir blob-name blob-png-path machine-dir))))))
 
 (defun write-art-generation (pathname)
   "Generates Makefile rules for compiling art assets for the current platform.
@@ -992,15 +1095,15 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
              (not (search "Decals2" (pathname-name pathname))))
         (format t "~%
 Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx Source/Maps/Tiles/CommonDecals.tsx \\
-~10tSource/Maps/Tiles/~:*~a.png Source/Maps/Tiles/CommonDecals.png \\
-~10tbin/skyline-tool
+          Source/Maps/Tiles/~:*~a.png Source/Maps/Tiles/CommonDecals.png \\
+          bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port ${PORT} compile-tileset $< Source/Maps/Tiles/CommonDecals.tsx"
                 machine-dir (pathname-name pathname) machine-dir)
         (format t "~%
 Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
-~10tSource/Maps/Tiles/~:*~a.png \\
-~10tbin/skyline-tool
+          Source/Maps/Tiles/~:*~a.png \\
+          bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port ${PORT} compile-tileset $<"
                 machine-dir (pathname-name pathname) machine-dir))))
@@ -1402,7 +1505,7 @@ Machines are divided into three naming conventions:
 
 @itemize
 @item
-@strong{Standard video-dependent} — Atari 7800/VCS800/5200/400/800 and
+@strong{Standard video-dependent} — Atari 7800/vcs800/5200/400/800 and
 all TV-connected ports (NES, SNES, SMS, TG16, etc.): object paths include
 the video-standard suffix, e.g.@:
 @file{Object/NES/Assets/Song.Title.ntsc.o}.
@@ -1554,7 +1657,7 @@ registered in @code{machine-directory-name}.
                              machine-dir (substitute #\. #\/ name)))
 		((equal kind "Blobs")
 		 (format nil "Source/Generated/~a/Assets/Blob.~a.ClcV.s"
-                             machine-dir name))
+                             machine-dir (%asset-leaf-name name)))
 		(t
 		 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name))))))))
 
@@ -1646,9 +1749,13 @@ and target platform. Handles special cases for different machines and video mode
          (format nil "bin/skyline-tool --port ${PORT} compile-script $< Source/Generated/~a/Assets/Script.~{~a~^.~}.forth~%	bin/skyline-tool --port ${PORT} compile-forth Source/Generated/~a/Assets/Script.~{~a~^.~}.forth $@"
                  machine-dir name machine-dir name))
         ((equal kind "Blobs")
-         (if (= *machine* 2609)
-	   (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@")
-	   (format nil "bin/skyline-tool --port ${PORT} dispatch-png $< Object/~a/Assets" machine-dir)))
+         (cond
+           ((= *machine* 2609)
+            (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"))
+           ((member *machine* '(3010 9918 1000 837 2110))
+            (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"))
+           (t
+            (format nil "bin/skyline-tool --port ${PORT} dispatch-png $< Object/~a/Assets" machine-dir))))
         (t (error "Asset kind ~a not known" kind))))))
 
 (defun write-asset-compilation/music (asset-indicator)
@@ -1670,7 +1777,7 @@ and target platform. Handles special cases for different machines and video mode
     (dolist (video (supported-video-types))
       (format t "
 ~a: ~a \\
-~10tSource/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
+          Source/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
 	mkdir -p ~a
 	~a"
 	      (asset->object-name asset-indicator :video video)
@@ -1686,7 +1793,7 @@ and target platform. Handles special cases for different machines and video mode
     (dolist (video (supported-video-types))
       (format t "~%
 ~a: ~a \\
-~10tSource/Assets.index bin/skyline-tool
+          Source/Assets.index bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	~a"
 	    (asset->object-name asset-indicator :video video)
@@ -1694,27 +1801,38 @@ and target platform. Handles special cases for different machines and video mode
 	    machine-dir
 	    (asset-compilation-line asset-indicator :video video)))))
 
+(defun makefile-blob-videos ()
+  "Video keywords to emit for blob compile rules.
+
+Blobs whose paths omit a video suffix (TMS9918-family Z80 ports) must not
+emit duplicate GNU Make targets for :ntsc / :pal / :secam."
+  (if (member *machine* '(3010 9918 1000 837 2110))
+      '(:ntsc)
+      (supported-video-types)))
+
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
     (if (= *machine* 2609)
         (format t "~%
 ~a: ~a \\
-~10tSource/Assets.index bin/skyline-tool
+          Source/Assets.index bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	~a"
                 (asset->object-name asset-indicator)
                 (asset->source-name asset-indicator)
                 machine-dir
                 (asset-compilation-line asset-indicator :video :ntsc))
-        (dolist (video (supported-video-types))
+        (dolist (video (makefile-blob-videos))
           (format t "~%
 ~a: ~a \\
-~10tSource/Assets.index bin/skyline-tool
-	mkdir -p Object/~a/Assets
+          Source/Assets.index bin/skyline-tool
+	mkdir -p ~a
 	~a"
                   (asset->object-name asset-indicator :video video)
                   (asset->source-name asset-indicator)
-                  machine-dir
+                  (if (member *machine* '(3010 9918 1000 837 2110))
+                      (format nil "Source/Generated/~a/Assets" machine-dir)
+                      (format nil "Object/~a/Assets" machine-dir))
                   (asset-compilation-line asset-indicator :video video))))))
 
 (defun write-asset-compilation (asset-indicator)
@@ -1731,14 +1849,20 @@ and target platform. Handles special cases for different machines and video mode
 	   (2609 ; Intellivision — tile map + GRAM (see @code{compile-blob-intv})
 	    (format *trace-output* "~&(Write-Asset-Compilation processing INTV BLOB ~a)" asset-indicator)
 	    (write-asset-compilation/blob asset-indicator))
-	   (otherwise ; Other machines - ignore blobs for now
+	   (5200 ; Atari 5200 — Mode E bitmap blobs (@code{dispatch-png})
+	    (format *trace-output* "~&(Write-Asset-Compilation processing 5200 BLOB ~a)" asset-indicator)
+	    (write-asset-compilation/blob asset-indicator))
+	   ((3010 9918 1000 837 2110) ; SMS, ColecoVision, SG-1000, Game Gear, VS — TMS9918 family
+	    (format *trace-output* "~&(Write-Asset-Compilation processing TMS9918-family BLOB ~a)" asset-indicator)
+	    (write-asset-compilation/blob asset-indicator))
+	   (otherwise ; Machines without per-port blob makefile integration yet
 	    (format *trace-output* "~&(Write-Asset-Compilation is ignoring BLOB ~a for machine ~A)"
                       asset-indicator *machine*))))
           ((script-asset-p asset-indicator)
            (format t "~%
-~a: ~a~@[ \\~%~10t~a~] \\
-~10tSource/Generated/~a/Labels.Public.NTSC.forth Source/Generated/~a/Classes.forth \\
-~10tSource/Assets.index bin/skyline-tool
+~a: ~a~@[ \\~%          ~a~] \\
+          Source/Generated/~a/Labels.Public.NTSC.forth Source/Generated/~a/Classes.forth \\
+          Source/Assets.index bin/skyline-tool
 	# FIXME: #1237 NTSC is not actually right for everyone
 	mkdir -p Object/~a/Assets
 	~a"
@@ -1751,8 +1875,8 @@ and target platform. Handles special cases for different machines and video mode
           (t
            (cerror "Continue with generic code" "Unexpected asset kind in indicator: ~a" asset-indicator)
            (format t "~%
-~a: ~a~@[\\~%	~a~]\\
-~10tSource/Assets.index bin/skyline-tool
+~a: ~a~@[\\~%          ~a~]\\
+          Source/Assets.index bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	~a"
                    (asset->object-name asset-indicator)
@@ -1888,18 +2012,13 @@ Reads the assets index (cached) and overwrites the three output files.
          (asm-flags (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                           ((equal build "Demo") "-DDEMO=true")
                           (t ""))))
-    (format t "~%
-Source/Generated/${PORT}/Bank~a.~a.~a.list: Source/Assets.index \\
-~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
-	bin/skyline-tool --port ${PORT} allocate-assets ~a
-~%"
-	    bank-hex build video asset-objects build)
+    (note-asset-bank-list-target bank)
     ;; Keep argument order explicit in this format string.
     ;; Relative argument jumps (~n:*) have proven brittle and can emit
     ;; malformed prerequisite tokens in generated Makefiles.
     (format t "
 Source/Generated/${PORT}/Bank~a.~a.~a.s: Source/Assets.index Source/Generated/${PORT}/Bank~a.~a.~a.list \\
-~10tbin/skyline-tool \\~{~%~10t~a~^ \\~}
+          bin/skyline-tool \\~{~%          ~a~^ \\~}
 	bin/skyline-tool --port ${PORT} write-asset-bank ~x ~a ~a
 ~%"
 	    bank-hex build video
@@ -1910,15 +2029,14 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: Source/Assets.index Source/Generated/${
 Object/${PORT}/Bank~a.~a.~a.o \\
   ~3:*Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
   ~3:*Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt: \\
-~20tSource/Generated/${PORT}/Bank~a.~a.~a.s \\
-~20tSource/Assets.index bin/skyline-tool \\~{~%~20t~a~^ \\~}
+~0@*                    Source/Generated/${PORT}/Bank~a.~a.~a.s \\
+                    Source/Assets.index bin/skyline-tool \\~{~%                    ~a~^ \\~}
 	mkdir -p Object/${PORT}
 	~a -DTV=~a ~a \\~{~%		-I ~a \\~}
 		~0@*-l Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt \\
                     ~0@*-L Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
 		~0@*$< -o Object/${PORT}/Bank~a.~a.~a.o
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~a.~a.~a.o.list.txt"
-	    bank-hex build video
 	    bank-hex build video
 	    object-deps
 	    (assembler-invocation-macro)
@@ -1940,7 +2058,7 @@ to EIGHTBOL (@file{Source/Classes/*.cob})."
   (when (= *bank* *last-bank*)
     (format t "~%
 ~*Source/Generated/${PORT}/LastBankDefs.~a.~a.s: ~0@*Object/${PORT}/Bank~2,'0x.~a.~a.o \\
-~10t~0@*Object/${PORT}/Bank~2,'0x.~a.~a.o.LABELS.txt
+          ~0@*Object/${PORT}/Bank~2,'0x.~a.~a.o.LABELS.txt
 	bin/skyline-tool --port ${PORT} labels-to-include ~0@*Object/${PORT}/Bank~2,'0x.~a.~a.o.LABELS.txt \\
 		c000 ffff ~1@*LastBankDefs.~a.~a"
 	  *bank* build video))
@@ -1949,14 +2067,15 @@ to EIGHTBOL (@file{Source/Classes/*.cob})."
 Object/${PORT}/Bank~a.~a.~a.o ~
 ~3:*Object/${PORT}/Bank~a.~a.~a.o.list.txt ~
 ~3:*Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt: ~
-~{ \\~%~20t~a~}~@[ \\~%~20t~a~]
+~{ \\~%                    ~a~}~@[ \\~%                    ~a~] \\
+                    bin/skyline-tool
 	mkdir -p Object/${PORT}
 	-rm -f $@
 	~a -DTV=~a \\
-		~@[-DLASTBANK=true -DBANK=~d ~] -DFIRSTASSETSBANK=~d \\
+		~a-DFIRSTASSETSBANK=~d \\
 		~a \\~{~%		-I ~a \\~}
 		~0@*-l Object/${PORT}/Bank~a.~a.~a.o.LABELS.txt \\
-		~0@*-L Object/${PORT}/Bank~a.~a.~a.o.list.txt $< \\
+                    ~0@*-L Object/${PORT}/Bank~a.~a.~a.o.list.txt $< \\
 		~0@*-o Object/${PORT}/Bank~a.~a.~a.o 2>&1 | \\
 		tee ~0@*Object/${PORT}/Bank~a.~a.~a.out
 	echo \"@	$$(grep 'warning: Bank .~0@*~a ends at ' ~
@@ -1966,13 +2085,14 @@ Object/${PORT}/Bank~a.~a.~a.o ~
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~a.~a.~a.o.list.txt
 	[ -f $@ ]
 "
-	  bank-hex build video (recursive-read-deps bank-source)
+	  bank-hex build video
+	  (recursive-read-deps bank-source)
 	  (if (= *bank* *last-bank*)
 	      "Source/Generated/${PORT}/Orchestration.s"
 	      (format nil "Source/Generated/${PORT}/LastBankDefs.~a.~a.s" build video))
 	  (assembler-invocation-macro)
 	  video
-	  (when (= *bank* *last-bank*) *bank*)
+	  (if (= *bank* *last-bank*) "-DLASTBANK=true " "")
 	  (first-assets-bank build)
 	  (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                   ((equal build "Demo") "-DDEMO=true")
@@ -2010,7 +2130,7 @@ Dist/$(PORT)/~a.Test.a78: Dist/$(PORT)/~:*~a.Test.bin
 	bin/7800sign -w $@
 
 Dist/$(PORT)/~:*~a.Test.bin: \\~
-~{~%~10tObject/${PORT}/Bank~a.Test.o~^ \\~}
+~{~%          Object/${PORT}/Bank~a.Test.o~^ \\~}
 	mkdir -p Dist/${PORT}
 	cat $^ > $@
 
@@ -2033,7 +2153,7 @@ Dist/$(PORT)/~a.~a.~a.a78: ~0@* Dist/$(PORT)/~a.~a.~a.bin
 
 ~0@*
 Dist/$(PORT)/~a.~a.~a.bin: \\~
-~{~%~10tObject/${PORT}/Bank~a.~a.~a.o~^ \\~}
+~{~%          Object/${PORT}/Bank~a.~a.~a.o~^ \\~}
 	mkdir -p Dist/${PORT}
 	cat $^ > $@
 
@@ -2051,7 +2171,7 @@ Dist/$(PORT)/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 	cp $^ $@
 
 Object/Phantasia.CBM.zip: \\~
-~{~%~10tObject/Phantasia.CBM/~a ~^ \\~}
+~{~%          Object/Phantasia.CBM/~a ~^ \\~}
 	mkdir -p Dist/${PORT}
 	zip $@ $^
 
@@ -2063,7 +2183,7 @@ Dist/$(PORT)/Phantasia.CBM.zip: ~0@* Object/Phantasia.CBM.zip
 	cp $^ $@
 
 Object/Phantasia.CBM.zip: \\~
-~{~%~10tObject/Phantasia.CBM/~a ~^ \\~}
+~{~%          Object/Phantasia.CBM/~a ~^ \\~}
 	mkdir -p Dist/${PORT}
 	zip $@ $^
 
@@ -2072,9 +2192,10 @@ Object/Phantasia.CBM.zip: \\~
                  (%makefile-game-title)))
     ((5200 400 800) (format t "~%
 Dist/$(PORT)/~a.~a.~a.bin: \\~
-~{~%~10tObject/${PORT}/Bank~a.~a.~a.o~^ \\~}
+~{~%          Object/${PORT}/Bank~a.~a.~a.o~^ \\~}
 	mkdir -p Dist/${PORT}
-	cat $^ > $@.wip
+	rm -f $@.wip
+	for bank_o in $^; do tail -c 32768 \"$$bank_o\" >> $@.wip; done
 	dd if=$@.wip of=$@ bs=1048576 conv=sync
 	rm -f $@.wip
 "
@@ -2115,7 +2236,7 @@ Uses *ASSETS-FOR-BUILDS* as a cache"
   "Write the makefile for assets for BUILD and VIDEO"
   (assert build) (assert video)
   (format t "
-Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%~10t~a~^ \\~}
+Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%          ~a~^ \\~}
 	bin/skyline-tool --port ${PORT} allocate-assets ~a"
           *bank*
           build video
@@ -2237,7 +2358,8 @@ Object/${PORT}/Bank~2,'0x.Test.o:
 	    ;; a make cycle ( defs are emitted from LAST bank labels ).  ~:[ uses
 	    ;; one explicit FORMAT argument per CLHS 22.3.7.2.
 	    (format t "~%
-Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%~20t~a~}~:[~; \\~%~20tSource/Generated/${PORT}/LastBankDefs.Test.NTSC.s~] | $(EIGHTBOL_CLASS_OUTPUTS)
+Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%                    Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s~] \\
+                    bin/skyline-tool | $(EIGHTBOL_CLASS_OUTPUTS)
 	mkdir -p Object/${PORT}
 	~a ~@[~a~] -DTV=NTSC -DUNITTEST=true \\
 	-DFIRSTASSETSBANK=~d ~{ \\~%		-I ~a ~} \\
@@ -2256,7 +2378,7 @@ Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%~20t~a~}~:[~; \\~%~20tSource/Generated/$
 		    (/= *bank* *last-bank*)
 		    (assembler-invocation-macro)
 		    (when (= *bank* *last-bank*)
-		      (format nil "-DBANK=~d -DLASTBANK=true" *bank*))
+		      "-DLASTBANK=true")
 		    (first-assets-bank "Test")
 		    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
 			    (include-paths-for-current-bank))))))))
@@ -2349,7 +2471,19 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
          -I Source/Generated/$(PORT)/Classes \\
          -I Source/Classes~a"
                    pascal class-id class-id post-sed)))
-        (t nil)))))
+        (t nil))))
+  (let ((outputs
+         (loop for class-id in (eightbol-sources)
+               for bas = (merge-pathnames (make-pathname :name class-id :type "bas")
+                                          #p"Source/Classes/")
+               for cob = (merge-pathnames (make-pathname :name class-id :type "cob")
+                                          #p"Source/Classes/")
+               when (or (probe-file bas) (probe-file cob))
+                 collect (format nil "Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s"
+                                 (pascal-case class-id)))))
+    (when outputs
+      (format t "~%# Concrete class outputs for order-only bank prerequisites (see write-bank-makefile).~%")
+      (format t "EIGHTBOL_CLASS_OUTPUTS :=~{ ~a~}~%" outputs))))
 
 (defun bank-source-pathname (&optional (bank *bank*))
   (if (and *last-bank* bank (= bank *last-bank*))
@@ -2385,16 +2519,18 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
+        (reset-asset-bank-list-batch)
         (dotimes (*bank* (1+ *last-bank*))
           (cond
-	  ((and (= *last-bank* #x3f)
+            ((and (= *last-bank* #x3f)
                   (= *bank* #x3e))
-	   (write-ram-bank-makefile :build build :video video))
-	  ((probe-file (bank-source-pathname))
-	   (write-bank-makefile (bank-source-pathname)
+             (write-ram-bank-makefile :build build :video video))
+            ((probe-file (bank-source-pathname))
+             (write-bank-makefile (bank-source-pathname)
                                   :build build :video video))
-	  (t (write-asset-bank-makefile *bank*
-                                          :build build :video video))))))))
+            (t (write-asset-bank-makefile *bank*
+                                          :build build :video video))))
+        (emit-grouped-asset-bank-list-rules build video)))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 200)))
   "Write makefile content for Atari Lynx"
@@ -2402,6 +2538,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
     (let ((*last-bank* (1- (number-of-banks build nil))))
       (write-makefile-top-line :build build)
       (write-header-script :build build)
+      (reset-asset-bank-list-batch)
       (dotimes (*bank* (1+ *last-bank*))
         (let ((bank-source (bank-source-pathname)))
           (cond
@@ -2415,11 +2552,13 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 	     (write-bank-makefile bank-source
                                   :build build))
 	    (t (write-asset-bank-makefile *bank*
-                                          :build build))))))))
+                                          :build build))))))
+      (emit-grouped-asset-bank-list-rules build nil)))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 64)))
   "Write makefile content for Commodore 64"
   (write-makefile-top-line)
+  (reset-asset-bank-list-batch)
   (dotimes (*bank* (1+ *last-bank*))
     (let ((bank-source (bank-source-pathname)))
       (cond
@@ -2427,7 +2566,8 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-bank-makefile (last-bank-source-pathname)))
         ((probe-file bank-source)
          (write-bank-makefile bank-source))
-        (t (write-asset-bank-makefile *bank*))))))
+        (t (write-asset-bank-makefile *bank*)))))
+  (emit-grouped-asset-bank-list-rules nil nil))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 3010)))
   "Append SMS note: Z80 build uses Source/Build/SMS.mak and ASZ80 (sjasmplus), not 64tass per-bank assembly."
@@ -2474,6 +2614,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 	      (*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
           (write-header-script :build build :video video)
+          (reset-asset-bank-list-batch)
           (dotimes (*bank* (1+ *last-bank*))
 	    (let ((bank-source (bank-source-pathname)))
 	      (cond
@@ -2484,7 +2625,8 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
                  (write-bank-makefile bank-source
 				      :build build :video video))
                 (t (write-asset-bank-makefile *bank*
-					      :build build :video video))))))))))
+					      :build build :video video)))))
+          (emit-grouped-asset-bank-list-rules build video))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 5200)))
   "Write makefile content for Atari 5200 (32 × 32 KiB banks, 1 MiB concatenated image)."
@@ -2504,6 +2646,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 (defmethod write-master-makefile-for-machine ((machine (eql 81)))
   "Write makefile content for ZX81 platform"
   (write-makefile-top-line)
+  (reset-asset-bank-list-batch)
   (dotimes (*bank* (1+ *last-bank*))
     (let ((bank-source (bank-source-pathname)))
       (cond
@@ -2513,11 +2656,13 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-bank-makefile bank-source
 			      :build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-				      :build "Public" :video "NTSC"))))))
+				      :build "Public" :video "NTSC")))))
+  (emit-grouped-asset-bank-list-rules "Public" "NTSC"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 2068)))
   "Write makefile content for ZX Spectrum platform"
   (write-makefile-top-line)
+  (reset-asset-bank-list-batch)
   (dotimes (*bank* (1+ *last-bank*))
     (let ((bank-source (bank-source-pathname)))
       (cond
@@ -2527,11 +2672,13 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-bank-makefile bank-source
 			      :build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-				      :build "Public" :video "NTSC"))))))
+				      :build "Public" :video "NTSC")))))
+  (emit-grouped-asset-bank-list-rules "Public" "NTSC"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 128)))
   "Write makefile content for Commodore 128"
   (write-makefile-top-line)
+  (reset-asset-bank-list-batch)
   (dotimes (*bank* (1+ *last-bank*))
     (let ((bank-source (bank-source-pathname)))
       (cond
@@ -2539,7 +2686,8 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-bank-makefile (last-bank-source-pathname)))
         ((probe-file bank-source)
          (write-bank-makefile bank-source))
-        (t (write-asset-bank-makefile *bank*))))))
+        (t (write-asset-bank-makefile *bank*)))))
+  (emit-grouped-asset-bank-list-rules nil nil))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 20953)))
   "Write makefile content for Game Boy Color"
@@ -2548,6 +2696,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
+        (reset-asset-bank-list-batch)
         (dotimes (*bank* (1+ *last-bank*))
           (let ((bank-source (bank-source-pathname)))
 	    (cond
@@ -2558,7 +2707,8 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 	       (write-bank-makefile bank-source
 				    :build build :video video))
 	      (t (write-asset-bank-makefile *bank*
-					    :build build :video video)))))))))
+					    :build build :video video)))))
+        (emit-grouped-asset-bank-list-rules build video)))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 2609)))
   "Write makefile tail for Intellivision (Mattel CP1610).
@@ -2616,7 +2766,15 @@ Source/Generated/{platform}/Makefile with all build rules
 @item Behavior
 Creates a comprehensive Makefile containing rules for building all assets,
 generating bank allocations, and compiling platform-specific code.
-This Makefile handles everything not covered by the top-level Makefile."
+This Makefile handles everything not covered by the top-level Makefile.
+
+Do not shell-redirect standard output of @command{bin/skyline-tool … write-master-makefile}
+into the generated Makefile path: the process may also have file descriptor 1 attached
+to that path, which then receives @code{*trace-output*} progress lines and corrupts the
+file interleaved with @code{*standard-output*} content.  Progress is sent to
+@code{*trace-output*}, rebound to @code{*error-output*} for the duration of the write so
+accidental @samp{> Makefile} only duplicates Makefile bytes on fd 1 while trace stays on
+stderr."
   (let* ((root (uiop:ensure-directory-pathname (project-root)))
          (gen-dir (merge-pathnames
                    (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name)))
@@ -2627,7 +2785,7 @@ This Makefile handles everything not covered by the top-level Makefile."
     (with-output-to-file (*standard-output* gen-mf
 					    :if-exists :supersede
 					    :external-format :utf-8)
-      (progn
+      (let ((*trace-output* *error-output*))
         (setf *makefile-bank-rules-emitted* (make-hash-table :test 'equal))
         (let ((*region* nil))
           (write-makefile-header)
@@ -2639,8 +2797,8 @@ This Makefile handles everything not covered by the top-level Makefile."
           (unless (member *machine* '(5200 400 800 2609 200))
 	    (write-makefile-test-target)
 	    (write-test-header-script)
-	    (write-makefile-test-banks)))
-        (write-master-makefile-for-machine *machine*)))
+	    (write-makefile-test-banks))
+        (write-master-makefile-for-machine *machine*))))
     (%scrub-makefile-nul-bytes gen-mf)
     (format *trace-output* " … done writing master Makefile.~%")))
 
@@ -2937,7 +3095,8 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
   (let ((kind (kind-by-name kind$)))
       (when (some predicate assets)
       (when (and (equal :map kind)
-                 (not (= *machine* 2609)))
+                 (not (= *machine* 2609))
+                 (= *machine* 7800))
         (format source "~&~10t.include \"ZX7Decompressor.s\""))
       (format source "~&~10t.include \"Load~:(~a~).s\"~2%~:(~a~)s:" kind kind)
       (dolist (asset (remove-if-not predicate assets))
@@ -2980,6 +3139,12 @@ If CHAR does not occur in STRING, returns STRING."
       (subseq string (1+ position))
     string))
 
+(defun start-bank-include-name ()
+  "Return @file{StartBank.s} or @file{StartAssetBank.s} for the active @code{*machine*}."
+  (if (member *machine* '(5200 400 800))
+      "StartAssetBank.s"
+      "StartBank.s"))
+
 (defun write-asset-bank (bank-hex build video)
   "Write out the skeletal bank file for BANK-HEX for BUILD with VIDEO formats specified.
 
@@ -3002,7 +3167,7 @@ based on the asset listing files."
 
 ~10tBANK = $~2,'0x
 
-~10t.include \"StartBank.s\"
+~10t.include \"~a\"
 
 VLoadMap:~10t~:[sec
 ~10trts
@@ -3018,6 +3183,7 @@ VLoadBlob:~10t~:[sec
 ~10tnop~;jmp LoadBlob~]
 ~2%"
 	      *bank* *bank*
+	      (start-bank-include-name)
 	      (some #'map-asset-p assets)
 	      (some #'song-asset-p assets)
 	      (some #'script-asset-p assets)
@@ -3214,22 +3380,36 @@ Creates parent directories if needed; overwrites the output file."
       (finish-output *error-output*))))
 
 (defun assemble-with-64tass (source-name object-name error-stream)
-  (let ((cmd (list "64tass" "--nostart" "--long-branch"
-                   "--case-sensitive" "--ascii" "-Wall"
-                   "-Werror=shadow" "-Werror=wrap-pc"
-                   "-Wno-leading-zeros" "--m6502" "-m" "--tab-size=1"
-                   "--verbose-list" "-DTV=NTSC"
-                   "-I"
-                   (enough-namestring
-		    (merge-pathnames (format nil "Source/Code/~a/Common/" (machine-directory-name))))
-                   "-I"
-                   (enough-namestring
-		    (merge-pathnames (make-pathname :directory (list :relative
-								     "Source" "Generated"
-								     (machine-directory-name)))))
-                   (enough-namestring source-name)
-                   "-o"
-                   (enough-namestring object-name))))
+  (let* ((machine (machine-directory-name))
+         (cmd (list* "64tass" "--nostart" "--long-branch"
+                     "--case-sensitive" "--ascii" "-Wall"
+                     "-Werror=shadow" "-Werror=wrap-pc"
+                     "-Wno-leading-zeros" "--m6502" "-m" "--tab-size=1"
+                     "--verbose-list" "-D" "TV=NTSC"
+                     (append
+                      (list "-I"
+                            (enough-namestring
+                             (merge-pathnames (format nil "Source/Code/~a/" machine)))
+                            "-I"
+                            (enough-namestring
+                             (merge-pathnames (format nil "Source/Code/~a/Common/" machine)))
+                            "-I"
+                            (enough-namestring
+                             (merge-pathnames (format nil "Source/Code/~a/Stagehand/" machine)))
+                            "-I"
+                            (enough-namestring
+                             (merge-pathnames (make-pathname :directory (list :relative
+                                                                              "Source" "Generated"
+                                                                              machine))))
+                            "-I"
+                            (enough-namestring
+                             (merge-pathnames (make-pathname :directory (list :relative
+                                                                              "Source" "Generated"
+                                                                              machine
+                                                                              "Assets")))))
+                      (list (enough-namestring source-name)
+                            "-o"
+                            (enough-namestring object-name))))))
     (format *trace-output* "~&~{~a~^ ~}" cmd)
     (run-program cmd
                  :error-output error-stream
@@ -3238,16 +3418,19 @@ Creates parent directories if needed; overwrites the output file."
 (defun write-assembly-skeleton-for-size (tmp.s pathname)
   (format tmp.s ";;; Temporary rig to get size of “~a”" (enough-namestring pathname))
   (format tmp.s "
-~10t.include \"StartBank.s\"
-~10t.include \"SpeakJet.s\"
-~10tBANK=0
-Start:
+~10tBANK = $00
+~10t.include \"~a\"
+"
+          (start-bank-include-name))
+  (when (not (member *machine* '(5200 400 800)))
+    (format tmp.s "~10t.include \"SpeakJet.s\"~%"))
+  (format tmp.s "Start:
 ~10t.include ~s
 
 ~10t.dsection BankData
 ~10t.error format(\"$SIZE$%04x\", (* - Start))
 "
-          (namestring (merge-pathnames pathname)))
+          (file-namestring pathname))
   (finish-output tmp.s))
 
 (defun compress-sequential-numbers (first &optional next &rest rest)
@@ -3312,7 +3495,7 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
         (machine-dir (machine-directory-name)))
     (format t "~%
 ~a: ~a \\
-~10tbin/skyline-tool
+          bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Object/~a/Assets"
 	    object-name source-name machine-dir machine-dir)))

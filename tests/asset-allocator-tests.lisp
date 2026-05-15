@@ -229,7 +229,7 @@ sizes (due to loader overhead)."
   (is (= (skyline-tool::machine-number-by-tag "2600") 2600) "2600 tag should map to 2600")
   (is (= (skyline-tool::machine-number-by-tag "nes") 8) "nes tag should map to 8")
   (is (= (skyline-tool::machine-number-by-tag "5200") 5200) "5200 tag should map to 5200")
-  (is (= (skyline-tool::machine-number-by-tag "VCS800") 7850) "VCS800 tag should map to 7850"))
+  (is (= (skyline-tool::machine-number-by-tag "vcs800") 7850) "vcs800 tag should map to 7850"))
 
 ;; Test extract-palette function
 (test extract-palette-existence
@@ -274,7 +274,7 @@ by LABEL) when applied to ASSET-INDICATOR."
 (test asset-object-name-standard-machines-songs
   "ASSET->OBJECT-NAME must return a video-suffixed Song path for every
 standard TV-connected machine and must not signal ECASE failure."
-  (dolist (entry '((7800 "7800") (7850 "VCS800") (5200 "5200")
+  (dolist (entry '((7800 "7800") (7850 "vcs800") (5200 "5200")
                    (400 "400") (800 "800")
                    (1 "Oric") (2 "A2") (3 "A3") (8 "NES") (9 "NG")
                    (15 "F") (16 "TG16") (20 "VIC20") (23 "A2e")
@@ -393,6 +393,41 @@ the .CBM. marker to disambiguate from standard 6502 builds."
           "ClcV Song path must contain 'ClcV', got ~s" song)
       (is (search "ClcV" map)
           "ClcV Map path must contain 'ClcV', got ~s" map))))
+
+(test asset-object-name-clcv-blob-uses-leaf-name
+  "ColecoVision blob targets must use the PNG stem only, not Blobs/ClcV/… path components."
+  (with-machine 9918
+    (let ((blob (skyline-tool::asset->object-name "Blobs/ClcV/TitleCard")))
+      (is (string= blob "Source/Generated/ClcV/Assets/Blob.TitleCard.ClcV.s")
+          "ClcV blob object path should be ~s, got ~s"
+          "Source/Generated/ClcV/Assets/Blob.TitleCard.ClcV.s" blob))))
+
+(test write-asset-compilation-clcv-blob-not-ignored
+  "write-asset-compilation must emit TMS9918 blob rules for machine 9918, not skip them."
+  (with-machine 9918
+    (let* ((trace (make-string-output-stream))
+           (stdout (with-output-to-string (out)
+                     (let ((*trace-output* trace)
+                           (*standard-output* out))
+                       (skyline-tool::write-asset-compilation "Blobs/ClcV/TitleCard"))))
+           (msg (get-output-stream-string trace)))
+      (is (search "TMS9918-family" msg)
+          "trace should mention TMS9918-family processing, got: ~s" msg)
+      (is (null (search "ignoring BLOB" msg))
+          "trace must not ignore ClcV blobs: ~s" msg)
+      (is (search "blob-rip-tms9918" stdout)
+          "makefile recipe should call blob-rip-tms9918, got: ~s" stdout))))
+
+(test write-blob-generation-clcv-emits-tms-ripper
+  "write-blob-generation must not fall through ECASE on machine 9918."
+  (with-machine 9918
+    (let ((stdout (with-output-to-string (out)
+                    (skyline-tool::write-blob-generation
+                     #p"Source/Blobs/ClcV/TitleCard.xcf"))))
+      (is (search "blob-rip-tms9918" stdout)
+          "ClcV blob rule should invoke blob-rip-tms9918, got: ~s" stdout)
+      (is (search "Blob.TitleCard.ClcV.s" stdout)
+          "ClcV blob rule should target Blob.<stem>.ClcV.s, got: ~s" stdout))))
 
 ;;; SUPPORTED-VIDEO-TYPES — portable machines must return a single-element list.
 
