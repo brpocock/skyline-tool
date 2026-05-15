@@ -111,7 +111,7 @@ Two values: plist suitable for @code{getf}, and remaining strings
     (values plist rest)))
 
 (defun cbm-petscii-docs (&rest args)
-  "Fallback: emit PHANTASIA.DOC.*.SEQ under OUT-DIR without VICE petcat.
+  "Fallback: emit phantasia.doc.*.seq under OUT-DIR without VICE petcat.
 
 When VICE @command{petcat} is available, the build should use it instead
 (e.g. @samp{petcat -text -w2 -o OUT.seq -- MASTER.txt} per the VICE manual)
@@ -140,8 +140,8 @@ Creates DIRECTORY, writes two @code{SEQ} binaries, prints byte counts
       (let ((root (merge-pathnames
                    #p"Source/Code/CBM/Reference/petscii/"
                    (project-root)))
-            (pairs '(("MANUAL-RETAIL-MASTER.txt" . "PHANTASIA.DOC.MANUAL.SEQ")
-                     ("DEMO-ZIP-MASTER.txt" . "PHANTASIA.DOC.DEMO.SEQ"))))
+            (pairs '(("MANUAL-RETAIL-MASTER.txt" . "phantasia.doc.manual.seq")
+                     ("DEMO-ZIP-MASTER.txt" . "phantasia.doc.demo.seq"))))
         (dolist (pair pairs)
           (destructuring-bind (src-name . dst-name) pair
             (let ((src (merge-pathnames src-name root)))
@@ -278,7 +278,7 @@ Writes three files; prints a short confirmation
                                      "Bootstrap record0 placeholder - replace T/S "
                                      "and chain with geoProgrammer or disk tools.")))
                  (rec (%build-geos-record-index-sector track-n sector-n))
-                 (dir (pathname out-dir)))
+                 (dir (uiop:ensure-directory-pathname (pathname out-dir))))
             (ensure-directories-exist dir)
             (let ((info-file (merge-pathnames "PhantasiaBoot-info.bin" dir))
                   (rec-file (merge-pathnames "PhantasiaBoot-record.bin" dir))

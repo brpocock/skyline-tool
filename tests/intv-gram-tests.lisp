@@ -826,8 +826,8 @@
     (is (every (lambda (b) (= 7 b)) (subseq two 0 4)))
     (is (every (lambda (b) (= 0 b)) (subseq two 4 8))))
   (let ((eight (skyline-tool::parse-stic-region-value
-                "red, tan, blue, cyan, green, yellow, pink, magenta")))
-    (is (equalp #(2 3 0 9 5 6 12 15) eight)))
+                "red, tan, blue, cyan, light-green, yellow, pink, magenta")))
+    (is (equalp #(2 3 1 9 5 6 12 15) eight)))
   (signals error (skyline-tool::parse-stic-region-value "only-one-color")))
 
 ;; Test 22: File I/O error handling

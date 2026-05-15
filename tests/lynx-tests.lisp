@@ -12,10 +12,10 @@
 ;; Test Lynx palette definitions
 (test lynx-palette
   "Test Lynx color palette definitions"
-  (is (equal (length +lynx-palette+) 4096)
+  (is (equal (length skyline-tool::+lynx-palette+) 4096)
       "Lynx palette should have 4096 colors (16×16×16)")
   ;; Test that palette values are in valid RGB range (0-255)
-  (loop for color in +lynx-palette+
+  (loop for color in skyline-tool::+lynx-palette+
         do (is (>= (first color) 0) "Red component should be >= 0")
            (is (<= (first color) 255) "Red component should be <= 255")
            (is (>= (second color) 0) "Green component should be >= 0")
@@ -41,8 +41,8 @@
     (unwind-protect
         (progn
           ;; Create a minimal test index file
-          (with-output-to-file (index temp-index :if-exists :supersede :if-does-not-exist :create)
-            (format index "; Test Lynx art index~%test-sprite.png SPRITE 8×8~%"))
+          (with-output-to-file (index-out temp-index :if-exists :supersede :if-does-not-exist :create)
+            (format index-out "; Test Lynx art index~%test-sprite.png SPRITE 8×8~%"))
           ;; Test read-lynx-art-index
           (finishes
             (read-lynx-art-index temp-index))
@@ -125,8 +125,8 @@
   (let ((invalid-index (merge-pathnames "invalid.index" (uiop:temporary-directory))))
     (unwind-protect
         (progn
-          (with-output-to-file (index invalid-index :if-exists :supersede :if-does-not-exist :create)
-            (format index "invalid data"))
+          (with-output-to-file (index-out invalid-index :if-exists :supersede :if-does-not-exist :create)
+            (format index-out "invalid data"))
           (signals error
             (read-lynx-art-index invalid-index)))
         (when (probe-file invalid-index)

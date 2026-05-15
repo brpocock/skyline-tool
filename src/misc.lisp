@@ -1214,7 +1214,7 @@ then use $f9 (512kiB) banking."
        :suffix "s"
        :element-type 'character
        :external-format :utf-8)
-    (format temp "BANK=9
+    (format temp "BANK = 9
 .include \"preamble.s\"
 ~{~%.include \"~a\"~}
 .include \"finis.s\"~%"

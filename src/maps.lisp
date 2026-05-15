@@ -194,13 +194,13 @@ Each tileset contributes GIDs from @code{(tileset-gid)} through
 
 TOKEN may be a decimal/hex numeral or an @code{+intv-color-names+} keyword
 (case-insensitive, hyphens allowed). Returns @code{NIL} when TOKEN is empty."
-  (let ((trimmed (string-trim " \t\n\r," token)))
+  (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return #\,) token)))
     (unless (zerop (length trimmed))
       (or (ignore-errors (parse-integer trimmed))
           (ignore-errors (parse-integer trimmed :radix 16))
           (position (string-downcase (substitute #\- #\_ trimmed))
                     +intv-color-names+
-                    :test #'string=)
+                    :test #'string-equal)
           (error "Unrecognized Intellivision STIC color token “~a”" token)))))
 
 (defun parse-stic-region-value (string)
@@ -214,7 +214,7 @@ quadrant to @code{fg}, @code{bg-light}, @code{bg-black} (light then black).
 
 Returns an 8-element vector of STIC indices (@code{0}–@code{15})."
   (let* ((tokens (remove-if (lambda (s) (zerop (length s)))
-                            (mapcar (lambda (part) (string-trim " \t\n\r," part))
+                            (mapcar (lambda (part) (string-trim '(#\Space #\Tab #\Newline #\Return #\,) part))
                                     (split-sequence #\, string))))
          (colors (mapcar #'parse-stic-color-token tokens))
          (out (make-array 8 :element-type '(unsigned-byte 8))))
@@ -558,11 +558,13 @@ all-default (@code{#xff}) record."
 (defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
   "Load tileset PNG for the current machine, with sensible fallbacks.
 
-Prefer @file{Source/Maps/Tiles/@var{machine}/}, then @file{Hicolor/}. For all
-machines except Atari VCS800 (@code{7850}), also try @file{7800/} (legacy
-Maria-style 8×16 sheets). VCS800 (@code{7850}) uses only the port directory and
-@file{Hicolor/}---never @file{7800/}. If none match, use the machine-specific
-path so missing-file errors stay tied to the port."
+For Atari vcs800 (@code{7850}), prefer @file{Hicolor/} first (matching TSX
+paths such as @file{IndoorTiles.tsx} → @file{Hicolor/<name>.png}), then the
+lowercase port directory @file{vcs800/}. For all other machines, prefer
+@file{Source/Maps/Tiles/@var{machine}/}, then @file{Hicolor/}. Everywhere except
+7850 also try legacy @file{7800/} (Maria-style 8×16 sheets). Missing-file
+fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
+@file{Tiles/}."
   (let* ((name (pathname-name pathname$))
          (root (or (project-root)
                    (uiop:pathname-directory-pathname (uiop:getcwd))))
@@ -582,7 +584,11 @@ path so missing-file errors stay tied to the port."
                                     :name name :type "png")
                      root)))
     (load-tileset-image
-     (cond ((probe-file machine-path) machine-path)
+     (cond ((eql *machine* 7850)
+            (cond ((probe-file hicolor-path) hicolor-path)
+                  ((probe-file machine-path) machine-path)
+                  (t hicolor-path)))
+           ((probe-file machine-path) machine-path)
            ((probe-file hicolor-path) hicolor-path)
            ((and (not (eql *machine* 7850)) (probe-file 7800-path)) 7800-path)
            (t machine-path)))))
