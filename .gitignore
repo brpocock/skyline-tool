@@ -20,10 +20,7 @@ DEADJOE
 .#*#
 *.mscz.autosave
 .~lock.*
+.aider*
 
 lib/system-index.txt
-
-# SBCL heap images built under SkylineTool/bin (large); same names as Phantasia repo bin/
-bin/eightbol
-bin/skyline-tool
 
