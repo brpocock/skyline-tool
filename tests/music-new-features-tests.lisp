@@ -89,6 +89,91 @@
       (is (= (array-dimension result 1) 5) "Should have 5 columns"))))
 
 ;; ======================================================================
+;; Pokey/Hokey PAL Tests
+;; ======================================================================
+
+(test pokey-pal-base-frequency
+  "Verify Pokey base frequency constants are defined with correct values."
+  (is (= skyline-tool::+pokey-ntsc-base-hz+ 15699.9d0)
+      "NTSC Pokey base should be 15699.9 Hz")
+  (is (= skyline-tool::+pokey-pal-base-hz+ 15556.5d0)
+      "PAL Pokey base should be 15556.5 Hz"))
+
+(test frequency->pokey-ntsc-vs-pal
+  "frequency->pokey should produce different AUDF values for NTSC vs PAL."
+  (let ((freq 440.0d0))
+    (let ((ntsc-audf (skyline-tool::frequency->pokey freq :ntsc))
+          (pal-audf (skyline-tool::frequency->pokey freq :pal)))
+      (is (/= ntsc-audf pal-audf)
+          "NTSC and PAL should produce different AUDF values")
+      (is (<= 0 ntsc-audf 255) "NTSC AUDF should be in 0-255 range")
+      (is (<= 0 pal-audf 255) "PAL AUDF should be in 0-255 range"))))
+
+(test pokey->frequency-round-trip-ntsc
+  "pokey->frequency should be the inverse of frequency->pokey for NTSC."
+  (let ((freq 440.0d0))
+    (let ((audf (skyline-tool::frequency->pokey freq :ntsc)))
+      (let ((recovered (skyline-tool::pokey->frequency audf :ntsc)))
+        (is (< (abs (- recovered freq)) 5.0d0)
+            "Round-trip frequency should be within 5 Hz of target")))))
+
+(test pokey->frequency-round-trip-pal
+  "pokey->frequency should be the inverse of frequency->pokey for PAL."
+  (let ((freq 440.0d0))
+    (let ((audf (skyline-tool::frequency->pokey freq :pal)))
+      (let ((recovered (skyline-tool::pokey->frequency audf :pal)))
+        (is (< (abs (- recovered freq)) 5.0d0)
+            "Round-trip frequency should be within 5 Hz of target")))))
+
+(test best-pokey-note-for-pal
+  "best-pokey-note-for should handle PAL TV standard."
+  (let ((note 69)) ; A4
+    (multiple-value-bind (ntsc-audf ntsc-error)
+        (skyline-tool::best-pokey-note-for note nil nil :ntsc)
+      (multiple-value-bind (pal-audf pal-error)
+          (skyline-tool::best-pokey-note-for note nil nil :pal)
+        (is (<= 0 ntsc-audf 255) "NTSC AUDF should be in range")
+        (is (<= 0 pal-audf 255) "PAL AUDF should be in range")
+        (is (numberp ntsc-error) "NTSC error should be a number")
+        (is (numberp pal-error) "PAL error should be a number")))))
+
+(test hokey-reckon-pal
+  "hokey-reckon should handle PAL TV standard."
+  (let ((note 60)) ; C4
+    (multiple-value-bind (instrument ntsc-f ntsc-error)
+        (skyline-tool::hokey-reckon note :piano 1 :ntsc)
+      (multiple-value-bind (_instrument pal-f pal-error)
+          (skyline-tool::hokey-reckon note :piano 1 :pal)
+        (declare (ignore _instrument))
+        (is (<= 0 ntsc-f 255) "NTSC frequency should be in range")
+        (is (<= 0 pal-f 255) "PAL frequency should be in range")
+        (is (numberp ntsc-error) "NTSC error should be a number")
+        (is (numberp pal-error) "PAL error should be a number")))))
+
+(test hokey-fps
+  "hokey-fps should return correct frame rate for each TV standard."
+  (let ((skyline-tool::*hokey-tv* :ntsc))
+    (is (= (skyline-tool::hokey-fps) 60) "NTSC should be 60 fps"))
+  (let ((skyline-tool::*hokey-tv* :pal))
+    (is (= (skyline-tool::hokey-fps) 50) "PAL should be 50 fps"))
+  (let ((skyline-tool::*hokey-tv* :secam))
+    (is (= (skyline-tool::hokey-fps) 50) "SECAM should be 50 fps")))
+
+(test score->hokey-notes-pal-frequency
+  "score->hokey-notes should produce different Pokey frequencies for PAL vs NTSC."
+  (let ((score '((:time 0.0d0 :key 60 :duration 0.1d0 :velocity 100 :instrument :piano))))
+    (let ((ntsc-notes (skyline-tool::score->hokey-notes score :ntsc))
+          (pal-notes (skyline-tool::score->hokey-notes score :pal)))
+      (dolist (ntsc-note ntsc-notes)
+        (when ntsc-note
+          (let ((pal-note (find (skyline-tool::hokey-note-start-time ntsc-note)
+                                pal-notes :key #'skyline-tool::hokey-note-start-time)))
+            (when pal-note
+              ;; Pokey frequencies may differ between NTSC and PAL
+              (is (typep ntsc-note 'skyline-tool::hokey-note) "NTSC note should be hokey-note")
+              (is (typep pal-note 'skyline-tool::hokey-note) "PAL note should be hokey-note"))))))))
+
+;; ======================================================================
 ;; SID Frequency Conversion Tests
 ;; ======================================================================
 

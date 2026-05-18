@@ -605,64 +605,41 @@ AUDCTL register value for the specified distortion and bit settings
        (:4b 14)
        (:4a 16))))
 
-(defun pokey->frequency (AUDF)
+(defconstant +pokey-ntsc-base-hz+ 15699.9d0
+  "POKEY base frequency for NTSC Atari 7800/5200 (1.7897725 MHz / 114).")
+
+(defconstant +pokey-pal-base-hz+ 15556.5d0
+  "POKEY base frequency for PAL Atari 7800/5200 (1.7734475 MHz / 114).")
+
+(defun pokey->frequency (AUDF &optional (tv :ntsc))
   "Convert POKEY AUDF register value to frequency in Hz.
 
-Calculates the output frequency for a given AUDF (Audio Frequency) register
-value in the POKEY sound chip.
+@param AUDF AUDF register value (0-255)
+@param TV TV standard (:ntsc or :pal)
+@returns Frequency in Hz"
+  (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
+    (/ base (* 2 (1+ AUDF)))))
 
-@table @asis
-@item AUDF
-AUDF register value (0-255)
-@item Returns
-Frequency in Hz
-@item Note
-Currently uses NTSC timing (FIXME: #1229 should support PAL too)
-@end table
-
-@xref{fun:frequency->pokey}, @xref{fun:best-pokey-note-for}."
-  (/ 15699.9 #| FIXME: #1229 NTSC? |# (* 2 (1+ AUDF))))
-
-(defun frequency->pokey (frequency)
+(defun frequency->pokey (frequency &optional (tv :ntsc))
   "Convert frequency in Hz to nearest POKEY AUDF register value.
 
-Calculates the AUDF register value that produces the closest frequency match
-for the POKEY sound chip.
+@param FREQUENCY Frequency in Hz
+@param TV TV standard (:ntsc or :pal)
+@returns AUDF register value (0-255)"
+  (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
+    (ceiling (/ (- base (* 2 frequency)) (* 2 frequency)))))
 
-@table @asis
-@item FREQUENCY
-Frequency in Hz
-@item Returns
-AUDF register value (0-255)
-@end table
-
-@xref{fun:pokey->frequency}, @xref{fun:best-pokey-note-for}."
-  (ceiling (/ (- 15699.9 #| FIXME: #1229 NTSC? |# (* 2 frequency)) (* 2 frequency))))
-
-(defun best-pokey-note-for (midi-note-number &optional distortion bits)
+(defun best-pokey-note-for (midi-note-number &optional distortion bits (tv :ntsc))
   "Find the best POKEY AUDF value for a MIDI note number.
 
-Converts a MIDI note number to the closest POKEY frequency register value.
-Currently ignores distortion and bits parameters (FIXME: should use them).
-
-@table @asis
-@item MIDI-NOTE-NUMBER
-MIDI note number (0-127)
-@item DISTORTION
-Ignored (FIXME: should affect frequency calculation)
-@item BITS
-Ignored (FIXME: should affect frequency calculation)
-@item Returns
-AUDF register value and frequency error
-@end table
-
-@xref{fun:frequency->pokey}, @xref{fun:freq<-midi-key}, @ref{constant:+all-hokey-distortions+}."
+@param MIDI-NOTE-NUMBER MIDI note number (0-127)
+@param DISTORTION Ignored (FIXME: should affect frequency calculation)
+@param BITS Ignored (FIXME: should affect frequency calculation)
+@param TV TV standard (:ntsc or :pal)
+@returns AUDF register value and frequency error"
   (declare (ignore distortion bits))
   (multiple-value-bind (value error)
-      (frequency->pokey (freq<-midi-key midi-note-number))
-    #+ () (format *trace-output* "~&For ~a, ~d × ~d then ~d × ~d" (midi->note-name midi-note-number)
-                  value (ash (logand #xf0 (apply #'fraction-nybbles (simplify-to-rational error))) -4)
-                  (1+ value) (logand #x0f (apply #'fraction-nybbles (simplify-to-rational error))))
+      (frequency->pokey (freq<-midi-key midi-note-number) tv)
     (values value error)))
 
 (defun null-if-zero-note (n)
@@ -1888,7 +1865,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
   tia-f
   tia-error)
 
-(defun hokey-reckon (note instrument &optional (q 1))
+(defun hokey-reckon (note instrument &optional (q 1) (tv :ntsc))
   (let* ((o (get-orchestration))
          (i (loop for i* in o for i from 0
                   when (string-equal (param-case (string instrument))
@@ -1896,11 +1873,11 @@ A MIDI note number from 0 to 127, or nil if parsing fails
                     return i
                   finally (return 0))))
     (when note
-      (multiple-value-bind (best1 best-e) (best-pokey-note-for note)
+      (multiple-value-bind (best1 best-e) (best-pokey-note-for note nil nil tv)
         (when (and best1 (< 0 best1 #xff))
           (return-from hokey-reckon (values i best1 best-e)))))
     (when (> q 1/2)
-      (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4))
+      (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4) tv)
       (cerror "Continue, dropping this note"
               "Hokey cannot play ~a on any instrument" (midi->note-name note)))))
 
@@ -1928,36 +1905,37 @@ A MIDI note number from 0 to 127, or nil if parsing fails
   (let ((tv (if (keywordp frame-rate)
                 frame-rate
                 (make-keyword (string-upcase (string frame-rate))))))
-    (remove-if #'null
-               (mapcar (lambda (score-note)
-                         (let ((key (getf score-note :key)))
-                           (unless (<= 24 key 72)
-                             (warn "Note ~a is unlikely to play correctly on Hokey"
-                                   (midi->note-name key)))
-                           (multiple-value-bind (instrument hokey-f hokey-error)
-                               (hokey-reckon key (getf score-note :instrument))
-                             (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
-                                 (ecase tv
-                                   (:ntsc (best-tia-ntsc-note-for key))
-                                   (:pal (best-tia-pal-note-for key))
-                                   (:secam (best-tia-secam-note-for key)))
-                               (declare (ignore _tia-c))
-                               (when (getf score-note :velocity)
-                                 (make-hokey-note :start-time (getf score-note :time)
-                                                  :duration (getf score-note :duration)
-                                                  :instrument instrument
-                                                  :hokey-f (or hokey-f 0)
-                                                  :hokey-error
-                                                  (apply #'fraction-nybbles
-                                                         (simplify-to-rational
-                                                          (or hokey-error #xf0)))
-                                                  :tia-f (or tia-f 0)
-                                                  :tia-error
-                                                  (apply #'fraction-nybbles
-                                                         (simplify-to-rational
-                                                          (or tia-error #xf0)))
-                                                  :volume (/ (getf score-note :velocity) 127)))))))
-                       score))))
+    (let ((*hokey-tv* tv))
+      (remove-if #'null
+                 (mapcar (lambda (score-note)
+                           (let ((key (getf score-note :key)))
+                             (unless (<= 24 key 72)
+                               (warn "Note ~a is unlikely to play correctly on Hokey"
+                                     (midi->note-name key)))
+                             (multiple-value-bind (instrument hokey-f hokey-error)
+                                 (hokey-reckon key (getf score-note :instrument) 1 tv)
+                               (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
+                                   (ecase tv
+                                     (:ntsc (best-tia-ntsc-note-for key))
+                                     (:pal (best-tia-pal-note-for key))
+                                     (:secam (best-tia-secam-note-for key)))
+                                 (declare (ignore _tia-c))
+                                 (when (getf score-note :velocity)
+                                   (make-hokey-note :start-time (getf score-note :time)
+                                                    :duration (getf score-note :duration)
+                                                    :instrument instrument
+                                                    :hokey-f (or hokey-f 0)
+                                                    :hokey-error
+                                                    (apply #'fraction-nybbles
+                                                           (simplify-to-rational
+                                                            (or hokey-error #xf0)))
+                                                    :tia-f (or tia-f 0)
+                                                    :tia-error
+                                                    (apply #'fraction-nybbles
+                                                           (simplify-to-rational
+                                                            (or tia-error #xf0)))
+                                                    :volume (/ (getf score-note :velocity) 127)))))))
+                         score)))))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
   (score->hokey-notes score frame-rate))
@@ -2007,6 +1985,13 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
 
 (defvar *orchestra* nil)
 
+(defvar *hokey-tv* :ntsc
+  "Current TV standard for Hokey/Pokey compilation (:ntsc, :pal, or :secam).")
+
+(defun hokey-fps ()
+  "Return frames per second for the current Hokey TV standard."
+  (ecase *hokey-tv* (:ntsc 60) (:pal 50) (:secam 50)))
+
 (defun get-orchestration ()
   (or *orchestra*
       (setf *orchestra* (read-orchestration))))
@@ -2041,46 +2026,48 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
                      :tia-error (hokey-note-tia-error note))))
 
 (defmethod calculate-duration-for ((note hokey-note) instrument-number)
-  (when (< (hokey-note-duration note) 1/60); FIXME: #1231 NTSC
-    (format *trace-output* "~%Dropping note at time ~d as it is too short to play (duration ~ds = ~5fs < 1/60s)"
-            (hokey-note-start-time note)
-            (hokey-note-duration note) (hokey-note-duration note))
-    (return-from calculate-duration-for 0))
-  (let* ((instrument (elt *orchestra* instrument-number))
-         (total-duration (ceiling (* 60 (hokey-note-duration note)))) ; FIXME: #1231 NTSC
-         (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note)))
-                                      (getf instrument :attack-addend))))
-         (decay-duration (ceiling (getf instrument :decay-duration)))
-         (sustained-volume-after-decay
-           (max 1
-                (- (ceiling (* 15 (hokey-note-volume note)))
-                   (ceiling (* (getf instrument :decay-subtrahend)
-                               (getf instrument :decay-duration))))))
-         (release-duration
-           (ceiling (/ sustained-volume-after-decay
-                       (getf instrument :release-subtrahend))))
-         (sustain-duration (- total-duration
-                              attack-duration
-                              decay-duration
-                              release-duration)))
-    #+ ()
-    (format *trace-output* "~& ~3d frame~:p — A ~3d D ~3d S ~3d R ~3d (vol ~3d%)"
-            total-duration
-            attack-duration
-            decay-duration
-            sustain-duration
-            release-duration
-            (floor (* 100 (hokey-note-volume note))))
-    (if (< sustain-duration 1)
-        (let ((quieter (quieter-note note)))
-          (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"
-                  sustain-duration (floor (* 100 (hokey-note-volume note))))
-          (calculate-duration-for quieter instrument-number))
-        (values (max 1 sustain-duration) note))))
+  (let ((fps (hokey-fps)))
+    (when (< (hokey-note-duration note) (/ fps))
+      (format *trace-output* "~%Dropping note at time ~d as it is too short to play (duration ~ds = ~5fs < 1/~ds)"
+              (hokey-note-start-time note)
+              (hokey-note-duration note) (hokey-note-duration note) fps)
+      (return-from calculate-duration-for 0))
+    (let* ((instrument (elt *orchestra* instrument-number))
+           (total-duration (ceiling (* fps (hokey-note-duration note))))
+           (attack-duration (ceiling (/ (ceiling (* 15 (hokey-note-volume note)))
+                                        (getf instrument :attack-addend))))
+           (decay-duration (ceiling (getf instrument :decay-duration)))
+           (sustained-volume-after-decay
+             (max 1
+                  (- (ceiling (* 15 (hokey-note-volume note)))
+                     (ceiling (* (getf instrument :decay-subtrahend)
+                                 (getf instrument :decay-duration))))))
+           (release-duration
+             (ceiling (/ sustained-volume-after-decay
+                         (getf instrument :release-subtrahend))))
+           (sustain-duration (- total-duration
+                                attack-duration
+                                decay-duration
+                                release-duration)))
+      #+ ()
+      (format *trace-output* "~& ~3d frame~:p — A ~3d D ~3d S ~3d R ~3d (vol ~3d%)"
+              total-duration
+              attack-duration
+              decay-duration
+              sustain-duration
+              release-duration
+              (floor (* 100 (hokey-note-volume note))))
+      (if (< sustain-duration 1)
+          (let ((quieter (quieter-note note)))
+            (format *trace-output* "~& Sustain duration would have been below 1 frame at ~d, reducing volume from ~d%"
+                    sustain-duration (floor (* 100 (hokey-note-volume note))))
+            (calculate-duration-for quieter instrument-number))
+          (values (max 1 sustain-duration) note)))))
 
 (defmethod write-song-binary (hokey-notes (format (eql :hokey)) output)
   (with-output-to-file (out output :if-exists :supersede :element-type '(unsigned-byte 8))
-    (let ((orchestra (enumerate-orchestral-instruments)))
+    (let ((orchestra (enumerate-orchestral-instruments))
+          (fps (hokey-fps)))
       (format *trace-output* " … ~d instrument~:p in orchestra"
               (length orchestra))
       (let ((time 0)
@@ -2093,8 +2080,8 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
           #+ () (format *trace-output* "~x" (max 0 (min 15 (floor (* #x10 (hokey-note-volume note))))))
           (case (random 8)
             (0 (princ "♪" *trace-output*))
-            (2 (princ "𝅘𝅥" *trace-output*)))
-          (let ((d-t (* 60 (- (hokey-note-start-time note) time))) ; NTSC XXX
+            (2 (princ "𝅘𝅥" *trace-output*)))
+          (let ((d-t (* fps (- (hokey-note-start-time note) time)))
                 (instrument (or (hokey-note-instrument note) 0)))
             (setf time (hokey-note-start-time note))
             (multiple-value-bind (duration note) ; shadows outer NOTE
