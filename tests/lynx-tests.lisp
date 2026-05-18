@@ -63,19 +63,17 @@
 
 (test lynx-music-compilation-output
   "Test Lynx music compilation output generation"
-  ;; Test that music compilation doesn't error (even if not fully implemented)
-  (let ((temp-file (merge-pathnames "test-lynx-music.s" (uiop:temporary-directory))))
+  (let ((temp-file (merge-pathnames "test-lynx-music.s" (uiop:temporary-directory)))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
-          ;; This should either succeed or give a meaningful error
-          (handler-case
-              (compile-music-lynx temp-file "dummy-input.mid")
-            (error (e)
-              ;; For now, we expect an error since it's not implemented
-              (is (search "not yet implemented" (format nil "~a" e))
-                  "Should give 'not yet implemented' error"))))
-        (when (probe-file temp-file)
-          (delete-file temp-file)))))
+          (with-open-file (out input-file :direction :output :if-exists :supersede)
+            (write *test-midi-data* :stream out :readably t))
+          (finishes (compile-music-lynx temp-file input-file))
+          (is-true (probe-file temp-file)
+                   "Lynx music compilation should create output file"))
+        (when (probe-file temp-file) (delete-file temp-file))
+        (when (probe-file input-file) (delete-file input-file)))))
 
 ;; Test Lynx font compilation
 (test lynx-font-compilation
@@ -149,14 +147,19 @@
   (is-true t "Lynx sprite conversion framework should exist"))
 
 ;; Test Lynx sound conversion
-(test lynx-sound-conversion
-  "Test Lynx sound and music data conversion"
-  ;; Test that sound conversion functions are properly stubbed
-  ;; Currently compile-music-lynx errors out, which is expected
-  (let ((temp-file (merge-pathnames "test-lynx-sound.s" (uiop:temporary-directory))))
-    (unwind-protect
-        (progn
-          (signals error
-            (compile-music-lynx temp-file "nonexistent.mid")))
-        (when (probe-file temp-file)
-          (delete-file temp-file)))))
+(test lynx-mikey-frequency-conversion
+  "Test Mikey frequency-to-counter conversion"
+  (let ((a4-counter (skyline-tool::frequency->mikey-counter 440.0d0)))
+    (is (= a4-counter 4544) "A4 (440 Hz) counter should be 4544 at 4 MHz"))
+  (let ((c4-counter (skyline-tool::frequency->mikey-counter 261.63d0)))
+    (is (= c4-counter 7643) "C4 (261.63 Hz) counter should be 7643"))
+  (let ((max-counter (skyline-tool::frequency->mikey-counter 30.5d0)))
+    (is (<= max-counter 65535) "Low frequency counter should fit in 16 bits")))
+
+(test lynx-mikey-score-to-song
+  "Test Mikey score->song conversion"
+  (let ((score (list (list :lyric nil :instrument :piano :time 0.0d0 :duration 0.1d0
+                           :key 60 :velocity 100))))
+    (let ((song (skyline-tool::score->song score :mikey :ntsc)))
+      (is (arrayp song) "score->song :mikey should return an array")
+      (is (plusp (array-dimension song 0)) "should have at least one note row"))))

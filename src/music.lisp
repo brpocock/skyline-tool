@@ -2309,6 +2309,13 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
       (midi-to-sn76489-sequences midi-notes output-coding)
       (call-next-method)))
 
+(defmethod midi-to-sound-binary (output-coding (machine-type (eql 200)) midi-notes sound-chip)
+  (declare (ignore output-coding))
+  (if (eql (make-keyword (string-upcase sound-chip)) :mikey)
+      (let ((*region* :ntsc))
+        (midi->mikey-sequences midi-notes :ntsc))
+      (call-next-method)))
+
 (defun find-free-psg-channel (voice-assignments current-time)
   "Find the first available PSG channel"
   (loop for channel from 0 below 3
@@ -2384,11 +2391,188 @@ SECAM uses the NTSC crystal (3.579545 MHz) with 50 fps."
                (write-byte volume out)
                (write-byte duration out)))))
 
+;;; ---------------------------------------------------------------------------
+;;; Atari Lynx — Mikey audio
+;;; ---------------------------------------------------------------------------
+
+(defconstant +lynx-clock-hz+ 4000000
+  "Atari Lynx Mikey audio system clock (4 MHz standard).")
+
+(defun frequency->mikey-counter (frequency &optional (clock +lynx-clock-hz+))
+  "Convert FREQUENCY in Hz to a 16-bit Mikey AUDnCNT value.
+
+The Mikey audio generator uses a 16-bit counter that decrements at the
+system clock rate; when it underflows the LFSR shifts one step.  For a
+square-wave output the tone frequency is:
+
+  freq = clock / (2 * (counter + 1))
+
+Therefore:
+
+  counter = clock / (2 * freq) - 1
+
+The result is clamped to the 16-bit unsigned range [0, 65535]."
+  (let ((raw (round (/ clock (* 2 frequency)))))
+    (max 0 (min 65535 (1- raw)))))
+
+(defun midi->mikey-sequences (midi-notes output-coding)
+  "Convert MIDI notes to Mikey AUDnCNT / volume arrays for the Atari Lynx.
+
+TIME and DURATION in decoded MIDI events are in seconds; they are converted
+to frame counts using 60 (NTSC) frames per second.
+
+Compiled notes carry orchestration @strong{instrument IDs} so the runtime
+can look up feedback/polynomial/volume from instrument tables."
+  (let* ((*region* :ntsc)
+         (*hokey-tv* :ntsc)
+         (*orchestra* (get-orchestration))
+         (fps 60)
+         (notes (list)))
+    (dolist (track midi-notes)
+      (let ((track-instrument :piano))
+        (dolist (event track)
+          (ecase (first event)
+            (:text
+             (setf track-instrument
+                   (make-keyword (string-upcase (param-case (second event))))))
+            (:note
+             (destructuring-bind (&key time key duration velocity instrument) (rest event)
+               (let* ((time-sec (float (or time 0) 1.0d0))
+                      (dur-sec (float (or duration 0) 1.0d0))
+                      (t-frames (floor (* time-sec fps)))
+                      (vel (or velocity 127))
+                      (instrument-id (orchestration-instrument-id
+                                      (or instrument track-instrument)))
+                      (max-vol (min 15 (floor (* 15 (/ vel 127)))))
+                      (sustain-duration
+                        (nth-value 0
+                          (calculate-duration-for
+                           (make-hokey-note :duration dur-sec
+                                            :volume (/ vel 127.0)
+                                            :instrument instrument-id)
+                           instrument-id))))
+                 (let* ((frequency (freq<-midi-key key))
+                        (counter (frequency->mikey-counter frequency)))
+                   (push (list t-frames
+                               (logand counter #xff)
+                               (ash counter -8)
+                               instrument-id
+                               max-vol
+                               (max 1 sustain-duration))
+                         notes)))))))))
+    (setf notes (sort notes #'< :key #'first))
+    (let ((result (make-array (list (length notes) 6))))
+      (loop for i from 0
+            for note in notes
+            do (destructuring-bind (time cnt-lo cnt-hi instrument volume duration) note
+                 (setf (aref result i 0) (floor time))    ; time in frames
+                 (setf (aref result i 1) cnt-lo)           ; counter low byte
+                 (setf (aref result i 2) cnt-hi)           ; counter high byte
+                 (setf (aref result i 3) instrument)       ; orchestration instrument ID
+                 (setf (aref result i 4) volume)           ; volume (0-15)
+                 (setf (aref result i 5) duration)))       ; duration in frames
+      result)))
+
+(defun write-song-data-to-mikey (notes source-out)
+  "Write Mikey music data to assembly source, referencing Lynx register names."
+  (format source-out "~2%;;; Mikey audio music data")
+  (format source-out "~%;;; Each row: time(counter), cnt-lo, cnt-hi, instrument, volume, duration~%")
+  (loop for i below (array-dimension notes 0)
+        do (let ((time (aref notes i 0))
+                 (cnt-lo (aref notes i 1))
+                 (cnt-hi (aref notes i 2))
+                 (instrument (aref notes i 3))
+                 (volume (aref notes i 4))
+                 (duration (aref notes i 5)))
+             (format source-out "~%	.byte ~d, $~2,'0x, $~2,'0x, ~d, ~d, ~d	; Time:~d ~dHz vol:~d dur:~d"
+                     time cnt-lo cnt-hi instrument volume duration
+                     time
+                     (floor (/ +lynx-clock-hz+ (* 2 (1+ (logior (ash cnt-hi 8) cnt-lo)))))
+                     volume duration))))
+
+(defmethod write-song-data-to-binary (notes object (machine (eql 200)) (sound-chip (eql :mikey)))
+  "Write Mikey audio binary data for Atari Lynx.
+Format: 2-byte note count header + 6 bytes per note."
+  (with-output-to-file (out object :element-type '(unsigned-byte 8)
+                           :if-exists :supersede :if-does-not-exist :create)
+    (let ((num-notes (array-dimension notes 0)))
+      (write-byte (logand num-notes #xff) out)
+      (write-byte (ash num-notes -8) out))
+    (loop for i below (array-dimension notes 0)
+          do (let ((time (aref notes i 0))
+                   (cnt-lo (aref notes i 1))
+                   (cnt-hi (aref notes i 2))
+                   (instrument (aref notes i 3))
+                   (volume (aref notes i 4))
+                   (duration (aref notes i 5)))
+               (write-byte time out)
+               (write-byte cnt-lo out)
+               (write-byte cnt-hi out)
+               (write-byte instrument out)
+               (write-byte volume out)
+               (write-byte duration out)))))
+
+(defmethod write-song-binary ((notes array) (format (eql :mikey)) output)
+  "Write Mikey note table for @code{compile-midi} (@code{bin/skyline-tool compile-midi …})."
+  (write-song-data-to-binary notes output 200 :mikey))
+
+(defmethod score->song (score (format (eql :mikey)) frame-rate)
+  "Build Mikey note array for Atari Lynx @code{compile-midi} / @code{midi-compile}."
+  (nth-value 0 (midi->mikey-sequences (list (mapcar #'score-item-to-ay-note-event score))
+                                       (make-keyword (string-upcase frame-rate)))))
+
+
+;;; --- compile-music wrappers ---
+
+(defun compile-music-lynx (source-out-name in-file-name
+                            &optional (sound-chip "Mikey") (output-coding "NTSC"))
+  "Compile music for Atari Lynx (machine 200) — emits assembly with Mikey register equates.
+
+SOUND-CHIP defaults to Mikey; OUTPUT-CODING defaults to NTSC.
+The Lynx is a single-region portable, so only NTSC timing is needed."
+  (declare (ignore sound-chip output-coding))
+  (let ((*machine* 200)
+        (*region* :ntsc)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table)))
+    (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing ~a…" source-out-name)
+      (format source-out ";;; Atari Lynx Music compiled from ~a
+;;; do not bother editing (generated file will be overwritten)
+;;; Mikey AUD0 register equates for reference:
+AUD0_VOL       EQU $FD20
+AUD0_FEEDBACK  EQU $FD21
+AUD0_OUTPUT    EQU $FD22
+AUD0_SHIFT     EQU $FD23
+AUD0_BACKUP    EQU $FD24
+AUD0_CONTROL   EQU $FD25
+AUD0_COUNT     EQU $FD26
+AUD0_OTHER     EQU $FD27
+"
+              (pathname-name in-file-name))
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :NTSC
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-mikey notes source-out)))
+    (format *trace-output* "~&… done.~%")
+    (finish-output)))
+
+(defmethod compile-music-for-machine ((machine (eql 200)) sound-chip source-out-name in-file-name output-coding)
+  "Compile Mikey audio for Atari Lynx — emits assembly with register and song data.
+The Lynx is portable / single-region, so NTSC framing is always used."
+  (declare (ignore sound-chip output-coding))
+  (let ((*region* :ntsc))
+    (compile-music-lynx source-out-name in-file-name)))
+
 (defun compile-midi (argv0 input format frame-rate
-                     &optional (output (make-pathname
-                                        :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
-                                        :type "o"
-                                        :directory '(:relative "Object" "Assets"))))
+                      &optional (output (make-pathname
+                                         :name (format nil "Song.~a.~a" frame-rate (pathname-name input))
+                                         :type "o"
+                                         :directory '(:relative "Object" "Assets"))))
   (declare (ignore argv0))
   (midi-compile input format frame-rate output))
 

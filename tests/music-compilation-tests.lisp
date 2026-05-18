@@ -560,6 +560,7 @@
   "Test that Atari Lynx music compilation produces correct assembly output"
   (let ((output-file (format nil "Object/200/test-music-~a.s" (skyline-tool::generate-secure-random-id 2)))
         (input-file (unit-test-midi-input-path)))
+    (ensure-directories-exist (pathname (directory-namestring output-file)))
     (unwind-protect
         (progn
            ;; Create a minimal test input file
@@ -583,6 +584,39 @@
       ;; Cleanup
       (ignore-errors (delete-file output-file))
       (ignore-errors (delete-file input-file)))))
+
+(test lynx-mikey-clock-constant
+  "Atari Lynx Mikey uses 4 MHz audio clock"
+  (is (= skyline-tool::+lynx-clock-hz+ 4000000) "Mikey clock should be 4 MHz"))
+
+(test lynx-mikey-period-calculation
+  "Mikey frequency->counter conversion"
+  (let ((a4 (skyline-tool::frequency->mikey-counter 440.0d0)))
+    (is (= a4 4544) "A4 (440 Hz) counter should be 4544"))
+  (let ((c4 (skyline-tool::frequency->mikey-counter 261.63d0)))
+    (is (= c4 7643) "C4 counter should be 7643"))
+  (let ((min (skyline-tool::frequency->mikey-counter 20000.0d0)))
+    (is (>= min 0) "High frequency counter should be >= 0")))
+
+(test lynx-mikey-score-and-midi-compile-path
+  "Mikey: score->song, write-song-binary, and compile-midi path"
+  (let ((score (list (list :lyric nil :instrument :piano :time 0.0d0 :duration 0.1d0
+                           :key 60 :velocity 100))))
+    (let ((song (skyline-tool::score->song score :mikey :ntsc)))
+      (is (arrayp song) "score->song :mikey should return an array")
+      (is (plusp (array-dimension song 0)) "should have at least one note row")
+      (is (= (array-dimension song 1) 6) "should have 6 columns (time, counter-lo, counter-hi, feedback, volume, duration)"))
+    (let ((bin (merge-pathnames (format nil "test-mikey-~a.bin" (skyline-tool::generate-secure-random-id 2))
+                                (uiop:temporary-directory))))
+      (unwind-protect
+          (let ((song (skyline-tool::score->song score :mikey :ntsc)))
+            (finishes (skyline-tool::write-song-binary song :mikey bin))
+            (is-true (probe-file bin))
+            (is-true (> (with-open-file (s bin :element-type '(unsigned-byte 8))
+                          (file-length s))
+                        3)
+                     "Mikey binary should have header plus >= 1 note"))
+        (when (probe-file bin) (delete-file bin))))))
 
 (test 264-c16-music-compilation-validation
   "Test that Commodore 16/Plus4 music compilation produces correct assembly output"
