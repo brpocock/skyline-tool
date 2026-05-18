@@ -678,6 +678,41 @@ Note tuple if frequency component is non-zero, otherwise NIL
 @end table"
   (if (or (null n) (zerop (third n))) nil n))
 
+(defconstant +tia-ntsc-clock-hz+ 3579545
+  "TIA master clock for NTSC Atari 2600/7800.")
+
+(defconstant +tia-pal-clock-hz+ 3546895
+  "TIA master clock for PAL Atari 2600/7800.")
+
+(defconstant +tia-secam-clock-hz+ 3579545
+  "TIA master clock for SECAM Atari 2600 (same as NTSC).")
+
+(defun best-tia-note-for-secam (note)
+  "Find the best TIA note for SECAM across all voices.
+
+SECAM machines use the same 3.58 MHz crystal as NTSC, so frequency
+lookups use the NTSC table. Frame rate is 50 Hz like PAL."
+  (labels ((nearest (&rest set)
+             (first (sort (remove-if #'null set) #'< :key #'third))))
+    (nearest (null-if-zero-note (best-tia-ntsc-note-for note 4))
+             (null-if-zero-note (best-tia-ntsc-note-for note 5))
+             (null-if-zero-note (best-tia-ntsc-note-for note 2))
+             (null-if-zero-note (best-tia-ntsc-note-for note 6))
+             (null-if-zero-note (best-tia-ntsc-note-for note 8))
+             (list 0 0 most-positive-fixnum))))
+
+(defun best-tia-note-for-tv (freq tv &optional (voice 1))
+  "Dispatch to the correct TIA note lookup for the given TV standard."
+  (ecase tv
+    (:ntsc (best-tia-ntsc-note-for freq voice))
+    (:pal (best-tia-pal-note-for freq voice))
+    (:secam (best-tia-ntsc-note-for freq voice))))
+
+(defun best-tia-secam-note-for (freq &optional (voice 1))
+  "Find the best TIA note for SECAM Atari 2600.
+SECAM uses the same 3.58 MHz crystal as NTSC, so this delegates to NTSC table."
+  (best-tia-ntsc-note-for freq voice))
+
 (defun best-tia-note-for-ntsc (note)
   "Find the best TIA note for NTSC across all voices.
 
@@ -725,7 +760,7 @@ List of (voice note-code frequency-error) with lowest error
              (list 0 0 most-positive-fixnum))))
 
 (defun array<-7800-tia-notes-list (notes tv-type)
-  (let ((frame-rate (ecase tv-type (:ntsc 60) (:pal 50))))
+  (let ((frame-rate (ecase tv-type (:ntsc 60) (:pal 50) (:secam 50))))
     (coerce (sort (adjust-note-timing-for-frame-rate (merge-tia-voices notes) frame-rate)
                   #'< :key #'second)
             'vector)))
@@ -741,7 +776,9 @@ List of (voice note-code frequency-error) with lowest error
                 (:ntsc
                  (best-tia-note-for-ntsc note))
                 (:pal
-                 (best-tia-note-for-pal note)))
+                 (best-tia-note-for-pal note))
+                (:secam
+                 (best-tia-note-for-secam note)))
               (list nil nil))
           do (setf (aref array i 0) (when (elt note 0)
                                       (floor (max (/ (elt note 0) +midi-duration-divisor+)
@@ -783,6 +820,103 @@ List of (voice note-code frequency-error) with lowest error
 (defun merge-tia-voices (notes)
   "Merge TIA voices. Currently a stub, returns notes unchanged."
   notes)
+
+;;; ======================================================================
+;;; SID (MOS 6581 / 8580) — Commodore 64/128
+;;; ======================================================================
+
+(defconstant +sid-ntsc-clock-hz+ 1022730
+  "SID master clock for NTSC C64/C128 (≈1.022730 MHz).")
+
+(defconstant +sid-pal-clock-hz+ 985248
+  "SID master clock for PAL C64/C128 (≈985.248 kHz).")
+
+(defun frequency->sid (frequency &optional (tv :ntsc))
+  "Convert frequency in Hz to 16-bit SID period register value.
+
+The SID frequency formula is: f_out = clock / (16 × period)
+So: period = clock / (16 × frequency)
+
+Returns the period value and the actual frequency error."
+  (let ((clock (ecase tv
+                 (:ntsc +sid-ntsc-clock-hz+)
+                 (:pal +sid-pal-clock-hz+)
+                 (:secam +sid-pal-clock-hz+))))
+    (let* ((period (/ clock 16 frequency))
+           (rounded (round period))
+           (clamped (max 1 (min #xffff rounded)))
+           (actual (/ clock 16 clamped))
+           (error (- frequency actual)))
+      (values clamped error))))
+
+(defun sid->frequency (period &optional (tv :ntsc))
+  "Convert SID period register value back to frequency in Hz."
+  (let ((clock (ecase tv
+                 (:ntsc +sid-ntsc-clock-hz+)
+                 (:pal +sid-pal-clock-hz+)
+                 (:secam +sid-pal-clock-hz+))))
+    (/ clock 16 period)))
+
+(defun best-sid-note-for (midi-note-number &optional (tv :ntsc))
+  "Find the best SID period value for a MIDI note number."
+  (let ((freq (freq<-midi-key midi-note-number)))
+    (multiple-value-bind (period error)
+        (frequency->sid freq tv)
+      (let ((actual (sid->frequency period tv)))
+        (values period actual error)))))
+
+(defun best-sid-note-for-ntsc (freq)
+  "Find the best SID note for NTSC given a frequency in Hz."
+  (multiple-value-bind (period error)
+      (frequency->sid freq :ntsc)
+    (list period (sid->frequency period :ntsc) error)))
+
+(defun best-sid-note-for-pal (freq)
+  "Find the best SID note for PAL given a frequency in Hz."
+  (multiple-value-bind (period error)
+      (frequency->sid freq :pal)
+    (list period (sid->frequency period :pal) error)))
+
+(defun best-sid-note-for-secam (freq)
+  "Find the best SID note for SECAM given a frequency in Hz.
+SECAM uses PAL SID clock (985248 Hz)."
+  (best-sid-note-for-pal freq))
+
+(defun midi->sid (midi-notes tv)
+  "Convert MIDI notes to SID format."
+  (let ((volume 15)
+        (last-duration 0)
+        (output (list)))
+    (loop for note in midi-notes
+          for i from 0
+          for (note/rest . info) = note
+          do (ecase note/rest
+               (:note
+                (multiple-value-bind (period actual-freq error)
+                    (best-sid-note-for (getf info :key) tv)
+                  (declare (ignore actual-freq error))
+                  (push (make-array 5 :initial-contents
+                                    (list (let ((d (getf info :duration)))
+                                            (prog1 (if (plusp d) d last-duration)
+                                              (setf last-duration d)))
+                                          (ldb (byte 8 8) period)
+                                          (ldb (byte 8 0) period)
+                                          volume
+                                          (nth-value 2 (key<-midi-key (getf info :key)))))
+                        output)))
+               (:text (push (make-array 5 :initial-contents (list nil nil nil nil info))
+                            output))))
+    (reverse output)))
+
+(defun merge-sid-voices (notes)
+  "Merge SID voices. Currently a stub, returns notes unchanged."
+  notes)
+
+(defmethod midi-to-sound-binary (output-coding machine-type midi-notes (sound-chip (eql :sid)))
+  "Convert MIDI to SID note data for Commodore 64/128."
+  (declare (ignore machine-type))
+  (let ((tv (make-keyword (string-upcase output-coding))))
+    (midi->sid midi-notes tv)))
 
 (defun merge-pokey-tia-voices (notes)
   "Merge POKEY/TIA voices. Currently a stub, returns notes unchanged."
@@ -836,7 +970,9 @@ List of (voice note-code frequency-error) with lowest error
       (:ntsc (or (best-tia-ntsc-note-for freq distortion)
                  (best-tia-note-for-ntsc freq)))
       (:pal (or (best-tia-pal-note-for freq distortion)
-                (best-tia-note-for-pal freq))))))
+                (best-tia-note-for-pal freq)))
+      (:secam (or (best-tia-ntsc-note-for freq distortion)
+                  (best-tia-note-for-secam freq))))))
 
 (defun adjust-note-timing-for-frame-rate (notes frame-rate)
   (loop for (voice time key duration distortion) in notes
@@ -1222,28 +1358,56 @@ Music:~:*
 
 ;; Machine that ignores sound-chip and output-coding parameters
 (defmethod compile-music-for-machine ((machine (eql 2600)) sound-chip source-out-name in-file-name output-coding)
+  "Compile TIA music for Atari 2600 — emits assembly with NTSC/SECAM/PAL conditional.
+
+SECAM uses the same 3.58 MHz crystal as NTSC, so it shares NTSC frequencies
+but runs at 50 Hz frame rate like PAL."
   (declare (ignore sound-chip output-coding))
   (let ((catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
     (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing ~a…" source-out-name)
       (format source-out ";;; Music compiled from ~a;
-;;; do not bother editing (generated file will be overwritten)"
+;;; do not bother editing (generated file will be overwritten)
+;;; NTSC and SECAM share the same 3.58 MHz crystal; PAL uses 3.547 MHz."
               in-file-name)
-      (dolist (output-coding '(:NTSC :PAL))
-        (format *trace-output* "Music encoded for ~a TV standard…" output-coding)
-        (when (eql :NTSC output-coding)
-          (format source-out "~%	.if TV == NTSC~2%"))
-        (when (eql :PAL output-coding)
-          (format source-out "~%	.else ; PAL or SECAM"))
-        (import-song-to-catalog
-         :song-file-name in-file-name
-         :output-coding output-coding
-         :catalog catalog
-         :comments-catalog comments-catalog)
-        (loop for symbol being the hash-keys of catalog
-              for notes = (gethash symbol catalog)
-              do (write-song-data-to-file (string symbol) notes source-out)))
+      ;; NTSC section (60 Hz, 3.58 MHz)
+      (format *trace-output* "Music encoded for NTSC TV standard…")
+      (format source-out "~%	.if TV == NTSC~2%")
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :NTSC
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-file (string symbol) notes source-out))
+      ;; SECAM section (50 Hz, but same 3.58 MHz crystal as NTSC)
+      (format *trace-output* "Music encoded for SECAM TV standard…")
+      (format source-out "~%	.elseif TV == SECAM~2%")
+      (setf catalog (make-hash-table)
+            comments-catalog (make-hash-table))
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :SECAM
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-file (string symbol) notes source-out))
+      ;; PAL section (50 Hz, 3.547 MHz)
+      (format *trace-output* "Music encoded for PAL TV standard…")
+      (format source-out "~%	.else ; PAL~2%")
+      (setf catalog (make-hash-table)
+            comments-catalog (make-hash-table))
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :PAL
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-file (string symbol) notes source-out))
       (format source-out "~2%	.fi~%"))
     (format *trace-output* "~&… done.~%")
     (finish-output)))
@@ -1360,33 +1524,66 @@ Music:~:*
   (error "BBC music compilation not yet implemented"))
 
 (defmethod compile-music-for-machine ((machine (eql 64)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  (let ((*machine* 64))
+  "Compile music for Commodore 64 SID."
+  (declare (ignore sound-chip))
+  (let ((*machine* 64)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table))
+        (tv (make-keyword (string-upcase output-coding))))
     (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing SID music ~a…" source-out-name)
-      (format source ";;; SID Music compiled from ~a~%;" in-file-name)  )))
+      (format source ";;; SID Music compiled from ~a~%" in-file-name)
+      (format source ";;; TV standard: ~a~2%" output-coding)
+      (format source ";;;
+;;; Format:
+;;;
+;;; first byte is the note duration (in frames)
+;;;
+;;; second and third bytes are the note frequency (in SID period form, big-endian)
+;;;
+;;; fourth byte is the instrument index
+;;;
+;;; fifth byte is the volume (0-15)")
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :sound-chip :sid
+       :output-coding tv
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-file (string symbol) notes source-out)))))
 
 (defmethod compile-music-for-machine ((machine (eql 128)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding))
-  ;; Compile music for Commodore 128 (same as C64 SID)
-  (let ((*machine* 64))
+  "Compile music for Commodore 128 SID (same as C64)."
+  (declare (ignore sound-chip))
+  (let ((*machine* 128)
+        (catalog (make-hash-table))
+        (comments-catalog (make-hash-table))
+        (tv (make-keyword (string-upcase output-coding))))
     (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing SID music ~a…" source-out-name)
-      (format source ";;; SID Music compiled from ~a~%;" in-file-name)
-      (format source ";;; Commodore 128 SID synthesizer~2%")
-      ;; Basic SID music framework - would need full MIDI parsing
-      (format source "sid_init:~%")
-      (format source "    lda #$00~%")
-      (format source "    sta $d404  ; Voice 1 control~%")
-      (format source "    sta $d40b  ; Voice 2 control~%")
-      (format source "    sta $d412  ; Voice 3 control~%")
-      (format source "    rts~2%")
-      ;; Placeholder for actual MIDI conversion
-      (format source ";;; TODO: Implement MIDI to SID conversion~%")
-      (format source ";;; SID has 3 voices, each with:~%")
-      (format source ";;; - Oscillator (triangle, sawtooth, pulse, noise)~%")
-      (format source ";;; - ADSR envelope~%")
-      (format source ";;; - Filter~%"))))
+      (format source ";;; SID Music compiled from ~a~%" in-file-name)
+      (format source ";;; TV standard: ~a~2%" output-coding)
+      (format source ";;;
+;;; Format:
+;;;
+;;; first byte is the note duration (in frames)
+;;;
+;;; second and third bytes are the note frequency (in SID period form, big-endian)
+;;;
+;;; fourth byte is the instrument index
+;;;
+;;; fifth byte is the volume (0-15)")
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :sound-chip :sid
+       :output-coding tv
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-file (string symbol) notes source-out)))))
 
 (defmethod compile-music-for-machine ((machine (eql 264)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding sound-chip in-file-name))
@@ -1728,39 +1925,57 @@ A MIDI note number from 0 to 127, or nil if parsing fails
                    (max 0 (min 15 (- den num)))))))
 
 (defun score->hokey-notes (score frame-rate)
-  (declare (ignore frame-rate)) ; FIXME: #1231 PAL support
-  (remove-if #'null
-             (mapcar (lambda (score-note)
-                       (let ((key (getf score-note :key)))
-                         (unless (<= 24 key 72)
-                           (warn "Note ~a is unlikely to play correctly on Hokey"
-                                 (midi->note-name key)))
-                         (multiple-value-bind (instrument hokey-f hokey-error)
-                             #| FIXME: #1231 PAL |#
-                             (hokey-reckon key (getf score-note :instrument))
-                           (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
-                               #| FIXME: #1231 PAL |#
-                               (best-tia-ntsc-note-for key)
-                             (declare (ignore _tia-c))
-                             (when (getf score-note :velocity)
-                               (make-hokey-note :start-time (getf score-note :time)
-                                                :duration (getf score-note :duration)
-                                                :instrument instrument
-                                                :hokey-f (or hokey-f 0)
-                                                :hokey-error
-                                                (apply #'fraction-nybbles
-                                                       (simplify-to-rational
-                                                        (or hokey-error #xf0)))
-                                                :tia-f (or tia-f 0)
-                                                :tia-error
-                                                (apply #'fraction-nybbles
-                                                       (simplify-to-rational
-                                                        (or tia-error #xf0)))
-                                                :volume (/ (getf score-note :velocity) 127)))))))
-                     score)))
+  (let ((tv (if (keywordp frame-rate)
+                frame-rate
+                (make-keyword (string-upcase (string frame-rate))))))
+    (remove-if #'null
+               (mapcar (lambda (score-note)
+                         (let ((key (getf score-note :key)))
+                           (unless (<= 24 key 72)
+                             (warn "Note ~a is unlikely to play correctly on Hokey"
+                                   (midi->note-name key)))
+                           (multiple-value-bind (instrument hokey-f hokey-error)
+                               (hokey-reckon key (getf score-note :instrument))
+                             (destructuring-bind (&optional _tia-c tia-f (tia-error 0))
+                                 (ecase tv
+                                   (:ntsc (best-tia-ntsc-note-for key))
+                                   (:pal (best-tia-pal-note-for key))
+                                   (:secam (best-tia-secam-note-for key)))
+                               (declare (ignore _tia-c))
+                               (when (getf score-note :velocity)
+                                 (make-hokey-note :start-time (getf score-note :time)
+                                                  :duration (getf score-note :duration)
+                                                  :instrument instrument
+                                                  :hokey-f (or hokey-f 0)
+                                                  :hokey-error
+                                                  (apply #'fraction-nybbles
+                                                         (simplify-to-rational
+                                                          (or hokey-error #xf0)))
+                                                  :tia-f (or tia-f 0)
+                                                  :tia-error
+                                                  (apply #'fraction-nybbles
+                                                         (simplify-to-rational
+                                                          (or tia-error #xf0)))
+                                                  :volume (/ (getf score-note :velocity) 127)))))))
+                       score))))
 
 (defmethod score->song (score (format (eql :hokey)) frame-rate)
   (score->hokey-notes score frame-rate))
+
+(defun score-item-to-sid-note-event (item)
+  "Turn a plist from @code{midi->score} into a dotted-pair note event for SID."
+  (cons :note (list :time (getf item :time)
+                    :key (getf item :key)
+                    :duration (getf item :duration)
+                    :velocity (or (getf item :velocity) 127)
+                    :instrument (getf item :instrument :piano))))
+
+(defmethod score->song (score (format (eql :sid)) frame-rate)
+  "Build SID note array for C64/C128."
+  (let ((tv (if (keywordp frame-rate)
+                frame-rate
+                (make-keyword (string-upcase (string frame-rate))))))
+    (midi->sid (mapcar #'score-item-to-sid-note-event score) tv)))
 
 (defun score-item-to-ay-note-event (item)
   "Turn a plist from @code{midi->score} into an @code{(:note …)} event for @code{midi-to-ay-3-8910}.
