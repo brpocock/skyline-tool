@@ -151,6 +151,9 @@
                   ((:nefertem :sentinel :enemy) :160a)
                   (otherwise :160b))))))
 
+(defclass animation-preview-pane (clim:application-pane) ()
+  (:documentation "Preview pane for animation sequences. Handles timer events for animation."))
+
 (clim:define-application-frame anim-seq-editor-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
    (%sequence :accessor anim-seq-editor-sequence)
@@ -160,16 +163,16 @@
    (%animation-thread :initform nil :accessor anim-seq-editor-animation-thread)
    (%cached-tile-dump :initform nil :accessor anim-seq-editor-cached-tile-dump)
    (%cached-tile-sheet-name :initform nil :accessor anim-seq-editor-cached-tile-sheet-name))
-  (:panes (anim-seq-filmstrip-pane :application :height 550 :width 1800
+  (:panes (anim-seq-filmstrip-pane :application :height 500 :width 1800
                                                 :display-function 'display-anim-seq-filmstrip)
-          (interactor :interactor :height 250 :width 400
-                                  :max-height 250)
-          (anim-seq-detail-pane :application :height 250 :width 700
-                                             :max-height 250
+          (interactor :interactor :height 300 :width 400
+                                  :max-height 300)
+          (anim-seq-detail-pane :application :height 300 :width 700
+                                             :max-height 300
                                              :display-function 'display-anim-seq-properties)
-          (anim-seq-preview-pane :application :height 250 :width 700
-                                              :max-height 250
-                                              :display-function 'display-anim-preview))
+          (anim-seq-preview-pane animation-preview-pane :height 300 :width 700
+                                                       :max-height 300
+                                                       :display-function 'display-anim-preview))
   (:layouts (default (clim:vertically ()
                        anim-seq-filmstrip-pane
                        (clim:horizontally ()
@@ -192,52 +195,59 @@
                                             (:160a (case (simple-animation-sequence-decal-kind
                                                           (anim-seq-editor-sequence frame))
                                                      ((:enemy :sentinel :nefertem) 6)
-                                                     (otherwise 0)))))
-    (clim:redisplay-frame-panes frame))
-  (start-preview-animation frame))
+                                                     (otherwise 0))))))
+  ;; Redisplay and animation timer are deferred to note-sheet-grafted
+  ;; when the frame is actually connected to the display.
+  )
 
 (defun start-preview-animation (frame)
-  "Start the background animation thread for the preview pane."
-  (when (anim-seq-editor-animation-thread frame)
-    (bt:destroy-thread (anim-seq-editor-animation-thread frame)))
-  (setf (anim-seq-editor-animation-thread frame)
-        (bt:make-thread
-         (lambda ()
-           (loop
-             (handler-case
-                 (let* ((seq (anim-seq-editor-sequence frame))
-                        (frame-count (simple-animation-sequence-frame-count seq))
-                        (fps (* 10 (simple-animation-sequence-frame-rate-scalar seq)))
-                        (delay (/ 1.0 fps))
-                        (preview-pane (clim:find-pane-named frame 'anim-seq-preview-pane)))
-                   (when (and preview-pane (> frame-count 0))
-                     ;; Advance to next frame
-                     (setf (anim-seq-editor-preview-frame frame)
-                           (mod (1+ (anim-seq-editor-preview-frame frame))
-                                frame-count))
-                     ;; Directly update the pane
-                     (handler-case
-                         (progn
-                           ;; Clear the pane
-                           (clim:window-clear preview-pane)
-                           ;; Draw directly to the pane
-                           (display-anim-preview frame preview-pane))
-                       (error (e)
-                         ;; Silently ignore display errors - they'll retry next frame
-                         (declare (ignore e)))))
-                   (sleep delay))
-               (condition (c)
-                 ;; Only log unexpected errors, not display errors
-                 (unless (search "Lock" (format nil "~a" c))
-                   (format *error-output* "~%Preview animation error: ~a~%" c))
-                 (sleep 1)))))
-         :name "Animation Preview Thread")))
+  "Schedule the first animation timer tick on the preview pane.
+Called from note-sheet-grafted after the frame is connected to the display."
+  (setf (anim-seq-editor-animation-thread frame) nil)
+  (let ((pane (clim:find-pane-named frame 'anim-seq-preview-pane)))
+    (when pane
+      (let* ((seq (anim-seq-editor-sequence frame))
+             (frame-count (when seq (simple-animation-sequence-frame-count seq)))
+             (fps (if (and seq (> frame-count 0))
+                      (* 10 (simple-animation-sequence-frame-rate-scalar seq))
+                      1))
+             (delay (if (> fps 0) (/ 1.0 fps) 1.0)))
+        (handler-case
+            (clim-extensions:schedule-timer-event pane :preview-tick delay)
+          (error (c)
+            (format *error-output* "~%Preview animation schedule error: ~a~%" c)))))))
+
+(defmethod clim:note-sheet-grafted :after ((pane animation-preview-pane))
+  "Start animation and force an initial redisplay once the pane is connected to the display."
+  (let ((frame (clim:pane-frame pane)))
+    (clim:redisplay-frame-panes frame)
+    (start-preview-animation frame)))
+
+(defmethod clim:handle-event ((pane animation-preview-pane) (event clim:timer-event))
+  "Handle animation timer ticks: advance frame, redisplay preview, reschedule next tick."
+  (when (eq (clim-extensions:timer-event-qualifier event) :preview-tick)
+    (when (clim:sheet-grafted-p pane)
+      (let ((frame (clim:pane-frame pane)))
+        (handler-case
+            (let* ((seq (anim-seq-editor-sequence frame))
+                   (frame-count (when seq (simple-animation-sequence-frame-count seq))))
+              (when (and seq (> frame-count 0))
+                (setf (anim-seq-editor-preview-frame frame)
+                      (mod (1+ (anim-seq-editor-preview-frame frame)) frame-count))
+                (clim:redisplay-frame-pane frame pane :force-p t))
+              ;; Reschedule for next tick at current frame rate
+              (let* ((fps (if (and seq (> frame-count 0))
+                              (* 10 (simple-animation-sequence-frame-rate-scalar seq))
+                              1))
+                     (delay (if (> fps 0) (/ 1.0 fps) 1.0)))
+                (clim-extensions:schedule-timer-event pane :preview-tick delay)))
+          (error (c)
+            (format *error-output* "~%Preview animation tick error: ~a~%" c))))))
+  t)
 
 (defmethod clim:frame-exit :before ((frame anim-seq-editor-frame))
-  "Clean up the animation thread when the frame closes."
-  (when (anim-seq-editor-animation-thread frame)
-    (bt:destroy-thread (anim-seq-editor-animation-thread frame))
-    (setf (anim-seq-editor-animation-thread frame) nil)))
+  "Clean up when the frame closes. Timer events check sheet-grafted-p and stop naturally."
+  (setf (anim-seq-editor-animation-thread frame) nil))
 
 (defmethod update-params ((frame anim-seq-editor-frame))
   (unless (slot-boundp frame '%sequence)
@@ -1015,14 +1025,6 @@
                                    "Edit Animation Sequence")
                              (clim:run-frame-top-level *anim-seq-editor-frame*)))
                          :name "Edit Animation Sequence"))
-
-(define-constant +all-actions+
-    '(:idle :climbing :hurt :flying
-      :knocked-back :swimming :use-equipment :wading
-      :walking :wave-arms :gesture :sleep :non-interactive
-      :dance :panic :special-walk-with-shield :special-idle-with-shield
-      :boating)
-  :test 'equalp)
 
 (clim:define-application-frame anim-seq-assign-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-assign-index :initarg :sequence)

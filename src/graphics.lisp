@@ -4050,8 +4050,7 @@ Used internally by BLOB ripping for color stamp conversion."
 (defun print-wide-pixel (color stream &key shortp unit)
   (cond
     #+mcclim
-    ((member (package-name (symbol-package (class-name (class-of stream))))
-             '(clim clim-listener) :test #'string-equal)
+    ((typep stream 'clim:sheet)
      (print-clim-pixel color stream :shortp shortp :unit unit))
     ((tty-xterm-p)
      (print-ansi-pixel color stream))
