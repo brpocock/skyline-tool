@@ -407,7 +407,10 @@ skipping MIDI music with ~:d track~:p"
 
 (defun midi-to-sound-binary-intv (output-coding midi-notes)
   "Convert MIDI to Intellivision AY-3-8910 note array; signal if conversion fails."
-  (let ((result (midi-to-ay-3-8910 midi-notes output-coding)))
+  (let* ((tv (if (keywordp output-coding)
+                 output-coding
+                 (make-keyword (string-upcase (string output-coding)))))
+         (result (midi-to-ay-3-8910 midi-notes tv)))
     (unless (arrayp result)
       (error "midi-to-ay-3-8910 returned ~s, expected note array" result))
     (values result nil)))
@@ -1316,22 +1319,60 @@ Music:~:*
             do (write-song-data-to-binary notes object *machine* (make-keyword (string-upcase sound-chip)))))))
 
 (defmethod compile-music-for-machine ((machine (eql 2609)) sound-chip source-out-name in-file-name output-coding)
-  (let ((*machine* 2609)
-        (catalog (make-hash-table))
+  "Compile AY-3-8910 music for Intellivision — emits assembly with NTSC/SECAM/PAL conditional.
+
+NTSC: 3.579545 MHz crystal, 60 fps; PAL: 4.0 MHz crystal, 50 fps;
+SECAM: 3.579545 MHz crystal (like NTSC), 50 fps."
+  (declare (ignore sound-chip output-coding))
+  (let ((catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
     (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
       (format *trace-output* "~&Writing ~a…" source-out-name)
       (format source-out ";;; Music compiled from ~a for Intellivision AY-3-8910 PSG
-;;; do not bother editing (generated file will be overwritten)"
+;;; do not bother editing (generated file will be overwritten)
+;;; NTSC: 3.579545 MHz crystal, 60 fps; PAL: 4.0 MHz crystal, 50 fps;
+;;; SECAM: 3.579545 MHz crystal, 50 fps."
               in-file-name)
-      (import-song-to-catalog :song-file-name in-file-name
-                              :sound-chip (make-keyword (string-upcase sound-chip))
-                              :output-coding (make-keyword (string-upcase output-coding))
-                              :catalog catalog
-                              :comments-catalog comments-catalog)
+      ;; NTSC section (60 fps, 3.579545 MHz)
+      (format *trace-output* "Music encoded for NTSC TV standard…")
+      (format source-out "~%	.if TV == NTSC~2%")
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :NTSC
+       :catalog catalog
+       :comments-catalog comments-catalog)
       (loop for symbol being the hash-keys of catalog
             for notes = (gethash symbol catalog)
-            do (write-song-data-to-ay-3-8910 notes source-out)))))
+            do (write-song-data-to-ay-3-8910 notes source-out))
+      ;; SECAM section (50 fps, 3.579545 MHz)
+      (format *trace-output* "Music encoded for SECAM TV standard…")
+      (format source-out "~%	.elseif TV == SECAM~2%")
+      (setf catalog (make-hash-table)
+            comments-catalog (make-hash-table))
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :SECAM
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-ay-3-8910 notes source-out))
+      ;; PAL section (50 fps, 4.0 MHz)
+      (format *trace-output* "Music encoded for PAL TV standard…")
+      (format source-out "~%	.else ; PAL~2%")
+      (setf catalog (make-hash-table)
+            comments-catalog (make-hash-table))
+      (import-song-to-catalog
+       :song-file-name in-file-name
+       :output-coding :PAL
+       :catalog catalog
+       :comments-catalog comments-catalog)
+      (loop for symbol being the hash-keys of catalog
+            for notes = (gethash symbol catalog)
+            do (write-song-data-to-ay-3-8910 notes source-out))
+      (format source-out "~2%	.fi~%"))
+    (format *trace-output* "~&… done.~%")
+    (finish-output)))
 
 ;; Machine that ignores sound-chip and output-coding parameters
 (defmethod compile-music-for-machine ((machine (eql 2600)) sound-chip source-out-name in-file-name output-coding)
@@ -1831,7 +1872,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
   (ecase frame-rate
     (:ntsc 60)
     (:secam 50)
-    (:pal 60)))
+    (:pal 50)))
 
 (defun midi->score (input &optional _ignored)
   (declare (ignore _ignored))
@@ -2123,22 +2164,26 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
   "Write Intellivision PSG note table for @code{compile-midi} (@code{bin/skyline-tool compile-midi …})."
   (write-song-data-to-binary notes output 2609 :ay-3-8910))
 
-(defun midi-to-ay-3-8910 (midi-notes output-coding)
+(defun midi-to-ay-3-8910 (midi-notes tv)
   "Convert MIDI notes to AY-3-8910 PSG register values for Intellivision
 
 TIME and DURATION in decoded MIDI events are in seconds; they are converted
 to frame counts using 60 (NTSC) or 50 (PAL/SECAM) frames per second.
 
 Compiled notes carry orchestration @strong{instrument IDs}, not PSG channel
-numbers; the runtime assigns tonal or noise voices dynamically."
-  (let ((*orchestra* (get-orchestration))
-        (fps (ecase (if (keywordp output-coding)
-                         output-coding
-                         (make-keyword (string-upcase (string output-coding))))
-               (:ntsc 60)
-               (:pal 50)
-               (:secam 50)))
-        (notes (list)))
+numbers; the runtime assigns tonal or noise voices dynamically.
+
+@table @asis
+@item TV
+TV standard keyword (@code{:ntsc}, @code{:pal}, @code{:secam})
+@end table"
+  (let* ((tv-keyword (if (keywordp tv) tv (make-keyword (string-upcase (string tv)))))
+         (*ay-tv* tv-keyword)
+         (*hokey-tv* tv-keyword)
+         (*orchestra* (get-orchestration))
+         (fps (ay-fps))
+         (clock (ay-clock))
+         (notes (list)))
     (dolist (track midi-notes)
       (let ((track-instrument :piano))
         (dolist (event track)
@@ -2163,10 +2208,10 @@ numbers; the runtime assigns tonal or noise voices dynamically."
                                             :instrument instrument-id)
                            instrument-id))))
                  (let* ((frequency (freq<-midi-key key))
-                        (period (frequency-to-ay-period frequency +intv-ay-clock-hz+)))
+                        (period (frequency-to-ay-period frequency clock)))
                    (push (list t-frames instrument-id (logand period #xff) (ash period -8)
-                               max-vol (max 1 sustain-duration))
-                         notes)))))))))
+                                max-vol (max 1 sustain-duration))
+                          notes)))))))))
     (setf notes (sort notes #'< :key #'first))
     (let ((result (make-array (list (length notes) 6))))
       (loop for i from 0
@@ -2277,7 +2322,30 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
   (max 1 (min #xffff (round (/ clock-frequency (* 16 frequency))))))
 
 (defconstant +intv-ay-clock-hz+ 3579545
+  "NTSC Intellivision AY-3-8914 master clock (jzIntv @file{ay8910.c}).
+@deprecated Use @code{+intv-ay-ntsc-clock-hz+} or @ref{ay-clock}.")
+
+(defconstant +intv-ay-ntsc-clock-hz+ 3579545
   "NTSC Intellivision AY-3-8914 master clock (jzIntv @file{ay8910.c}).")
+
+(defconstant +intv-ay-pal-clock-hz+ 4000000
+  "PAL Intellivision AY-3-8914 master clock (jzIntv @file{psg.txt}:
+PAL uses a 4.00 MHz crystal).")
+
+(defvar *ay-tv* :ntsc
+  "Current TV standard for AY-3-8910 compilation (:ntsc, :pal, or :secam).")
+
+(defun ay-fps ()
+  "Return frames per second for the current AY TV standard."
+  (ecase *ay-tv* (:ntsc 60) (:pal 50) (:secam 50)))
+
+(defun ay-clock ()
+  "Return AY master clock for the current TV standard.
+SECAM uses the NTSC crystal (3.579545 MHz) with 50 fps."
+  (ecase *ay-tv*
+    (:ntsc +intv-ay-ntsc-clock-hz+)
+    (:pal +intv-ay-pal-clock-hz+)
+    (:secam +intv-ay-ntsc-clock-hz+)))
 
 (defun write-song-data-to-ay-3-8910 (notes source-out)
   "Write AY-3-8910 PSG music data to assembly source"

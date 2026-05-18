@@ -151,8 +151,62 @@
 
 (test intv-ay-period-uses-ntsc-master-clock
   "Intellivision AY period uses 3.579545 MHz master clock (jzIntv ay8910.c)"
-  (let ((period (skyline-tool::frequency-to-ay-period 440.0d0 skyline-tool::+intv-ay-clock-hz+)))
+  (let ((period (skyline-tool::frequency-to-ay-period 440.0d0 skyline-tool::+intv-ay-ntsc-clock-hz+)))
     (is (= period 508) "A4 (440 Hz) period should be 508 at 3.579545 MHz")))
+
+(test intv-ay-pal-clock-constant
+  "Intellivision AY PAL uses 4.0 MHz master clock (jzIntv psg.txt)"
+  (is (= skyline-tool::+intv-ay-pal-clock-hz+ 4000000)
+      "PAL clock should be 4.0 MHz"))
+
+(test intv-ay-pal-period-calculation
+  "Intellivision AY period at PAL clock"
+  (let ((ntsc-period (skyline-tool::frequency-to-ay-period 440.0d0 skyline-tool::+intv-ay-ntsc-clock-hz+))
+        (pal-period (skyline-tool::frequency-to-ay-period 440.0d0 skyline-tool::+intv-ay-pal-clock-hz+)))
+    (is (= ntsc-period 508) "NTSC A4 period should be 508 at 3.579545 MHz")
+    (is (= pal-period 568) "PAL A4 period should be 568 at 4.0 MHz")
+    (is (> pal-period ntsc-period) "PAL period should be higher than NTSC for same note")))
+
+(test intv-ay-secam-uses-ntsc-clock
+  "SECAM Intellivision uses NTSC crystal at 50 fps"
+  (let* ((ntsc-clock skyline-tool::+intv-ay-ntsc-clock-hz+)
+         (ntsc-period (skyline-tool::frequency-to-ay-period 440.0d0 ntsc-clock))
+         (secam-period (skyline-tool::frequency-to-ay-period 440.0d0 ntsc-clock)))
+    (is (= ntsc-period secam-period) "SECAM and NTSC share the same clock → same period")))
+
+(test intv-ay-pal-score-to-song
+  "Intellivision PSG: score->song for PAL TV standard"
+  (let ((score (list (list :lyric nil :instrument :piano :time 0.0d0 :duration 0.1d0
+                           :key 60 :velocity 100))))
+    (let ((ntsc-song (skyline-tool::score->song score :ay-3-8910 :ntsc))
+          (pal-song (skyline-tool::score->song score :ay-3-8910 :pal))
+          (secam-song (skyline-tool::score->song score :ay-3-8910 :secam)))
+      (is (arrayp ntsc-song) "NTSC score->song should return an array")
+      (is (arrayp pal-song) "PAL score->song should return an array")
+      (is (arrayp secam-song) "SECAM score->song should return an array")
+      (is (plusp (array-dimension ntsc-song 0)) "NTSC should have at least one note")
+      (is (plusp (array-dimension pal-song 0)) "PAL should have at least one note")
+      (is (plusp (array-dimension secam-song 0)) "SECAM should have at least one note"))))
+
+(test intv-ay-pal-compile-music-assembly
+  "Intellivision compile-music-for-machine emits NTSC/PAL/SECAM conditional assembly"
+  (let ((output-file (format nil "Object/2609/test-music-ay-pal-~a.s"
+                             (skyline-tool::generate-secure-random-id 2)))
+        (input-file (unit-test-midi-input-path)))
+    (ensure-directories-exist (pathname (directory-namestring output-file)))
+    (unwind-protect
+        (with-open-file (out input-file :direction :output :if-exists :supersede)
+          (write *test-midi-data* :stream out :readably t))
+      (let ((skyline-tool::*machine* 2609))
+        (finishes (skyline-tool::compile-music output-file input-file "2609" "AY-3-8910" "NTSC")))
+      (validate-music-output-file output-file 2609
+                                '(";;; Music compiled from"
+                                  "Intellivision AY-3-8910 PSG"
+                                  ".if TV == NTSC"
+                                  ".elseif TV == SECAM"
+                                  ".else ; PAL"))
+      (ignore-errors (delete-file output-file))
+      (ignore-errors (delete-file input-file)))))
 
 (test 64-c64-music-compilation-validation
   "Test that Commodore 64 music compilation produces correct assembly output"
