@@ -1791,37 +1791,37 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                  palette))))))))
 
 (defun compile-tileset (pathname &optional common-pathname)
-  "Compiles tileset graphics into binary format for PATHNAME.
+  "Compiles tileset graphics for the current @code{*machine*}.
 
-@lindex compile-tileset
-@cindex tileset compilation
-@cindex tile graphics processing
-
-@table @code
-@item Package: skyline-tool
-@item Arguments: pathname (pathname designator), &optional common-pathname (pathname designator)
-@item Returns: nil
-@item Side Effects: Writes compiled tileset data to Object/$(PORT)/Assets/Tileset.*.o
-@end table
-
-This function processes tileset image files, extracting individual tiles and organizing them into the format required by the MARIA graphics processor. The compilation process includes:
-
-@itemize
-@item Tile extraction from source image (8x8 pixel tiles)
-@item Palette generation and optimization
-@item Graphics data compression and formatting
-@item Optional common tileset merging
-@end itemize
-
-When COMMON-PATHNAME is provided, tiles from that tileset are merged into the compilation, allowing shared graphics between different tilesets.
-
-@strong{Output Format:}
-Binary data suitable for MARIA graphics chip, stored as object files for linking into the final ROM.
-
-@strong{Example:}
-@example
-(compile-tileset #p\"Source/Tilesets/Overworld.tsx\")
-@end example"
+For MARIA platforms (7800, 5200, 400, 800, 7850): extracts 8×16 tiles into
+binary format for the MARIA graphics processor.  For VIC-II platforms (C64,
+C128): dispatches to @code{compile-tileset-64} for C64 multicolor/monochrome
+character-cell tiles.  For other machines, signals an error."
+  ;; Machine dispatch: non-MARIA platforms
+  (when (member *machine* '(64 128))
+    (let* ((name (pathname-name pathname))
+           (png (load-tileset-image-for-machine pathname))
+           (height (png-read:height png))
+           (width (png-read:width png))
+           (α (png-read:transparency png))
+           (image-nybbles (png->palette height width (png-read:image-data png) α))
+           (out-dir (merge-pathnames
+                     (make-pathname :directory (list :relative "Source" "Generated"
+                                                     (machine-directory-name) "Assets"))
+                     (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))))
+      (compile-tileset-64 (make-pathname :name name :type "png")
+                          out-dir height width image-nybbles)
+      (return-from compile-tileset)))
+  (when (member *machine* '(2609))
+    ;; Intv tilesets use compile-tileset-intv-screen (separate pipeline);
+    ;; the standard compile-tileset path is not used for Intv.
+    (warn "Tile set compiler: use compile-blob-intv or compile-tileset-intv-screen for Intellivision (~a)"
+          (machine-long-name))
+    (return-from compile-tileset))
+  (when (member *machine* '(1 2 8 16 20 88 2600 3010))
+    (warn "Tile set compiler not set up for ~a (~a); skipping"
+          *machine* (machine-long-name))
+    (return-from compile-tileset))
   (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                 :name (format nil "Tileset.~a" (pathname-name pathname))
                                 :type "o")))

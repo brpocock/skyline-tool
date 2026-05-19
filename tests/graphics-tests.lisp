@@ -424,9 +424,23 @@
   (dolist (func '(skyline-tool::pretty-mob-data-listing-vic2
                   skyline-tool::mob-index+bitmap+color-sets
                   skyline-tool::tile-cell-vic2-x
-                  skyline-tool::tile-cell-vic2-y))
+                  skyline-tool::tile-cell-vic2-y
+                  skyline-tool::compile-tileset-64
+                  skyline-tool::compile-c64-blob
+                  skyline-tool::compile-vdc-blob
+                  skyline-tool::vic2-cell-multicolor-map))
     (is-true (fboundp func)
              "~a function should be defined" func)))
+
+;; Test C64/C128 dispatch existence
+(test c64-c128-dispatch-existence
+  "Test that C64 and C128 dispatch-png% methods exist"
+  (is-true (fboundp 'skyline-tool::dispatch-png%)
+           "dispatch-png% generic should exist")
+  (let ((method-64 (find-method #'skyline-tool::dispatch-png% nil
+                                (list (find-class 'eql) t t t t t t) nil)))
+    ;; Method for (eql 64) should exist
+    (is-true method-64 "dispatch-png% for machine 64 should exist")))
 
 ;; Test compression functions
 (test compression-functions-existence

@@ -434,8 +434,9 @@ New list with each element duplicated
 
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
-(defun machine-palette (&optional (machine *machine*) (region *region*))
-  "Get the standard color palette for a target machine and region.
+(defgeneric machine-palette (&optional (machine *machine*) (region *region*))
+  (:documentation
+   "Get the standard color palette for a target machine and region.
 
 Returns the appropriate color palette for the specified machine type and
 video region, used for graphics conversion and color matching.
@@ -444,43 +445,67 @@ video region, used for graphics conversion and color matching.
 @item MACHINE
 Machine identifier (default: current *machine*)
 @item REGION
-Video region (:ntsc, :pal, :secam) (default: current *region*).  For TMS9918-class
-machines (9918, 1000, 3010, 837, 2110) the VDP RGB values are fixed; REGION is
-accepted for a uniform call pattern but does not change the returned list.
+Video region (:ntsc, :pal, :secam) (default: current *region*).
 @item Returns
 List of RGB color triples for the machine's palette
 @end table
 
-@xref{var:*machine*}, @xref{var:*region*}."
-  (copy-list (ecase machine
-               (20 (subseq +c64-palette+ 0 7))
-               (200 +lynx-palette+)
-               ((64 128) +c64-palette+)
-               (2 +apple-hires-palette+)
-               (8 (ecase region
-                    (:ntsc +nes-palette-ntsc+)
-                    (:pal +nes-palette-pal+)))
-               (2600 (ecase region
-                       (:ntsc +vcs-ntsc-palette+)
-                       (:pal +vcs-pal-palette+)
-                       (:secam +vcs-secam-palette+)))
-               (2609 +intv-palette+)
-               (7800 (ecase region
-                       (:ntsc +prosystem-ntsc-palette+)
-                       (:pal +prosystem-pal-palette+)))
-               ;; vcs800 native host: map tile PNG conversion uses same ProSystem indices as 7800
-               ;; (see @file{Source/Code/vcs800/Parity7800.texf}).
-               (7850 (ecase region
-                       (:ntsc +prosystem-ntsc-palette+)
-                       (:pal +prosystem-pal-palette+)))
-               ;; Maria-class cart ports (400/800 delegate PNG dispatch to 5200 Mode E): same
-               ;; ProSystem palette indices as 5200/7800 (tile PNGs use ProSystem mapping).
-               ((400 800 5200) (ecase region
-                                 (:ntsc +prosystem-ntsc-palette+)
-                                 (:pal +prosystem-pal-palette+)))
-               ((9918 1000 3010 837 2110) +tms9918-palette+)
-               (264 +ted-palette+)
-               (16 +tg16-palette+))))
+@xref{var:*machine*}, @xref{var:*region*}.")
+  (:method ((machine (eql 20)) &optional region) (declare (ignore region))
+    (subseq +c64-palette+ 0 7))
+  (:method ((machine (eql 200)) &optional region) (declare (ignore region))
+    (copy-list +lynx-palette+))
+  (:method ((machine (eql 64)) &optional region) (declare (ignore region))
+    (copy-list +c64-palette+))
+  (:method ((machine (eql 128)) &optional region) (declare (ignore region))
+    (copy-list +c64-palette+))
+  (:method ((machine (eql 2)) &optional region) (declare (ignore region))
+    (copy-list +apple-hires-palette+))
+  (:method ((machine (eql 8)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +nes-palette-ntsc+))
+      (:pal (copy-list +nes-palette-pal+))))
+  (:method ((machine (eql 2600)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +vcs-ntsc-palette+))
+      (:pal (copy-list +vcs-pal-palette+))
+      (:secam (copy-list +vcs-secam-palette+))))
+  (:method ((machine (eql 2609)) &optional region) (declare (ignore region))
+    (copy-list +intv-palette+))
+  (:method ((machine (eql 7800)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +prosystem-ntsc-palette+))
+      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 5200)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +prosystem-ntsc-palette+))
+      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 400)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +prosystem-ntsc-palette+))
+      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 800)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +prosystem-ntsc-palette+))
+      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 7850)) &optional (region *region*))
+    (ecase region
+      (:ntsc (copy-list +prosystem-ntsc-palette+))
+      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 9918)) &optional region) (declare (ignore region))
+    (copy-list +tms9918-palette+))
+  (:method ((machine (eql 3010)) &optional region) (declare (ignore region))
+    (copy-list +tms9918-palette+))
+  (:method ((machine (eql 1000)) &optional region) (declare (ignore region))
+    (copy-list +tms9918-palette+))
+  (:method ((machine (eql 837)) &optional region) (declare (ignore region))
+    (copy-list +tms9918-palette+))
+  (:method ((machine (eql 2110)) &optional region) (declare (ignore region))
+    (copy-list +tms9918-palette+))
+  (:method ((machine (eql 264)) &optional region) (declare (ignore region))
+    (copy-list +ted-palette+))
+  (:method ((machine (eql 16)) &optional region) (declare (ignore region))
+    (copy-list +tg16-palette+)))
 
 (defun machine-colors ()
   "Get the color names for the current target machine.
@@ -2060,33 +2085,67 @@ Proceed with caution."))
         (compile-font-generic *machine* nil font font-input)))))
 
 (defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  (declare (ignore height width image-nybbles))
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name (pathname-name png-file)
-                                  :type "s")
-                   out-dir)))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; -*- asm -*-
-;;; Generated file; editing is useless. Source is ~a (derived from the matching XCF)
-;;;
+  "Compile 8×8 font with deduplication: unique char definitions + mapping table.
 
-VIC2Font:
-"
-              png-file)
-      (loop for char from 0 below (* (/ height 8) (/ width 8))
-            for x-cell = (mod (* char 8) width)
-            for y-cell = (* 8 (floor (* char 8) width))
-            for char-data = (extract-region image-nybbles
-                                            x-cell y-cell
-                                            (+ 7 x-cell) (+ 7 y-cell))
-            do (format src-file
-                       "~%	;; 		 character ~d ($~:*~x)~{~a~}"
-                       char
-                       (map 'list #'byte-and-art
-                            (tile->bits char-data)))
-            collect (tile->color char-data))
-      (format *error-output* "~% Wrote binary font (monochrome) data to ~A." out-file)
-      (finish-output src-file))))
+Shared by 7800, 5200, Lynx, VIC-II, VDC, ClcV, and Intv.  Outputs
+assembly with @code{FontChars} (unique 8-byte glyphs) and
+@code{FontCharMap} (256-entry index map).  Identical characters share
+one definition slot.
+
+@table @asis
+@item PNG-FILE
+Source PNG path (for comments).
+@item OUT-DIR
+Output directory.
+@item HEIGHT, WIDTH
+Pixel dimensions.
+@item IMAGE-NYBBLES
+2D palette-pixel array from @code{png->palette}.
+@end table"
+  (declare (ignore height width image-nybbles))
+  (let* ((total (/ (* (/ height 8) (/ width 8)) 1))
+         (uniq (make-array total :adjustable t :fill-pointer 0))
+         (ht (make-hash-table :test 'equalp))
+         (char-map (make-array total :element-type '(unsigned-byte 8)))
+         (out-file (merge-pathnames
+                    (make-pathname :name (pathname-name png-file) :type "s")
+                    out-dir)))
+    (ensure-directories-exist (directory-namestring out-file))
+    ;; Pass 1: deduplicate
+    (loop for char from 0 below total
+          for x-cell = (mod (* char 8) width)
+          for y-cell = (* 8 (floor (* char 8) width))
+          for char-data = (extract-region image-nybbles x-cell y-cell
+                                          (+ 7 x-cell) (+ 7 y-cell))
+          for bits = (tile->bits char-data)
+          for idx = (gethash bits ht)
+          do (unless idx
+               (setf idx (length uniq))
+               (setf (gethash bits ht) idx)
+               (vector-push-extend bits uniq))
+             (setf (aref char-map char) idx))
+    ;; Pass 2: write output
+    (with-output-to-file (src-file out-file :if-exists :supersede)
+      (format src-file ";;; -*- asm -*-~%")
+      (format src-file ";;; Font compiled from ~A~%" png-file)
+      (format src-file ";;; ~D characters, ~D unique glyph~:P~2%"
+              total (length uniq))
+      ;; Unique glyph definitions (8 bytes each)
+      (format src-file "FontChars:  ;; ~D glyphs × 8 bytes~%" (length uniq))
+      (loop for glyph-index from 0 below (length uniq)
+            for bits = (aref uniq glyph-index)
+            do (format src-file "    ;; glyph ~D~%" glyph-index)
+               (loop for byte in bits
+                     do (format src-file "    .byte $~2,'0X~%" byte)))
+      ;; Character → glyph index map
+      (format src-file "~%FontCharMap:  ;; ~D entries~%" total)
+      (loop for char from 0 below total
+            do (format src-file "    .byte ~D  ; char ~D~%"
+                       (aref char-map char) char))
+      (format src-file "~%FontUniqueCount EQU ~D~%" (length uniq))
+      (format src-file "FontTotalChars  EQU ~D~%" total))
+    (format *error-output* "~&Wrote font (~D unique of ~D chars) to ~A."
+            (length uniq) total out-file)))
 
 (defun tile-cell-vic2-x (cell width)
   "Each tile's data is arranged into four cells, like so:
@@ -2145,16 +2204,8 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
                   byte)))
 
 (defun intv-invert-tile-row-bytes (key)
-  "Return KEY with each of the 8 row bytes bitwise-complemented (XOR #xFF).
-
-This is an involution: @code{(intv-invert-tile-row-bytes (intv-invert-tile-row-bytes key))}
-equals KEY for any valid 8-byte tile key.
-
-@table @asis
-@item KEY
-List of 8 bytes (row bitmaps from @code{intv-tile-row-bytes}).
-@end table"
-  (mapcar (lambda (b) (logxor b #xFF)) key))
+  "Intv alias for @code{tile-invert}.  Returns KEY with each row byte XORed #xFF."
+  (tile-invert key))
 
 (defvar *intv-grom-bytes-cache* nil
   "Cached 2048-byte GROM image (256×8 bytes) or NIL if unavailable.")
@@ -2244,8 +2295,7 @@ Intv @emph{map} tilesets should reuse this GROM/GRAM dedup per 8×8 quadrant;
 each logical 16×16 map tile is four such cells (2×2: TL, TR, BL, BR), each
 storing its own card ID. Tileset records carry per-quadrant color-stack values
 with pattern refs — no separate palette assets (contrast 7800 tileset palette
-blobs). Map export (@code{compile-map-intv} for machine 2609) is not implemented
-yet.
+blobs). Map export uses @code{compile-map-intv-screen} for STIC color-stack tiles.
 
 @code{*_TILE_MAP} entries: @code{$0000}–@code{$00FF} = GROM card number;
 @code{$0100}–@code{$013F} = GRAM slot 0–63 (see @code{*_TILE_MAP_GRAM_BASE}).
@@ -2286,24 +2336,39 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
       (dotimes (row rows)
         (dotimes (col cols)
           (let* ((key (intv-tile-row-bytes palette-pixels (* col 8) (* row 8))))
-            (multiple-value-bind (grom-id grom-ok) (if grom-map
-                                                         (gethash key grom-map)
-                                                         (values nil nil))
-              (if (and grom-map grom-ok)
-                  (progn
-                    (setf (aref tile-ids idx) grom-id)
-                    (incf grom-cells))
-                  (multiple-value-bind (gram-id presentp) (gethash key ht)
-                    (unless presentp
-                      (when (>= (length uniq) 64)
-                        (error "Intellivision blob ~A needs more than 64 GRAM 8×8 tiles (~D×~D grid); use GROM-default shapes or reuse tiles"
-                               png-file cols rows))
-                      (setf gram-id (length uniq))
-                      (setf (gethash key ht) gram-id)
-                      (vector-push-extend key uniq))
-                    (setf (aref tile-ids idx) (+ #x100 gram-id))))
-              (incf idx))))))
+            (if grom-map
+                (multiple-value-bind (grom-id invert found)
+                    (intv-grom-lookup key grom-map)
+                  (if found
+                      (progn
+                        (setf (aref tile-ids idx) (logior grom-id (if invert #x8000 0)))
+                        (incf grom-cells))
+                      (multiple-value-bind (gram-id invert)
+                          (intv-gram-lookup-or-allocate key uniq ht)
+                        (setf (aref tile-ids idx)
+                              (logior (+ #x100 gram-id) (if invert #x8000 0))))))
+                (multiple-value-bind (gram-id invert)
+                    (intv-gram-lookup-or-allocate key uniq ht)
+                  (setf (aref tile-ids idx)
+                        (logior (+ #x100 gram-id) (if invert #x8000 0)))))
+            (incf idx))))))
     (let ((nuniq (length uniq)))
+      (when (> nuniq 64)
+        (error "Intellivision blob ~A has ~D unique GRAM cards (max 64 after reduction)"
+               png-file nuniq))
+      (when (> nuniq 56)
+        (warn "Intellivision blob ~A reducing from ~D to 56 GRAM cards by Hamming-distance merging..."
+              png-file nuniq)
+        (intv-reduce-gram-set uniq tile-ids :max-slots 56 :grom-bytes grom-bytes)
+        (setf nuniq (length uniq))
+        (setf grom-cells (loop for packed across tile-ids
+                               count (< (logand packed #x7FFF) #x100))))
+        (when (> nuniq 56)
+          (warn "Intellivision blob ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
+                png-file nuniq)))
+      (when (>= nuniq 56)
+        (warn "Intellivision blob ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
+              png-file nuniq))
       (ensure-directories-exist (merge-pathnames output-path))
       (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
                                                       :external-format :utf-8)
@@ -2316,6 +2381,9 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
         (format src "~A_TILE_ROWS EQU ~D~%" lab rows)
         (format src "~A_TILE_MAP_GRAM_BASE EQU $0100~%" lab)
         (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
+        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
+        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
+        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
         (format src "~A_GRAM_DATA:~%" lab)
         (loop for u from 0 below nuniq
               for card = (aref uniq u)
@@ -2327,25 +2395,20 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
                            for byte-second = (nth (+ (* i 2) 1) bytes-list)
                            for word = (logior (ash byte-first 8) byte-second)
                            do (format src "    DECLE   $~4,'0X~%" word)))))
-        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
-        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
-        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
-        (format src "~A_TILE_CSTK:~%" lab)
-        (dotimes (i total-cells)
-          (let* ((raw-id (aref tile-ids i))
-                 (gram-slot-p (>= raw-id #x100))
-                 (card-id raw-id)
-                 (color (if gram-slot-p
-                            (intv-dominant-stic-color
-                             palette-pixels
-                             (* (mod i cols) 8)
-                             (* (floor i cols) 8))
-                            7))
-                 (cstk (intv-cstk-word card-id color nil)))
-            (format src "    DECLE   $~4,'0X~%" cstk)))
-        (format src "~A_TILE_MAP:~%" lab)
-        (dotimes (i total-cells)
-          (format src "    DECLE   $~4,'0X~%" (aref tile-ids i)))
+         (format src "~A_TILE_CSTK:~%" lab)
+         (dotimes (i total-cells)
+           (let* ((raw-id (aref tile-ids i))
+                  (invert (logtest raw-id #x8000))
+                  (card-id (logand raw-id #x7FFF))
+                  (color (intv-dominant-stic-color
+                          palette-pixels
+                          (* (mod i cols) 8)
+                          (* (floor i cols) 8)))
+                  (cstk (intv-cstk-word card-id color invert)))
+             (format src "    DECLE   $~4,'0X~%" cstk)))
+         (format src "~A_TILE_MAP:~%" lab)
+         (dotimes (i total-cells)
+           (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
         (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
                 grom-cells nuniq (enough-namestring output-path))))))
 
@@ -2385,12 +2448,212 @@ Ignores palette index 0 (background). Defaults to @code{7} (white) when empty."
           (setf best-count (aref counts c))))
       best)))
 
-(defun intv-allocate-gram-card (key uniq ht)
+;;; ── Generic Tile Core ───────────────────────────────────────────
+;;; Platform-agnostic cell extraction, deduplication, H-distance
+;;; reduction, and color-frequency helpers.  Used by Intv, C64, ClcV,
+;;; TMS9918, font compilers, and tileset pipelines.
+
+(defun cell-key-from-image (palette-pixels sx sy w h)
+  "Extract a W×H rectangular cell key from PALETTE-PIXELS at (SX,SY).
+
+Returns a list of H row-lists, each containing W palette indices.
+This is the canonical tile key format used by all dedup/reduce functions."
+  (loop for y from sy below (+ sy h)
+        collect (loop for x from sx below (+ sx w)
+                      collect (aref palette-pixels x y))))
+
+(defun cell-binary-key-from-image (palette-pixels sx sy w h)
+  "Extract a color-invariant binary tile key: each row byte has
+bit 7–(7−W+1) set for every non-zero palette index in that column.
+
+Returns a list of H row-bytes.  Cells with identical shape but
+different colors produce the same key, sharing one character
+definition when the platform supports per-instance color selection
+(e.g. VIC-II color RAM, TMS9918 color table, C64 color nybble)."
+  (loop for y from sy below (+ sy h)
+        collect (loop for x from sx below (+ sx w)
+                      sum (if (zerop (aref palette-pixels x y))
+                              0
+                              (ash 1 (- (1- w) (- x sx)))))))
+
+(defun cell-keys-from-image (palette-pixels width height cell-w cell-h)
+  "Extract all CELL-W×CELL-H cells from PALETTE-PIXELS (WIDTH×HEIGHT).
+
+Returns two values: a list of cell keys (top-to-bottom, left-to-right)
+and a list of (cols rows).  Rows/cols that don't form complete cells are
+cropped."
+  (let* ((cols (floor width cell-w))
+         (rows (floor height cell-h))
+         (keys nil))
+    (loop for row from 0 below rows
+          do (loop for col from 0 below cols
+                   for sx = (* col cell-w)
+                   for sy = (* row cell-h)
+                   do (push (cell-key-from-image palette-pixels sx sy cell-w cell-h) keys)))
+    (values (nreverse keys) (list cols rows))))
+
+(defun tile-hamming-distance (key-a key-b)
+  "Hamming distance between two tile keys (lists of bytes/rows).
+Each row is a byte value; rows are compared position-by-position.
+For multi-row keys, the sum of per-row Hamming distances is returned."
+  (loop for a in key-a
+        for b in key-b
+        sum (logcount (logxor a b))))
+
+(defun tile-invert (key)
+  "Return KEY with each row byte bitwise-complemented (XOR #xFF).
+This is an involution: (tile-invert (tile-invert key)) = key."
+  (mapcar (lambda (b) (logxor b #xFF)) key))
+
+(defun color-frequencies (palette-pixels sx sy w h)
+  "Return a hash table of palette-index → count for a W×H region at (SX,SY).
+Index 0 (transparent/background) is excluded from counting."
+  (let ((freq (make-hash-table)))
+    (loop for y from sy below (+ sy h)
+          do (loop for x from sx below (+ sx w)
+                   for c = (aref palette-pixels x y)
+                   unless (zerop c)
+                     do (incf (gethash c freq 0))))
+    freq))
+
+(defun dominant-color (palette-pixels sx sy w h &optional (default 1))
+  "Return the most frequent non-zero palette index in a W×H cell.
+Returns DEFAULT when the cell is empty."
+  (let ((freq (color-frequencies palette-pixels sx sy w h))
+        (best default)
+        (best-n 0))
+    (loop for c being the hash-keys of freq
+          for n = (gethash c freq)
+          when (> n best-n)
+            do (setf best c best-n n))
+    best))
+
+(defun deduplicate-cells (cell-keys &key max-unique (ht (make-hash-table :test 'equalp))
+                                       (uniq (make-array (or max-unique 256)
+                                                         :adjustable t :fill-pointer 0)))
+  "Deduplicate CELL-KEYS (list of tile keys) into a unique set.
+
+Returns three values:
+  UNIQ      — adjustable vector (fill-pointer = count of unique keys)
+  HT        — hash table mapping key → slot index
+  SLOT-MAP  — vector where slot-map[i] = index into UNIQ for cell-key i
+
+When MAX-UNIQUE is given and exceeded, extends UNIQ beyond it and warns
+(the caller should invoke @code{reduce-tile-set} afterward)."
+  (let ((slot-map (make-array (length cell-keys) :element-type '(unsigned-byte 16))))
+    (loop for i from 0 below (length cell-keys)
+          for key = (nth i cell-keys)
+          for idx = (gethash key ht)
+          do (unless idx
+               (when (and max-unique (not (>= (length uniq) max-unique)))
+                 nil)  ;; still have room
+               (setf idx (length uniq))
+               (setf (gethash key ht) idx)
+               (vector-push-extend key uniq))
+             (setf (aref slot-map i) idx))
+    (when (and max-unique (> (length uniq) max-unique))
+      (warn "deduplicate-cells: ~D unique cells exceed limit ~D" (length uniq) max-unique))
+    (values uniq ht slot-map)))
+
+(defun reduce-tile-set (uniq slot-map &key max-slots extra-keys
+                                            (extra-key-count (length extra-keys))
+                                            (hamming #'tile-hamming-distance)
+                                            (invert-fn #'tile-invert)
+                                            (invert-ok-p t)
+                                            (verbose t))
+  "Reduce UNIQ (adjustable vector of tile keys) and SLOT-MAP (array
+of slot indices) to at most MAX-SLOTS unique entries.
+
+Merges the most similar key pairs progressively by Hamming distance
+until the limit is met.  When INVERT-OK-P is true, also considers
+the bitwise complement of each key (halving storage for inverted twins).
+
+EXTRA-KEYS is a vector of external candidate keys for substitution
+(e.g. GROM cards).  When a slot is replaced by an extra-key, all
+its references in SLOT-MAP become extra-key references.
+
+Returns NIL; modifies UNIQ and SLOT-MAP in place."
+  (when (<= (length uniq) max-slots)
+    (return-from reduce-tile-set nil))
+  (when (and extra-keys (zerop extra-key-count))
+    (return-from reduce-tile-set nil))
+  (let ((n-extra (length extra-keys)))
+    (loop while (> (length uniq) max-slots)
+          for n-uniq = (length uniq)
+          for best-dist = (1+ (* 8 (length (aref uniq 0))))  ;; > max possible
+          for best-a = nil  for best-b = nil
+          for best-kind = nil  for best-flip = nil
+          do
+             ;; Pairwise within uniq
+             (loop for a from 0 below n-uniq
+                   for key-a = (aref uniq a)
+                   do (loop for b from (1+ a) below n-uniq
+                            for key-b = (aref uniq b)
+                            for same-dist = (funcall hamming key-a key-b)
+                            do (when (< same-dist best-dist)
+                                 (setf best-dist same-dist best-a a best-b b
+                                       best-kind :uniq-uniq best-flip nil))
+                               (when invert-ok-p
+                                 (let ((flip-dist (funcall hamming
+                                                           (funcall invert-fn key-a) key-b)))
+                                   (when (< flip-dist best-dist)
+                                     (setf best-dist flip-dist best-a a best-b b
+                                           best-kind :uniq-uniq best-flip t))))))
+             ;; uniq vs extra-keys
+             (when (plusp n-extra)
+               (loop for a from 0 below n-uniq
+                     for key-a = (aref uniq a)
+                     do (loop for e from 0 below n-extra
+                              for e-key = (aref extra-keys e)
+                              for same-dist = (funcall hamming key-a e-key)
+                              do (when (< same-dist best-dist)
+                                   (setf best-dist same-dist best-a a best-b e
+                                         best-kind :uniq-extra best-flip nil))
+                                 (when invert-ok-p
+                                   (let ((flip-dist
+                                          (funcall hamming key-a
+                                                   (funcall invert-fn e-key))))
+                                     (when (< flip-dist best-dist)
+                                       (setf best-dist flip-dist best-a a best-b e
+                                             best-kind :uniq-extra best-flip t)))))))
+             ;; Apply merge
+             (ecase best-kind
+               (:uniq-uniq
+                ;; Merge slot best-b into best-a
+                (when verbose
+                  (warn "reduce-tile-set: merging slot ~D into ~D (dist=~D)~@[ flip~]"
+                        best-b best-a best-dist best-flip))
+                (loop for i from 0 below (length slot-map)
+                      for s = (aref slot-map i)
+                      do (cond
+                           ((= s best-b)
+                            (setf (aref slot-map i) best-a))
+                           ((> s best-b)
+                            (decf (aref slot-map i)))))
+                ;; Remove best-b from uniq
+                (loop for i from best-b below (1- n-uniq)
+                      do (setf (aref uniq i) (aref uniq (1+ i))))
+                (vector-pop uniq))
+               (:uniq-extra
+                ;; Replace slot best-a with extra-key best-b
+                (when verbose
+                  (warn "reduce-tile-set: replacing slot ~D with extra-key ~D (dist=~D)~@[ flip~]"
+                        best-a best-b best-dist best-flip))
+                ;; Mark as extra-key reference (negative index = extra reference)
+                (loop for i from 0 below (length slot-map)
+                      for s = (aref slot-map i)
+                      do (when (= s best-a)
+                           (setf (aref slot-map i) (- -1 best-b))))  ;; negative = extra
+                ;; Remove dead slot from uniq
+                (loop for i from best-a below (1- n-uniq)
+                      do (setf (aref uniq i) (aref uniq (1+ i))))
+                (vector-pop uniq))))))
+  nil)
+
+;;;; Intv GRAM-specific helpers (build on Generic Tile Core) ────────
   "Allocate or reuse GRAM slot for bitmap KEY; return GRAM slot index."
   (multiple-value-bind (gram-id presentp) (gethash key ht)
     (unless presentp
-      (when (>= (length uniq) 64)
-        (error "Intellivision tileset needs more than 64 unique GRAM 8×8 tiles"))
       (setf gram-id (length uniq))
       (setf (gethash key ht) gram-id)
       (vector-push-extend key uniq))
@@ -2421,12 +2684,155 @@ Adjustable vector of allocated keys (fill-pointer = slot count).
           (if inv-id
               (values inv-id t)
               (progn
-                (when (>= (length uniq) 64)
-                  (error "Intellivision GRAM overflow: more than 64 unique 8×8 tiles"))
                 (setf gram-id (length uniq))
                 (setf (gethash key ht) gram-id)
                 (vector-push-extend key uniq)
                 (values gram-id nil)))))))
+
+(defun intv-tile-hamming-distance (key-a key-b)
+  "Intv alias for @code{tile-hamming-distance}."
+  (tile-hamming-distance key-a key-b))
+
+(defun intv-reduce-gram-set (uniq tile-ids &key max-slots grom-bytes)
+  "Reduce UNIQ (adjustable vector of tile keys, fill-pointer = slot count)
+and TILE-IDS array so GRAM uses at most MAX-SLOTS unique cards.
+
+Merges the most similar card pairs (pixel-by-pixel Hamming distance),
+including GROM substitutions when GROM-BYTES is non-NIL.  Returns NIL;
+modifies both UNIQ and TILE-IDS in place.
+
+When merging GRAM slot B into A: entries that referenced B are remapped to
+A, preserving or flipping the invert bit ($8000) to minimize visual
+difference.  When a GRAM slot is replaced by a GROM card, all its entries
+become GROM references.
+
+@table @asis
+@item UNIQ
+Adjustable vector (fill-pointer = used slot count) of 8-byte canonical
+tile keys.
+@item TILE-IDS
+Array of packed card+invert values (bit 15 = invert, bits 14–0 = card ID).
+@item MAX-SLOTS
+Hard limit for UNIQ fill-pointer after reduction.
+@item GROM-BYTES
+2048-byte GROM image or NIL (skip GROM substitution).
+@end table"
+  (when (<= (length uniq) max-slots)
+    (return-from intv-reduce-gram-set nil))
+  (let* ((grom-keys (when grom-bytes
+                      (let ((keys (make-array 256)))
+                        (loop for card from 0 below 256
+                              for base = (* card 8)
+                              do (setf (aref keys card)
+                                       (loop for row from 0 below 8
+                                             collect (aref grom-bytes (+ base row)))))
+                        keys)))))
+    (loop while (> (length uniq) max-slots)
+          for n-gram = (length uniq)
+          for best-dist = 65
+          for best-a = nil
+          for best-b = nil
+          for best-kind = nil
+          for best-flip = nil
+          do
+             ;; Pairwise GRAM vs GRAM
+             (loop for a from 0 below n-gram
+                   for key-a = (aref uniq a)
+                   do (loop for b from (1+ a) below n-gram
+                            for key-b = (aref uniq b)
+                            for same-dist = (tile-hamming-distance key-a key-b)
+                            for flip-dist = (tile-hamming-distance
+                                             (tile-invert key-a) key-b)
+                            do (when (< same-dist best-dist)
+                                 (setf best-dist same-dist best-a a best-b b
+                                       best-kind :gram-gram best-flip nil))
+                               (when (< flip-dist best-dist)
+                                 (setf best-dist flip-dist best-a a best-b b
+                                       best-kind :gram-gram best-flip t))))
+             ;; GRAM vs GROM (all 256 cards)
+             (when grom-keys
+               (loop for a from 0 below n-gram
+                     for key-a = (aref uniq a)
+                     do (loop for grom-card from 0 below 256
+                              for grom-key = (aref grom-keys grom-card)
+                              for same-dist = (tile-hamming-distance key-a grom-key)
+                              for flip-dist = (tile-hamming-distance
+                                               key-a (tile-invert grom-key))
+                              do (when (< same-dist best-dist)
+                                   (setf best-dist same-dist best-a a best-b grom-card
+                                         best-kind :gram-grom best-flip nil))
+                                 (when (< flip-dist best-dist)
+                                   (setf best-dist flip-dist best-a a best-b grom-card
+                                         best-kind :gram-grom best-flip t)))))
+             ;; Apply the best merge found this round
+             (ecase best-kind
+               (:gram-gram
+                ;; Merge slot best-b into slot best-a.  If best-flip is T,
+                ;; flip the invert bit for all remapped entries.
+                (warn "Intellivision GRAM overflow reduction: merging slot ~D into ~D (dist=~D)~@[; flipping invert~]"
+                      best-b best-a best-dist best-flip)
+                (let ((hi-slot best-b)
+                      (target-slot best-a))
+                  ;; Update tile-ids: remap hi-slot -> target-slot
+                  (loop for i from 0 below (length tile-ids)
+                        for packed = (aref tile-ids i)
+                        for card-id = (logand packed #x7FFF)
+                        for slot = (when (>= card-id #x100) (- card-id #x100))
+                        do (cond
+                             ((eql slot hi-slot)
+                              (let ((old-invert (logtest packed #x8000))
+                                    (new-invert (if best-flip (not old-invert) old-invert)))
+                                (setf (aref tile-ids i)
+                                      (logior (+ #x100 target-slot)
+                                              (if new-invert #x8000 0)))))
+                             ((and slot (> slot hi-slot))
+                              (let ((invert-bit (logand packed #x8000)))
+                                (setf (aref tile-ids i)
+                                      (logior (+ #x100 (1- slot)) invert-bit))))))
+                  ;; Remove hi-slot from uniq, shifting higher entries down
+                  (loop for i from hi-slot below (1- n-gram)
+                        do (setf (aref uniq i) (aref uniq (1+ i))))
+                  (vector-pop uniq)))
+               (:gram-grom
+                ;; Replace all uses of GRAM slot best-a with GROM card best-b.
+                ;; If best-flip is T, set the invert bit for the GROM entries.
+                ;; Entries that previously used slot best-a with invert get the
+                ;; opposite.
+                (warn "Intellivision GRAM overflow reduction: replacing slot ~D with GROM card ~D (dist=~D)~@[; flipping invert~]"
+                      best-a best-b best-dist best-flip)
+                (let ((dead-slot best-a)
+                      (grom-card best-b))
+                  (loop for i from 0 below (length tile-ids)
+                        for packed = (aref tile-ids i)
+                        for card-id = (logand packed #x7FFF)
+                        for slot = (when (>= card-id #x100) (- card-id #x100))
+                        do (cond
+                             ((eql slot dead-slot)
+                              (let ((old-invert (logtest packed #x8000))
+                                    (new-invert (if best-flip (not old-invert) old-invert)))
+                                (setf (aref tile-ids i)
+                                      (logior grom-card
+                                              (if new-invert #x8000 0)))))
+                             ((and slot (> slot dead-slot))
+                              (let ((invert-bit (logand packed #x8000)))
+                                (setf (aref tile-ids i)
+                                      (logior (+ #x100 (1- slot)) invert-bit))))))
+                  ;; Remove dead slot from uniq
+                  (loop for i from dead-slot below (1- n-gram)
+                        do (setf (aref uniq i) (aref uniq (1+ i))))
+                  (vector-pop uniq))
+                ;; Update grom-cells count is tracked by the caller; we just
+                ;; emit a warning.  The GRAM→GROM substitution reduces unique
+                ;; GRAM count by 1.
+                nil)))))
+
+(defun intv-cstk-to-card-id (cstk)
+  "Extract the unified card ID from a BACKTAB CSTK word.
+Returns @code{$0000}–@code{$00FF} for GROM or @code{$0100}+ for GRAM
+(without the invert bit $4000)."
+  (if (logtest cstk #x1000)
+      (+ #x100 (ash (logand cstk #x1F8) -3))
+      (ash (logand cstk #xFF8) -3)))
 
 (defun intv-cstk-word (card-id color invert)
   "Return the 16-bit BACKTAB CSTK word for CARD-ID, COLOR, and INVERT flag.
@@ -2455,15 +2861,24 @@ When non-nil, sets the hardware invert bit (@code{$4000}).
 
 GROM-first: matching @file{minigrom.bin} patterns yield card @code{$0000}–@code{$00FF}
 (no GRAM slot); otherwise allocates a shared GRAM slot @code{$0100}+. CSTK-WORD
-embeds the card index and STIC color for BACKTAB. Reuses
-@code{intv-grom-key-to-card-map} / GRAM dedup from @code{compile-blob-intv-screen}."
+embeds the card index, color, and invert bit for BACKTAB. Reuses
+@code{intv-grom-lookup} and @code{intv-gram-lookup-or-allocate} from
+@code{compile-blob-intv-screen}."
   (let* ((key (intv-tile-row-bytes palette-pixels sx sy))
-         (color (intv-dominant-stic-color palette-pixels sx sy))
-         (grom-id (when grom-map (gethash key grom-map))))
-    (if grom-id
-        (values grom-id (+ (* grom-id 8) color))
-        (let ((gram-id (intv-allocate-gram-card key uniq ht)))
-          (values (+ #x100 gram-id) (+ #x1000 (* gram-id 8) color))))))
+         (color (intv-dominant-stic-color palette-pixels sx sy)))
+    (if grom-map
+        (multiple-value-bind (grom-id invert found)
+            (intv-grom-lookup key grom-map)
+          (if found
+              (values grom-id (intv-cstk-word grom-id color invert))
+              (multiple-value-bind (gram-id invert)
+                  (intv-gram-lookup-or-allocate key uniq ht)
+                (values (+ #x100 gram-id)
+                        (intv-cstk-word (+ #x100 gram-id) color invert)))))
+        (multiple-value-bind (gram-id invert)
+            (intv-gram-lookup-or-allocate key uniq ht)
+          (values (+ #x100 gram-id)
+                  (intv-cstk-word (+ #x100 gram-id) color invert))))))
 
 (defun compile-tileset-intv-screen (png-file output-path palette-pixels width height)
   "Write OUTPUT-PATH assembly: per-logical-tile quadrant CSTK + deduplicated GRAM.
@@ -2507,6 +2922,36 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
                 (setf (aref records idx) cstk)
                 (incf idx)))))))
     (let ((nuniq (length uniq)))
+      (when (> nuniq 64)
+        (error "Intellivision tileset ~A has ~D unique GRAM cards (max 64 after reduction)"
+               png-file nuniq))
+      (when (> nuniq 56)
+        (warn "Intellivision tileset ~A reducing from ~D to 56 GRAM cards by Hamming-distance merging..."
+              png-file nuniq)
+        ;; Build card-ids array from CSTK records for the reduction pass
+        (let ((card-ids (make-array (length records) :element-type '(unsigned-byte 16))))
+          (loop for i from 0 below (length records)
+                for cstk = (aref records i)
+                do (setf (aref card-ids i)
+                         (logior (intv-cstk-to-card-id cstk)
+                                 (if (logtest cstk #x4000) #x8000 0))))
+          (intv-reduce-gram-set uniq card-ids :max-slots 56 :grom-bytes grom-bytes)
+          ;; Rebuild CSTK records from the updated card-ids
+          (loop for i from 0 below (length records)
+                for orig-cstk = (aref records i)
+                for new-packed = (aref card-ids i)
+                for new-card = (logand new-packed #x7FFF)
+                for new-invert = (logtest new-packed #x8000)
+                for color = (logand orig-cstk 7)
+                do (setf (aref records i)
+                         (intv-cstk-word new-card color new-invert)))))
+        (setf nuniq (length uniq))
+        (when (> nuniq 56)
+          (warn "Intellivision tileset ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
+                png-file nuniq)))
+      (when (>= nuniq 56)
+        (warn "Intellivision tileset ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
+              png-file nuniq))
       (ensure-directories-exist (merge-pathnames output-path))
       (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
                                                       :external-format :utf-8)
@@ -2517,6 +2962,9 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
         (format src "~A_TILE_COLS EQU ~D~%" lab tile-cols)
         (format src "~A_TILE_ROWS EQU ~D~%" lab tile-rows)
         (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
+        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
+        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
+        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
         (format src "~A_GRAM_DATA:~%" lab)
         (loop for u from 0 below nuniq
               for card = (aref uniq u)
@@ -2850,102 +3298,273 @@ compilation but for sprites that can be positioned anywhere on screen."
     (format *trace-output* "Intellivision art compilation complete.")))
 
 (defun assemble-intv-rom (source-files output-file)
-  "Assemble Intellivision ROM from source files"
-  (let ((*machine* 2609))
-    (format *trace-output* "~&Assembling Intellivision ROM from ~D source files to ~A…" (length source-files) output-file)
+  "Assemble Intellivision ROM from SOURCE-FILES to OUTPUT-FILE using as1600.
 
-    ;; Basic ROM assembly - concatenate source files
-    ;; This is a simplified implementation; a full assembler would be more complex
-    (with-output-to-file (out output-file :element-type '(unsigned-byte 8) :if-exists :supersede)
-      (dolist (source-file source-files)
-        (when (probe-file source-file)
-          (with-input-from-file (in source-file :element-type '(unsigned-byte 8))
-            (loop for byte = (read-byte in nil nil)
-                  while byte
-                  do (write-byte byte out))))))
+SOURCE-FILES is a list of assembly source paths.  The first file is the
+main entry given to as1600 (it may INCLUDE the rest).  Writes the
+binary to OUTPUT-FILE and a companion @file{.cfg} sidecar beside it.
 
-    (format *trace-output* "ROM assembly complete.")))
+as1600 is located at @file{bin/as1600} or @file{Tools/jzIntv/bin/as1600}
+relative to the project root.
+
+@table @asis
+@item Side Effects
+Invokes @command{as1600}.  Requires the jzIntv SDK to be built (@command{make
+-f Source/Build/Intv.mak bin/as1600}).
+@end table"
+  (check-type source-files list)
+  (check-type output-file (or pathname string))
+  (let* ((main-source (first source-files))
+         (as1600 (or (probe-file (merge-pathnames #p"bin/as1600" (project-root)))
+                     (probe-file (merge-pathnames #p"Tools/jzIntv/bin/as1600" (project-root))))))
+    (unless as1600
+      (error "as1600 not found at bin/as1600 or Tools/jzIntv/bin/as1600; build jzIntv SDK first"))
+    (format *trace-output* "~&Assembling Intellivision ROM: ~A -o ~A…~%" main-source output-file)
+    (ensure-directories-exist output-file)
+    (uiop:run-program (list (namestring as1600)
+                            (namestring (merge-pathnames main-source))
+                            "-o" (namestring (merge-pathnames output-file))
+                            "-l" (namestring (merge-pathnames (make-pathname :type "lst" :defaults output-file))))
+                      :output *trace-output*
+                      :error-output *trace-output*)
+    output-file))
 
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
+  "Write VIC-II tileset to OUT-DIR: char data (2048 bytes) + color RAM (256 bytes).
+
+Each 16×16 tile is four 8×8 character cells (TL, TR, BL, BR).  Cells with
+0–1 distinct non-background colors emit monochrome bitmaps; cells with 2+
+distinct colors emit VIC-II multicolor 2-bit-pair data.  Color RAM is always
+emitted.
+
+Output file: @file{tiles.@emph{name}.s}
+
+@table @asis
+@item PNG-FILE
+Source PNG path (for comments only).
+@item OUT-DIR
+Directory for the @file{.s} output.
+@item HEIGHT, WIDTH
+Pixel dimensions of the PNG.
+@item IMAGE-NYBBLES
+2D palette-pixel array from @code{png->palette}.
+@end table"
   (declare (ignore height))
   (let ((out-file (merge-pathnames
-                   (make-pathname :name
-                                  (concatenate 'string "tiles."
-                                               (pathname-name png-file))
+                   (make-pathname :name (concatenate 'string "tiles."
+                                                     (pathname-name png-file))
                                   :type "s")
-                   out-dir)))
+                   out-dir))
+        (cell-count 256)
+        (multi-cells 0))
+    (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-        (let ((color (loop for cell from 0 to #xff
-                           for x-cell = (tile-cell-vic2-x cell width)
-                           for y-cell = (tile-cell-vic2-y cell width)
-                           for tile-data = (extract-region image-nybbles x-cell y-cell (+ 7 x-cell) (+ 7 y-cell))
-                           do (format src-file "~{~a~}"
-                                      (map 'list #'bytes-and-art (tile->bits tile-data)))
-                           collect (tile->color tile-data))))
+      (format src-file ";;; -*- asm -*-~%")
+      (format src-file ";;; VIC-II tileset compiled from ~A~%" png-file)
+      (format src-file ";;; ~D×~D px → ~D char cells, 4 per 16×16 tile~2%"
+              width height cell-count)
+      ;; Char data: 8 bytes per cell
+      (format src-file "~ATilesetChars:  ;; ~D cells × 8 bytes~%"
+              (pathname-name png-file) cell-count)
+      (loop for cell from 0 below cell-count
+            for x-cell = (tile-cell-vic2-x cell width)
+            for y-cell = (tile-cell-vic2-y cell width)
+            for tile-data = (extract-region image-nybbles x-cell y-cell
+                                            (+ 7 x-cell) (+ 7 y-cell))
+            for colors = (tile->color tile-data)
+            for n-colors = (length colors)
+            for multi-p = (> n-colors 1)
+            do (when multi-p (incf multi-cells))
+               (if multi-p
+                   ;; Multicolor: 4 big pixels per row, 2-bit pairs
+                   (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+                     (loop for y from 0 below 8
+                           for byte = 0
+                           do (loop for x-pair from 0 below 4
+                                    for b0 = (aref tile-data (* x-pair 2) y)
+                                    for b1 = (aref tile-data (1+ (* x-pair 2)) y)
+                                    for pair = (cond
+                                                 ((and (zerop b0) (zerop b1)) 0)
+                                                 ((and (= b0 b1) (position b0 cmap))
+                                                  (position b0 cmap))
+                                                 (t (or (position b0 cmap)
+                                                        (position b1 cmap)
+                                                        0)))
+                                    do (setf byte (logior (ash byte 2) pair)))
+                               (format src-file "    .byte $~2,'0X~%" byte)))
+                   ;; Monochrome: 1 bit per pixel, 8 bytes per cell
+                   (loop for y from 0 below 8
+                         for byte = (loop for x from 0 below 8
+                                          sum (if (zerop (aref tile-data x y))
+                                                  0
+                                                  (ash 1 (- 7 x))))
+                         do (format src-file "    .byte $~2,'0X~%" byte)))
+      ;; Color RAM: 1 byte per cell
+      (format src-file "~2%~ATilesetColorRAM:  ;; ~D cells~%"
+              (pathname-name png-file) cell-count)
+      (loop for cell from 0 below cell-count
+            for x-cell = (tile-cell-vic2-x cell width)
+            for y-cell = (tile-cell-vic2-y cell width)
+            for tile-data = (extract-region image-nybbles x-cell y-cell
+                                            (+ 7 x-cell) (+ 7 y-cell))
+            for colors = (tile->color tile-data)
+            for n-colors = (length colors)
+            for multi-p = (> n-colors 1)
+            for cram = (if multi-p
+                           (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+                             (logior (ash (or (nth 1 cmap) 0) 4)
+                                     (logand (or (nth 2 cmap) 0) #x0F)))
+                           (or (first colors) 0))
+            do (format src-file "    .byte $~2,'0X~%" cram))
+      ;; Constants
+      (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
+              (pathname-name png-file) multi-cells))
+    (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
+            cell-count multi-cells out-file)))
 
-          (format *error-output* "~% Tileset with multiple colors found")
-          (loop for cell in color
-                for i from 0 upto #xff
-                do (cond
-                     ((null cell) (princ #\NUL src-file))
-                     ((null (cdr cell)) (princ (code-char (car cell)) src-file))
-                     (t (princ (code-char (car cell)) src-file)
-                        (warn "Tile ~D (~:*$~2,'0X) cell at (~:D×~:D) uses colors: ~{~D, ~D~}; using ~D"
-                              (floor i 4) (floor i 4)
-                              (tile-cell-vic2-x i width) (tile-cell-vic2-y i width)
-                              cell (car cell)))))
-          (format *error-output* "~% Wrote binary tileset data to ~A." out-file)))))
+(defun vic2-cell-multicolor-map (tile-data colors)
+  "Build a 3-color map for multicolor encoding of an 8×8 cell.
 
-(defun compile-tileset-cgb (png-file out-dir height width image-nybbles)
-  "Compile tileset for Game Boy Color"
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name
-                                  (concatenate 'string "tiles."
-                                               (pathname-name png-file))
-                                  :type "s")
-                   out-dir)))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; CGB Tileset compiled from ~a~%;;; Generated automatically~2%" png-file)
-      (format src-file ".include \"cgb.inc\"~2%")
-      (format src-file ".segment \"TILES\"~%")
-      (format src-file "~a:~%" (pathname-name png-file))
+Returns a list of up to 3 color palette indices: the background (always
+index 0), the most frequent non-zero color, and the second-most-frequent.
+Used by VIC-II multicolor character mode: bit-pair 0 = bg, 1 = color1,
+2 = color2."
+  (let ((freq (make-hash-table)))
+    (loop for y from 0 below 8
+          do (loop for x from 0 below 8
+                   for c = (aref tile-data x y)
+                   unless (zerop c)
+                     do (incf (gethash c freq 0))))
+    (let* ((sorted (sort (loop for c being the hash-keys of freq
+                               collect (cons c (gethash c freq)))
+                         #'> :key #'cdr))
+           (bg 0)
+           (c1 (first (first sorted)))
+           (c2 (first (second sorted))))
+           (list bg c1 c2))))
 
-      ;; For CGB, we need to handle 2BPP tiles
-      ;; Each tile is 8x8 pixels, 2 bits per pixel = 16 bytes per tile
-      (let ((tile-width (/ width 8))
-            (tile-height (/ height 8)))
-        (dotimes (ty tile-height)
-          (dotimes (tx tile-width)
-            (let ((tile-bytes (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0)))
-              ;; Extract 8x8 pixel block and convert to 2BPP
-              (dotimes (y 8)
-                (dotimes (x 8)
-                  (let* ((px (+ (* tx 8) x))
-                         (py (+ (* ty 8) y))
-                         (pixel-value (if (and (< px width) (< py height))
-                                          (aref image-nybbles py px)
-                                          0))
-                         (bit0 (logand pixel-value 1))
-                         (bit1 (ash (logand pixel-value 2) -1)))
-                    ;; Set bits in the bitplanes (2BPP format)
-                    (when (= bit0 1)
-                      (setf (aref tile-bytes y)
-                            (logior (aref tile-bytes y) (ash 1 (- 7 x)))))
-                    (when (= bit1 1)
-                      (setf (aref tile-bytes (+ y 8))
-                            (logior (aref tile-bytes (+ y 8)) (ash 1 (- 7 x))))))))
-              ;; Write the 16 bytes for this tile
-              (dotimes (i 16)
-                (format src-file "    .byte $~2,'0x~%" (aref tile-bytes i)))))))
+(defun compile-c64-blob (png-file target-dir height width palette-pixels)
+  "Write a C64 character-cell full-screen blob: char data + screen map + color RAM.
 
-      (format src-file "~2%;;; End of CGB tileset~%"))))
+The image (ideally 320×200 px) is divided into 40×25 8×8 character cells.
+Duplicate cells share the same char definition (up to 256 unique).  Output
+@file{.s} assembly with labels @code{<stem>BlobChars}, @code{<stem>BlobScreen},
+and @code{<stem>BlobColorRAM}.
 
-#+ (or)
-(defun compile-tileset (png-file out-dir height width image-nybbles)
-  (case *machine*
-    ((64 128) (compile-tileset-64 png-file out-dir height width image-nybbles))
-    (20953 (compile-tileset-cgb png-file out-dir height width image-nybbles))
-    (otherwise (error "Tile set compiler not set up yet for ~a" (machine-long-name)))))
+@table @asis
+@item PNG-FILE
+Source PNG path (for comments).
+@item TARGET-DIR
+Directory for the @file{.s} output.
+@item HEIGHT, WIDTH
+Pixel dimensions (cropped to multiples of 8).
+@item PALETTE-PIXELS
+2D palette-pixel array.
+@end table"
+  (declare (ignore height width))
+  (setf width (- width (mod width 8)))
+  (setf height (- height (mod height 8)))
+  (when (or (< width 8) (< height 8))
+    (error "C64 blob ~A too small: ~D×~D" png-file width height))
+  (let* ((cols (/ width 8))
+         (rows (/ height 8))
+         (total-cells (* cols rows))
+         (uniq (make-array 256 :adjustable t :fill-pointer 0))
+         (ht (make-hash-table :test 'equal))
+         (screen (make-array total-cells :element-type '(unsigned-byte 8)))
+         (cram (make-array total-cells :element-type '(unsigned-byte 8)))
+         (stem (pathname-name (merge-pathnames png-file))))
+    ;; Dedup char cells
+    (loop for idx from 0 below total-cells
+          for row = (floor idx cols)
+          for col = (mod idx cols)
+          for sx = (* col 8)
+          for sy = (* row 8)
+          for key = (cell-binary-key-from-image palette-pixels sx sy 8 8)
+          for char-id = (gethash key ht)
+          do (unless char-id
+               (setf char-id (length uniq))
+               (setf (gethash key ht) char-id)
+               (vector-push-extend key uniq))
+             (setf (aref screen idx) char-id)
+             (setf (aref cram idx) (dominant-color palette-pixels sx sy 8 8 1)))
+    ;; Reduce if char table overflows 256
+    (when (> (length uniq) 256)
+      (warn "C64 blob ~A: ~D unique chars, reducing to 256 via H-distance..."
+            png-file (length uniq))
+      (reduce-tile-set uniq screen :max-slots 256))
+    ;; Write assembly
+    (let ((out-file (merge-pathnames
+                     (make-pathname :name (concatenate 'string "Blob." stem)
+                                    :type "s")
+                     target-dir)))
+      (ensure-directories-exist (directory-namestring out-file))
+      (with-output-to-file (src out-file :if-exists :supersede
+                                            :external-format :utf-8)
+        (format src ";;; C64 blob: ~A~%" png-file)
+        (format src ";;; Grid: ~D×~D chars; ~D unique char~:P~2%" cols rows (length uniq))
+        (format src "~ABlobChars:~%" stem)
+        (loop for u from 0 below (length uniq)
+              for row-bytes = (aref uniq u)
+              do (loop for byte in row-bytes
+                       do (format src "    .byte $~2,'0X~%" byte)))
+        (format src "~ABlobScreen:~%" stem)
+        (loop for i from 0 below total-cells
+              do (format src "    .byte ~D~%" (aref screen i)))
+        (format src "~ABlobColorRAM:~%" stem)
+        (loop for i from 0 below total-cells
+              do (format src "    .byte ~D~%" (aref cram i))))
+      (format *trace-output* "~&Wrote C64 blob to ~A." out-file))))
+
+(defun compile-vdc-blob (png-file target-dir height width palette-pixels)
+  "Write a C128 VDC bitmap blob: 640-wide or 320-wide, 200 or 400 rows.
+
+VDC bitmap mode stores one byte per 8 horizontal pixels, linear row-major.
+Width is rounded down to a byte multiple; height is rounded down to an even
+number of rows (200 or 400 for interlaced VDC).
+
+Output @file{.s} assembly with @code{<stem>VDCBlobBitmap} taking
+@code{VDC_Blob_Width} bytes per row.
+
+@table @asis
+@item PNG-FILE
+Source PNG path (for comments).
+@item TARGET-DIR
+Directory for the output assembly file.
+@item HEIGHT
+Pixel height.
+@item WIDTH
+Pixel width (640 or 320).
+@item PALETTE-PIXELS
+2D palette-pixel array.
+@end table"
+  (let* ((stem (pathname-name (merge-pathnames png-file)))
+         (byte-width (floor width 8))
+         (rows height))
+    (setf byte-width (max byte-width 1))
+    (when (or (< byte-width 1) (< rows 1))
+      (error "VDC blob ~A too small: ~D×~D (need at least 8×1)" png-file width height))
+    (let ((out-file (merge-pathnames
+                     (make-pathname :name (concatenate 'string "Blob." stem)
+                                    :type "s")
+                     target-dir)))
+      (ensure-directories-exist (directory-namestring out-file))
+      (with-output-to-file (src out-file :if-exists :supersede
+                                            :external-format :utf-8)
+        (format src ";;; VDC bitmap blob: ~A~%" png-file)
+        (format src ";;; ~D×~D px → ~D bytes/row × ~D rows~2%" width height byte-width rows)
+        (format src "~AVDCBlobWidth     EQU ~D~%" stem byte-width)
+        (format src "~AVDCBlobHeight    EQU ~D~2%" stem rows)
+        (format src "~AVDCBlobBitmap:~%" stem)
+        (loop for y from 0 below rows
+              do (loop for byte-x from 0 below byte-width
+                       for byte = (loop for bit from 0 below 8
+                                        for px = (+ (* byte-x 8) bit)
+                                        for c = (if (< px width) (aref palette-pixels px y) 0)
+                                        sum (if (zerop c) 0 (ash 1 (- 7 bit))))
+                       do (format src "    .byte $~2,'0X~%" byte))
+                 (format src "    ;; row ~D~%" y)))
+      (format *trace-output* "~&Wrote VDC blob to ~A." out-file))))
 
 (defun monochrome-lines-p (palette-pixels height width)
   (every
@@ -3013,7 +3632,7 @@ compilation but for sprites that can be positioned anywhere on screen."
                 (zerop (mod height 8))))
        (format *trace-output* "~% Image ~A seems to be sprite (player) data"
                png-file)
-       #+ () (compile-tia-player png-file target-dir height width palette-pixels))
+       (compile-gtia-player png-file target-dir height width palette-pixels))
 
       ((and (zerop (mod width 8))
             (zerop (mod height 8)))
@@ -3140,15 +3759,82 @@ compilation but for sprites that can be positioned anywhere on screen."
           (zerop (mod width 16))
           (>= 64 (* (/ height 16) (/ width 16))))
      (format *trace-output* "~% Image ~A seems to be a tileset" png-file)
-     (compile-tileset png-file))
+     (compile-tileset-64 png-file target-dir height width palette-pixels))
 
     ((and (zerop (mod height 21))
           (zerop (mod width 24)))
      (format *trace-output* "~% Image ~A seems to be sprite MOB data" png-file)
      (compile-mob png-file target-dir height width palette-pixels))
 
+    ;; Full-screen character-cell blob (multiples of 40×25 chars = 320×200)
+    ((and (zerop (mod width 8))
+          (zerop (mod height 8))
+          (>= (/ width 8) 40)
+          (>= (/ height 8) 25))
+     (format *trace-output* "~% Image ~A seems to be a C64 bitmap blob" png-file)
+     (compile-c64-blob png-file target-dir height width palette-pixels))
+
     (t (error "Don't know how to deal with image with dimensions ~:D×~:D pixels"
               width height))))
+
+(defmethod dispatch-png% ((machine (eql 128)) png-file target-dir
+                          png height width α palette-pixels)
+  "C128: VDC BLOB for 640×200/320×200 images; otherwise VIC-II (same as C64)."
+  (cond
+    ;; VDC bitmap blobs: 640 or 320 wide, 200 or 400 tall
+    ((and (member width '(640 320))
+          (member height '(200 400)))
+     (format *trace-output* "~% Image ~A (~D×~D) seems to be a VDC bitmap" png-file width height)
+     (compile-vdc-blob png-file target-dir height width palette-pixels))
+    ;; Fall through to VIC-II (same logic as C64)
+    (t
+     (format *trace-output* "~% C128: deferring ~A to VIC-II path" png-file)
+     (dispatch-png% 64 png-file target-dir png height width α palette-pixels))))
+
+(defmethod dispatch-png% ((machine (eql 9918)) png-file target-dir ; ColecoVision
+                          png height width α palette-pixels)
+  "ColecoVision / TMS9918: pattern data (8 bytes/tile), name table, color table."
+  (declare (ignore α))
+  (let ((blob-out (merge-pathnames (png-to-blob-pathname png-file) target-dir)))
+    (setf width (- width (mod width 8))
+          height (- height (mod height 8)))
+    (if (or (< width 8) (< height 8))
+        (error "TMS9918 image ~A too small (~D×~D)" png-file width height)
+        (let* ((cols (/ width 8))
+               (rows (/ height 8))
+               (cells (* cols rows))
+               (uniq (make-array 256 :adjustable t :fill-pointer 0))
+               (ht (make-hash-table :test 'equal))
+               (nametable (make-array cells :element-type '(unsigned-byte 8)))
+               (stem (pathname-name (merge-pathnames png-file))))
+          (loop for cell from 0 below cells
+                for row = (floor cell cols) for col = (mod cell cols)
+                for sx = (* col 8) for sy = (* row 8)
+                for key = (cell-binary-key-from-image palette-pixels sx sy 8 8)
+                for idx = (gethash key ht)
+                do (unless idx
+                     (setf idx (length uniq))
+                     (setf (gethash key ht) idx)
+                     (vector-push-extend key uniq))
+                   (setf (aref nametable cell) idx))
+           ;; Reduce if pattern table overflows 256
+           (when (> (length uniq) 256)
+             (warn "TMS9918 image ~A: ~D patterns, reducing to 256..." png-file (length uniq))
+             (reduce-tile-set uniq nametable :max-slots 256))
+           (ensure-directories-exist blob-out)
+          (with-output-to-file (src blob-out :if-exists :supersede)
+            (format src ";;; TMS9918 tile data from ~A~%" png-file)
+            (format src ";;; ~D×~D chars; ~D unique~2%" cols rows (length uniq))
+            (format src "~APatterns:~%" stem)
+            (loop for u from 0 below (length uniq)
+                  for row-bytes = (aref uniq u)
+                  do (loop for byte in row-bytes
+                           do (format src "  .byte $~2,'0X~%" byte)))
+            (format src "~ANameTable:~%" stem)
+            (loop for i from 0 below cells
+                  do (format src "  .byte ~D~%" (aref nametable i))))
+          (format *trace-output* "~&wrote TMS9918 blob to ~A~%" blob-out)
+          blob-out))))
 
 (defmethod dispatch-png% ((machine (eql 2609)) png-file target-dir
                           png height width α palette-pixels)
@@ -3159,22 +3845,54 @@ compilation but for sprites that can be positioned anywhere on screen."
     (compile-blob-intv-screen png-file out-file palette-pixels width height)))
 
 (defun compile-ted-bitmap (png-file target-dir height width palette-pixels)
-  "Compile TED bitmap graphics (320x200, 2 colors per 8x8 cell) - STUB IMPLEMENTATION"
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name (pathname-name png-file)
-                                  :type "s")
-                   target-dir)))
+  "Compile TED bitmap graphics (320x200, 2 colors per 8x8 cell).
+
+Divides the image into 40×25 8×8 character cells.  Each cell gets a
+monochrome bitmap (8 bytes) and a color RAM byte (upper nybble = fg,
+lower nybble = bg).  Outputs @file{.s} assembly with @code{bitmap},
+@code{colorram}, and @code{screen} sections."
+  (setf width (- width (mod width 8))
+        height (- height (mod height 8)))
+  (let* ((out-file (merge-pathnames
+                    (make-pathname :name (pathname-name png-file) :type "s")
+                    target-dir))
+         (lab (pathname-name png-file))
+         (cols (/ width 8))
+         (rows (/ height 8))
+         (total (* cols rows)))
     (ensure-directories-exist (directory-namestring out-file))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; TED Bitmap graphics compiled from ~A
-;;; Commodore 16/Plus4 bitmap mode (320x200, 2 colors per 8x8 cell)
-;;; Generated automatically - STUB IMPLEMENTATION
-~2%" png-file)
-      (format src-file ";;; TODO: Implement full TED bitmap compilation
-~A_data:
-    ;; Placeholder bitmap data
-    .byte $00, $00, $00, $00
-~%.export ~A_data~%" (pathname-name png-file) (pathname-name png-file)))))
+    (with-output-to-file (src out-file :if-exists :supersede)
+      (format src ";;; TED bitmap compiled from ~A~%" png-file)
+      (format src ";;; ~D×~D px → ~D×~D chars~2%" width height cols rows)
+      (format src "~A_cols EQU ~D~%" lab cols)
+      (format src "~A_rows EQU ~D~2%" lab rows)
+      (format src "~A_bitmap:  ;; ~D cells × 8 bytes~%" lab total)
+      (format src "~A_colorram:  ;; ~D bytes~%" lab total)
+      (loop for cell from 0 below total
+            for row = (floor cell cols) for col = (mod cell cols)
+            for sx = (* col 8) for sy = (* row 8)
+            for fg = 1 for bg = 0
+            for freq = (make-array 16 :initial-element 0)
+            do (loop for y from sy below (+ sy 8)
+                     do (loop for x from sx below (+ sx 8)
+                              for c = (aref palette-pixels x y)
+                              do (incf (aref freq c))
+                                 (when (> c bg)
+                                   (if (zerop (aref freq bg))
+                                       (setf bg c)
+                                       (unless (= c bg)
+                                         (setf fg c))))))
+               ;; Emit bitmap (8 bytes per cell, 1 bit per pixel, fg = 1)
+               (loop for y from sy below (+ sy 8)
+                     for byte = (loop for x from sx below (+ sx 8)
+                                      for c = (aref palette-pixels x y)
+                                      sum (if (and (plusp c) (/= c bg)) (ash 1 (- 7 (- x sx))) 0))
+                     ;; interleave bitmap and colorram for TED layout
+                     do (format src "    .byte $~2,'0X~%" byte))
+               (format src "    .byte $~2,'0X  ; color (@~D,~D)~%"
+                       (logior (ash (logand fg #x0F) 4) (logand bg #x0F))
+                       col row)))
+    (format *trace-output* "~&Compiled TED bitmap: ~A (~D cells)~%" out-file total)))
 
 (defvar *ted-screen-colors* nil
   "Global variable to store TED screen color data during bitmap compilation")
@@ -3397,6 +4115,9 @@ chars-wide chars-high total-chars))))
   "Dispatch PNG processing for Apple IIGS graphics - temporarily disabled"
   (error "Apple IIGS graphics compilation not yet implemented"))
 
+;; vcs800 (7850) and Android reference PNGs directly from Hicolor folder;
+;; no skyline-tool compilation needed.
+
 ;; Atari 400/800 support - delegate to 5200 routines
 (defmethod dispatch-png% ((machine (eql 400)) png-file target-dir ; Atari 400
                           png height width α palette-pixels)
@@ -3464,6 +4185,16 @@ chars-wide chars-high total-chars))))
       (t (error "Don't know how to deal with C16/Plus4 image with dimensions ~
 ~:D×~:D pixels~:[ with monochrome lines~; without monochrome lines~]"
                 width height monochrome-lines-p)))))
+
+(defmethod dispatch-png% ((machine (eql 16)) png-file target-dir
+                          png height width α palette-pixels)
+  "TurboGrafx-16 / PC Engine: sprite tiles and background tiles."
+  (cond
+    ((and (zerop (mod width 8))
+          (zerop (mod height 8)))
+     (format *trace-output* "~% Image ~A seems to be TG16 tile/sprite data" png-file)
+     (compile-tg16-sprite png-file target-dir height width palette-pixels))
+    (t (error "Don't know how to deal with TG16 image ~D×~D" width height))))
 
 (defmethod dispatch-png% ((machine (eql 88)) png-file target-dir
                           png height width α palette-pixels)
@@ -3613,54 +4344,43 @@ chars-wide chars-high total-chars))))
     (format *trace-output* " done - processed ~Dx~D image into 256x256 Mode 7 data." image-width image-height)))
 
 (defun compile-snes-tiles (png-file target-dir height width palette-pixels)
-  "Compile SNES tiles from PNG image"
+  "Compile SNES tiles from PNG image into 2BPP CHR format (16 bytes/tile).
+
+Each 8×8 tile is encoded as two bitplanes (8 bytes low, 8 bytes high),
+producing 16 bytes per tile.  Output is binary @file{.chr}."
   (let ((out-file (merge-pathnames
-                   (make-pathname :name (pathname-name png-file)
-                                  :type "chr")
-                   target-dir)))
+                   (make-pathname :name (pathname-name png-file) :type "chr")
+                   target-dir))
+        (tiles-across (/ width 8))
+        (tiles-down (/ height 8)))
     (ensure-directories-exist (directory-namestring out-file))
-    (format *trace-output* "~&Compiling SNES tiles to ~A…" out-file)
-    (let* ((png (png-read:read-png-file png-file))
-           (image-height (png-read:height png))
-           (image-width (png-read:width png))
-           (image-data (png-read:image-data png))
-           (transparency (png-read:transparency png)))
-      (with-output-to-file (out out-file :element-type '(unsigned-byte 8)
-                                :if-exists :supersede)
-        ;; Process each 8x8 tile and convert to SNES CHR format (2BPP)
-        (let ((tiles-across (/ image-width 8))
-              (tiles-down (/ image-height 8)))
-          (dotimes (tile-y tiles-down)
-            (dotimes (tile-x tiles-across)
-              ;; For each tile, write 16 bytes (2BPP format)
-              (dotimes (byte 16)
-                ;; Simplified bitplane data - real implementation would extract from PNG
-                (write-byte (mod (+ (* tile-y tiles-across) tile-x byte) 256) out)))))))
-    (format *trace-output* " done.")))
+    (format *trace-output* "~&Compiling SNES ~D×~D tiles to ~A…" tiles-across tiles-down out-file)
+    (with-output-to-file (out out-file :element-type '(unsigned-byte 8)
+                                  :if-exists :supersede)
+      (dotimes (ty tiles-down)
+        (dotimes (tx tiles-across)
+          (let ((low (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0))
+                (high (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0)))
+            (dotimes (y 8)
+              (dotimes (x 8)
+                (let* ((px (+ (* tx 8) x))
+                       (py (+ (* ty 8) y))
+                       (c (mod (if (and (< px width) (< py height))
+                                   (aref palette-pixels px py)
+                                   0)
+                               4)))
+                  (when (logbitp 0 c)
+                    (setf (aref low y) (logior (aref low y) (ash 1 (- 7 x)))))
+                  (when (logbitp 1 c)
+                    (setf (aref high y) (logior (aref high y) (ash 1 (- 7 x))))))))
+            ;; Write 16 bytes: 8 low bitplane, then 8 high bitplane
+            (dotimes (y 8) (write-byte (aref low y) out))
+            (dotimes (y 8) (write-byte (aref high y) out))))))
+    (format *trace-output* " done (~D bytes).~%" (* tiles-across tiles-down 16))))
 
 (defun compile-snes-sprite (png-file target-dir height width palette-pixels)
-  "Compile SNES sprite data from PNG image"
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name (pathname-name png-file)
-                                  :type "spr")
-                   target-dir)))
-    (ensure-directories-exist (directory-namestring out-file))
-    (format *trace-output* "~&Compiling SNES sprite data to ~A…" out-file)
-    (let* ((png (png-read:read-png-file png-file))
-           (image-height (png-read:height png))
-           (image-width (png-read:width png)))
-      (with-output-to-file (out out-file :element-type '(unsigned-byte 8)
-                                :if-exists :supersede)
-        ;; SNES sprites consist of multiple 8x8 tiles
-        (let* ((tiles-wide (/ image-width 8))
-               (tiles-high (/ image-height 8))
-               (total-tiles (* tiles-wide tiles-high)))
-          ;; For each tile in the sprite
-          (dotimes (tile-index total-tiles)
-            ;; Write 16 bytes per tile (2BPP format)
-            (dotimes (byte 16)
-              (write-byte (mod (+ tile-index byte) 256) out))))))
-    (format *trace-output* " done.")))
+  "Compile SNES sprite data as 2BPP 8×8 tiles in binary @file{.spr}."
+  (compile-snes-tiles png-file target-dir height width palette-pixels))
 
 (defun dispatch-png (png-file target-dir)
   (with-simple-restart (retry-png "Retry processing PNG file ~a" png-file)
@@ -4843,37 +5563,85 @@ and VS use @file{Blob.<stem>.s} like @code{png-to-blob-pathname}."
         base)))
 
 (defun blob-rip-tms9918 (png-file)
-  "Write TMS9918-family Z80 blob assembly from PNG-FILE into @code{Source/Generated/…/Assets/}.
+  "Write TMS9918-family tile-mapped blob assembly from PNG-FILE.
 
-Emits a small @code{.block} shaped like Mode~E pixmap stubs so downstream tooling
-can evolve without changing filenames.  @strong{FIXME:} Replace with real
-TMS9918 pattern/color encoding (tiles, bitmap, sprites) per asset kind."
+Divides the image into 8×8 character cells.  Deduplicates patterns (max
+256 unique).  Each cell gets the dominant foreground color.  Outputs
+pattern data (8 bytes per tile), name table, and color table (per
+8-tile group, TMS9918 color-table format).
+
+Output path: @file{Source/Generated/@emph{machine}/Assets/Blob.@emph{name}.s}"
   (let* ((root (uiop:ensure-directory-pathname (or (project-root) (uiop:getcwd))))
          (out (merge-pathnames (generated-blob-assembly-pathname png-file) root))
-         (label (assembler-label-name (pathname-name (merge-pathnames png-file)))))
+         (label (assembler-label-name (pathname-name (merge-pathnames png-file))))
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (α (png-read:transparency png))
+         (pal (png->palette height width (png-read:image-data png) α))
+         (cols (floor width 8))
+         (rows (floor height 8))
+         (cells (* cols rows))
+         (uniq (make-array 256 :adjustable t :fill-pointer 0))
+         (ht (make-hash-table :test 'equal))
+         (nametable (make-array cells :element-type '(unsigned-byte 8)))
+         (fg-colors (make-array cells :element-type '(unsigned-byte 8))))
+    (when (or (< cols 1) (< rows 1))
+      (error "TMS9918 blob ~A too small (~D×~D)" png-file width height))
+    (loop for cell from 0 below cells
+          for row = (floor cell cols) for col = (mod cell cols)
+          for sx = (* col 8) for sy = (* row 8)
+          for key = (cell-binary-key-from-image pal sx sy 8 8)
+          for idx = (gethash key ht)
+          do (unless idx
+               (setf idx (length uniq))
+               (setf (gethash key ht) idx)
+               (vector-push-extend key uniq))
+             (setf (aref nametable cell) idx)
+             (setf (aref fg-colors cell)
+                   (dominant-color pal sx sy 8 8 1)))
+    ;; Reduce if pattern table overflows
+    (when (> (length uniq) 256)
+      (warn "TMS9918 blob ~A: ~D unique patterns, reducing to 256 via H-distance..."
+            png-file (length uniq))
+      (reduce-tile-set uniq nametable :max-slots 256))
     (ensure-directories-exist out)
     (%write-blob-assembly-atomically
      out
      (lambda (stream)
-       (format stream ";;; -*- fundamental -*-
-;;; TMS9918-family blob placeholder from ~a
-;;; FIXME: Real TMS9918 encoder for machine ~d.
-
-~a:	.block
-~10tLength = 6
-~10tHeight = 1
-~10tWidth = 8
-Shape:
-~10t.text x\"00000000\"
-CoLu:
-~10t.text x\"00\"
- .bend
-"
-               (enough-namestring png-file)
-               *machine*
-               label)))
-    (format *trace-output* "~&blob-rip-tms9918: wrote ~a~%" (enough-namestring out))
-    t))
+       (format stream ";;; TMS9918 blob: ~A~%" (enough-namestring png-file))
+       (format stream ";;; Grid: ~D×~D chars; ~D unique pattern~:P~2%" cols rows (length uniq))
+       (format stream "~ASizeX EQU ~D~%" label cols)
+       (format stream "~ASizeY EQU ~D~2%" label rows)
+       ;; Pattern table: 8 bytes per tile
+        (format stream "~APatterns:~%" label)
+        (loop for u from 0 below (length uniq)
+              for row-bytes = (aref uniq u)
+              do (loop for byte in row-bytes
+                       do (format stream "  .byte $~2,'0X~%" byte)))
+       ;; Name table
+       (format stream "~ANameTable:~%" label)
+       (loop for i from 0 below cells
+             do (format stream "  .byte ~D~%" (aref nametable i)))
+       ;; Color table: per 8-tile group (TMS9918: upper nybble=fg, lower=bg)
+       (format stream "~AColorTable:~%" label)
+       (let ((groups (ceiling (length uniq) 8)))
+         (loop for g from 0 below groups
+               do (let ((fg 1) (bg 0))
+                    ;; Most common fg color in this group of 8 tiles
+                    (let ((cfreq (make-array 16 :initial-element 0)))
+                      (loop for i from 0 below cells
+                            for tile = (aref nametable i)
+                            when (<= (* g 8) tile (1- (min (* (1+ g) 8) cells)))
+                              do (incf (aref cfreq (aref fg-colors i))))
+                      (dotimes (c 16)
+                        (when (> (aref cfreq c) (aref cfreq fg))
+                          (setf fg c))))
+                    (format stream "  .byte ~D  ; group ~D~%"
+                            (logior (ash (logand fg #x0F) 4) (logand bg #x0F))
+                            g)))))
+     (format *trace-output* "~&blob-rip-tms9918: wrote ~a~%" (enough-namestring out))
+     t))
 
 (defun %write-blob-assembly-atomically (output-pathname writer)
   "Call WRITER with an output character stream, then rename into OUTPUT-PATHNAME.
@@ -5680,85 +6448,7 @@ Columns: ~d
                           (- i 12)))
     (t nil)))
 
-;; if  the other  version  of this  is working,  then  delete this  one,
-;; else merge.
-#+ ()
-(defun compile-intv-sprite (png-file output-dir &key height width palette-pixels)
-  "Compile Intellivision sprite (MOB data)
 
-In Intellivision terminology, sprites are called MOBs (Moving Object Blocks).
-This function compiles sprite graphics into MOB data format, similar to GRAM
-compilation but for sprites that can be positioned anywhere on screen."
-  (check-type png-file (or pathname string))
-  (check-type output-dir (or pathname string))
-  (let* ((palette-pixels (or palette-pixels
-                             (let* ((png (png-read:read-png-file png-file))
-                                    (png-height (png-read:height png))
-                                    (png-width (png-read:width png))
-                                    (α (png-read:transparency png)))
-                               (png->palette png-height png-width
-                                             (png-read:image-data png)
-                                             α))))
-         (array-width (array-dimension palette-pixels 0))
-         (array-height (array-dimension palette-pixels 1))
-         (width (floor (or width array-width)))
-         (height (floor (or height array-height))))
-    ;; Validate dimensions: ensure at least one 8×8 sprite
-    (assert (>= width 8) (width) "Width must be at least 8 (for at least one sprite), got ~D" width)
-    (assert (>= height 8) (height) "Height must be at least 8 (for at least one sprite), got ~D" height)
-    ;; Validate dimensions are within array bounds
-    (assert (<= width array-width)
-            (width palette-pixels)
-            "Can't extract sprite(s): width ~d requested exceeds image width ~d"
-            width array-width)
-    (assert (<= height array-height)
-            (height palette-pixels)
-            "Can't extract sprite(s): height ~d requested exceeds image height ~d"
-            height array-height)
-    ;; Check if monochrome (only black=0 and white=7 palette indices)
-    (let ((colors (image-colors palette-pixels height width)))
-      (unless (subsetp colors '(0 7) :test '=)
-        (warn "Sprite image ~A is not black-and-white (found colors: ~{~D~^, ~});
-treating non-black/non-white pixels as black"
-              png-file colors))
-      (let ((out-file (merge-pathnames
-                       (make-pathname :name
-                                      (pathname-name png-file)
-                                      :type "s")
-                       out-dir))
-            (sprites-across (floor (/ width 8)))
-            (sprites-down (floor (/ height 8))))
-        (ensure-directories-exist (directory-namestring out-file))
-        (with-output-to-file (src-file out-file :if-exists :supersede)
-          (format src-file ";;; MOB sprites compiled from ~A
-;;; Generated for Intellivision
-;;; Each sprite: 8×8 pixels = 8 bytes = 4 16-bit DECLE values~%~%"
-                  png-file)
-          ;; Process each 8×8 sprite
-          (loop for sprite-y from 0 below sprites-down
-                do (loop for sprite-x from 0 below sprites-across
-                         for sprite-index = (+ (* sprite-y sprites-across) sprite-x)
-                         do (let ((start-x (* sprite-x 8))
-                                  (start-y (* sprite-y 8))
-                                  (sprite-bytes '()))
-                              ;; Extract 8 bytes (one per row)
-                              (loop for y from 0 below 8
-                                    for byte = 0
-                                    do (loop for x from 0 below 8
-                                             for palette-index = (aref palette-pixels (+ start-x x) (+ start-y y))
-                                             ;; White (palette index 7) = bit 1, black (0) or other = bit 0
-                                             do (when (= palette-index 7)
-                                                  (setf byte (logior byte (ash 1 (- 7 x))))))
-                                       (push byte sprite-bytes))
-                              ;; Pack bytes into 16-bit words (2 bytes per DECLE, 4 DECLE per sprite)
-                              ;; Big-endian: most significant byte first
-                              (let ((bytes-list (reverse sprite-bytes)))
-                                (loop for i from 0 below 4
-                                      for byte-first = (nth (* i 2) bytes-list) ; First byte (high byte)
-                                      for byte-second = (nth (+ (* i 2) 1) bytes-list) ; Second byte (low byte)
-                                      for word = (logior (ash byte-first 8) byte-second)
-                                      do (format src-file "    DECLE   $~4,'0X~%" word)))))))
-        (format *trace-output* "~% Wrote MOB sprite data to ~A." out-file)))))
 
 (defun read-colecovision-art-index (index-in)
   "Read ColecoVision art index file and return list of (png-name mode width-px height-px)"
@@ -6119,55 +6809,19 @@ Malformed lines (e.g. missing mode) are skipped."
 ;; Blob ripping for Lynx
 
 (defun blob-rip-lynx-sprite (png-file)
-  "Extract sprite data from PNG for Lynx"
-  (let ((*machine* 200))
-    (format *trace-output* "~&Ripping Lynx sprite data from ~a …" (enough-namestring png-file))
-    (let ((output-file (merge-pathnames
-                       (make-pathname :name (pathname-name png-file)
-                                    :type "s")
-                       (directory-namestring png-file))))
-      (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
-        (format out ";;; Lynx sprite data ripped from ~a~%;;; Generated automatically~2%" png-file)
-        (format out ".include \"lynx.inc\"~2%")
-        (format out ".segment \"SPRITES\"~%")
-        (format out "~a:~%" (pathname-name png-file))
-        (format out "    ;;; Sprite data - 16 colors per sprite, 4-bit indices~%")
-        (format out "    ;;; TODO: Implement actual PNG parsing and data extraction~%"))
-      (format *trace-output* " done. (Placeholder implementation)~%"))))
+  "Dispatch Lynx sprite PNG through dispatch-png for auto-detection."
+  (let ((*machine* 200)
+        (out-dir (merge-pathnames (make-pathname :directory '(:relative "Source" "Generated" "Lynx" "Assets"))
+                                  (or (project-root) (uiop:getcwd)))))
+    (dispatch-png png-file out-dir)))
 
 (defun blob-rip-lynx-tile (png-file)
-  "Extract tile data from PNG for Lynx"
-  (let ((*machine* 200))
-    (format *trace-output* "~&Ripping Lynx tile data from ~a …" (enough-namestring png-file))
-    (let ((output-file (merge-pathnames
-                       (make-pathname :name (pathname-name png-file)
-                                    :type "s")
-                       (directory-namestring png-file))))
-      (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
-        (format out ";;; Lynx tile data ripped from ~a~%;;; Generated automatically~2%" png-file)
-        (format out ".include \"lynx.inc\"~2%")
-        (format out ".segment \"TILES\"~%")
-        (format out "~a:~%" (pathname-name png-file))
-        (format out "    ;;; Tile data - 8x8 pixels, 4-bit color indices~%")
-        (format out "    ;;; TODO: Implement actual PNG parsing and data extraction~%"))
-      (format *trace-output* " done. (Placeholder implementation)~%"))))
+  "Dispatch Lynx tile PNG through dispatch-png for auto-detection."
+  (blob-rip-lynx-sprite png-file))
 
 (defun blob-rip-lynx-font (png-file)
-  "Extract font data from PNG for Lynx"
-  (let ((*machine* 200))
-    (format *trace-output* "~&Ripping Lynx font data from ~a …" (enough-namestring png-file))
-    (let ((output-file (merge-pathnames
-                       (make-pathname :name (pathname-name png-file)
-                                    :type "s")
-                       (directory-namestring png-file))))
-      (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
-        (format out ";;; Lynx font data ripped from ~a~%;;; Generated automatically~2%" png-file)
-        (format out ".include \"lynx.inc\"~2%")
-        (format out ".segment \"FONT\"~%")
-        (format out "~a:~%" (pathname-name png-file))
-        (format out "    ;;; Font data - 8x8 character glyphs, 4-bit color indices~%")
-        (format out "    ;;; TODO: Implement actual PNG parsing and data extraction~%"))
-      (format *trace-output* " done. (Placeholder implementation)~%"))))
+  "Dispatch Lynx font PNG through dispatch-png for auto-detection."
+  (blob-rip-lynx-sprite png-file))
 
 ;; TED (Commodore 16/Plus4) Blob Ripping Functions
 
@@ -6612,6 +7266,33 @@ Malformed lines (e.g. missing mode) are skipped."
         (write-byte (aref tile i) out))))
       (format *trace-output* "~&Wrote ~:D bytes (~:D tiles) to ~A"
           (* (length tile-data) 16) (length tile-data) index-out))
+
+(defun read-dmg-art-index (index-in)
+  "Read DMG art index file; return list of (png-name width-tiles height-tiles &optional color)."
+  (let ((png-list (list)))
+    (format *trace-output* "~&DMG: reading art index ~A…" (enough-namestring index-in))
+    (with-input-from-file (index index-in)
+      (loop for line = (read-line index nil)
+            while line
+            do (let ((trimmed (string-trim " " line)))
+                 (when (and (> (length trimmed) 0)
+                            (not (char= (char trimmed 0) #\#))
+                            (not (char= (char trimmed 0) #\;)))
+                   (let* ((parts (split-sequence #\Space trimmed :remove-empty-subseqs t))
+                          (png-name (first parts))
+                          (width (parse-integer (second parts)))
+                          (height (parse-integer (third parts)))
+                          (color (ignore-errors (find (fourth parts) '("color" "cgb") :test #'string-equal))))
+                     (push (list png-name width height color) png-list))))))
+    (reverse png-list)))
+
+(defun compile-art-dmg (index-out index-in)
+  "Compile art assets for Game Boy DMG platform."
+  (let ((*machine* 35902))
+    (let ((art-index (read-dmg-art-index index-in)))
+      (write-gb-tile-data index-out
+                          (parse-into-gb-tile-data art-index
+                                                   :color (some #'fourth art-index))))))
 
 ;; Apple IIGS Graphics Conversion Functions
 

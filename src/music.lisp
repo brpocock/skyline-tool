@@ -1366,6 +1366,15 @@ Music:~:*
             for notes = (gethash symbol catalog)
             do (write-song-data-to-binary notes object *machine* (make-keyword (string-upcase sound-chip)))))))
 
+;; Atari 400/800 share POKEY with 5200
+(defmethod compile-music-for-machine ((machine (eql 400)) sound-chip source-out-name in-file-name output-coding)
+  (compile-music-for-machine 5200 sound-chip source-out-name in-file-name output-coding))
+
+(defmethod compile-music-for-machine ((machine (eql 800)) sound-chip source-out-name in-file-name output-coding)
+  (compile-music-for-machine 5200 sound-chip source-out-name in-file-name output-coding))
+
+;; vcs800 (7850) references MIDI files directly; no hardware music compilation.
+
 (defmethod compile-music-for-machine ((machine (eql 7800)) sound-chip source-out-name in-file-name output-coding)
   (let ((*machine* 7800)
         (catalog (make-hash-table))

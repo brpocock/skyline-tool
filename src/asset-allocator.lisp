@@ -1007,19 +1007,25 @@ Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"
                machine-dir blob-name blob-png-path machine-dir))
-      ((3010 9918 1000 837 2110) ; Z80 + TMS9918 family (SMS, ClcV, SG-1000, GG, VS)
-       ;; ColecoVision uses Blob.<stem>.ClcV.s (see asset->object-name); others Blob.<stem>.s.
-       (if (= *machine* 9918)
-           (format t "~%
+       ((3010 9918 1000 837 2110) ; Z80 + TMS9918 family (SMS, ClcV, SG-1000, GG, VS)
+        ;; ColecoVision uses Blob.<stem>.ClcV.s (see asset->object-name); others Blob.<stem>.s.
+        (if (= *machine* 9918)
+            (format t "~%
 Source/Generated/~a/Assets/Blob.~a.ClcV.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
-                   machine-dir blob-name blob-png-path machine-dir)
-           (format t "~%
+                    machine-dir blob-name blob-png-path machine-dir)
+            (format t "~%
 Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
 	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
-                   machine-dir blob-name blob-png-path machine-dir))))))
+                    machine-dir blob-name blob-png-path machine-dir)))
+       ((64 128) ; C64/C128: VIC-II character-cell blobs (via dispatch-png)
+        (format t "~%
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	bin/skyline-tool --port ${PORT} dispatch-png $< Source/Generated/~a/Assets"
+                machine-dir blob-name blob-png-path machine-dir machine-dir)))))
 
 (defun write-art-generation (pathname)
   "Generates Makefile rules for compiling art assets for the current platform.

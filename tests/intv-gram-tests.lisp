@@ -374,11 +374,11 @@
 
         ;; Verify the output contains correct GRAM card data
         (let ((content (uiop:read-file-string output-path)))
-          ;; Each GRAM card should be represented as 8 DECLE statements (8 rows × 1 card)
-          ;; For 8x8 input, we get 1 GRAM card (8 rows of 8 pixels each = 8 DECLE)
+          ;; Each 8×8 GRAM card packs 2 row bytes per 16-bit DECLE: 4 DECLEs per card.
           (let ((decle-lines (cl-ppcre:all-matches-as-strings "DECLE \\$([0-9A-F]{4})" content)))
-            (is (= 8 (length decle-lines))
-                "Should generate 8 DECLE statements for 8x8 GRAM card")
+            (is (= 4 (length decle-lines))
+                "Should generate 4 DECLE statements for 8×8 GRAM card, got ~D"
+                (length decle-lines))
 
             ;; The first row should have left 4 pixels as color 1, right 4 as color 2
             ;; In Intellivision GRAM format, each DECLE represents 8 pixels
@@ -514,17 +514,17 @@
         ;; Parse the output and validate binary data
         (let ((content (uiop:read-file-string output-path)))
           (let ((decle-values (cl-ppcre:all-matches-as-strings "\\$([0-9A-F]{4})" content)))
-            ;; Should generate 8 DECLE values for 8x8 sprite
-            (is (= 8 (length decle-values))
-                "Should generate 8 DECLE values for 8x8 sprite")
+            ;; Should generate 4 DECLE values for 8x8 sprite (8 rows packed 2 bytes per DECLE)
+            (is (= 4 (length decle-values))
+                "Should generate 4 DECLE values for 8x8 sprite")
 
-            ;; For diagonal pattern, each DECLE should have specific bit patterns
-            ;; Row 0: pixel 0 white, others black -> $0080 (bit 7 set)
-            ;; Row 1: pixel 1 white, others black -> $0040 (bit 6 set)
-            ;; etc.
-            (let ((expected-patterns '("$0080" "$0040" "$0020" "$0010"
-                                       "$0008" "$0004" "$0002" "$0001")))
-              (dotimes (i 8)
+            ;; For diagonal pattern, each DECLE packs two row bytes (big-endian).
+            ;; Row 0 ($80) : Row 1 ($40) -> $8040
+            ;; Row 2 ($20) : Row 3 ($10) -> $2010
+            ;; Row 4 ($08) : Row 5 ($04) -> $0804
+            ;; Row 6 ($02) : Row 7 ($01) -> $0201
+            (let ((expected-patterns '("$8040" "$2010" "$0804" "$0201")))
+              (dotimes (i 4)
                 (is (string= (nth i decle-values) (nth i expected-patterns))
                     "Sprite DECLE ~D should be ~A for diagonal pattern: ~A"
                     i (nth i expected-patterns) (nth i decle-values)))))))))))
@@ -1009,36 +1009,36 @@
 
 ;; Test Intellivision ROM assembly
 (test intv-rom-assembly
-  "Test Intellivision ROM assembly functionality"
-  (let ((temp-output (format nil "/tmp/intv-rom-test-~X.bin" (sxhash (get-universal-time))))
-        (temp-source1 (format nil "/tmp/source1-~X.bin" (sxhash (get-universal-time))))
-        (temp-source2 (format nil "/tmp/source2-~X.bin" (sxhash (get-universal-time)))))
+  "Test Intellivision ROM assembly escrows to as1600 when available"
+  (let* ((temp-output (format nil "/tmp/intv-rom-test-~X.bin" (sxhash (get-universal-time))))
+         (temp-source (format nil "/tmp/intv-rom-test-~X.s" (sxhash (get-universal-time))))
+         (temp-lst (format nil "/tmp/intv-rom-test-~X.lst" (sxhash (get-universal-time))))
+         (temp-cfg (format nil "/tmp/intv-rom-test-~X.cfg" (sxhash (get-universal-time))))
+         (as1600 (or (probe-file (merge-pathnames #p"bin/as1600" (skyline-tool::project-root)))
+                     (probe-file (merge-pathnames #p"Tools/jzIntv/bin/as1600" (skyline-tool::project-root))))))
     (unwind-protect
          (progn
-           ;; Create test source files
-           (with-open-file (out temp-source1 :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-             (write-byte #xAA out)
-             (write-byte #xBB out))
-           (with-open-file (out temp-source2 :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-             (write-byte #xCC out)
-             (write-byte #xDD out))
-
-           ;; Test assembly
-           (let ((skyline-tool::*machine* 2609)) ; Set Intellivision machine
-             (finishes (skyline-tool::assemble-intv-rom (list temp-source1 temp-source2) temp-output)
-                      "ROM assembly should complete without error")
-
-             ;; Check output file
-             (is-true (probe-file temp-output) "ROM output file should be created")
-             (when (probe-file temp-output)
-               (with-open-file (in temp-output :element-type '(unsigned-byte 8))
-                 (is (= 4 (file-length in)) "ROM should be 4 bytes (concatenation of 2x2 byte files)")
-                 (is (= #xAA (read-byte in)) "First byte should be from first source")
-                 (is (= #xBB (read-byte in)) "Second byte should be from first source")
-                 (is (= #xCC (read-byte in)) "Third byte should be from second source")
-                 (is (= #xDD (read-byte in)) "Fourth byte should be from second source")))))
+           ;; Create a minimal valid as1600 source: ORG in ROM, single DECLE, no EXEC dep
+           (with-open-file (out temp-source :direction :output :if-exists :supersede)
+             (format out "        ROMW 16~%")
+             (format out "        ORG  $5000~%")
+             (format out "        DECLE $CAFE~%"))
+           (if as1600
+               (progn
+                 (skyline-tool::assemble-intv-rom (list temp-source) temp-output)
+                 (is-true (probe-file temp-output)
+                          "as1600 should produce output binary")
+                 (when (probe-file temp-output)
+                   (is-true (> (with-open-file (in temp-output :element-type '(unsigned-byte 8))
+                                 (file-length in))
+                               0)
+                            "Output binary should be non-empty")))
+               (progn
+                 (signals error
+                   (skyline-tool::assemble-intv-rom (list temp-source) temp-output)
+                   "Should signal error when as1600 is not found"))))
       ;; Clean up
-      (dolist (file (list temp-output temp-source1 temp-source2))
+      (dolist (file (list temp-output temp-source temp-lst temp-cfg))
         (when (probe-file file)
           (delete-file file))))))
 
