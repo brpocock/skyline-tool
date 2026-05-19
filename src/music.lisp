@@ -614,32 +614,49 @@ AUDCTL register value for the specified distortion and bit settings
 (defconstant +pokey-pal-base-hz+ 15556.5d0
   "POKEY base frequency for PAL Atari 7800/5200 (1.7734475 MHz / 114).")
 
-(defun pokey->frequency (AUDF &optional (tv :ntsc))
-  "Convert POKEY AUDF register value to frequency in Hz.
+(defun pokey->frequency (AUDF &optional (TV :ntsc))
+  "Convert POKEY AUDF to frequency in Hz.
 
-@param AUDF AUDF register value (0-255)
-@param TV TV standard (:ntsc or :pal)
-@returns Frequency in Hz"
+@table @asis
+@item AUDF
+AUDF register value (0-255)
+@item TV
+TV standard (:ntsc or :pal), default @code{:NTSC}
+@item Returns
+Frequency in Hz
+@end table"
   (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
     (/ base (* 2 (1+ AUDF)))))
 
-(defun frequency->pokey (frequency &optional (tv :ntsc))
-  "Convert frequency in Hz to nearest POKEY AUDF register value.
+(defun frequency->pokey (FREQUENCY &optional (TV :ntsc))
+  "Convert FREQUENCY in Hz to nearest POKEY AUDF register value.
 
-@param FREQUENCY Frequency in Hz
-@param TV TV standard (:ntsc or :pal)
-@returns AUDF register value (0-255)"
+@table @asis
+@item FREQUENCY
+Frequency in Hz
+@item TV
+TV standard (:ntsc or :pal), default @code{:NTSC}
+@item Returns
+AUDF register value (0-255)
+@end table"
   (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
     (ceiling (/ (- base (* 2 frequency)) (* 2 frequency)))))
 
-(defun best-pokey-note-for (midi-note-number &optional distortion bits (tv :ntsc))
-  "Find the best POKEY AUDF value for a MIDI note number.
+(defun best-pokey-note-for (MIDI-NOTE-NUMBER &optional DISTORTION BITS (TV :ntsc))
+  "Find the best POKEY AUDF value for MIDI-NOTE-NUMBER.
 
-@param MIDI-NOTE-NUMBER MIDI note number (0-127)
-@param DISTORTION Ignored (FIXME: should affect frequency calculation)
-@param BITS Ignored (FIXME: should affect frequency calculation)
-@param TV TV standard (:ntsc or :pal)
-@returns AUDF register value and frequency error"
+@table @asis
+@item MIDI-NOTE-NUMBER
+MIDI note number (0-127)
+@item DISTORTION
+Ignored (FIXME: should affect frequency calculation)
+@item BITS
+Ignored (FIXME: should affect frequency calculation)
+@item TV
+TV standard (:ntsc or :pal), default @code{:NTSC}
+@item Returns
+AUDF register value and frequency error
+@end table"
   (declare (ignore distortion bits))
   (multiple-value-bind (value error)
       (frequency->pokey (freq<-midi-key midi-note-number) tv)
@@ -811,13 +828,20 @@ List of (voice note-code frequency-error) with lowest error
 (defconstant +sid-pal-clock-hz+ 985248
   "SID master clock for PAL C64/C128 (≈985.248 kHz).")
 
-(defun frequency->sid (frequency &optional (tv :ntsc))
-  "Convert frequency in Hz to 16-bit SID period register value.
+(defun frequency->sid (FREQUENCY &optional (TV :ntsc))
+  "Convert FREQUENCY in Hz to 16-bit SID period register value.
 
 The SID frequency formula is: f_out = clock / (16 × period)
 So: period = clock / (16 × frequency)
 
-Returns the period value and the actual frequency error."
+@table @asis
+@item FREQUENCY
+Frequency in Hz
+@item TV
+TV standard (:ntsc, :pal, or :secam), default @code{:NTSC}
+@item Returns
+Period value and actual frequency error
+@end table"
   (let ((clock (ecase tv
                  (:ntsc +sid-ntsc-clock-hz+)
                  (:pal +sid-pal-clock-hz+)
@@ -829,37 +853,77 @@ Returns the period value and the actual frequency error."
            (error (- frequency actual)))
       (values clamped error))))
 
-(defun sid->frequency (period &optional (tv :ntsc))
-  "Convert SID period register value back to frequency in Hz."
+(defun sid->frequency (PERIOD &optional (TV :ntsc))
+  "Convert SID PERIOD register value back to frequency in Hz.
+
+@table @asis
+@item PERIOD
+SID period register value (1-65535)
+@item TV
+TV standard (:ntsc, :pal, or :secam), default @code{:NTSC}
+@item Returns
+Frequency in Hz
+@end table"
   (let ((clock (ecase tv
                  (:ntsc +sid-ntsc-clock-hz+)
                  (:pal +sid-pal-clock-hz+)
                  (:secam +sid-pal-clock-hz+))))
     (/ clock 16 period)))
 
-(defun best-sid-note-for (midi-note-number &optional (tv :ntsc))
-  "Find the best SID period value for a MIDI note number."
+(defun best-sid-note-for (MIDI-NOTE-NUMBER &optional (TV :ntsc))
+  "Find the best SID period value for MIDI-NOTE-NUMBER.
+
+@table @asis
+@item MIDI-NOTE-NUMBER
+MIDI note number (0-127)
+@item TV
+TV standard (:ntsc, :pal, or :secam), default @code{:NTSC}
+@item Returns
+SID period value, actual frequency, and error
+@end table"
   (let ((freq (freq<-midi-key midi-note-number)))
     (multiple-value-bind (period error)
         (frequency->sid freq tv)
       (let ((actual (sid->frequency period tv)))
         (values period actual error)))))
 
-(defun best-sid-note-for-ntsc (freq)
-  "Find the best SID note for NTSC given a frequency in Hz."
+(defun best-sid-note-for-ntsc (FREQ)
+  "Find the best SID note for NTSC given FREQ in Hz.
+
+@table @asis
+@item FREQ
+Frequency in Hz
+@item Returns
+List of (period actual-frequency error)
+@end table"
   (multiple-value-bind (period error)
       (frequency->sid freq :ntsc)
     (list period (sid->frequency period :ntsc) error)))
 
-(defun best-sid-note-for-pal (freq)
-  "Find the best SID note for PAL given a frequency in Hz."
+(defun best-sid-note-for-pal (FREQ)
+  "Find the best SID note for PAL given FREQ in Hz.
+
+@table @asis
+@item FREQ
+Frequency in Hz
+@item Returns
+List of (period actual-frequency error)
+@end table"
   (multiple-value-bind (period error)
       (frequency->sid freq :pal)
     (list period (sid->frequency period :pal) error)))
 
-(defun best-sid-note-for-secam (freq)
-  "Find the best SID note for SECAM given a frequency in Hz.
-SECAM uses PAL SID clock (985248 Hz)."
+(defun best-sid-note-for-secam (FREQ)
+  "Find the best SID note for SECAM given FREQ in Hz.
+
+SECAM uses PAL SID clock (985248 Hz).
+
+@table @asis
+@item FREQ
+Frequency in Hz
+@item Returns
+List of (period actual-frequency error)
+@end table"
   (best-sid-note-for-pal freq))
 
 (defun midi->sid (midi-notes tv)

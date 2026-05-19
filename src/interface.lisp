@@ -92,11 +92,11 @@
         :cbm-petscii-docs 'cbm-petscii-docs
         :geos-vlir-stub-pack 'geos-vlir-stub-pack))
 
-(defun run-self-test (&rest args)
+(defun run-self-test (&rest ARGS)
   "Run all unit tests for SkylineTool and exit with appropriate status.
 
-Loads the test system and executes all FiveAM unit tests, providing
-a summary of results and exiting with status 0 for success or 1 for failure.
+Loads the test system and executes all FiveAM unit tests, providing a summary
+of results and exiting with status 0 for success or 1 for failure.
 
 @table @asis
 @item ARGS
@@ -121,7 +121,7 @@ Loads test system, runs tests, exits the Lisp process
       (format t "~%~&Failed to load or run tests: ~a" e)
       (sb-ext:exit :code 1))))
 
-(defun run-eightbol-test (&rest args)
+(defun run-eightbol-test (&rest ARGS)
   "Run all unit tests for EIGHTBOL compiler and exit with appropriate status.
 
 Loads the @code{eightbol-test} ASDF system and executes all FiveAM unit tests,
@@ -224,7 +224,20 @@ User input string with whitespace trimmed
       #-mcclim nil
       (prompt "provide a value for this restart")))
 
-(defun dialog (title message &rest args)
+(defun dialog (TITLE MESSAGE &rest ARGS)
+  "Display a dialog box with TITLE and formatted MESSAGE.
+
+When an X11 display is available and @code{#+mcclim} is active, renders a
+graphical dialog; otherwise writes to the terminal.
+
+@table @asis
+@item TITLE
+Dialog title string
+@item MESSAGE
+Format control string
+@item ARGS
+Format arguments for MESSAGE
+@end table"
   (if (and (not (tty-xterm-p)) (x11-p) #+:mcclim t #-mcclim nil)
       (or #+mcclim (clim-simple-echo:run-in-simple-echo
                     (lambda ()
@@ -518,10 +531,18 @@ effective for next time, you should run Make (which will run Buildapp).
       '("6502" "65c02" "65c816" "cp1610" "HuC6280" "RP2A03"
         "Z80" "SM83" "m68k" "i286" "ARM7" "F8")))
 
-(defun about-skyline-tool (&rest commands)
-  "Display help and version information.
+(defun about-skyline-tool (&rest COMMANDS)
+  "Display help and version information for COMMANDS.
 
-Supply a list of verb(s) to see detailed documentation"
+Supply a list of verb(s) to see detailed documentation.  When no COMMANDS are
+given, lists all available verbs with their first-line documentation.
+
+@table @asis
+@item COMMANDS
+Zero or more command names (strings) to display detailed help for.
+@item Side Effects
+Prints version, CPU backends, and command documentation to @code{*trace-output*}.
+@end table"
   (format *trace-output* "~&
 
  Skyline-Tool
@@ -706,10 +727,22 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
            label label))
   label)
 
-(defun load-project.json (&optional (port-label (find-default-port)) thunk)
-  "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
-   PORT-LABEL defaults via find-default-port.
-   Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
+(defun load-project.json (&optional (PORT-LABEL (find-default-port)) THUNK)
+  "Load Project.{PORT-LABEL}.json and run THUNK with global variables bound.
+
+Game name (for filenames) comes from JSON @code{Game} key (@code{:*game} in Lisp).
+
+@table @asis
+@item PORT-LABEL
+Port label string (e.g. @code{\"7800\"}, @code{\"Lynx\"}); defaults via @code{find-default-port}.
+@item THUNK
+Optional function called after binding @code{*game-title*}, @code{*machine*}, etc.
+@item Side Effects
+Binds @code{*project.json*}, @code{*game-title*}, @code{*part-number*}, @code{*studio*},
+@code{*publisher*}, @code{*machine*}, @code{*sound*}, @code{*common-palette*},
+@code{*default-skin-color*}, @code{*default-hair-color*}, @code{*default-clothes-color*},
+@code{*region*}.
+@end table"
   (let* ((raw-port (if (or (null port-label) (string-equal port-label "nil"))
                        (find-default-port)
                        port-label))
@@ -739,11 +772,21 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
                            :keyword))
     (when thunk (funcall thunk))))
 
-(defun run-for-port (port-label &rest subcommand)
-  (load-project.json port-label
+(defun run-for-port (PORT-LABEL &rest SUBCOMMAND)
+  "Load Project.PORT-LABEL.json and execute SUBCOMMAND for that port.
+
+@table @asis
+@item PORT-LABEL
+Port label string (e.g. @code{\"Intv\"}, @code{\"7800\"}, @code{\"Lynx\"})
+@item SUBCOMMAND
+Verb and arguments to execute after binding port-specific globals
+@item Side Effects
+Loads project JSON, binds global variables, executes the subcommand
+@end table"
+  (load-project.json PORT-LABEL
                      (lambda ()
-                       (format *trace-output* "~&Running for port: ~a" port-label)
-                       (destructuring-bind (verb &rest args) subcommand
+                       (format *trace-output* "~&Running for port: ~a" PORT-LABEL)
+                       (destructuring-bind (verb &rest args) SUBCOMMAND
                          (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
                            (apply fun args)
                            (error "Command not recognized: ?~a? (try ?help?)" verb))))))
@@ -755,11 +798,11 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
          (or (search "INVOKE-WITH-PRISTINE-VIEWPORT" msg)
              (search "already names" msg)))))
 
-(defun command (argv)
+(defun command (ARGV)
   "Main entry point for Skyline-Tool command-line interface.
 
-Processes   command-line  arguments   and   dispatches  to   appropriate
-subcommands. This is the function called by buildapp as the entry point.
+Processes command-line ARGV and dispatches to appropriate subcommands.
+This is the function called by buildapp as the entry point.
 
 @table @asis
 @item ARGV

@@ -103,16 +103,24 @@
       (clim:present script-name 'script-name :stream pane))
     (format pane "~2%")))
 
-(defun run-script (&optional script-to-run)
-  "Choose a script from a menu, and run it"
-  (if script-to-run
+(defun run-script (&optional SCRIPT-TO-RUN)
+  "Choose SCRIPT-TO-RUN from a menu and launch playtest.
+
+@table @asis
+@item SCRIPT-TO-RUN
+Optional script full name (e.g. @code{\"Scripts/Global/Welcome\"}).
+When omitted or NIL, opens a CLIM frame for interactive selection.
+@item Side Effects
+Launches an emulator playtest session for the specified script.
+@end table"
+  (if SCRIPT-TO-RUN
       (progn
         (when *run-script-frame*
           (clim:frame-exit *run-script-frame*))
         (run-script-in-playtest
-         (if (search "Scripts/" script-to-run)
-             script-to-run
-             (format nil "Scripts/~a" script-to-run))))
+         (if (search "Scripts/" SCRIPT-TO-RUN)
+             SCRIPT-TO-RUN
+             (format nil "Scripts/~a" SCRIPT-TO-RUN))))
       
       (let ((frame (clim:make-application-frame 'run-script-frame)))
         (let ((*run-script-frame* frame))
