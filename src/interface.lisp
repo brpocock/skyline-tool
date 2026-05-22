@@ -9,6 +9,8 @@
 ;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
 ;; undefined-function during buildapp compile when interface loads before oops.
 (declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
+(declaim (ftype (function (&rest t) t) intv-palette-command))
+(declaim (ftype (function (t) t) intv-palette-generator))
 
 ;; entry point from shell
 
@@ -78,8 +80,10 @@
         :write-docks-index 'write-docks-index
         :write-equipment-index 'write-equipment-index
         :write-flags-tables 'write-flags-tables
-        :write-gimp-palettes 'write-gimp-palettes
-        :write-globals-copybook 'write-globals-copybook
+         :write-gimp-palettes 'write-gimp-palettes
+         :--intv-palette 'intv-palette-command
+         :intv-palette-generator 'intv-palette-generator
+         :write-globals-copybook 'write-globals-copybook
         :write-inventory-tables 'write-inventory-tables
         :write-keys-tables 'write-keys-tables
         :write-orchestration 'write-orchestration

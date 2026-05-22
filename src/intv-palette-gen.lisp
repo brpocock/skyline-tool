@@ -2,73 +2,68 @@
 ;;;
 ;;; Intellivision Palette Generator
 ;;;
-;;; This module provides functions to generate palette indices for the Intellivision
-;;; platform, which has a fixed 16‑color palette.  Given a target RGB colour, it
-;;; computes the nearest colour in the palette using Euclidean distance.
+;;; Implements the requirements from Req-Intv-PaletteGen.md per TDD.
+;;; Uses the shared +intv-palette+ from graphics.lisp .
 ;;;
-;;; The output is a sequence of indices representing the fade steps: 0 (current),
-;;; 1/4, 1/2, 3/4, and 1 (target).  This is used by the AnimateLighting routine
-;;; to produce perceptually correct lighting transitions.
-;;;
-;;; The palette is defined as a list of (R G B) triples for the 16 fixed colours.
-;;;
-;;; (intv-palette-generator target-rgb) → list of palette indices
-;;;
+;;; (intv-palette-generator target-rgb) → list of 5 palette indices for ¼-step fades from black
 
 (in-package #:skyline-tool)
 
-(defparameter *intv-palette*
-  '((255 0 0)   ; Red
-    (0 255 0)   ; Green
-    (0 0 255)   ; Blue
-    (255 255 0) ; Yellow
-    (255 0 255) ; Magenta
-    (0 255 255) ; Cyan
-    (255 255 255) ; White
-    (0 0 0)     ; Black
-    (128 0 0)   ; Dark Red
-    (0 128 0)   ; Dark Green
-    (0 0 128)   ; Dark Blue
-    (128 128 0) ; Dark Yellow
-    (128 0 128) ; Dark Magenta
-    (0 128 128) ; Dark Cyan
-    (128 128 128) ; Gray
-    (192 192 192))) ; Light Gray
+(defun %euclid-dist (a b)
+  (sqrt (+ (expt (- (first a) (first b)) 2)
+           (expt (- (second a) (second b)) 2)
+           (expt (- (third a) (third b)) 2))))
+
+(defun %nearest-intv-index (rgb)
+  (let ((min-dist 1e9) (best 0) (palette +intv-palette+))
+    (loop for i from 0 below (length palette)
+          for col in palette
+          for d = (%euclid-dist rgb col)
+          when (< d min-dist) do (setf min-dist d best i))
+    best))
 
 (defun intv-palette-generator (target-rgb)
-  "Generate a list of palette indices for the Intellivision platform.
-   TARGET-RGB is a list (R G B) of integers 0‑255.
-   Returns a list of 5 indices: 0 (current), 1/4, 1/2, 3/4, 1 (target)."
-  (let* ((target-r (first target-rgb))
-         (target-g (second target-rgb))
-         (target-b (third target-rgb))
-         (palette *intv-palette*)
-         (num-colors (length palette)))
-    ;; Compute distances for each palette entry
-    (loop for i from 0 below num-colors
-          for (r g b) in palette
-          collect (list i (sqrt (+ (expt (- target-r r) 2)
-                                   (expt (- target-g g) 2)
-                                   (expt (- target-b b) 2)))) into distances
-          finally (let ((sorted (sort distances #'< (lambda (a b) (< (second a) (second b))))))
-                    (mapcar #'first sorted)))))
+  "Generate a list of 5 palette indices for ¼-step fades (0, 1/4, 1/2, 3/4, 1.0) from black to TARGET-RGB.
+Uses Euclidean nearest match in +intv-palette+.
+TARGET-RGB may be list or vector of 3 integers."
+  (let* ((tgt (if (vectorp target-rgb) (coerce target-rgb 'list) target-rgb))
+         (steps '(0 0.25 0.5 0.75 1.0))
+         (start '(0 0 0)))
+    (mapcar (lambda (f)
+              (let ((r (round (+ (* f (first tgt)) (* (- 1 f) (first start)))))
+                    (g (round (+ (* f (second tgt)) (* (- 1 f) (second start)))))
+                    (b (round (+ (* f (third tgt)) (* (- 1 f) (third start))))))
+                (%nearest-intv-index (list r g b))))
+            steps)))
 
-(defun intv-palette-generator-test ()
-  "Run unit tests for the palette generator."
-  (let* ((tests
-          '((#(255 0 0) (0 1 2 3 4))   ; Red
-            (#(0 255 0) (5 6 7 8 9))   ; Green
-            (#(0 0 255) (10 11 12 13 14)) ; Blue
-            (#(255 255 255) (6 15 0 1 2)) ; White
-            (#(0 0 0) (7 6 5 4 3)))))   ; Black
-         (all-passed t))
-    (dolist (test tests)
-      (let* ((target (first test))
-             (expected (second test))
-             (result (intv-palette-generator target)))
-        (unless (equal result expected)
-          (format t "Test failed: ~a => ~a, expected ~a~%" target result expected)
-          (setf all-passed nil))))
-    all-passed))
+(defun intv-palette-as-json (target-rgb)
+  "JSON interface (byteArrayToJSON style) returning the 5 indices as JSON array string."
+  (json:encode-json-to-string (intv-palette-generator target-rgb)))
+
+(defun intv-palette-command (&rest args)
+  "CLI handler for --intv-palette --input JSONFILE --output PALFILE
+Reads list of RGB targets from JSON, for each calls generator, writes all indices as raw bytes to .pal"
+  (let* ((parsed (let ((plist nil) (r args))
+                   (loop while r
+                         do (let ((k (pop r)))
+                              (cond ((string= k "--input") (setf (getf plist :input) (pop r)))
+                                    ((string= k "--output") (setf (getf plist :output) (pop r)))
+                                    (t (error "Unknown arg ~a" k)))))
+                   plist))
+         (input (getf parsed :input))
+         (output (getf parsed :output)))
+    (unless (and input output)
+      (error "Usage: --intv-palette --input foo.json --output bar.pal"))
+    (let* ((targets (with-open-file (f input :direction :input)
+                      (json:decode-json f)))
+           (all-bytes (loop for tgt in targets
+                            append (intv-palette-generator (if (vectorp tgt) (coerce tgt 'list) tgt)))))
+      (ensure-directories-exist output)
+      (with-open-file (out output :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+        (dolist (b all-bytes)
+          (write-byte b out)))
+      (format t "~&Wrote ~d bytes to ~a~%" (length all-bytes) output))))
 
 (export 'intv-palette-generator)
+(export 'intv-palette-command)
+(export 'intv-palette-as-json)

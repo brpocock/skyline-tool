@@ -88,8 +88,11 @@
            #:write-docks-index
            #:write-equipment-index
            #:write-flags-tables
-           #:write-gimp-palettes
-           #:write-inventory-tables
+            #:write-gimp-palettes
+            #:intv-palette-generator
+            #:intv-palette-command
+            #:intv-palette-as-json
+            #:write-inventory-tables
            #:write-keys-tables
            #:write-orchestration
            #:write-projection-tables.s

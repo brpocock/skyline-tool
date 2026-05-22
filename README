@@ -38,3 +38,10 @@ Skyline tool invoked: (Skyline-Tool:Command '("bin/skyline-tool"
                         "obj/2600/music.tia.ntsc.s"
                         "music/skyline.playlist"))
 
+Intellivision palette generation (for fade tables in lighting/AnimateLighting ports):
+
+    bin/skyline-tool --intv-palette --input target-colors.json --output IntvPalette.pal
+
+Where target-colors.json is e.g. [[255,255,255],[0,0,0],[255,0,0],[0,255,255]] for the 4 lighting modes.
+The .pal is raw bytes of the 5 fade indices per target (nearest in +intv-palette+).
+
