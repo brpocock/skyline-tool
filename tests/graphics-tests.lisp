@@ -66,7 +66,7 @@
 (test machine-palette-basic
   "Test machine-palette returns appropriate palettes"
   (let ((skyline-tool::*machine* 2600))
-    (let ((palette (skyline-tool::machine-palette)))
+    (let ((palette (skyline-tool::machine-palette 2600 :ntsc)))
     (is (listp palette) "Should return a list")
     (is (> (length palette) 0) "Should not be empty"))))
 
@@ -107,18 +107,20 @@
       (dolist (region '(:ntsc :pal))
         (is (equalp (skyline-tool::machine-palette machine region) ref)
             "machine-palette ~a ~a should match canonical 9918 :ntsc triples" machine region)))
-    (let ((skyline-tool::*machine* machine))
-      (let ((colors (skyline-tool::machine-colors))
-            (pal (skyline-tool::machine-palette machine)))
-        (is (= 16 (length pal)) "palette length 16 for machine ~a" machine)
-        (is (= (length colors) (length pal))
-            "machine-colors length must match machine-palette for ~a" machine)))))
+    (dolist (region '(:ntsc :pal))
+      (let ((skyline-tool::*machine* machine)
+            (skyline-tool::*region* region))
+        (let ((colors (skyline-tool::machine-colors))
+              (pal (skyline-tool::machine-palette machine region)))
+          (is (= 16 (length pal)) "palette length 16 for machine ~a ~a" machine region)
+          (is (= (length colors) (length pal))
+              "machine-colors length must match machine-palette for ~a ~a" machine region))))))
 
 (test machine-colors-basic
   "Test machine-colors returns color information"
   (let ((skyline-tool::*machine* 2600))
     (let ((colors (skyline-tool::machine-colors)))
-      (is (or (null colors) (listp colors)) "Should return nil or list"))))
+      (is (listp colors) "Should return a list"))))
 
 (test color-distance-basic
   "Test color-distance calculates Euclidean distance"
@@ -153,8 +155,8 @@
   "Test find-nearest-in-palette finds closest color"
   (let ((palette '((0 0 0) (255 255 255) (255 0 0))))
     (let ((nearest (skyline-tool::find-nearest-in-palette palette 254 0 0)))
-      (is (integerp nearest) "Should return palette index")
-      (is (<= 0 nearest (1- (length palette))) "Index should be in valid range"))))
+      (is (and (listp nearest) (= 3 (length nearest))) "Should return proper list of 3 elements")
+      (is (every (lambda (n) (<= 0 n #xff)) nearest) "Colors should be in valid range"))))
 
 (define-multi-test find-nearest-in-palette-samples
   "Test find-nearest-in-palette with multiple random samples"
@@ -162,11 +164,11 @@
   (let* ((palette (generate-random-palette 16))
          (target-color (generate-random-color))
          (nearest (skyline-tool::find-nearest-in-palette palette
-                                                       (first target-color)
-                                                       (second target-color)
-                                                       (third target-color))))
-    (is (integerp nearest) "Should return integer index")
-    (is (<= 0 nearest (1- (length palette))) "Index should be in valid range")))
+                                                         (first target-color)
+                                                         (second target-color)
+                                                         (third target-color))))
+    (is (and (listp nearest) (= 3 (length nearest))) "Should return proper list of 3 elements")
+    (is (every (lambda (n) (<= 0 n #xff)) nearest) "Colors should be in valid range")))
 
 (test rgb-int-conversion
   "Test rgb->int conversion"
@@ -178,10 +180,10 @@
 ;; Test pixel manipulation functions
 (test fat-bits-basic
   "Test fat-bits expands pixel data"
-  (let ((pixels #(1 0 1 0)))
+  (let ((pixels (make-array '(2 2) :element-type '(unsigned-byte 8) :initial-contents '((1 0) (0 #xff)))))
     (let ((expanded (skyline-tool::fat-bits pixels)))
       (is (arrayp expanded) "Should return array")
-      (is (> (length expanded) (length pixels)) "Should expand the data"))))
+      (is (> (length expanded) (array-total-size pixels)) "Should expand the data"))))
 
 (test tile-bits-conversion
   "Test tile->bits converts tile data"
@@ -487,4 +489,4 @@
   (is-true (fboundp 'skyline-tool::find-nearest-palette-color)
            "find-nearest-palette-color should be defined")
   (finishes (skyline-tool::find-nearest-palette-color '(255 0 0))
-            "Should handle basic RGB input"))
+    "Should handle basic RGB input"))
