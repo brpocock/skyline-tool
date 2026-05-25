@@ -67,6 +67,8 @@
            #:compile-tileset
            #:collect-strings
            #:extract-tileset-palette
+           #:machine-palette
+           #:find-locale-id-for-segment
            #:gui
            #:labels-to-forth
            #:labels-to-mame

@@ -1387,6 +1387,8 @@ Path to the raw ROM binary to wrap.
                  do (write-byte b out))))))))
 
 (defun prepend-fundamental-mode (file)
+  "Prepend -*- fundamental -*- mode marker to FILE.
+Writes the marker to the beginning of FILE, preserving existing content after it."
   (let ((contents (read-file-into-string file)))
     (with-output-to-file (f file :if-does-not-exist :error :if-exists :overwrite)
       (princ ";;; -*- fundamental -*-" f)

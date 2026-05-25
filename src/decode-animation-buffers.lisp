@@ -300,6 +300,14 @@
   (set-animation-buffer-colors *anim-buffer-frame*)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+(define-constant +all-actions+
+    '(:idle :climbing :hurt :flying
+      :knocked-back :swimming :use-equipment :wading
+      :walking :wave-arms :gesture :sleep :non-interactive
+      :dance :panic :special-walk-with-shield :special-idle-with-shield
+      :boating)
+  :test 'equalp)
+
 (define-constant +anim-buffer-offsets+
     (list 0 (- #x1000) #x1000)
   :test 'equalp)

@@ -434,7 +434,10 @@ New list with each element duplicated
 
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
-(defgeneric machine-palette (&optional (machine *machine*) (region *region*))
+(defun machine-palette (&optional (machine *machine*) (region *region*))
+  (palette-for-machine-and-region machine region))
+
+(defgeneric palette-for-machine-and-region (machine region)
   (:documentation
    "Get the standard color palette for a target machine and region.
 
@@ -451,60 +454,60 @@ List of RGB color triples for the machine's palette
 @end table
 
 @xref{var:*machine*}, @xref{var:*region*}.")
-  (:method ((machine (eql 20)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 20)) region) (declare (ignore region))
     (subseq +c64-palette+ 0 7))
-  (:method ((machine (eql 200)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 200)) region) (declare (ignore region))
     (copy-list +lynx-palette+))
-  (:method ((machine (eql 64)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 64)) region) (declare (ignore region))
     (copy-list +c64-palette+))
-  (:method ((machine (eql 128)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 128)) region) (declare (ignore region))
     (copy-list +c64-palette+))
-  (:method ((machine (eql 2)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 2)) region) (declare (ignore region))
     (copy-list +apple-hires-palette+))
-  (:method ((machine (eql 8)) &optional (region *region*))
+  (:method ((machine (eql 8)) region)
     (ecase region
       (:ntsc (copy-list +nes-palette-ntsc+))
       (:pal (copy-list +nes-palette-pal+))))
-  (:method ((machine (eql 2600)) &optional (region *region*))
+  (:method ((machine (eql 2600)) region)
     (ecase region
       (:ntsc (copy-list +vcs-ntsc-palette+))
       (:pal (copy-list +vcs-pal-palette+))
       (:secam (copy-list +vcs-secam-palette+))))
-  (:method ((machine (eql 2609)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 2609)) region) (declare (ignore region))
     (copy-list +intv-palette+))
-  (:method ((machine (eql 7800)) &optional (region *region*))
+  (:method ((machine (eql 7800)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
       (:pal (copy-list +prosystem-pal-palette+))))
-  (:method ((machine (eql 5200)) &optional (region *region*))
+  (:method ((machine (eql 5200)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
       (:pal (copy-list +prosystem-pal-palette+))))
-  (:method ((machine (eql 400)) &optional (region *region*))
+  (:method ((machine (eql 400)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
       (:pal (copy-list +prosystem-pal-palette+))))
-  (:method ((machine (eql 800)) &optional (region *region*))
+  (:method ((machine (eql 800)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
       (:pal (copy-list +prosystem-pal-palette+))))
-  (:method ((machine (eql 7850)) &optional (region *region*))
+  (:method ((machine (eql 7850)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
       (:pal (copy-list +prosystem-pal-palette+))))
-  (:method ((machine (eql 9918)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 9918)) region) (declare (ignore region))
     (copy-list +tms9918-palette+))
-  (:method ((machine (eql 3010)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 3010)) region) (declare (ignore region))
     (copy-list +tms9918-palette+))
-  (:method ((machine (eql 1000)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 1000)) region) (declare (ignore region))
     (copy-list +tms9918-palette+))
-  (:method ((machine (eql 837)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 837)) region) (declare (ignore region))
     (copy-list +tms9918-palette+))
-  (:method ((machine (eql 2110)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 2110)) region) (declare (ignore region))
     (copy-list +tms9918-palette+))
-  (:method ((machine (eql 264)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 264)) region) (declare (ignore region))
     (copy-list +ted-palette+))
-  (:method ((machine (eql 16)) &optional region) (declare (ignore region))
+  (:method ((machine (eql 16)) region) (declare (ignore region))
     (copy-list +tg16-palette+)))
 
 (defun machine-colors ()
@@ -1440,8 +1443,14 @@ transparent pixels — are copied without coercing @code{NIL} into
     (check-type lu (integer 0 15) "Atari Luminance value 0-15")
     (format nil "CoLu(~a, $~x)" co lu)))
 
-(defun atari-colu-run (&rest _)
-  (error "unimplemented: ~s" _))
+(defun atari-colu-run (&optional byte)
+  "Run atari-colu on BYTE (or nil) and return the result.
+   If BYTE is omitted or NIL, returns the default background color.
+   This stub replaces the previous unimplemented placeholder.
+   It simply forwards to `atari-colu` for actual logic."
+  (if byte
+      (atari-colu byte)
+      (atari-colu nil)))
 
 (defun compile-tia-48px (png-file out-dir height image-pixels)
   (let ((out-file-name (merge-pathnames
@@ -2410,7 +2419,7 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
          (dotimes (i total-cells)
            (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
         (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
-                grom-cells nuniq (enough-namestring output-path))))))
+                grom-cells nuniq (enough-namestring output-path))))
 
 (defun compile-blob-intv (png-file output-file)
   "Compile BLOB PNG-FILE to OUTPUT-FILE assembly (tile map + GRAM card data).
@@ -2647,7 +2656,7 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                 ;; Remove dead slot from uniq
                 (loop for i from best-a below (1- n-uniq)
                       do (setf (aref uniq i) (aref uniq (1+ i))))
-                (vector-pop uniq))))))
+                (vector-pop uniq))))
   nil)
 
 ;;;; Intv GRAM-specific helpers (build on Generic Tile Core) ────────
@@ -2824,7 +2833,7 @@ Hard limit for UNIQ fill-pointer after reduction.
                 ;; Update grom-cells count is tracked by the caller; we just
                 ;; emit a warning.  The GRAM→GROM substitution reduces unique
                 ;; GRAM count by 1.
-                nil)))))
+                nil))))
 
 (defun intv-cstk-to-card-id (cstk)
   "Extract the unified card ID from a BACKTAB CSTK word.
@@ -2980,7 +2989,7 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
         (dotimes (i (* tile-count 4))
           (format src "    DECLE   $~4,'0X~%" (aref records i)))
         (format *trace-output* "~&Wrote Intellivision tileset (~D logical tiles, ~D GRAM) to ~A."
-                tile-count nuniq (enough-namestring output-path))))))
+                tile-count nuniq (enough-namestring output-path)))))
 
 (defun compile-map-intv-screen (map-name output-path width height tile-grid tileset-records
                                 &key spawn-table stic-override-grid stic-override-table)
@@ -3420,7 +3429,7 @@ Pixel dimensions of the PNG.
       (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
               (pathname-name png-file) multi-cells))
     (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
-            cell-count multi-cells out-file)))
+            cell-count multi-cells out-file))))
 
 (defun vic2-cell-multicolor-map (tile-data colors)
   "Build a 3-color map for multicolor encoding of an 8×8 cell.
@@ -5641,7 +5650,7 @@ Output path: @file{Source/Generated/@emph{machine}/Assets/Blob.@emph{name}.s}"
                             (logior (ash (logand fg #x0F) 4) (logand bg #x0F))
                             g)))))
      (format *trace-output* "~&blob-rip-tms9918: wrote ~a~%" (enough-namestring out))
-     t))
+     t)))
 
 (defun %write-blob-assembly-atomically (output-pathname writer)
   "Call WRITER with an output character stream, then rename into OUTPUT-PATHNAME.
@@ -7577,8 +7586,8 @@ Malformed lines (e.g. missing mode) are skipped."
 
 (defmethod compile-art-generic ((machine-type (eql 222)) format source-file-base-name art-input)
   "Compile art for Apple IIGS platform"
+  (declare (ignore format art-input))
   (let ((*machine* 222))
-    (declare (ignore format art-input))
     (compile-atari-8×8 source-file-base-name #p"2gs/Fonts/" 8 8)))
 
 (defun compile-art-264 (index-out index-in)

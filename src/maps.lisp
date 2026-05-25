@@ -218,7 +218,7 @@ Returns an 8-element vector of STIC indices (@code{0}–@code{15})."
                                     (split-sequence #\, string))))
          (colors (mapcar #'parse-stic-color-token tokens))
          (out (make-array 8 :element-type '(unsigned-byte 8))))
-    (ecase (length colors)
+    (case (length colors)
       (2 (dotimes (q 4)
            (setf (aref out q) (first colors))
            (setf (aref out (+ q 4)) (second colors))))
@@ -417,6 +417,60 @@ all-default (@code{#xff}) record."
        (let ((name (assocdr "Prototype" (second object))))
          (format *trace-output* "~&Prototype spawn @(~3d, ~3d) “~a” (legacy property)" x y name)
          (return-from collect-prototype-object (list x y :character name)))))))
+
+(defun pascal-case-property (string)
+  "Normalize STRING to PascalCase, preserving slashes for region/script paths.
+E.g. \"on player enter\" → \"OnPlayerEnter\", \"Region/Script\" → \"Region/Script\"."
+  (let ((parts (split-sequence #\/ string :remove-empty-subseqs t)))
+    (format nil "~{~a~^/~}"
+            (mapcar (lambda (part)
+                      (let ((words (split-sequence #\Space part :remove-empty-subseqs t)))
+                        (format nil "~{~:(~a~)~}" words)))
+                    parts))))
+
+(defvar *force-field-event-properties*
+  '("OnPlayerEnter" "OnPlayerExit" "OnCharacterEnter" "OnCharacterExit")
+  "Canonical PascalCase names for force-field event properties in TMX objects.")
+
+(defun collect-force-field-objects (objects &key (tile-width 8))
+  "Collect force-field rectangle objects from OBJECTS.
+Each force field is a rectangle with optional event script properties.
+Returns a list of 20-byte vectors: 4 bytes (x1 y1 x2 y2) + 8 words (event script IDs).
+Objects without any event properties are ignored."
+  (let ((force-fields '()))
+    (dolist (object objects)
+      (when (equal "object" (car object))
+        (let ((events (make-array 8 :element-type '(unsigned-byte 16) :initial-element 0))
+              (has-event-p nil)
+              (x1 (floor (parse-number (or (assocdr "x" (second object)) "0")) tile-width))
+              (y1 (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16)))
+              (x2 (floor (+ (parse-number (or (assocdr "x" (second object)) "0"))
+                            (parse-number (or (assocdr "width" (second object)) "0")))
+                         tile-width))
+              (y2 (1- (floor (+ (parse-number (or (assocdr "y" (second object)) "0"))
+                                (parse-number (or (assocdr "height" (second object)) "0")))
+                             16)))
+              (props (xml-match "properties" object nil)))
+          (dolist (prop (xml-matches "property" props))
+            (let* ((name (or (assocdr "name" (second prop)) ""))
+                   (normalized (pascal-case-property name)))
+              (dotimes (i 4)
+                (when (string-equal normalized (nth i *force-field-event-properties*))
+                  (let* ((script-name (or (assocdr "value" (second prop)) ""))
+                         (script-id (or (get-asset-id :script script-name) 0)))
+                    (setf (aref events i) script-id)
+                    (setf has-event-p t))))))
+          (when has-event-p
+            (let ((record (make-array 20 :element-type '(unsigned-byte 8))))
+              (setf (aref record 0) x1
+                    (aref record 1) y1
+                    (aref record 2) x2
+                    (aref record 3) y2)
+              (dotimes (i 8)
+                (setf (aref record (+ 4 (* i 2))) (ldb (byte 8 0) (aref events i)))
+                (setf (aref record (+ 5 (* i 2))) (ldb (byte 8 8) (aref events i))))
+              (push record force-fields))))))
+    (nreverse force-fields)))
 
 (defun map-spawn-table (prototypes-table)
   "Resolve raw TMX spawn rows to encoded spawn alists for binary output."
@@ -862,7 +916,8 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
                    id (not (emptyp (string id))))
           (let* ((island-str (pascal-case (string island)))
                  (full-str (string full-name))
-                 ;; Island header rows use "0" or numeric id as full name; map path is Island/Island
+                 ;; Island header  rows use  "0" or  numeric id  as full
+                 ;; name; map path is Island/Island
                  (effective-full (if (every #'digit-char-p full-str)
                                      island-str
                                      (pascal-case full-str)))
@@ -882,56 +937,11 @@ All colors: ~s~@[~% at (~3d,~3d)~]"
     (error "~a does not seem to define any maps" (enough-namestring table)))
   (format *trace-output* " … now I know about ~:d map~:p" (hash-table-count *maps-ids*)))
 
-(defun maps-segment-lookup (segment-name)
-  "Look up SEGMENT-NAME in *maps-ids*, trying direct match and normalized variants
-(apostrophe/underscore removed) to handle ODS vs Assets.index naming differences."
-  (let ((trimmed (string-trim '(#\space #\tab) segment-name)))
-    (or (gethash segment-name *maps-ids*)
-        (gethash trimmed *maps-ids*)
-        (gethash (coerce (remove-if (lambda (c) (member c '(#\' #\_))) trimmed) 'string)
-                 *maps-ids*)
-        (when (and (boundp '*maps-ids*) *maps-ids* (plusp (hash-table-count *maps-ids*)))
-          ;; Try case-insensitive match for ODS vs Assets.index differences
-          (loop for key being the hash-keys of *maps-ids*
-                when (string-equal key segment-name)
-                  return (gethash key *maps-ids*))
-          ;; Fallback: match by Island/MapName when path has 2+ parts
-          (let ((parts (split-sequence #\/ trimmed)))
-            (when (>= (length parts) 2)
-              (let ((island (first parts))
-                    (map-name (lastcar parts)))
-                (loop for key being the hash-keys of *maps-ids*
-                      for key-parts = (split-sequence #\/ key)
-                      when (and (>= (length key-parts) 2)
-                                (string-equal (first key-parts) island)
-                                (string-equal (lastcar key-parts) map-name))
-                        return (gethash key *maps-ids*)))))))))
-
-(defun find-locale-id-for-segment (segment-name)
-  "Look up map ID for SEGMENT-NAME (e.g. Solace/AncientBurialSite2) from MapsIndex.ods.
-Does not rely on *current-scene*."
-  (tagbody top
-     (restart-case
-         (let ((id-prop (when segment-name
-                          (when (or (not (boundp '*maps-ids*))
-                                    (null *maps-ids*)
-                                    (zerop (hash-table-count *maps-ids*)))
-                            (read-map-ids-table))
-                          (prog1
-                              (maps-segment-lookup segment-name)
-                            (format *trace-output* "~&Loaded maps index, looking for ~s"
-                                    segment-name)))))
-           (return-from find-locale-id-for-segment id-prop))
-       (reload-map-ids-table ()
-         :report "Reload Source/Tables/MapsIndex.ods"
-         (read-map-ids-table)
-         (go top)))))
-
 (defun find-locale-id-from-xml (xml)
   "Look up map ID from MapsIndex.ods spreadsheet. Phantasia does not use IDs from TMX.
 XML is the map element; *current-scene* must be bound to the segment name (e.g. Solace/AncientBurialSite3)."
   (declare (ignore xml))
-  (find-locale-id-for-segment *current-scene*))
+  (get-asset-id :map *current-scene*))
 
 (defun find-entrance-by-name (xml name locale-name)
   "Find entrance NAME in the map XML for  LOCALE-NAME"
@@ -1644,124 +1654,143 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
         (when (< 2 (length tilesets))
           (warn "Ignoring tilesets after the second: ~{~a~^, ~}" tilesets))
         (format *trace-output* "~&Parsing map layers…")
-        (multiple-value-bind (tile-grid
-                              attributes-table decals-table
-                              exits-table prototypes-table)
-            (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
-          (when (= *machine* 2609)
-            (let* ((width (array-dimension tile-grid 0))
-                   (height (array-dimension tile-grid 1))
-                   (spawn-table (map-spawn-table prototypes-table))
-                   (outfile (make-pathname
-                             :name (format nil "Map.~a" canon-name)
-                             :directory `(:relative "Source" "Generated"
-                                           ,(machine-directory-name) "Assets")
-                             :type "s")))
-              (multiple-value-bind (stic-grid stic-table)
-                  (build-stic-override-grid width height objects :tile-width tile-width)
-                (compile-map-intv-screen canon-name outfile width height tile-grid #()
-                                         :spawn-table spawn-table
-                                         :stic-override-grid stic-grid
-                                         :stic-override-table stic-table))
-              (return-from compile-map nil)))
-          (dolist (tv '(:ntsc :pal))
-            (format *trace-output* "~&About to write map ~a for ~a… "
-                    (title-case canon-name) tv)
-            (let* ((width (array-dimension tile-grid 0))
-                   (height (array-dimension tile-grid 1))
-                   (spawn-table (map-spawn-table prototypes-table))
-                   (display-name (or
-                                  (gethash (substitute #\/ #\. canon-name) *maps-display-names*)
-                                  (error "Can't figure out the display name for ~a" canon-name)))
-                   (name (subseq display-name 0 (min 20 (length display-name))))
-                   (compressed-map-data
-                     (zx7-compress
-                      (map-data-vector :width width :height height
-                                       :tile-grid tile-grid
-                                       :attributes-table attributes-table
-                                       :exits-table exits-table
-                                       :animations-list animations-list
-                                       :decals-animations-list decals-animations-list
-                                       :tv tv)
-                      :base-name (concatenate 'string "Map."
-                                              canon-name
-                                              ".Data."
-                                              (string-upcase tv))))
-                   (run-commands-content (run-commands-content-for-map pathname)))
-              (assert (<= (* width height) 1024))
-              (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
+        (let* ((map-props (properties->plist (or (xml-match "properties" xml nil)
+                                                 '("properties" nil))))
+               (bgm-name (getf map-props :bgm))
+               (rc-name (getf map-props :rc))
+               (bgm-id (when bgm-name
+                         (or (get-asset-id :song (pascal-case (string-trim " " bgm-name)))
+                             (progn
+                               (warn "BGM song ~s not found in asset index" bgm-name)
+                               0))))
+               (rc-id (if rc-name
+                          (get-asset-id :map (substitute #\/ #\. canon-name))
+                          0))
+               (force-fields (collect-force-field-objects objects :tile-width tile-width)))
+          (multiple-value-bind (tile-grid
+                                attributes-table decals-table
+                                exits-table prototypes-table)
+              (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
+            (when (= *machine* 2609)
+              (let* ((width (array-dimension tile-grid 0))
+                     (height (array-dimension tile-grid 1))
+                     (spawn-table (map-spawn-table prototypes-table))
+                     (outfile (make-pathname
+                               :name (format nil "Map.~a" canon-name)
+                               :directory `(:relative "Source" "Generated"
+                                                      ,(machine-directory-name) "Assets")
+                               :type "s")))
+                (multiple-value-bind (stic-grid stic-table)
+                    (build-stic-override-grid width height objects :tile-width tile-width)
+                  (compile-map-intv-screen canon-name outfile width height tile-grid #()
+                                           :spawn-table spawn-table
+                                           :stic-override-grid stic-grid
+                                           :stic-override-table stic-table))
+                (return-from compile-map nil)))
+            (dolist (tv '(:ntsc :pal))
+              (format *trace-output* "~&About to write map ~a for ~a… "
+                      (title-case canon-name) tv)
+              (let* ((width (array-dimension tile-grid 0))
+                     (height (array-dimension tile-grid 1))
+                     (spawn-table (map-spawn-table prototypes-table))
+                     (display-name (or
+                                    (gethash (substitute #\/ #\. canon-name) *maps-display-names*)
+                                    (error "Can't figure out the display name for ~a" canon-name)))
+                     (name (subseq display-name 0 (min 20 (length display-name))))
+                     (compressed-map-data
+                       (zx7-compress
+                        (map-data-vector :width width :height height
+                                         :tile-grid tile-grid
+                                         :attributes-table attributes-table
+                                         :exits-table exits-table
+                                         :animations-list animations-list
+                                         :decals-animations-list decals-animations-list
+                                         :tv tv)
+                        :base-name (concatenate 'string "Map."
+                                                canon-name
+                                                ".Data."
+                                                (string-upcase tv))))
+                     (run-commands-content (run-commands-content-for-map pathname)))
+                (assert (<= (* width height) 1024))
+                (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
 ~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~
 ~r distinct animation~:p, and ~r interactive object~:p"
-                      width height
-                      (length attributes-table)
-                      (length decals-table)
-                      (count-if #'decal-invisible-p decals-table)
-                      (length exits-table)
-                      (length animations-list)
-                      (length prototypes-table))
-              (format *trace-output* "~&Ready to write binary output for ~a … " tv)
-              (force-output *trace-output*)
-              (let ((outfile (make-pathname
-                              :name (format nil "Map.~a.~a.~a"
-                                            (last-elt (pathname-directory pathname))
-                                            (pathname-name pathname) tv)
-                              :directory `(:relative "Object" ,(machine-directory-name) "Assets")
-                              :type "o"))
-                    (offset 0))
-                (ensure-directories-exist outfile)
-                (with-output-to-file (object outfile :element-type '(unsigned-byte 8)
-                                                     :if-exists :supersede)
-                  ;; offset 0, width
-                  (write-byte width object)
-                  ;; offset 1, height
-                  (write-byte height object)
-                  ;; offset 2-3, offset of compressed RAM map data
-                  (write-word (setf offset (+ #x10 (length name)))
-                              object)
-                  ;; offset 4-5, offset of scenery decals list
-                  (write-word (incf offset (length compressed-map-data))
-                              object)
-                  ;; offset 6-7, offset of objects to spawn
-                  (write-word (incf offset (1+ (* 7 (length decals-table))))
-                              object)
-                  ;; offset 8, tileset ROM bank
-                  (write-byte (tileset-rom-bank xml) object)
-                  ;; offset 9-12, unused now
-                  (write-dword 0 object)
-                  ;; offset 13-14, run-commands pointer
-                  (if run-commands-content
-                      (write-word run-commands-content object)
-                      (write-word 0 object))
-                  ;; offset 15, name (Pascal string)
-                  (write-byte (length (unicode->minifont name)) object)
-                  (write-bytes (unicode->minifont name) object)
-                  ;; compressed art map
-                  (write-bytes compressed-map-data object)
-                  (format *trace-output* "Wrote compressed map data … ")
-                  (force-output *trace-output*)
-                  ;; decals list
-                  (write-byte (length decals-table) object)
-                  (assert (every (lambda (decal)
-                                   (= 4 (length decal)))
-                                 decals-table)
-                          (decals-table)
-                          "All decals table entries must be precisely 4 values: ~%~s"
-                          decals-table)
-                  (dolist (decal decals-table)
-                    ;; x, y, gid of first art
-                    (write-bytes (subseq decal 0 3) object)
-                    ;; attributes
-                    (write-dword (fourth decal) object)
-                    #+ ()
-                    (format *trace-output*
-                            "~&~{ • Decal at ~d, ~d gid $~2,'0x attributes $~8,'0x~}"
-                            (coerce decal 'list)))
-                  ;; prototypes / spawn list (5 bytes per entry after count)
-                  (write-map-spawn-bytes object spawn-table)
-                  (format *trace-output* " end of file at $~4,'0x … "
-                          (file-position object))
-                  (force-output *trace-output*)))
-              (format *trace-output* "done."))))))))
+                        width height
+                        (length attributes-table)
+                        (length decals-table)
+                        (count-if #'decal-invisible-p decals-table)
+                        (length exits-table)
+                        (length animations-list)
+                        (length prototypes-table))
+                (format *trace-output* "~&Ready to write binary output for ~a … " tv)
+                (force-output *trace-output*)
+                (let ((outfile (make-pathname
+                                :name (format nil "Map.~a.~a.~a"
+                                              (last-elt (pathname-directory pathname))
+                                              (pathname-name pathname) tv)
+                                :directory `(:relative "Object" ,(machine-directory-name) "Assets")
+                                :type "o"))
+                      (offset 0))
+                  (ensure-directories-exist outfile)
+                  (with-output-to-file (object outfile :element-type '(unsigned-byte 8)
+                                                       :if-exists :supersede)
+                    ;; offset 0, width
+                    (write-byte width object)
+                    ;; offset 1, height
+                    (write-byte height object)
+                    ;; offset 2-3, offset of compressed RAM map data
+                    (write-word (setf offset (+ #x10 (length name)))
+                                object)
+                    ;; offset 4-5, offset of scenery decals list
+                    (write-word (incf offset (length compressed-map-data))
+                                object)
+                    ;; offset 6-7, offset of objects to spawn
+                    (write-word (incf offset (1+ (* 7 (length decals-table))))
+                                object)
+                    ;; offset 8, tileset ROM bank
+                    (write-byte (tileset-rom-bank xml) object)
+                    ;; offset 9, RC Script indicator $80
+                    (write-byte (if rc-id #x80 0) object)
+                    ;; offset 10, BGM Song ID
+                    (write-byte (or bgm-id 0) object)
+                    ;; offset 11-12, force fields pointer
+                    (write-word (incf offset (1+ (* 5 (length spawn-table)))) object)
+                    ;; offset 13-14, unused
+                    (write-word 0 object)
+                    ;; offset 15, name (Pascal string)
+                    (write-byte (length (unicode->minifont name)) object)
+                    (write-bytes (unicode->minifont name) object)
+                    ;; compressed art map
+                    (write-bytes compressed-map-data object)
+                    (format *trace-output* "Wrote compressed map data … ")
+                    (force-output *trace-output*)
+                    ;; decals list
+                    (write-byte (length decals-table) object)
+                    (assert (every (lambda (decal)
+                                     (= 4 (length decal)))
+                                   decals-table)
+                            (decals-table)
+                            "All decals table entries must be precisely 4 values: ~%~s"
+                            decals-table)
+                    (dolist (decal decals-table)
+                      ;; x, y, gid of first art
+                      (write-bytes (subseq decal 0 3) object)
+                      ;; attributes
+                      (write-dword (fourth decal) object)
+                      #+ ()
+                      (format *trace-output*
+                              "~&~{ • Decal at ~d, ~d gid $~2,'0x attributes $~8,'0x~}"
+                              (coerce decal 'list)))
+                    ;; prototypes / spawn list (5 bytes per entry after count)
+                    (write-map-spawn-bytes object spawn-table)
+                    ;; force fields list pointer (1 byte count + 20 bytes per entry)
+                    (write-byte (length force-fields) object)
+                    (dolist (ff force-fields)
+                      (write-bytes ff object))
+                    (format *trace-output* " end of file at $~4,'0x … "
+                            (file-position object))
+                    (force-output *trace-output*)))
+                (format *trace-output* "done.")))))))))
 
 (defun rip-tiles-from-tileset (tileset images &optional (start-i 0))
   (let ((i start-i))
@@ -1904,6 +1933,8 @@ character-cell tiles.  For other machines, signals an error."
     adjusted-palettes))
 
 (defun extract-tileset-palette (pathname outfile)
+  "Extract palette data from a tileset and write to OUTFILE.
+PATHNAME is the tileset definition file (.tsx); writes assembly source to OUTFILE."
   (ensure-directories-exist outfile)
   (with-output-to-file (output outfile :if-exists :supersede)
     (flet ((dump-palettes (series label)
