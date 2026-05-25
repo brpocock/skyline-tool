@@ -824,10 +824,7 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
 
 (defun compile-2600-font-8x16 (output-bas png-path)
   (let* ((input-path (uiop:ensure-pathname png-path))
-         (png (progn
-                (with-open-file (stream input-path :if-does-not-exist :error)
-                  (declare (ignore stream)))
-                (png-read:read-png-file input-path)))
+         (png (png-read:read-png-file input-path))
          (width (png-read:width png))
          (height (png-read:height png)))
     (unless (and (> width 0) (zerop (mod width 8)))
@@ -837,7 +834,7 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
     (let* ((*machine* 2600)
            (*region* :ntsc)
            (palette (png->palette height width (png-read:image-data png)
-                                   (png-read:transparency png)))
+                                  (png-read:transparency png)))
            (chars-per-row (/ width 8))
            (char-rows (/ height 16))
            (char-count (* chars-per-row char-rows))
@@ -905,10 +902,7 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
 (defun compile-2600-playfield (output-bas png-path &optional tv-standard)
   (declare (ignore tv-standard))
   (let* ((input-path (uiop:ensure-pathname png-path))
-         (png (progn
-                (with-open-file (stream input-path :if-does-not-exist :error)
-                  (declare (ignore stream)))
-                (png-read:read-png-file input-path)))
+         (png (png-read:read-png-file input-path))
          (width (png-read:width png))
          (height (png-read:height png))
          (rgb (png-read:image-data png))
@@ -921,7 +915,6 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
            (name (pathname-name target-path))
            (segments (uiop:split-string name :separator "."))
            (maybe-region (when segments (string-upcase (car (last segments)))))
-           (has-explicit-region (member maybe-region '("NTSC" "PAL" "SECAM") :test #'string=))
            (base-segments (if has-explicit-region
                               (butlast segments)
                               segments))
@@ -934,27 +927,13 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
            (device (pathname-device target-path))
            (label-root (cl-change-case:pascal-case (pathname-base-name input-path))))
       (loop for region in '(:ntsc :pal :secam)
-            for conversion-region = (if (and (eq region :pal)
-                                             (or (null +vcs-pal-palette+)
-                                                 (null (machine-palette 2600 :pal))))
-                                         :ntsc
-                                         region)
-            for output-path = (if has-explicit-region
-                                   (make-pathname :host host
-                                                  :device device
-                                                  :directory directory
-                                                  :name (format nil "~a.~a" base-name (string-upcase (symbol-name region)))
-                                                  :type type)
-                                   (if (eq region :ntsc)
-                                       target-path
-                                       (make-pathname :host host
-                                                      :device device
-                                                      :directory directory
-                                                      :name (format nil "~a.~a" base-name (string-upcase (symbol-name region)))
-                                                      :type type)))
-            for label = (format nil "SetPlayfield~a~a"
-                                 label-root
-                                 (string-upcase (symbol-name region)))
+            for output-path = (make-pathname :host host
+                                                 :device device
+                                                 :directory directory
+                                                 :name (format nil "~a.~a" base-name (string-upcase (symbol-name region)))
+                                                 :type type)
+            for label = (format nil "SetPlayfield~a"
+                                label-root))
             do (let* ((*machine* 2600)
                       (*region* conversion-region)
                       (palette (png->palette height width rgb alpha))
@@ -984,10 +963,7 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
 
 (defun compile-chaos-character (output-bas png-path)
   (let* ((png-pathname (uiop:ensure-pathname png-path))
-         (png (progn
-                (with-open-file (stream png-pathname :if-does-not-exist :error)
-                  (declare (ignore stream)))
-                (png-read:read-png-file png-pathname)))
+         (png (png-read:read-png-file png-pathname))
          (width (png-read:width png))
          (height (png-read:height png)))
     (unless (= width 64)
@@ -1013,7 +989,7 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
                  (setf row (copy-seq (aref frame-map (1- pose))))
                  (let ((blank-index (ensure-chaos-frame-index
                                      (make-array 16 :element-type '(unsigned-byte 8)
-                                                 :initial-element 0)
+                                                    :initial-element 0)
                                      frame-cache frames)))
                    (dotimes (idx 8)
                      (setf (aref row idx) blank-index)))))
@@ -1217,11 +1193,11 @@ transparent pixels — are copied without coercing @code{NIL} into
          (appendf colors color))
     finally (return (values shapes colors))))
 
-(defun try-to-maintain-palette (new old &optional (overall old) &key lenient-p)
+(defun try-to-maintain-palette (new old &key (overall old) lenient-p)
   (if (or (null old) (emptyp old))
       (if overall
           (return-from try-to-maintain-palette
-            (try-to-maintain-palette new overall overall :lenient-p lenient-p))
+            (try-to-maintain-palette new overall :overall overall :lenient-p lenient-p))
           (return-from try-to-maintain-palette new)))
   ;; Pad shorter palette to match new's length (Mode E rows can have varying color counts)
   (when (< (length old) (length new))
@@ -1261,12 +1237,12 @@ transparent pixels — are copied without coercing @code{NIL} into
 (assert (equalp '(0 6 7 8) (try-to-maintain-palette '(6 0 7 8) '(0 1 2 3))))
 (assert (equalp '(5 6 7 8) (try-to-maintain-palette '(5 6 7 8) '(0 1 2 3))))
 
-(assert (equalp '(5 6 7 8) (try-to-maintain-palette '(6 7 8 5) '(0 1 2 3) '(5 6 7 8))))
+(assert (equalp '(5 6 7 8) (try-to-maintain-palette '(6 7 8 5) '(0 1 2 3) :overall '(5 6 7 8))))
 
-(assert (equalp '(0 1 2 3) (try-to-maintain-palette '(3 2 1 0) nil '(0 1 2 3))))
-(assert (equalp '(0 1 4 3) (try-to-maintain-palette '(3 4 1 0) nil '(0 1 2 3))))
-(assert (equalp '(0 6 7 8) (try-to-maintain-palette '(6 0 7 8) nil '(0 1 2 3))))
-(assert (equalp '(5 6 7 8) (try-to-maintain-palette '(5 6 7 8) nil '(0 1 2 3))))
+(assert (equalp '(0 1 2 3) (try-to-maintain-palette '(3 2 1 0) nil :overall '(0 1 2 3))))
+(assert (equalp '(0 1 4 3) (try-to-maintain-palette '(3 4 1 0) nil :overall '(0 1 2 3))))
+(assert (equalp '(0 6 7 8) (try-to-maintain-palette '(6 0 7 8) nil :overall '(0 1 2 3))))
+(assert (equalp '(5 6 7 8) (try-to-maintain-palette '(5 6 7 8) nil :overall '(0 1 2 3))))
 
 (defun mode-e-row-bytes (pixels &key last-row-palette y overall-palette
                                      enforce-overall-palette-p lenient-palette-p)
@@ -1279,7 +1255,7 @@ transparent pixels — are copied without coercing @code{NIL} into
                       (most-popular-colors pixels (array-dimension pixels 0) 1
                                            :count 4)
                       last-row-palette
-                      overall-palette
+                      :overall overall-palette
                       :lenient-p lenient-palette-p))))
     (assert (= (ceiling (array-dimension pixels 0) 4)
                (length (group-into-4 (coerce (pixels-into-palette pixels palette
@@ -1523,10 +1499,7 @@ Shape:~{~{~a~}~2%~}
 
    Input PNG can be color (for titlescreen kernel) or 1bpp (for basic bitmap)."
   (let* ((input-path (uiop:ensure-pathname png-file))
-         (png (progn
-                (with-open-file (stream input-path :if-does-not-exist :error)
-                  (declare (ignore stream)))
-                (png-read:read-png-file input-path)))
+         (png (png-read:read-png-file input-path))
          (width (png-read:width png))
          (height (png-read:height png))
          (rgb (png-read:image-data png))
@@ -1535,29 +1508,29 @@ Shape:~{~{~a~}~2%~}
          (output-name (pathname-name output-path))
          ;; Determine minikernel slot from output filename
          (kernel-slot (cond ((search "AtariAgeText" output-name :test #'string-equal)
-                            2)  ; AtariAgeText uses slot 2
-                           ((or (search "AtariAge" output-name :test #'string-equal)
-                                (search "Publisher" output-name :test #'string-equal))
-                            1)  ; AtariAge logo uses slot 1
-                           ((or (search "Interworldly" output-name :test #'string-equal)
-                                (search "Author" output-name :test #'string-equal))
-                            4)  ; Interworldly uses slot 4
-                           ((or (search "ChaosFight" output-name :test #'string-equal)
-                                (search "Title" output-name :test #'string-equal))
-                            3)  ; ChaosFight uses slot 3
-                           (t 1)))  ; Default to slot 1
+                             2)  ; AtariAgeText uses slot 2
+                            ((or (search "AtariAge" output-name :test #'string-equal)
+                                 (search "Publisher" output-name :test #'string-equal))
+                             1)  ; AtariAge logo uses slot 1
+                            ((or (search "Interworldly" output-name :test #'string-equal)
+                                 (search "Author" output-name :test #'string-equal))
+                             4)  ; Interworldly uses slot 4
+                            ((or (search "ChaosFight" output-name :test #'string-equal)
+                                 (search "Title" output-name :test #'string-equal))
+                             3)  ; ChaosFight uses slot 3
+                            (t 1)))  ; Default to slot 1
          (kernel-prefix (format nil "bmp_48x2_~d" kernel-slot))
          ;; Determine page address for bitmap data (pack four bitmaps on adjacent pages)
          (page-address (cond ((= kernel-slot 1)
-                             "$f100")  ; AtariAge at $f100
-                            ((= kernel-slot 2)
-                             "$f200")  ; AtariAgeText at $f200
-                            ((= kernel-slot 3)
-                             "$f300")  ; ChaosFight at $f300
-                            ((= kernel-slot 4)
-                             "$f400")  ; Author at $f400
-                            (t
-                             "$f100"))))  ; Default to $f100
+                              "$f100")  ; AtariAge at $f100
+                             ((= kernel-slot 2)
+                              "$f200")  ; AtariAgeText at $f200
+                             ((= kernel-slot 3)
+                              "$f300")  ; ChaosFight at $f300
+                             ((= kernel-slot 4)
+                              "$f400")  ; Author at $f400
+                             (t
+                              "$f100"))))  ; Default to $f100
     (unless (= width 48)
       (error "Bitmap must be 48 pixels wide; got ~a" width))
     (unless (= height 42)
@@ -1566,7 +1539,7 @@ Shape:~{~{~a~}~2%~}
            (*region* tv-standard)
            (palette (png->palette height width rgb alpha))
            (pixels (make-array (list width height)
-                              :element-type '(unsigned-byte 8)))
+                               :element-type '(unsigned-byte 8)))
            (label-name (cl-change-case:pascal-case (pathname-base-name input-path))))
       ;; Convert RGB to 1bpp bitmap (black/white) for shape data
       (loop for y from 0 below height
@@ -1626,12 +1599,12 @@ Shape:~{~{~a~}~2%~}
                 (loop for column from 0 below 6
                       do (format stream "~%~%")
                       do (format stream "~a_~2,'0D~%" kernel-prefix column)
-                      ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
-                      (loop for row from (1- height) downto 0
-                            for byte = (elt (elt shape column) row)
-                            for binary = (format nil "~8,'0b" byte)
-                            do (format stream "~tBYTE %~a~%" binary))
-                      (format stream "~%~%")))
+                         ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
+                         (loop for row from (1- height) downto 0
+                               for byte = (elt (elt shape column) row)
+                               for binary = (format nil "~8,'0b" byte)
+                               do (format stream "~tBYTE %~a~%" binary))
+                         (format stream "~%~%")))
               ;; Write color table, PF1, PF2, and background to separate file
               ;; These will be combined into titlescreen_colors.s at $f500
               (with-open-file (color-stream color-output-path
@@ -2111,8 +2084,7 @@ Pixel dimensions.
 @item IMAGE-NYBBLES
 2D palette-pixel array from @code{png->palette}.
 @end table"
-  (declare (ignore height width image-nybbles))
-  (let* ((total (/ (* (/ height 8) (/ width 8)) 1))
+  (let* ((total (* (ceiling height 8) (ceiling width 8)))
          (uniq (make-array total :adjustable t :fill-pointer 0))
          (ht (make-hash-table :test 'equalp))
          (char-map (make-array total :element-type '(unsigned-byte 8)))
@@ -2290,21 +2262,24 @@ original (non-inverted) GROM card.  When neither matches,
                 (values nil nil nil)))))))
 
 (defun compile-blob-intv-screen (png-file output-path palette-pixels width height)
-  "Write OUTPUT-PATH assembly: deduplicated GRAM 8×8 cards + row-major tile map.
+  "Write  OUTPUT-PATH assembly:  deduplicated  GRAM 8×8  cards +  row-major
+tile map.
 
-Each cell in the WIDTH×HEIGHT image is one 8×8 tile. Trailing pixels that do
-not form a complete 8×8 tile are cropped from the right or bottom edge.
-Each cell resolves GROM-first: tiles that match a built-in GROM card (from
-bundled @file{minigrom.bin}) use that card index (@code{$0000}–@code{$00FF})
-and consume no GRAM slot (no bitmap upload at runtime). Other identical tiles
-share one GRAM definition (@code{$0100}–@code{$013F}). At most 64 unique
-non-GROM tiles (Intv GRAM); @code{*_GRAM_DATA} is emitted only for those slots.
+Each cell  in the WIDTH×HEIGHT  image is  one 8×8 tile.  Trailing pixels
+that do  not form  a complete  8×8 tile  are cropped  from the  right or
+bottom edge. Each cell resolves  GROM-first: tiles that match a built-in
+GROM   card   (from   bundled   @file{minigrom.bin})   use   that   card
+index (@code{$0000}–@code{$00FF})  and consume  no GRAM slot  (no bitmap
+upload   at   runtime).   Other   identical   tiles   share   one   GRAM
+definition  (@code{$0100}–@code{$013F}).  At  most  64  unique  non-GROM
+tiles (Intv GRAM); @code{*_GRAM_DATA} is emitted only for those slots.
 
-Intv @emph{map} tilesets should reuse this GROM/GRAM dedup per 8×8 quadrant;
-each logical 16×16 map tile is four such cells (2×2: TL, TR, BL, BR), each
-storing its own card ID. Tileset records carry per-quadrant color-stack values
-with pattern refs — no separate palette assets (contrast 7800 tileset palette
-blobs). Map export uses @code{compile-map-intv-screen} for STIC color-stack tiles.
+Intv  @emph{map} tilesets  should  reuse this  GROM/GRAM  dedup per  8×8
+quadrant; each logical  16×16 map tile is four such  cells (2×2: TL, TR,
+BL,  BR),  each   storing  its  own  card  ID.   Tileset  records  carry
+per-quadrant color-stack values with pattern  refs — no separate palette
+assets  (contrast   7800  tileset   palette  blobs).  Map   export  uses
+@code{compile-map-intv-screen} for STIC color-stack tiles.
 
 @code{*_TILE_MAP} entries: @code{$0000}–@code{$00FF} = GROM card number;
 @code{$0100}–@code{$013F} = GRAM slot 0–63 (see @code{*_TILE_MAP_GRAM_BASE}).
@@ -2335,91 +2310,85 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
          (rows (/ height 8))
          (total-cells (* cols rows))
          (uniq (make-array 64 :adjustable t :fill-pointer 0))
+         (nuniq (length uniq))
          (ht (make-hash-table :test 'equal))
          (tile-ids (make-array total-cells :element-type '(unsigned-byte 16)))
-         (lab (substitute #\_ #\. (pathname-name (merge-pathnames output-path))))
          (grom-bytes (intv-grom-bytes))
-         (grom-map (when grom-bytes (intv-grom-key-to-card-map grom-bytes)))
-         (grom-cells 0))
-    (let ((idx 0))
-      (dotimes (row rows)
-        (dotimes (col cols)
-          (let* ((key (intv-tile-row-bytes palette-pixels (* col 8) (* row 8))))
-            (if grom-map
-                (multiple-value-bind (grom-id invert found)
-                    (intv-grom-lookup key grom-map)
-                  (if found
-                      (progn
-                        (setf (aref tile-ids idx) (logior grom-id (if invert #x8000 0)))
-                        (incf grom-cells))
-                      (multiple-value-bind (gram-id invert)
-                          (intv-gram-lookup-or-allocate key uniq ht)
-                        (setf (aref tile-ids idx)
-                              (logior (+ #x100 gram-id) (if invert #x8000 0))))))
+         (grom-map (intv-grom-key-to-card-map grom-bytes))
+         (grom-cells 0)
+         (idx 0))
+    (dotimes (row rows)
+      (dotimes (col cols)
+        (let* ((key (intv-tile-row-bytes palette-pixels (* col 8) (* row 8))))
+          (multiple-value-bind (grom-id invert found)
+              (intv-grom-lookup key grom-map)
+            (if found
+                (progn
+                  (setf (aref tile-ids idx) (logior grom-id (if invert #x8000 0)))
+                  (incf grom-cells))
                 (multiple-value-bind (gram-id invert)
                     (intv-gram-lookup-or-allocate key uniq ht)
                   (setf (aref tile-ids idx)
-                        (logior (+ #x100 gram-id) (if invert #x8000 0)))))
-            (incf idx))))))
-    (let ((nuniq (length uniq)))
-      (when (> nuniq 64)
-        (error "Intellivision blob ~A has ~D unique GRAM cards (max 64 after reduction)"
-               png-file nuniq))
-      (when (> nuniq 56)
-        (warn "Intellivision blob ~A reducing from ~D to 56 GRAM cards by Hamming-distance merging..."
-              png-file nuniq)
-        (intv-reduce-gram-set uniq tile-ids :max-slots 56 :grom-bytes grom-bytes)
-        (setf nuniq (length uniq))
-        (setf grom-cells (loop for packed across tile-ids
-                               count (< (logand packed #x7FFF) #x100))))
-        (when (> nuniq 56)
-          (warn "Intellivision blob ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
-                png-file nuniq)))
-      (when (>= nuniq 56)
-        (warn "Intellivision blob ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
-              png-file nuniq))
-      (ensure-directories-exist (merge-pathnames output-path))
-      (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
-                                                      :external-format :utf-8)
-        (format src ";;; Intellivision blob: tile-mapped screen + GRAM cards~%")
-        (format src ";;; Source: ~A~%" png-file)
-        (format src ";;; Grid: ~D×~D tiles (~D×~D px); ~D tile~:P use GROM; ~D unique GRAM card~:P~2%"
-                cols rows width height grom-cells nuniq)
-        (format src ";;; TILE_MAP: $0000-$00FF = GROM card# ; $0100-$013F = GRAM slot + *_TILE_MAP_GRAM_BASE~%")
-        (format src "~A_TILE_COLS EQU ~D~%" lab cols)
-        (format src "~A_TILE_ROWS EQU ~D~%" lab rows)
-        (format src "~A_TILE_MAP_GRAM_BASE EQU $0100~%" lab)
-        (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
-        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
-        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
-        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
-        (format src "~A_GRAM_DATA:~%" lab)
-        (loop for u from 0 below nuniq
-              for card = (aref uniq u)
-              do (progn
-                   (format src "    ;; GRAM slot ~D~%" u)
-                   (let ((bytes-list (reverse card)))
-                     (loop for i from 0 below 4
-                           for byte-first = (nth (* i 2) bytes-list)
-                           for byte-second = (nth (+ (* i 2) 1) bytes-list)
-                           for word = (logior (ash byte-first 8) byte-second)
-                           do (format src "    DECLE   $~4,'0X~%" word)))))
-         (format src "~A_TILE_CSTK:~%" lab)
-         (dotimes (i total-cells)
-           (let* ((raw-id (aref tile-ids i))
-                  (invert (logtest raw-id #x8000))
-                  (card-id (logand raw-id #x7FFF))
-                  (color (intv-dominant-stic-color
-                          palette-pixels
-                          (* (mod i cols) 8)
-                          (* (floor i cols) 8)))
-                  (cstk (intv-cstk-word card-id color invert)))
-             (format src "    DECLE   $~4,'0X~%" cstk)))
-         (format src "~A_TILE_MAP:~%" lab)
-         (dotimes (i total-cells)
-           (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
-        (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
-                grom-cells nuniq (enough-namestring output-path))))
+                        (logior (+ #x100 gram-id) (if invert #x8000 0))))))
+          (incf idx))))
+    (when (> nuniq 56)
+      (error "Intellivision blob ~A has ~D unique GRAM cards (max 56 after reduction)"
+             png-file nuniq))
+    (when (> nuniq 56)
+      (warn "Intellivision blob ~A reducing from ~D to 56 GRAM cards by Hamming-distance merging..."
+            png-file nuniq)
+      (intv-reduce-gram-set uniq tile-ids :max-slots 56 :grom-bytes grom-bytes)
+      (setf nuniq (length uniq))
+      (setf grom-cells (loop for packed across tile-ids
+                             count (< (logand packed #x7FFF) #x100))))
+    (when (> nuniq 56)
+      (warn "Intellivision blob ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
+            png-file nuniq))
+    (when (>= nuniq 56)
+      (warn "Intellivision blob ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
+            png-file nuniq)))
+  (ensure-directories-exist (merge-pathnames output-path))
+  (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
+                                                          :external-format :utf-8)
+    (format src ";;; Intellivision blob: tile-mapped screen + GRAM cards~%")
+    (format src ";;; Source: ~A~%" png-file)
+    (format src ";;; Grid: ~D×~D tiles (~D×~D px); ~D tile~:P use GROM; ~D unique GRAM card~:P~2%"
+            cols rows width height grom-cells nuniq)
+    (format src ";;; TILE_MAP: $0000-$00FF = GROM card# ; $0100-$013F = GRAM slot + *_TILE_MAP_GRAM_BASE~%")
+    (format src "~A_TILE_COLS EQU ~D~%" lab cols)
+    (format src "~A_TILE_ROWS EQU ~D~%" lab rows)
+    (format src "~A_TILE_MAP_GRAM_BASE EQU $0100~%" lab)
+    (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
+    ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
+    (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
+    (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
+    (format src "~A_GRAM_DATA:~%" lab)
+    (loop for u from 0 below nuniq
+          for card = (aref uniq u)
+          do (progn
+               (format src "    ;; GRAM slot ~D~%" u)
+               (let ((bytes-list (reverse card)))
+                 (loop for i from 0 below 4
+                       for byte-first = (nth (* i 2) bytes-list)
+                       for byte-second = (nth (+ (* i 2) 1) bytes-list)
+                       for word = (logior (ash byte-first 8) byte-second)
+                       do (format src "    DECLE   $~4,'0X~%" word)))))
+    (format src "~A_TILE_CSTK:~%" lab)
+    (dotimes (i total-cells)
+      (let* ((raw-id (aref tile-ids i))
+             (invert (logtest raw-id #x8000))
+             (card-id (logand raw-id #x7FFF))
+             (color (intv-dominant-stic-color
+                     palette-pixels
+                     (* (mod i cols) 8)
+                     (* (floor i cols) 8)))
+             (cstk (intv-cstk-word card-id color invert)))
+        (format src "    DECLE   $~4,'0X~%" cstk)))
+    (format src "~A_TILE_MAP:~%" lab)
+    (dotimes (i total-cells)
+      (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
+    (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
+            grom-cells nuniq (enough-namestring output-path))))
 
 (defun compile-blob-intv (png-file output-file)
   "Compile BLOB PNG-FILE to OUTPUT-FILE assembly (tile map + GRAM card data).
@@ -7827,4 +7796,5 @@ Malformed lines (e.g. missing mode) are skipped."
                                               (png-read:transparency (png-read:read-png-file png-name)))))))))
   (format *trace-output* "~&Apple IIGS art compilation complete."))
 
-;;; Commander X-16 (VERA) Graphics Converters
+;;; Commander X-16 (VERA) Graphics Converters (TODO later)
+
