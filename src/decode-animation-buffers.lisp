@@ -316,8 +316,8 @@
     (setf (anim-buffer-offset *anim-buffer-frame*) new-offset))
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
-(defun show-animation-buffer (&optional (index 0) &key (mode :160b) (palette 4)
-                                                       (dump (load-dump-into-mem)))
+(defun show-animation-buffer (index &key (mode :160b) (palette 4)
+                                         (dump (load-dump-into-mem)))
   "Show (from a core dump) the state of the animation buffers"
   (flet ((run ()
            (let ((frame (clim:make-application-frame 'anim-buffer-frame

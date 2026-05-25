@@ -432,7 +432,7 @@
 
 (define-show-decal-frame-command (com-find-animation-buffer :menu t :name t)
     ((buffer 'anim-buffer-index-value))
-  (clim-sys:make-process (lambda () (show-animation-buffer buffer))
+  (clim-sys:make-process (lambda () (show-animation-buffer buffer 0))
                          :name "Show animation buffer"))
 
 (clim:define-presentation-to-command-translator click-for-animation-buffer
@@ -456,7 +456,7 @@
   (pathname)
   (list pathname))
 
-(defun show-decal (&optional (index 0) &key (dump (load-dump-into-mem)))
+(defun show-decal (index &key (dump (load-dump-into-mem)))
   "Display (from a core dump) the details of a decal's state"
   (clim-sys:make-process
    (lambda ()
@@ -469,27 +469,3 @@
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
-(defun decode-dlbam (&key (dump (load-dump-into-mem)))
-  (format t "~&Decoding the display list block allocation map (DLBAM)")
-  (loop for i from 0 below 12
-        for address = 
-                    (+ (* i #x100)
-                       (if (< i 6)
-                           (find-label-from-files "DLSpace")
-                           (- (find-label-from-files "ExtDLSpace")
-                              #x600)))
-        for user = (dump-peek (+ i (find-label-from-files "DLBAM"))
-                              dump)
-        for user-name = (case user
-                          (#.(find-label-from-files "DLBlockFree")
-                           nil)
-                          (#.(find-label-from-files "DLBlockText")
-                           "Text")
-                          (#.(find-label-from-files "DLBlockMap")
-                           "Map")
-                          (#.(find-label-from-files "DLBlockScroll")
-                           "Scroll")
-                          (otherwise
-                           (format nil "¿garbage? code $~2,'0x" user)))
-        do (format t "~&DL Block $~x (at $~4,'0x) ~:[free~;~:*in use by ~a~]"
-                   i address user-name)))
