@@ -6,17 +6,19 @@
   (format t "~&Loading Quicklisp… ")
   (handler-bind
       ((error (lambda (c)
-                (format *error-output*
-                        "~2%Error of type ~:(~a~):~%~a
-
-Perhaps Quicklisp  is not installed,  or in installed in  a non-standard
-place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
-                        (type-of c) c)
-                (finish-output))))
+                        (format *error-output*
+                                "~2%Error of type ~:(~a~):~%~a
+                                 Perhaps Quicklisp  is not installed,  or in installed in  a non-standard
+                                 place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
+                                (type-of c) c)
+                        (finish-output))))
     (load (merge-pathnames (make-pathname
                             :directory '(:relative "quicklisp")
                             :name "setup" :type "lisp")
                            (user-homedir-pathname)))))
+
+;; Load dufy before building the system
+(ql:quickload :dufy)
 
 (defmacro with-casual-handlers (&body body)
   `(handler-bind
@@ -65,8 +67,14 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
 invoking CONTINUE restart~%"
                               (type-of c))
                       (finish-output *error-output*)
-                      (invoke-restart r))))))
-  (asdf:load-system :eightbol)
+                      (invoke-restart r)))))
+              (uiop/lisp-build:compile-file-error
+               (lambda (c)
+                 (format *error-output*
+                         "~&Warning: compilation error in dependent system (~a), continuing...~%"
+                         c)
+                 (finish-output *error-output*))))
+  (ignore-errors (asdf:load-system :eightbol))
   (asdf:load-system :skyline-tool))
 (let ((compile-lisp (merge-pathnames (make-pathname :name "compile"
 						    :type "lisp")

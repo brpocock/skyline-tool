@@ -64,7 +64,7 @@
                  (:file "eprom" :depends-on ("package"))
                  (:file "forth" :depends-on ("package" "fountain" "interface"))
                  (:file "fountain" :depends-on ("package" "maps"))
-                 (:file "graphics" :depends-on ("package" "prototypes"))
+                 (:file "graphics" :depends-on ("package" "prototypes" "misc" "utils"))
                  (:file "i18n-l10n" :depends-on ("package"))
                  (:file "interface" :depends-on ("package" "asset-allocator" "oops" "cbm-tooling"))
                  (:file "launcher" :depends-on ("package"))
@@ -95,9 +95,7 @@
   :components ((:module "tests"
                 :components (
                              (:file "5200-tests" :depends-on ("package"))
-                             (:file "7800-tests" :depends-on ("package"))
-                             (:file "action-tests" :depends-on ("package"))
-                             (:file "asset-allocator-tests" :depends-on ("package"))
+                (:file "7800-tests" :depends-on ("package"))
                              (:file "animation-preview-tests" :depends-on ("package"))
                              (:file "build-tests" :depends-on ("package"))
                              (:file "cbm-tooling-tests" :depends-on ("package"))
