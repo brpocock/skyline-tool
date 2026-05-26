@@ -1057,8 +1057,9 @@ Returns T if the machine is supported, NIL otherwise."
              t))
     (error () nil)))
 
-(defun check-machine-valid ()
-  (assert (machine-valid-p)))
+(defun check-machine-valid (&optional (machine *machine*))
+  (let ((*machine* machine))
+    (assert (machine-valid-p))))
 
 
 

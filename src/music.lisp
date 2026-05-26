@@ -1582,13 +1582,15 @@ but runs at 50 Hz frame rate like PAL."
                                      :psg-port #x7f
                                      :tone-label :play-tone))
 
-(defmethod compile-music-for-machine ((machine (eql 3010)) sound-chip source-out-name in-file-name output-coding)
+(defmethod compile-music-for-machine ((machine (eql 3010)) sound-chip source-out-name
+                                      in-file-name output-coding)
   (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
                                      :header-comment "SN76489 PSG Music compiled from"
                                      :psg-port #x7f
                                      :tone-label :psg-write))
 
-(defmethod compile-music-for-machine ((machine (eql 837)) sound-chip source-out-name in-file-name output-coding)
+(defmethod compile-music-for-machine ((machine (eql 837)) sound-chip source-out-name
+                                      in-file-name output-coding)
   "Compile SN76489 music for Sega Game Gear (machine 837); same chip and port as SMS."
   (compile-sn76489-music-for-machine machine sound-chip source-out-name in-file-name output-coding
                                      :header-comment "Sega Game Gear SN76489 PSG Music compiled from"
@@ -1602,7 +1604,8 @@ but runs at 50 Hz frame rate like PAL."
                                      :psg-port #x7f
                                      :tone-label :psg-write))
 
-(defmethod compile-music-for-machine ((machine (eql 3)) sound-chip source-out-name in-file-name output-coding)
+(defmethod compile-music-for-machine ((machine (eql 3)) sound-chip source-out-name
+                                      in-file-name output-coding)
   (declare (ignore output-coding sound-chip in-file-name))
   (error "NES music compilation not yet implemented"))
 
@@ -1610,14 +1613,15 @@ but runs at 50 Hz frame rate like PAL."
   (declare (ignore output-coding sound-chip in-file-name))
   (error "SNES music compilation not yet implemented"))
 
-(defmethod compile-music-for-machine ((machine (eql 7)) sound-chip source-out-name in-file-name output-coding)
+(defmethod compile-music-for-machine ((machine (eql 7)) sound-chip source-out-name
+                                      in-file-name output-coding)
   (declare (ignore output-coding sound-chip in-file-name))
   (error "BBC music compilation not yet implemented"))
 
-(defmethod compile-music-for-machine ((machine (eql 64)) sound-chip source-out-name in-file-name output-coding)
-  "Compile music for Commodore 64 SID."
-  (declare (ignore sound-chip))
-  (let ((*machine* 64)
+(defmethod compile-music-for-machine (machine (sound-chip (eql :sid)) source-out-name
+                                      in-file-name output-coding)
+  "Compile music for Commodore SID."
+  (let ((*machine* machine)
         (catalog (make-hash-table))
         (comments-catalog (make-hash-table))
         (tv (make-keyword (string-upcase output-coding))))
@@ -1643,42 +1647,25 @@ but runs at 50 Hz frame rate like PAL."
        :comments-catalog comments-catalog)
       (loop for symbol being the hash-keys of catalog
             for notes = (gethash symbol catalog)
-            do (write-song-data-to-file (string symbol) notes source-out)))))
-
-(defmethod compile-music-for-machine ((machine (eql 128)) sound-chip source-out-name in-file-name output-coding)
-  "Compile music for Commodore 128 SID (same as C64)."
-  (declare (ignore sound-chip))
-  (let ((*machine* 128)
-        (catalog (make-hash-table))
-        (comments-catalog (make-hash-table))
-        (tv (make-keyword (string-upcase output-coding))))
-    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
-      (format *trace-output* "~&Writing SID music ~a…" source-out-name)
-      (format source ";;; SID Music compiled from ~a~%" in-file-name)
-      (format source ";;; TV standard: ~a~2%" output-coding)
-      (format source ";;;
-;;; Format:
-;;;
-;;; first byte is the note duration (in frames)
-;;;
-;;; second and third bytes are the note frequency (in SID period form, big-endian)
-;;;
-;;; fourth byte is the instrument index
-;;;
-;;; fifth byte is the volume (0-15)")
-      (import-song-to-catalog
-       :song-file-name in-file-name
-       :sound-chip :sid
-       :output-coding tv
-       :catalog catalog
-       :comments-catalog comments-catalog)
-      (loop for symbol being the hash-keys of catalog
-            for notes = (gethash symbol catalog)
-            do (write-song-data-to-file (string symbol) notes source-out)))))
+            do (write-song-data-to-file (string symbol) notes source-out-name)))))
 
 (defmethod compile-music-for-machine ((machine (eql 264)) sound-chip source-out-name in-file-name output-coding)
-  (declare (ignore output-coding sound-chip in-file-name))
-  (error "C=16/Plus4 music compilation not yet implemented"))
+  (declare (ignore output-coding sound-chip))
+  (let ((*machine* machine))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (format *trace-output* "~&Writing C=16 TED music ~a…" source-out-name)
+      (format source ";;; Commodore 16 Music compiled from ~a~%" in-file-name)
+      (format source ";;; C=16/Plus4 TED audio (7360 8-bit CPU, TED sound)~2%")
+      (format source "TED_SOUND   = $FF4C~%")
+      (format source "TED_VOLUME  = $FF4D~%")
+      (format source "TED_ADSR    = $FF4E~%")
+      (format source "TED_WAVEFORM = $FF4F~2%")
+      (format source "ted_init:~%")
+      (format source "    lda #$00~%")
+      (format source "    sta TED_VOLUME~%")
+      (format source "    rts~2%")
+      (format source ";;; TODO: Implement MIDI to TED audio conversion~%")
+      (format source ";;; TED sound has 2 voices, 4 waveforms, volume and ADSR control~%"))))
 
 (defmethod compile-music-for-machine ((machine (eql 8)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding))
@@ -1695,6 +1682,34 @@ but runs at 50 Hz frame rate like PAL."
       ;; Placeholder for actual MIDI conversion
       (format source ";;; TODO: Implement MIDI to AY-3-8910 conversion~%")
       (format source ";;; Mockingboard has 3 voices, 8 registers each~%"))))
+
+(defmethod compile-music-for-machine ((machine (eql 2)) sound-chip source-out-name in-file-name output-coding)
+  (declare (ignore output-coding))
+  (let* ((*machine* 2)
+         (chip (string-upcase sound-chip)))
+    (with-output-to-file (source source-out-name :if-exists :supersede :if-does-not-exist :create)
+      (cond
+        ((string-equal chip "MOCKINGBOARD")
+         (format *trace-output* "~&Writing Apple II Mockingboard music ~a…" source-out-name)
+         (format source ";;; Apple II Mockingboard Music compiled from ~a~%" in-file-name)
+         (format source ";;; Apple II Mockingboard (AY-3-8910 PSG)~2%")
+         (format source "MOCK_REG_SELECT = $C000~2%")
+         (format source "mock_write_register:~%")
+         (format source "    sta MOCK_REG_SELECT~%")
+         (format source "    rts~2%")
+         (format source ";;; TODO: Implement MIDI to Mockingboard AY-3-8910 conversion~%")
+         (format source ";;; Mockingboard has 2 AY-3-8910 PSG chips, 6 voices total~%"))
+        ((string-equal chip "BEEPER")
+         (format *trace-output* "~&Writing Apple II beeper music ~a…" source-out-name)
+         (format source ";;; Apple II Beeper Music compiled from ~a~%" in-file-name)
+         (format source ";;; Apple II built-in speaker (1-bit audio)~2%")
+         (format source "SPEAKER = $C030~2%")
+         (format source "beeper_init:~%")
+         (format source "    sta SPEAKER~%")
+         (format source "    rts~2%")
+         (format source ";;; TODO: Implement MIDI to 1-bit beeper audio conversion~%"))
+        (t
+         (error "Apple II music compilation: unsupported sound chip ~s" sound-chip))))))
 
 (defmethod compile-music-for-machine ((machine (eql 9)) sound-chip source-out-name in-file-name output-coding)
   (declare (ignore output-coding sound-chip in-file-name))
@@ -1795,6 +1810,10 @@ Uses @code{compile-music-for-machine} with @code{(parse-integer MACHINE-TYPE$)},
 (defun compile-music-spectrum (source-out-name in-file-name)
   "Compile music for ZX Spectrum (machine 2068). Wrapper for compile-music-for-machine."
   (compile-music-for-machine 2068 "Beeper" source-out-name in-file-name "PAL"))
+
+(defun compile-music-c16 (source-out-name in-file-name)
+  "Compile music for Commodore 16/Plus4 (machine 264). Wrapper for compile-music-for-machine."
+  (compile-music-for-machine 264 "TED" source-out-name in-file-name "PAL"))
 
 (defun compile-music-sms (source-out-name in-file-name)
   "Compile music for Sega Master System (machine 3010). Wrapper for compile-music-for-machine."
@@ -1932,7 +1951,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
            (octave (parse-integer octave-part :junk-allowed t))
            (note-index (position note-part note-names :test #'string=)))
       (when (and note-index octave)
-        (+ (* octave 12) note-index)))))
+        (+ (* (1+ octave) 12) note-index)))))
 
 (defconstant +a4/hz+ 440
   "The frequency (Hz) of the A in octave 4; by convention, 440Hz.")
@@ -2019,7 +2038,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
   (let ((tv (if (keywordp frame-rate)
                 frame-rate
                 (make-keyword (string-upcase (string frame-rate))))))
-    (let ((*hokey-tv* tv))
+    (let ((*region* tv))
       (remove-if #'null
                  (mapcar (lambda (score-note)
                            (let ((key (getf score-note :key)))
@@ -2099,12 +2118,9 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
 
 (defvar *orchestra* nil)
 
-(defvar *hokey-tv* :ntsc
-  "Current TV standard for Hokey/Pokey compilation (:ntsc, :pal, or :secam).")
-
 (defun hokey-fps ()
   "Return frames per second for the current Hokey TV standard."
-  (ecase *hokey-tv* (:ntsc 60) (:pal 50) (:secam 50)))
+  (ecase *region* (:ntsc 60) (:pal 50) (:secam 50)))
 
 (defun get-orchestration ()
   (or *orchestra*
@@ -2252,7 +2268,7 @@ TV standard keyword (@code{:ntsc}, @code{:pal}, @code{:secam})
 @end table"
   (let* ((tv-keyword (if (keywordp tv) tv (make-keyword (string-upcase (string tv)))))
          (*ay-tv* tv-keyword)
-         (*hokey-tv* tv-keyword)
+         (*region* tv-keyword)
          (*orchestra* (get-orchestration))
          (fps (ay-fps))
          (clock (ay-clock))
@@ -2275,16 +2291,16 @@ TV standard keyword (@code{:ntsc}, @code{:pal}, @code{:secam})
                       (max-vol (min 15 (floor (* 15 (/ vel 127)))))
                       (sustain-duration
                         (nth-value 0
-                          (calculate-duration-for
-                           (make-hokey-note :duration dur-sec
-                                            :volume (/ vel 127.0)
-                                            :instrument instrument-id)
-                           instrument-id))))
+                                   (calculate-duration-for
+                                    (make-hokey-note :duration dur-sec
+                                                     :volume (/ vel 127.0)
+                                                     :instrument instrument-id)
+                                    instrument-id))))
                  (let* ((frequency (freq<-midi-key key))
                         (period (frequency-to-ay-period frequency clock)))
                    (push (list t-frames instrument-id (logand period #xff) (ash period -8)
-                                max-vol (max 1 sustain-duration))
-                          notes)))))))))
+                               max-vol (max 1 sustain-duration))
+                         notes)))))))))
     (setf notes (sort notes #'< :key #'first))
     (let ((result (make-array (list (length notes) 6))))
       (loop for i from 0
@@ -2496,8 +2512,8 @@ to frame counts using 60 (NTSC) frames per second.
 
 Compiled notes carry orchestration @strong{instrument IDs} so the runtime
 can look up feedback/polynomial/volume from instrument tables."
+  (declare (ignore output-coding))
   (let* ((*region* :ntsc)
-         (*hokey-tv* :ntsc)
          (*orchestra* (get-orchestration))
          (fps 60)
          (notes (list)))
@@ -2519,11 +2535,11 @@ can look up feedback/polynomial/volume from instrument tables."
                       (max-vol (min 15 (floor (* 15 (/ vel 127)))))
                       (sustain-duration
                         (nth-value 0
-                          (calculate-duration-for
-                           (make-hokey-note :duration dur-sec
-                                            :volume (/ vel 127.0)
-                                            :instrument instrument-id)
-                           instrument-id))))
+                                   (calculate-duration-for
+                                    (make-hokey-note :duration dur-sec
+                                                     :volume (/ vel 127.0)
+                                                     :instrument instrument-id)
+                                    instrument-id))))
                  (let* ((frequency (freq<-midi-key key))
                         (counter (frequency->mikey-counter frequency)))
                    (push (list t-frames
@@ -2538,12 +2554,12 @@ can look up feedback/polynomial/volume from instrument tables."
       (loop for i from 0
             for note in notes
             do (destructuring-bind (time cnt-lo cnt-hi instrument volume duration) note
-                 (setf (aref result i 0) (floor time))    ; time in frames
-                 (setf (aref result i 1) cnt-lo)           ; counter low byte
-                 (setf (aref result i 2) cnt-hi)           ; counter high byte
-                 (setf (aref result i 3) instrument)       ; orchestration instrument ID
-                 (setf (aref result i 4) volume)           ; volume (0-15)
-                 (setf (aref result i 5) duration)))       ; duration in frames
+                 (setf (aref result i 0) (floor time)) ; time in frames
+                 (setf (aref result i 1) cnt-lo) ; counter low byte
+                 (setf (aref result i 2) cnt-hi) ; counter high byte
+                 (setf (aref result i 3) instrument) ; orchestration instrument ID
+                 (setf (aref result i 4) volume)     ; volume (0-15)
+                 (setf (aref result i 5) duration))) ; duration in frames
       result)))
 
 (defun write-song-data-to-mikey (notes source-out)
@@ -2622,10 +2638,11 @@ AUD0_CONTROL   EQU $FD25
 AUD0_COUNT     EQU $FD26
 AUD0_OTHER     EQU $FD27
 "
-              (pathname-name in-file-name))
+               (pathname-name in-file-name))
       (import-song-to-catalog
        :song-file-name in-file-name
        :output-coding :NTSC
+       :sound-chip "Mikey"
        :catalog catalog
        :comments-catalog comments-catalog)
       (loop for symbol being the hash-keys of catalog

@@ -401,7 +401,7 @@ all-default (@code{#xff}) record."
 
 (defun collect-prototype-object (object prototypes base-tileset decal-tileset
                                  &key (tile-width 8))
-  (declare (ignore prototypes base-tileset decal-tileset))
+  (declare (ignore base-tileset decal-tileset))
   (let ((x (floor (parse-number (or (assocdr "x" (second object)) "0")) tile-width))
         (y (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16))))
     (cond
@@ -412,11 +412,7 @@ all-default (@code{#xff}) record."
       ((assocdr "Object" (second object))
        (let ((name (assocdr "Object" (second object))))
          (format *trace-output* "~&Object spawn @(~3d, ~3d) “~a”" x y name)
-         (return-from collect-prototype-object (list x y :object name))))
-      ((assocdr "Prototype" (second object))
-       (let ((name (assocdr "Prototype" (second object))))
-         (format *trace-output* "~&Prototype spawn @(~3d, ~3d) “~a” (legacy property)" x y name)
-         (return-from collect-prototype-object (list x y :character name)))))))
+         (return-from collect-prototype-object (list x y :object name)))))))
 
 (defun pascal-case-property (string)
   "Normalize STRING to PascalCase, preserving slashes for region/script paths.

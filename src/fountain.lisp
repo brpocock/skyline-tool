@@ -664,11 +664,12 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
             '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a an aboard above absolute alarmed all amulet and appears arrow arrows arms armor at awakens
+              a an aboard above absolute alarmed all amulet and appears
+              arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
-              dances dancing dark difference dim disembarks divided do dolly done down durbat
+              dances dancing dark difference dim disembarks divided do dolly done down
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
               flies flying

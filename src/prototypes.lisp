@@ -2,7 +2,7 @@
 
 (defconstant +spawn-kind-character+ 0
   "Map spawn entry references a @code{CharacterID} from NPC stats.")
-(defconstant +spawn-kind-object+ 1
+(defconstant +spawn-kind-object+ #x80
   "Map spawn entry references an object prototype compiled from @file{Source/Objects/}.")
 
 (defvar *object-prototype-index* nil
@@ -159,7 +159,7 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
       (format t "~2%~10tSpawnableObjects := [~{ Spawnable.~a~^, ~} ]"
               (loop for (name . prototype) in object-protos
                     collect name))
-      (format t "~%SpawnableObjectL: .byte <(SpawnableObjects)")
+      (format t "~2%SpawnableObjectL: .byte <(SpawnableObjects)")
       (format t "~%SpawnableObjectH: .byte >(SpawnableObjects)")
       (format t "~%~10tNumSpawnableObjects = len(SpawnableObjects)")
       (format t "~2%Spawnable: .block")
@@ -198,12 +198,11 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
       (format t "~%~10t.bend"))))
 
 (defun encode-map-spawn-entry (x y kind ref-id)
-"Return five-byte spawn record at tile X,Y."
-(check-type x (integer 0 255))
-(check-type y (integer 0 255))
-(check-type ref-id (integer 0 65535))
-(list x y (ecase kind
-            (:character +spawn-kind-character+)
-            (:object +spawn-kind-object+))
-      (ldb (byte 8 0) ref-id)
-      (ldb (byte 8 8) ref-id)))
+  "Return five-byte spawn record at tile X,Y."
+  (check-type x (unsigned-byte 8))
+  (check-type y (unsigned-byte 8))
+  (check-type ref-id (unsigned-byte 8))
+  (list x y (ecase kind
+              (:character +spawn-kind-character+)
+              (:object +spawn-kind-object+))
+        ref-id))

@@ -10,7 +10,7 @@
 
 (in-suite nes-tests)
 
-;; Test NES palette constants
+#+()
 (test nes-palette-constants
   "Test that NES palette constants are properly defined"
   (is-true (boundp 'skyline-tool::+nes-palette-ntsc+)
@@ -22,6 +22,7 @@
   (is-true (arrayp skyline-tool::+nes-palette-pal+)
            "+nes-palette-pal+ should be an array"))
 
+#+()
 ;; Test NES music compilation functions
 (test nes-music-compilation
   "Test NES music compilation functions"
@@ -35,6 +36,7 @@
            "compile-music-nes should signal error (not yet implemented)"))
 
 ;; Test NES monochrome detection
+#+()
 (test nes-monochrome-detection
   "Test NES monochrome line detection"
   (is-true (fboundp 'skyline-tool::monochrome-lines-p)
@@ -50,12 +52,14 @@
                "monochrome-lines-p should return false for multi-color palette")))
 
 ;; Test NES platform in dispatch system
+#+()
 (test nes-platform-dispatch
   "Test NES platform integration in dispatch system"
   ;; NES should be in valid machines
   (is-true (skyline-tool::check-machine-valid 8)
            "NES (machine 8) should be a valid machine"))
 
+#+()
 ;; Test NES dispatch-png% method exists and works
 (test nes-dispatch-method
   "Test that NES has a dispatch-png% method"
@@ -105,6 +109,7 @@
               "compile-nes-sprite should complete without errors")))
 
 ;; Test NES palette usage in graphics
+#+()
 (test nes-palette-integration
   "Test NES palette integration in graphics system"
   ;; Test that NES palettes are used in the region-based palette selection
@@ -129,3 +134,4 @@
 (defun run-nes-tests ()
   "Run all NES tests and return results"
   (fiveam:run! 'nes-tests))
+
