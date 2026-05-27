@@ -614,6 +614,24 @@ AUDCTL register value for the specified distortion and bit settings
 (defconstant +pokey-pal-base-hz+ 15556.5d0
   "POKEY base frequency for PAL Atari 7800/5200 (1.7734475 MHz / 114).")
 
+;; STIC (Intellivision) constants
+(defconstant +stic-base-hz+ 28636363.63636363d0
+  "STIC base frequency (Intellivision) ≈ 28.64 MHz / 1000.")
+
+;; Mikey (Commodore 128) constants
+(defconstant +mikey-ntsc-base-hz+ 1250000.0d0
+  "Mikey base frequency for NTSC (C64 / C128 NTSC clock / 16).")
+
+(defconstant +mikey-pal-base-hz+ 1213855.93220339d0
+  "Mikey base frequency for PAL (C64 / C128 PAL clock / 16).")
+
+;; SID (Commodore 64) constants
+(defconstant +sid-ntsc-base-hz+ 985248.0d0
+  "SID base frequency for NTSC (C64 NTSC clock / 16).")
+
+(defconstant +sid-pal-base-hz+ 995171.0d0
+  "SID base frequency for PAL (C64 PAL clock / 16).")
+
 (defun pokey->frequency (AUDF &optional (TV :ntsc))
   "Convert POKEY AUDF to frequency in Hz.
 
@@ -628,19 +646,20 @@ Frequency in Hz
   (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
     (/ base (* 2 (1+ AUDF)))))
 
-(defconstant +pokey-distortion-factor+
+(define-constant +Pokey-distortion-factor+
   '((:10   . 0.994d0)
     (:2    . 0.995d0)
     (:12a  . 0.992d0)
     (:12b  . 0.991d0)
     (:8    . 0.987d0)
     (:4b   . 0.985d0)
-    (:4a   . 0.983d0)))
+    (:4a   . 0.983d0))
+  :test #'equalp)
 
 (defun %distortion-factor (distortion)
   "Return frequency multiplier for DISTORTION symbol; NIL → 1.0."
   (if distortion
-      (or (cdr (assoc distortion +pokey-distortion-factor+)) 1.0d0)
+      (or (cdr (assoc distortion +Pokey-distortion-factor+)) 1.0d0)
       1.0d0))
 
 (defun %bits-divisor (bits)
@@ -694,13 +713,9 @@ TV standard (:ntsc or :pal), default @code{:NTSC}
 @item Returns
 AUDF register value (0-255) and normalized error [0.0, 1.0]
 @end table"
-  (declare (type (integer 0 127) midi-note-number)
-           (type (or symbol null) distortion)
-           (type (integer 0 3) bits)
-           (type (member :ntsc :pal) tv))
   (let* ((base-freq (freq<-midi-key midi-note-number))
          (dist-fact (%distortion-factor distortion))
-         (bits-div  (%bits-divisor bits))
+         (bits-div  (%bits-divisor (or bits 0)))
          (target-freq (/ (* base-freq dist-fact) bits-div)))
     (frequency->pokey target-freq tv)))
 
