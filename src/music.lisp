@@ -628,8 +628,34 @@ Frequency in Hz
   (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
     (/ base (* 2 (1+ AUDF)))))
 
+(defconstant +pokey-distortion-factor+
+  '((:10   . 0.994d0)
+    (:2    . 0.995d0)
+    (:12a  . 0.992d0)
+    (:12b  . 0.991d0)
+    (:8    . 0.987d0)
+    (:4b   . 0.985d0)
+    (:4a   . 0.983d0)))
+
+(defun %distortion-factor (distortion)
+  "Return frequency multiplier for DISTORTION symbol; NIL → 1.0."
+  (if distortion
+      (or (cdr (assoc distortion +pokey-distortion-factor+)) 1.0d0)
+      1.0d0))
+
+(defun %bits-divisor (bits)
+  "Return frequency divisor for BITS (0-3)."
+  (expt 2 bits))
+
 (defun frequency->pokey (FREQUENCY &optional (TV :ntsc))
   "Convert FREQUENCY in Hz to nearest POKEY AUDF register value.
+
+Returns (values AUDF error) where ERROR is in [0.0, 1.0]:
+  0.0   → AUDF produces the exact frequency
+  0.25  → AUDF is at 25% of the way to AUDF+1 being correct
+  0.50  → AUDF is exactly halfway between the correct values
+  0.75  → AUDF is at 75% (AUDF+1 would be at 25%)
+  1.0   → AUDF+1 produces the exact frequency
 
 @table @asis
 @item FREQUENCY
@@ -637,30 +663,46 @@ Frequency in Hz
 @item TV
 TV standard (:ntsc or :pal), default @code{:NTSC}
 @item Returns
-AUDF register value (0-255)
+AUDF register value (0-255) and normalized error [0.0, 1.0]
 @end table"
-  (let ((base (ecase tv (:ntsc +pokey-ntsc-base-hz+) (:pal +pokey-pal-base-hz+))))
-    (ceiling (/ (- base (* 2 frequency)) (* 2 frequency)))))
+  (let* ((base (ecase tv
+                 (:ntsc +pokey-ntsc-base-hz+)
+                 (:pal  +pokey-pal-base-hz+)))
+         (target-period (/ base (* 2.0d0 frequency)))
+         (audf (max 0 (min 255 (round target-period))))
+         (actual-period (1+ audf))
+         (error (/ (abs (- actual-period target-period)) target-period)))
+    (values audf error)))
 
 (defun best-pokey-note-for (MIDI-NOTE-NUMBER &optional DISTORTION BITS (TV :ntsc))
   "Find the best POKEY AUDF value for MIDI-NOTE-NUMBER.
+
+DISTORTION symbol modifies the target frequency using +pokey-distortion-factor+.
+BITS acts as a divisor (frequency / 2^BITS).
+
+Returns (values AUDF error) where ERROR is normalized [0.0, 1.0].
 
 @table @asis
 @item MIDI-NOTE-NUMBER
 MIDI note number (0-127)
 @item DISTORTION
-Ignored (FIXME: should affect frequency calculation)
+Distortion symbol (e.g. :10, :2, :12a), NIL for no distortion
 @item BITS
-Ignored (FIXME: should affect frequency calculation)
+Bits divisor (0-3), acts as frequency / 2^BITS
 @item TV
 TV standard (:ntsc or :pal), default @code{:NTSC}
 @item Returns
-AUDF register value and frequency error
+AUDF register value (0-255) and normalized error [0.0, 1.0]
 @end table"
-  (declare (ignore distortion bits))
-  (multiple-value-bind (value error)
-      (frequency->pokey (freq<-midi-key midi-note-number) tv)
-    (values value error)))
+  (declare (type (integer 0 127) midi-note-number)
+           (type (or symbol null) distortion)
+           (type (integer 0 3) bits)
+           (type (member :ntsc :pal) tv))
+  (let* ((base-freq (freq<-midi-key midi-note-number))
+         (dist-fact (%distortion-factor distortion))
+         (bits-div  (%bits-divisor bits))
+         (target-freq (/ (* base-freq dist-fact) bits-div)))
+    (frequency->pokey target-freq tv)))
 
 (defun null-if-zero-note (n)
   "Return NIL if note has zero frequency component, otherwise return note.
@@ -707,7 +749,9 @@ lookups use the NTSC table. Frame rate is 50 Hz like PAL."
 
 (defun best-tia-secam-note-for (freq &optional (voice 1))
   "Find the best TIA note for SECAM Atari 2600.
-SECAM uses the same 3.58 MHz crystal as NTSC, so this delegates to NTSC table."
+
+SECAM uses the same 3.58 MHz crystal  as NTSC, so this delegates to NTSC
+table. FIXME: That is a lie; should it be PAL?"
   (best-tia-ntsc-note-for freq voice))
 
 (defun best-tia-note-for-ntsc (note)
