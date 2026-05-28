@@ -36,35 +36,35 @@
     (is (<= 0.0 error 1.0) "Error is normalized [0.0, 1.0]")))
 
 (defun test-best-pokey-note-for ()
-  "Test best POKEY note function with distortion and bits."
-  ;; Test without distortion
-  (multiple-value-bind (audf error)
-      (best-pokey-note-for 60 nil 0 :ntsc)  ; C2
-    (is (typep audf '(integer 0 255)) "AUDF is valid integer")
-    (is (<= 0.0 error 1.0) "Error is normalized"))
-  
-  ;; Test with distortion
-  (multiple-value-bind (audf error)
-      (best-pokey-note-for 60 :10 0 :ntsc)
-    (is (typep audf '(integer 0 255)) "AUDF is valid with distortion")
-    (is (<= 0.0 error 1.0) "Error is normalized with distortion"))
-  
-  ;; Test with bits divisor
-  (multiple-value-bind (audf error)
-      (best-pokey-note-for 60 nil 3 :ntsc)  ; Divide by 8
-    (is (typep audf '(integer 0 255)) "AUDF is valid with bits")
-    (is (<= 0.0 error 1.0) "Error is normalized with bits"))
+"Test best POKEY note function with distortion and bits."
+;; Test without distortion
+(multiple-value-bind (audf error)
+    (best-pokey-note-for 60 nil 0 :ntsc)  ; C2
+  (is (typep audf '(integer 0 255)) "AUDF is valid integer")
+  (is (<= 0.0 error 1.0) "Error is normalized"))
+
+;; Test with distortion
+(multiple-value-bind (audf error)
+    (best-pokey-note-for 60 :10 0 :ntsc)
+  (is (typep audf '(integer 0 255)) "AUDF is valid with distortion")
+  (is (<= 0.0 error 1.0) "Error is normalized with distortion"))
+
+;; Test with bits divisor
+(multiple-value-bind (audf error)
+    (best-pokey-note-for 60 nil 3 :ntsc)  ; Divide by 8
+  (is (typep audf '(integer 0 255)) "AUDF is valid with bits")
+  (is (<= 0.0 error 1.0) "Error is normalized with bits")))
 
 (defun test-pokey-error-normalization ()
-  "Test that error values follow the expected normalization."
-  ;; Test edge cases
-  (multiple-value-bind (audf error)
-      (frequency->pokey 15699.9 :ntsc)  ; exact frequency
-    (is (<= error 0.01) "Near-zero error for exact match"))
-  
-  (multiple-value-bind (audf error)
-      (frequency->pokey 15699.9 2.0 :ntsc)  ; half frequency
-    (is (<= 0.0 error 1.0) "Error is within bounds for half frequency"))
+"Test that error values follow the expected normalization."
+;; Test edge cases
+(multiple-value-bind (audf error)
+    (frequency->pokey 15699.9 :ntsc)  ; exact frequency
+  (is (<= error 0.01) "Near-zero error for exact match"))
+
+(multiple-value-bind (audf error)
+    (frequency->pokey 15699.9 2.0 :ntsc)  ; half frequency
+  (is (<= 0.0 error 1.0) "Error is within bounds for half frequency")))
 
 (defun test-pokey-audf-clamping ()
   "Test that AUDF values are clamped to 0-255 range."
