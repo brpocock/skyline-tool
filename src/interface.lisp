@@ -73,6 +73,7 @@
         :write-keys-tables 'write-keys-tables
         :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
+        :write-sea-chart-docks-index 'write-sea-chart-docks-index
         :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile
         :write-intv-asset-includes 'write-intv-asset-includes

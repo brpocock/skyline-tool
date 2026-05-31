@@ -568,6 +568,133 @@ SOURCE-PATHNAME: Output path for the generated source file"
               (loop for i from 1 upto max-dock-id collecting i))
       (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
 
+(defun find-dock-in-tmx (locale-name dock-name)
+  "Find a dock object in the TMX file for LOCALE-NAME.
+Searches all object groups for an object with type=\"Dock\" and name
+matching DOCK-NAME.  Returns (values tether-x tether-y) in tile units
+(pixel coordinates divided by 16)."
+  (let ((xml (load-other-map locale-name)))
+    (dolist (object-group (xml-matches "objectgroup" xml))
+      (dolist (object (xml-matches "object" object-group))
+        (let ((type (xml-attr "type" (second object)))
+              (name (xml-attr "name" (second object)))
+              (x (xml-attr "x" (second object)))
+              (y (xml-attr "y" (second object))))
+          (when (and type name
+                     (string-equal type "Dock")
+                     (string-equal name dock-name))
+            (return-from find-dock-in-tmx
+              (values (floor (parse-integer x) 16)
+                      (floor (parse-integer y) 16))))))))
+  (error "No dock object with type=Dock and name=~s found in ~a"
+         dock-name locale-name))
+
+(defun read-flag-index (flag-name)
+  "Read Flags.txt and return the 0-based line index of FLAG-NAME.
+Comparison is case-insensitive.  Returns 0 when FLAG-NAME is nil or
+blank (always-visible flag).  Signals an error when the flag name is
+not found in the file."
+  (if (or (null flag-name)
+          (emptyp (string-trim '(#\Space #\Tab) (string flag-name))))
+      0
+      (let ((pathname (merge-pathnames #p"Source/Tables/Flags.txt"
+                                       (project-root))))
+        (with-open-file (stream pathname :direction :input)
+          (loop for line = (read-line stream nil nil)
+                for i from 0
+                while line
+                for trimmed = (string-trim '(#\Space #\Tab #\Return #\Newline) line)
+                do (when (string-equal trimmed flag-name)
+                     (return i))
+                finally (error "Flag ~s not found in ~a"
+                               flag-name pathname))))))
+
+(defun write-sea-chart-docks-index
+    (&optional (pathname (merge-pathnames
+                          (format nil "Source/Generated/~a/SeaChartDocksIndex.s"
+                                  (machine-directory-name))
+                          (project-root)))
+               (spreadsheet (merge-pathnames #p"Source/Tables/SeaChartDocks.ods"
+                                             (project-root))))
+  "Read dock locations from SPREADSHEET and write 7800 assembly to PATHNAME.
+Reads the SeaChartDocks.ods spreadsheet (first sheet), looks up each
+dock's map ID from the maps index, finds tether coordinates from the
+locale TMX file, resolves flag indices from Flags.txt, and generates
+a 64tass assembly file describing dock cursor positions and warps."
+  (format *trace-output* "~&Reading sea chart docks from ~a …"
+          (enough-namestring spreadsheet))
+  (finish-output *trace-output*)
+  (read-map-ids-table)
+  (let* ((raw (first (read-ods-into-lists spreadsheet)))
+         (table (ss->lol raw))
+         (docks (loop for row in table
+                      for locale = (getf row :locale)
+                      for map-name = (getf row :map-name)
+                      for sea-chart-x = (getf row :sea-chart-x)
+                      for sea-chart-y = (getf row :sea-chart-y)
+                      for island-name = (getf row :island-name)
+                      for flag-name = (getf row :flag-name)
+                      when (and locale map-name
+                                (not (emptyp (string locale)))
+                                (not (emptyp (string map-name))))
+                        collect (list :locale locale
+                                      :map-name map-name
+                                      :sea-chart-x sea-chart-x
+                                      :sea-chart-y sea-chart-y
+                                      :island-name island-name
+                                      :flag-name flag-name)))))
+    (format *trace-output* " … read ~:d dock~:p." (length docks))
+    (finish-output *trace-output*)
+    (with-output-to-file (code pathname :if-exists :supersede)
+      (format code ";;; Generated from ~a~2%;;; Sea Chart Dock Index~2%"
+              (enough-namestring spreadsheet))
+      (format code "; Format per entry:~%;
+;   .byte SeaChartX, SeaChartY, MapID, TetherX, TetherY, FlagByte~%;
+;   .ptext \"Island Name\"~2%")
+      (loop for dock in docks
+            for i from 1
+            for locale-str = (string (getf dock :locale))
+            for map-name-str = (string (getf dock :map-name))
+            for sea-chart-x-val = (getf dock :sea-chart-x)
+            for sea-chart-y-val = (getf dock :sea-chart-y)
+            for island-name-val = (getf dock :island-name)
+            for flag-name-val = (getf dock :flag-name)
+            for segment-name = (concatenate 'string
+                                            (pascal-case locale-str)
+                                            "/"
+                                            (pascal-case map-name-str))
+            for map-id = (or (gethash segment-name *maps-ids*)
+                             (error "Map ~s not found in maps index"
+                                    segment-name))
+            for dock-label = (pascal-case locale-str)
+            do (multiple-value-bind (tether-x tether-y)
+                   (find-dock-in-tmx segment-name dock-label)
+                 (let ((sc-x (parse-integer (string sea-chart-x-val)))
+                       (sc-y (parse-integer (string sea-chart-y-val))))
+                   (format code "DockEntry_~d:~%" i)
+                   (format code "~10t.byte $~2,'0x, $~2,'0x~32t; Sea chart (~2,'0x, ~2,'0x)~%"
+                           sc-x sc-y sc-x sc-y)
+                   (format code "~10t.byte $~2,'0x~32t; Map ID ~d (~a)~%"
+                           map-id map-id segment-name)
+                   (format code "~10t.byte ~d, ~d~32t; Tether (~d, ~d)~%"
+                           tether-x tether-y tether-x tether-y)
+                   (format code "~10t.byte ~a~32t; Flag~%"
+                           (if (or (null flag-name-val)
+                                   (emptyp (string-trim
+                                            '(#\Space #\Tab)
+                                            (string flag-name-val))))
+                               "0"
+                               (progn
+                                 (read-flag-index (string flag-name-val))
+                                 (format nil "GameFlag.~a"
+                                         (pascal-case (string flag-name-val))))))
+                   (format code "~10t.ptext \"~a\"~2%"
+                           (if island-name-val
+                               (string island-name-val)
+                               "")))))
+      (format code "SeaChartNumDocks = ~d~%" (length docks)))
+    (format *trace-output* " wrote ~a." (enough-namestring pathname)))
+
 (defun parse-number-or-fraction (value)
   "Parse VALUE as a number, supporting integers, decimals, and fractions (e.g. 20/3).
 Returns a real number. Handles values that may be strings, numbers, or nil.
