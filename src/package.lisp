@@ -6,113 +6,13 @@
                 #:split-string)
   (:shadow #:range)
   (:shadowing-import-from :serapeum #:partition)
-  (:export #:compile-index
-           #:collect-assets
-           #:compile-art
-           #:compile-critters
-           #:compile-map
-           #:compile-sound
-           #:compile-music
-           #:compile-music-for-machine
-           #:compile-music-sms
-           #:compile-music-colecovision
-           #:compile-music-sg1000
-           #:compile-music-game-gear
-           #:freq<-midi-key
-           #:key<-midi-key
-           #:midi-key<-freq
-           #:midi->note-name
-           #:note->midi-note-number
-           #:midi->7800-tia
-           #:array<-7800-tia-notes-list
-           #:compile-script
-           #:command
-           #:build-banking
+  ;; Export ONLY external call points. Unit tests will have to use ::
+  (:export #:command
            #:c
-           #:bye
            #:about-skyline-tool
-           #:allocate-assets
-           #:generate-all-copybooks
-           #:generate-constants-copybook
-           #:generate-variables-copybook
-           #:generate-class-copybook
-           #:atari800-label-file
-           #:blob-rip-5200-tile
-           #:blob-rip-7800
-           #:blob-rip-5200
-           #:7800-image-to-160a
-           #:7800-image-to-320a
-           #:7800-image-to-320c
-           #:parse-7800-object
-           #:write-7800-binary
-           #:interleave-7800-bytes
-           #:speech-supported-p
-           #:simple-animation-sequence
-           #:machine-directory-name
-           #:generate-secure-random-id
-           #:burn-rom
-           #:check-for-absent-assets
-           #:compile-animation-sequences
-           #:compile-art-7800
-           #:compile-blob-intv
-           #:compile-code
-           #:compile-enemies
-           #:compile-font-command
-           #:compile-forth
-           #:compile-forth-z80
-           #:compile-item-drops
-           #:compile-midi
-           #:compile-obj
-           #:compile-shops
-           #:compile-tileset
-           #:collect-strings
-           #:extract-tileset-palette
-           #:machine-palette
-           #:find-locale-id-for-segment
-           #:gui
-           #:labels-to-forth
-           #:labels-to-mame
-           #:labels-to-include
-           #:make-classes-for-oops
-           #:list-classes-defs-method-introductions
-           #:prepend-fundamental-mode
-           #:push-7800gd-bin
-           #:push-7800gd-bin-no-execute
-           #:repl
-           #:run-script
-           #:play-script-on-atarivox
-           #:write-actor-prototypes
-           #:write-object-prototypes
-           #:write-asset-bank
-           #:write-asset-ids
-           #:write-cart-header
-           #:write-character-ids
-           #:write-docks-index
-           #:write-equipment-index
-           #:write-flags-tables
-           #:write-gimp-palettes
-           #:write-inventory-tables
-           #:write-keys-tables
-           #:write-orchestration
-           #:write-projection-tables.s
-           #:write-sound-effects-file
-           #:write-master-makefile
-           #:cbm-petscii-docs
-           #:geos-vlir-stub-pack
            #:run-for-port
            #:run-gui
-           #:run-repl
-           ;; Display list debugging functions (for testing)
-           #:decode-header
-           #:header->string
-           #:string->hex
-           #:decode-dll-entry
-           #:decode-dll-hex
-           #:decode-display-list
-           #:decode-dll-deeply
-           #:detect-active-dll
-           #:dl-contains-entry-p
-           #:dll-can-reach-dl-entry-p))
+           #:run-repl))
 
 (in-package :skyline-tool)
 (defun project-root ()
