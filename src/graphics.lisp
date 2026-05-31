@@ -5771,7 +5771,7 @@ Signals assertion errors for invalid dimensions."
   (assert (= (array-dimension palette-pixels 0) width))
   (assert (= (array-dimension palette-pixels 1) height)))
 
-(defun write-blob-palettes (png output)
+(defun write-blob-palettes (png output &key (start-offset 0))
   (princ "Palette:" output)
   (dolist (*region* '(:ntsc :pal))
     (let ((palettes (extract-palettes
@@ -5783,8 +5783,9 @@ Signals assertion errors for invalid dimensions."
 ~10t.fi~%"
               *region*
               (atari-colu-string (aref palettes 0 0))
-              (mapcan (lambda (pal) (mapcar #'atari-colu-string (coerce (subseq pal 1 4) 'list)))
-                      (2a-to-list palettes))))))
+              (append (make-list (* 3 start-offset) :initial-element 0)
+                      (mapcan (lambda (pal) (mapcar #'atari-colu-string (coerce (subseq pal 1 4) 'list)))
+                              (2a-to-list palettes)))))))
 
 (defun blob/write-span-to-stamp-buffer (span stamp-buffer
                                         &key stamp-offsets serial output id
@@ -6225,7 +6226,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 Blob_~a:~10t.block~2%"
                 (enough-namestring png-file)
                 (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output)
+        (write-blob-palettes png output :start-offset 2)
         (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
         (dotimes (zone zones)
           (format output "~2&Zone~d:" zone)
@@ -6246,9 +6247,9 @@ Blob_~a:~10t.block~2%"
                                              (>= (+ stamp-counting (length span)) #x100))
                                         (setf stamp-counting #x100))
                                        (t (incf stamp-counting)))))))
-                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                               id last-palette (length span)
-                               (- x (length span)))))))
+                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                                id (+ last-palette 2) (length span)
+                                (- x (length span)))))))
             (loop with span = nil
                   with last-palette = nil
                   with last-mode = nil
