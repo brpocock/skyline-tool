@@ -12,10 +12,10 @@
 ;; Test that core functions have documentation
 (test function-documentation
   "Test that core functions have documentation"
-  (let ((core-functions '(skyline-tool:blob-rip-7800
-                         skyline-tool:compile-art-7800
-                         skyline-tool:compile-map
-                         skyline-tool:compile-script)))
+  (let ((core-functions '(skyline-tool::blob-rip-7800
+                          skyline-tool::compile-art-7800
+                          skyline-tool::compile-map
+                          skyline-tool::compile-script)))
     (dolist (func core-functions)
       (when (fboundp func)
         (is (documentation func 'function)

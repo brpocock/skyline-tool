@@ -784,8 +784,8 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
                (loop for column from 0 below 8
                      for global-x = (+ (* frame-index 8) column)
                      for palette-value = (and (< global-x (array-dimension palette 0))
-                                               (< global-y (array-dimension palette 1))
-                                               (aref palette global-x global-y))
+                                              (< global-y (array-dimension palette 1))
+                                              (aref palette global-x global-y))
                      do (when (and palette-value (plusp palette-value))
                           (setf nonzero t)
                           (setf byte (logior byte (ash 1 (- 7 column))))))
@@ -1069,7 +1069,7 @@ transparent pixels — are copied without coercing @code{NIL} into
                   (array-element-type original)
                   '(unsigned-byte 8)))
          (copy (make-array (list (1+ (- right left)) (1+ (- bottom top)))
-                          :element-type elt)))
+                           :element-type elt)))
     (loop for x from left to right
           do (loop for y from top to bottom
                    do (setf (aref copy (- x left) (- y top)) (aref original x y))))
@@ -1516,15 +1516,15 @@ Shape:~{~{~a~}~2%~}
    If fourth arg exists, uses it as TV standard (:ntsc, :pal, :secam)."
   (let* ((titlescreen-kernel-p (and args (string-equal (first args) "t")))
          (tv-standard (cond ((and args (>= (length args) 2))
-                            (let ((std (string-upcase (second args))))
-                              (cond ((string= std "NTSC") :ntsc)
-                                    ((string= std "PAL") :pal)
-                                    ((string= std "SECAM") :secam)
-                                    (t :ntsc))))
-                           (t :ntsc))))
+                             (let ((std (string-upcase (second args))))
+                               (cond ((string= std "NTSC") :ntsc)
+                                     ((string= std "PAL") :pal)
+                                     ((string= std "SECAM") :secam)
+                                     (t :ntsc))))
+                            (t :ntsc))))
     (compile-batari-48px png-file output-bas
-                        :titlescreen-kernel-p titlescreen-kernel-p
-                        :tv-standard tv-standard)))
+                         :titlescreen-kernel-p titlescreen-kernel-p
+                         :tv-standard tv-standard)))
 
 (defun compile-batari-48px (png-file output-bas &key (titlescreen-kernel-p nil) (tv-standard :ntsc))
   "Compile a 48×42 pixel PNG bitmap to batariBASIC data format.
@@ -1752,11 +1752,11 @@ Shape:~{~{~a~}~2%~}
                       (bin-pathname (make-pathname :name base-name
                                                    :type "bin"
                                                    :directory `(:relative "Object" "Assets"
-									  ,(machine-directory-name))))
+							    ,(machine-directory-name))))
                       (zx7-pathname (make-pathname :name base-name
                                                    :type "zx7"
                                                    :directory `(:relative "Object" "Assets"
-									  ,(machine-directory-name)))))
+							    ,(machine-directory-name)))))
                   (ensure-directories-exist bin-pathname)
                   (ensure-directories-exist zx7-pathname)
                   (write-byte-vector-into-file bytes bin-pathname :if-exists :overwrite
@@ -2413,31 +2413,31 @@ Pixel dimensions; partial trailing tile edges are cropped down to multiples of
           for card = (aref uniq u)
           do (progn
                (format src "    ;; GRAM slot ~D~%" u)
-(let ((bytes-list (reverse card)))
-                  (loop for i from 0 below 4
-                        for byte-first = (nth (* i 2) bytes-list)
-                        for byte-second = (nth (+ (* i 2) 1) bytes-list)
-                        for word = (logior (ash byte-first 8) byte-second)
-                        for low10 = (logand word #x3FF)
-                        for high10 = (logand (ash word -10) #x3FF)
-                        do (format src "    DECLE   $~3,'0X~%" low10)
-                           (format src "    DECLE   $~3,'0X~%" high10))))
-    (format src "~A_TILE_CSTK:~%" lab)
-    (dotimes (i total-cells)
-      (let* ((raw-id (aref tile-ids i))
-             (invert (logtest raw-id #x8000))
-             (card-id (logand raw-id #x7FFF))
-             (color (intv-dominant-stic-color
-                     palette-pixels
-                     (* (mod i cols) 8)
-                     (* (floor i cols) 8)))
-             (cstk (intv-cstk-word card-id color invert)))
-        (format src "    DECLE   $~4,'0X~%" cstk)))
-    (format src "~A_TILE_MAP:~%" lab)
-    (dotimes (i total-cells)
-      (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
-    (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
-            grom-cells nuniq (enough-namestring output-path))))
+               (let ((bytes-list (reverse card)))
+                 (loop for i from 0 below 4
+                       for byte-first = (nth (* i 2) bytes-list)
+                       for byte-second = (nth (+ (* i 2) 1) bytes-list)
+                       for word = (logior (ash byte-first 8) byte-second)
+                       for low10 = (logand word #x3FF)
+                       for high10 = (logand (ash word -10) #x3FF)
+                       do (format src "    DECLE   $~3,'0X~%" low10)
+                          (format src "    DECLE   $~3,'0X~%" high10))))
+             (format src "~A_TILE_CSTK:~%" lab)
+             (dotimes (i total-cells)
+               (let* ((raw-id (aref tile-ids i))
+                      (invert (logtest raw-id #x8000))
+                      (card-id (logand raw-id #x7FFF))
+                      (color (intv-dominant-stic-color
+                              palette-pixels
+                              (* (mod i cols) 8)
+                              (* (floor i cols) 8)))
+                      (cstk (intv-cstk-word card-id color invert)))
+                 (format src "    DECLE   $~4,'0X~%" cstk)))
+             (format src "~A_TILE_MAP:~%" lab)
+             (dotimes (i total-cells)
+               (format src "    DECLE   $~4,'0X~%" (logand (aref tile-ids i) #x7FFF)))
+             (format *trace-output* "~&Wrote Intellivision blob (~D GROM cells, ~D unique GRAM tiles) to ~A."
+                     grom-cells nuniq (enough-namestring output-path)))))
 
 (defun compile-blob-intv (png-file output-file)
   "Compile BLOB PNG-FILE to OUTPUT-FILE assembly (tile map + GRAM card data).
@@ -2556,8 +2556,8 @@ Returns DEFAULT when the cell is empty."
     best))
 
 (defun deduplicate-cells (cell-keys &key max-unique (ht (make-hash-table :test 'equalp))
-                                       (uniq (make-array (or max-unique 256)
-                                                         :adjustable t :fill-pointer 0)))
+                                         (uniq (make-array (or max-unique 256)
+                                                           :adjustable t :fill-pointer 0)))
   "Deduplicate CELL-KEYS (list of tile keys) into a unique set.
 
 Returns three values:
@@ -2583,11 +2583,11 @@ When MAX-UNIQUE is given and exceeded, extends UNIQ beyond it and warns
     (values uniq ht slot-map)))
 
 (defun reduce-tile-set (uniq slot-map &key max-slots extra-keys
-                                            (extra-key-count (length extra-keys))
-                                            (hamming #'tile-hamming-distance)
-                                            (invert-fn #'tile-invert)
-                                            (invert-ok-p t)
-                                            (verbose t))
+                                           (extra-key-count (length extra-keys))
+                                           (hamming #'tile-hamming-distance)
+                                           (invert-fn #'tile-invert)
+                                           (invert-ok-p t)
+                                           (verbose t))
   "Reduce UNIQ (adjustable vector of tile keys) and SLOT-MAP (array
 of slot indices) to at most MAX-SLOTS unique entries.
 
@@ -2638,8 +2638,8 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                                          best-kind :uniq-extra best-flip nil))
                                  (when invert-ok-p
                                    (let ((flip-dist
-                                          (funcall hamming key-a
-                                                   (funcall invert-fn e-key))))
+                                           (funcall hamming key-a
+                                                    (funcall invert-fn e-key))))
                                      (when (< flip-dist best-dist)
                                        (setf best-dist flip-dist best-a a best-b e
                                              best-kind :uniq-extra best-flip t)))))))
@@ -2675,7 +2675,7 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                 (loop for i from best-a below (1- n-uniq)
                       do (setf (aref uniq i) (aref uniq (1+ i))))
                 (vector-pop uniq))))
-  nil)
+    nil)
 
 ;;;; Intv GRAM-specific helpers (build on Generic Tile Core) ────────
   "Allocate or reuse GRAM slot for bitmap KEY; return GRAM slot index."
@@ -2754,104 +2754,104 @@ Hard limit for UNIQ fill-pointer after reduction.
                                        (loop for row from 0 below 8
                                              collect (aref grom-bytes (+ base row)))))
                         keys)))))
-    (loop while (> (length uniq) max-slots)
-          for n-gram = (length uniq)
-          for best-dist = 65
-          for best-a = nil
-          for best-b = nil
-          for best-kind = nil
-          for best-flip = nil
-          do
-             ;; Pairwise GRAM vs GRAM
+  (loop while (> (length uniq) max-slots)
+        for n-gram = (length uniq)
+        for best-dist = 65
+        for best-a = nil
+        for best-b = nil
+        for best-kind = nil
+        for best-flip = nil
+        do
+           ;; Pairwise GRAM vs GRAM
+           (loop for a from 0 below n-gram
+                 for key-a = (aref uniq a)
+                 do (loop for b from (1+ a) below n-gram
+                          for key-b = (aref uniq b)
+                          for same-dist = (tile-hamming-distance key-a key-b)
+                          for flip-dist = (tile-hamming-distance
+                                           (tile-invert key-a) key-b)
+                          do (when (< same-dist best-dist)
+                               (setf best-dist same-dist best-a a best-b b
+                                     best-kind :gram-gram best-flip nil))
+                             (when (< flip-dist best-dist)
+                               (setf best-dist flip-dist best-a a best-b b
+                                     best-kind :gram-gram best-flip t))))
+           ;; GRAM vs GROM (all 256 cards)
+           (when grom-keys
              (loop for a from 0 below n-gram
                    for key-a = (aref uniq a)
-                   do (loop for b from (1+ a) below n-gram
-                            for key-b = (aref uniq b)
-                            for same-dist = (tile-hamming-distance key-a key-b)
+                   do (loop for grom-card from 0 below 256
+                            for grom-key = (aref grom-keys grom-card)
+                            for same-dist = (tile-hamming-distance key-a grom-key)
                             for flip-dist = (tile-hamming-distance
-                                             (tile-invert key-a) key-b)
+                                             key-a (tile-invert grom-key))
                             do (when (< same-dist best-dist)
-                                 (setf best-dist same-dist best-a a best-b b
-                                       best-kind :gram-gram best-flip nil))
+                                 (setf best-dist same-dist best-a a best-b grom-card
+                                       best-kind :gram-grom best-flip nil))
                                (when (< flip-dist best-dist)
-                                 (setf best-dist flip-dist best-a a best-b b
-                                       best-kind :gram-gram best-flip t))))
-             ;; GRAM vs GROM (all 256 cards)
-             (when grom-keys
-               (loop for a from 0 below n-gram
-                     for key-a = (aref uniq a)
-                     do (loop for grom-card from 0 below 256
-                              for grom-key = (aref grom-keys grom-card)
-                              for same-dist = (tile-hamming-distance key-a grom-key)
-                              for flip-dist = (tile-hamming-distance
-                                               key-a (tile-invert grom-key))
-                              do (when (< same-dist best-dist)
-                                   (setf best-dist same-dist best-a a best-b grom-card
-                                         best-kind :gram-grom best-flip nil))
-                                 (when (< flip-dist best-dist)
-                                   (setf best-dist flip-dist best-a a best-b grom-card
-                                         best-kind :gram-grom best-flip t)))))
-             ;; Apply the best merge found this round
-             (ecase best-kind
-               (:gram-gram
-                ;; Merge slot best-b into slot best-a.  If best-flip is T,
-                ;; flip the invert bit for all remapped entries.
-                (warn "Intellivision GRAM overflow reduction: merging slot ~D into ~D (dist=~D)~@[; flipping invert~]"
-                      best-b best-a best-dist best-flip)
-                (let ((hi-slot best-b)
-                      (target-slot best-a))
-                  ;; Update tile-ids: remap hi-slot -> target-slot
-                  (loop for i from 0 below (length tile-ids)
-                        for packed = (aref tile-ids i)
-                        for card-id = (logand packed #x7FFF)
-                        for slot = (when (>= card-id #x100) (- card-id #x100))
-                        do (cond
-                             ((eql slot hi-slot)
-                              (let ((old-invert (logtest packed #x8000))
-                                    (new-invert (if best-flip (not old-invert) old-invert)))
-                                (setf (aref tile-ids i)
-                                      (logior (+ #x100 target-slot)
-                                              (if new-invert #x8000 0)))))
-                             ((and slot (> slot hi-slot))
-                              (let ((invert-bit (logand packed #x8000)))
-                                (setf (aref tile-ids i)
-                                      (logior (+ #x100 (1- slot)) invert-bit))))))
-                  ;; Remove hi-slot from uniq, shifting higher entries down
-                  (loop for i from hi-slot below (1- n-gram)
-                        do (setf (aref uniq i) (aref uniq (1+ i))))
-                  (vector-pop uniq)))
-               (:gram-grom
-                ;; Replace all uses of GRAM slot best-a with GROM card best-b.
-                ;; If best-flip is T, set the invert bit for the GROM entries.
-                ;; Entries that previously used slot best-a with invert get the
-                ;; opposite.
-                (warn "Intellivision GRAM overflow reduction: replacing slot ~D with GROM card ~D (dist=~D)~@[; flipping invert~]"
-                      best-a best-b best-dist best-flip)
-                (let ((dead-slot best-a)
-                      (grom-card best-b))
-                  (loop for i from 0 below (length tile-ids)
-                        for packed = (aref tile-ids i)
-                        for card-id = (logand packed #x7FFF)
-                        for slot = (when (>= card-id #x100) (- card-id #x100))
-                        do (cond
-                             ((eql slot dead-slot)
-                              (let ((old-invert (logtest packed #x8000))
-                                    (new-invert (if best-flip (not old-invert) old-invert)))
-                                (setf (aref tile-ids i)
-                                      (logior grom-card
-                                              (if new-invert #x8000 0)))))
-                             ((and slot (> slot dead-slot))
-                              (let ((invert-bit (logand packed #x8000)))
-                                (setf (aref tile-ids i)
-                                      (logior (+ #x100 (1- slot)) invert-bit))))))
-                  ;; Remove dead slot from uniq
-                  (loop for i from dead-slot below (1- n-gram)
-                        do (setf (aref uniq i) (aref uniq (1+ i))))
-                  (vector-pop uniq))
-                ;; Update grom-cells count is tracked by the caller; we just
-                ;; emit a warning.  The GRAM→GROM substitution reduces unique
-                ;; GRAM count by 1.
-                nil))))
+                                 (setf best-dist flip-dist best-a a best-b grom-card
+                                       best-kind :gram-grom best-flip t)))))
+           ;; Apply the best merge found this round
+           (ecase best-kind
+             (:gram-gram
+              ;; Merge slot best-b into slot best-a.  If best-flip is T,
+              ;; flip the invert bit for all remapped entries.
+              (warn "Intellivision GRAM overflow reduction: merging slot ~D into ~D (dist=~D)~@[; flipping invert~]"
+                    best-b best-a best-dist best-flip)
+              (let ((hi-slot best-b)
+                    (target-slot best-a))
+                ;; Update tile-ids: remap hi-slot -> target-slot
+                (loop for i from 0 below (length tile-ids)
+                      for packed = (aref tile-ids i)
+                      for card-id = (logand packed #x7FFF)
+                      for slot = (when (>= card-id #x100) (- card-id #x100))
+                      do (cond
+                           ((eql slot hi-slot)
+                            (let ((old-invert (logtest packed #x8000))
+                                  (new-invert (if best-flip (not old-invert) old-invert)))
+                              (setf (aref tile-ids i)
+                                    (logior (+ #x100 target-slot)
+                                            (if new-invert #x8000 0)))))
+                           ((and slot (> slot hi-slot))
+                            (let ((invert-bit (logand packed #x8000)))
+                              (setf (aref tile-ids i)
+                                    (logior (+ #x100 (1- slot)) invert-bit))))))
+                ;; Remove hi-slot from uniq, shifting higher entries down
+                (loop for i from hi-slot below (1- n-gram)
+                      do (setf (aref uniq i) (aref uniq (1+ i))))
+                (vector-pop uniq)))
+             (:gram-grom
+              ;; Replace all uses of GRAM slot best-a with GROM card best-b.
+              ;; If best-flip is T, set the invert bit for the GROM entries.
+              ;; Entries that previously used slot best-a with invert get the
+              ;; opposite.
+              (warn "Intellivision GRAM overflow reduction: replacing slot ~D with GROM card ~D (dist=~D)~@[; flipping invert~]"
+                    best-a best-b best-dist best-flip)
+              (let ((dead-slot best-a)
+                    (grom-card best-b))
+                (loop for i from 0 below (length tile-ids)
+                      for packed = (aref tile-ids i)
+                      for card-id = (logand packed #x7FFF)
+                      for slot = (when (>= card-id #x100) (- card-id #x100))
+                      do (cond
+                           ((eql slot dead-slot)
+                            (let ((old-invert (logtest packed #x8000))
+                                  (new-invert (if best-flip (not old-invert) old-invert)))
+                              (setf (aref tile-ids i)
+                                    (logior grom-card
+                                            (if new-invert #x8000 0)))))
+                           ((and slot (> slot dead-slot))
+                            (let ((invert-bit (logand packed #x8000)))
+                              (setf (aref tile-ids i)
+                                    (logior (+ #x100 (1- slot)) invert-bit))))))
+                ;; Remove dead slot from uniq
+                (loop for i from dead-slot below (1- n-gram)
+                      do (setf (aref uniq i) (aref uniq (1+ i))))
+                (vector-pop uniq))
+              ;; Update grom-cells count is tracked by the caller; we just
+              ;; emit a warning.  The GRAM→GROM substitution reduces unique
+              ;; GRAM count by 1.
+              nil))))
 
 (defun intv-cstk-to-card-id (cstk)
   "Extract the unified card ID from a BACKTAB CSTK word.
@@ -2939,9 +2939,9 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
       (dotimes (row tile-rows)
         (dotimes (col tile-cols)
           (dolist (q (list (list (* col 16) (* row 16))
-                            (list (+ (* col 16) 8) (* row 16))
-                            (list (* col 16) (+ (* row 16) 8))
-                            (list (+ (* col 16) 8) (+ (* row 16) 8))))
+                           (list (+ (* col 16) 8) (* row 16))
+                           (list (* col 16) (+ (* row 16) 8))
+                           (list (+ (* col 16) 8) (+ (* row 16) 8))))
             (destructuring-bind (sx sy) q
               (multiple-value-bind (card cstk)
                   (intv-quadrant-card-and-cstk palette-pixels sx sy grom-map uniq ht)
@@ -2972,43 +2972,43 @@ resolves GROM-first to card @code{$0000}–@code{$00FF} or a shared GRAM slot
                 for color = (logand orig-cstk 7)
                 do (setf (aref records i)
                          (intv-cstk-word new-card color new-invert)))))
-        (setf nuniq (length uniq))
-        (when (> nuniq 56)
-          (warn "Intellivision tileset ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
-                png-file nuniq)))
-      (when (>= nuniq 56)
-        (warn "Intellivision tileset ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
-              png-file nuniq))
-      (ensure-directories-exist (merge-pathnames output-path))
-      (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
-                                                      :external-format :utf-8)
-        (format src ";;; Intellivision map tileset: quadrant CSTK + GRAM cards~%")
-        (format src ";;; Source: ~A~%" png-file)
-        (format src ";;; Logical tiles: ~D×~D (~D×~D px); ~D unique GRAM card~:P~2%"
-                tile-cols tile-rows width height nuniq)
-        (format src "~A_TILE_COLS EQU ~D~%" lab tile-cols)
-        (format src "~A_TILE_ROWS EQU ~D~%" lab tile-rows)
-        (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
-        ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
-        (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
-        (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
-        (format src "~A_GRAM_DATA:~%" lab)
-        (loop for u from 0 below nuniq
-              for card = (aref uniq u)
-              do (progn
-                   (format src "    ;; GRAM slot ~D~%" u)
-                   (let ((bytes-list (reverse card)))
-                     (loop for i from 0 below 4
-                           for byte-first = (nth (* i 2) bytes-list)
-                           for byte-second = (nth (+ (* i 2) 1) bytes-list)
-                           for word = (logior (ash byte-first 8) byte-second)
-                           do (format src "    DECLE   $~3,'0X~%" low10)
-   (format src "    DECLE   $~3,'0X~%" high10)))))
-        (format src "~A_QUADRANT_CSTK:~%" lab)
-        (dotimes (i (* tile-count 4))
-          (format src "    DECLE   $~4,'0X~%" (aref records i)))
-        (format *trace-output* "~&Wrote Intellivision tileset (~D logical tiles, ~D GRAM) to ~A."
-                tile-count nuniq (enough-namestring output-path)))))
+      (setf nuniq (length uniq))
+      (when (> nuniq 56)
+        (warn "Intellivision tileset ~A: GRAM reduction could not bring card count below 56 (~D unique remain); MOB GRAM is compromised"
+              png-file nuniq)))
+    (when (>= nuniq 56)
+      (warn "Intellivision tileset ~A uses ~D unique GRAM cards, overlapping the MOB reservation (slots 56–63)"
+            png-file nuniq))
+    (ensure-directories-exist (merge-pathnames output-path))
+    (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
+                                                            :external-format :utf-8)
+      (format src ";;; Intellivision map tileset: quadrant CSTK + GRAM cards~%")
+      (format src ";;; Source: ~A~%" png-file)
+      (format src ";;; Logical tiles: ~D×~D (~D×~D px); ~D unique GRAM card~:P~2%"
+              tile-cols tile-rows width height nuniq)
+      (format src "~A_TILE_COLS EQU ~D~%" lab tile-cols)
+      (format src "~A_TILE_ROWS EQU ~D~%" lab tile-rows)
+      (format src "~A_UNIQUE_GRAM_CARDS EQU ~D~2%" lab nuniq)
+      ;; Reserve the top 8 GRAM slots (56–63) for MOB sprites; map tiles use 0–55.
+      (format src "~A_GRAM_MAP_SLOTS_MAX EQU 56~%" lab)
+      (format src "~A_GRAM_MOB_SLOT_BASE EQU 56~2%" lab)
+      (format src "~A_GRAM_DATA:~%" lab)
+      (loop for u from 0 below nuniq
+            for card = (aref uniq u)
+            do (progn
+                 (format src "    ;; GRAM slot ~D~%" u)
+                 (let ((bytes-list (reverse card)))
+                   (loop for i from 0 below 4
+                         for byte-first = (nth (* i 2) bytes-list)
+                         for byte-second = (nth (+ (* i 2) 1) bytes-list)
+                         for word = (logior (ash byte-first 8) byte-second)
+                         do (format src "    DECLE   $~3,'0X~%" low10)
+                            (format src "    DECLE   $~3,'0X~%" high10)))))
+      (format src "~A_QUADRANT_CSTK:~%" lab)
+      (dotimes (i (* tile-count 4))
+        (format src "    DECLE   $~4,'0X~%" (aref records i)))
+      (format *trace-output* "~&Wrote Intellivision tileset (~D logical tiles, ~D GRAM) to ~A."
+              tile-count nuniq (enough-namestring output-path)))))
 
 (defun compile-map-intv-screen (map-name output-path width height tile-grid tileset-records
                                 &key spawn-table stic-override-grid stic-override-table)
@@ -3069,7 +3069,7 @@ List of 8-byte override entries (may be nil).
                       0))))))
     (ensure-directories-exist (merge-pathnames output-path))
     (with-output-to-file (src (merge-pathnames output-path) :if-exists :supersede
-                                                    :external-format :utf-8)
+                                                            :external-format :utf-8)
       (format src ";;; Intellivision map: ~A (~D×~D logical tiles)~%" map-name width height)
       (format src ";;; Header: [width, height, spawn_count, spawn_ptr] (~
 MapCompiledHeaderWords=4)~%")
@@ -3321,7 +3321,7 @@ compilation but for sprites that can be positioned anywhere on screen."
                             (make-pathname :name (pathname-name png-file) :type "s")
                             (directory-namestring index-out))))
             (compile-gram-intv png-file (directory-namestring gram-file)
-                              :width width :height height))))
+                               :width width :height height))))
       (format out "~%;;; End of Intellivision art assets~%"))
     (format *trace-output* "Intellivision art compilation complete.")))
 
@@ -3419,7 +3419,7 @@ Pixel dimensions of the PNG.
                                                         (position b1 cmap)
                                                         0)))
                                     do (setf byte (logior (ash byte 2) pair)))
-                               (format src-file "    .byte $~2,'0X~%" byte)))
+                              (format src-file "    .byte $~2,'0X~%" byte)))
                    ;; Monochrome: 1 bit per pixel, 8 bytes per cell
                    (loop for y from 0 below 8
                          for byte = (loop for x from 0 below 8
@@ -3427,28 +3427,28 @@ Pixel dimensions of the PNG.
                                                   0
                                                   (ash 1 (- 7 x))))
                          do (format src-file "    .byte $~2,'0X~%" byte)))
-      ;; Color RAM: 1 byte per cell
-      (format src-file "~2%~ATilesetColorRAM:  ;; ~D cells~%"
-              (pathname-name png-file) cell-count)
-      (loop for cell from 0 below cell-count
-            for x-cell = (tile-cell-vic2-x cell width)
-            for y-cell = (tile-cell-vic2-y cell width)
-            for tile-data = (extract-region image-nybbles x-cell y-cell
-                                            (+ 7 x-cell) (+ 7 y-cell))
-            for colors = (tile->color tile-data)
-            for n-colors = (length colors)
-            for multi-p = (> n-colors 1)
-            for cram = (if multi-p
-                           (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
-                             (logior (ash (or (nth 1 cmap) 0) 4)
-                                     (logand (or (nth 2 cmap) 0) #x0F)))
-                           (or (first colors) 0))
-            do (format src-file "    .byte $~2,'0X~%" cram))
-      ;; Constants
-      (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
-              (pathname-name png-file) multi-cells))
-    (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
-            cell-count multi-cells out-file))))
+               ;; Color RAM: 1 byte per cell
+               (format src-file "~2%~ATilesetColorRAM:  ;; ~D cells~%"
+                       (pathname-name png-file) cell-count)
+               (loop for cell from 0 below cell-count
+                     for x-cell = (tile-cell-vic2-x cell width)
+                     for y-cell = (tile-cell-vic2-y cell width)
+                     for tile-data = (extract-region image-nybbles x-cell y-cell
+                                                     (+ 7 x-cell) (+ 7 y-cell))
+                     for colors = (tile->color tile-data)
+                     for n-colors = (length colors)
+                     for multi-p = (> n-colors 1)
+                     for cram = (if multi-p
+                                    (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+                                      (logior (ash (or (nth 1 cmap) 0) 4)
+                                              (logand (or (nth 2 cmap) 0) #x0F)))
+                                    (or (first colors) 0))
+                     do (format src-file "    .byte $~2,'0X~%" cram))
+               ;; Constants
+               (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
+                       (pathname-name png-file) multi-cells))
+      (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
+              cell-count multi-cells out-file))))
 
 (defun vic2-cell-multicolor-map (tile-data colors)
   "Build a 3-color map for multicolor encoding of an 8×8 cell.
@@ -3469,7 +3469,7 @@ Used by VIC-II multicolor character mode: bit-pair 0 = bg, 1 = color1,
            (bg 0)
            (c1 (first (first sorted)))
            (c2 (first (second sorted))))
-           (list bg c1 c2))))
+      (list bg c1 c2))))
 
 (defun compile-c64-blob (png-file target-dir height width palette-pixels)
   "Write a C64 character-cell full-screen blob: char data + screen map + color RAM.
@@ -3528,7 +3528,7 @@ Pixel dimensions (cropped to multiples of 8).
                      target-dir)))
       (ensure-directories-exist (directory-namestring out-file))
       (with-output-to-file (src out-file :if-exists :supersede
-                                            :external-format :utf-8)
+                                         :external-format :utf-8)
         (format src ";;; C64 blob: ~A~%" png-file)
         (format src ";;; Grid: ~D×~D chars; ~D unique char~:P~2%" cols rows (length uniq))
         (format src "~ABlobChars:~%" stem)
@@ -3578,7 +3578,7 @@ Pixel width (640 or 320).
                      target-dir)))
       (ensure-directories-exist (directory-namestring out-file))
       (with-output-to-file (src out-file :if-exists :supersede
-                                            :external-format :utf-8)
+                                         :external-format :utf-8)
         (format src ";;; VDC bitmap blob: ~A~%" png-file)
         (format src ";;; ~D×~D px → ~D bytes/row × ~D rows~2%" width height byte-width rows)
         (format src "~AVDCBlobWidth     EQU ~D~%" stem byte-width)
@@ -3845,11 +3845,11 @@ Pixel width (640 or 320).
                      (setf (gethash key ht) idx)
                      (vector-push-extend key uniq))
                    (setf (aref nametable cell) idx))
-           ;; Reduce if pattern table overflows 256
-           (when (> (length uniq) 256)
-             (warn "TMS9918 image ~A: ~D patterns, reducing to 256..." png-file (length uniq))
-             (reduce-tile-set uniq nametable :max-slots 256))
-           (ensure-directories-exist blob-out)
+          ;; Reduce if pattern table overflows 256
+          (when (> (length uniq) 256)
+            (warn "TMS9918 image ~A: ~D patterns, reducing to 256..." png-file (length uniq))
+            (reduce-tile-set uniq nametable :max-slots 256))
+          (ensure-directories-exist blob-out)
           (with-output-to-file (src blob-out :if-exists :supersede)
             (format src ";;; TMS9918 tile data from ~A~%" png-file)
             (format src ";;; ~D×~D chars; ~D unique~2%" cols rows (length uniq))
@@ -4117,7 +4117,7 @@ chars-wide chars-high total-chars))))
                                       0)))
                 ;; Pack 2-bit color index into byte
                 (setf sprite-byte (logior sprite-byte
-                                         (ash (logand color-index 3) (* pixel 2))))))
+                                          (ash (logand color-index 3) (* pixel 2))))))
             (format src-file "    .byte $~2,'0X~%" sprite-byte))))
 
       ;; Multicolor sprite color data (4 colors)
@@ -4302,12 +4302,12 @@ chars-wide chars-high total-chars))))
                 (let* ((src-x (+ (* tile-x 8) pixel-x))
                        (src-y (+ (* tile-y 8) pixel-y))
                        (color-index (if (and (< src-x width) (< src-y height))
-                                      (aref palette-pixels src-x src-y)
-                                      0)))
+                                        (aref palette-pixels src-x src-y)
+                                        0)))
                   (format src-file "    .byte $~2,'0X~@[~]" color-index
                           (if (= pixel-x 7) "~%" ""))))))))))
 
-      (format src-file "~%.export ~A_tiles~%" (pathname-name png-file)))
+  (format src-file "~%.export ~A_tiles~%" (pathname-name png-file)))
 
 (defun compile-lynx-font (png-file target-dir height width palette-pixels)
   "Compile Atari Lynx font data (8x8 characters)"
@@ -4356,7 +4356,7 @@ chars-wide chars-high total-chars))))
            (image-data (png-read:image-data png))
            (transparency (png-read:transparency png)))
       (with-output-to-file (out out-file :element-type '(unsigned-byte 8)
-                                :if-exists :supersede)
+                                         :if-exists :supersede)
         ;; Mode 7 data is 256x256 bytes of palette indices (8-bit per pixel)
         ;; Process the image data and convert to palette indices
         (dotimes (y 256)
@@ -4364,9 +4364,9 @@ chars-wide chars-high total-chars))))
             (let* ((src-x (min (1- image-width) (floor (* x (/ image-width 256.0)))))
                    (src-y (min (1- image-height) (floor (* y (/ image-height 256.0)))))
                    (color-index (if (and (< src-x image-width) (< src-y image-height))
-                                  ;; Get palette index from palette-pixels (pre-converted from image)
-                                  (aref palette-pixels src-x src-y)
-                                  0)))
+                                    ;; Get palette index from palette-pixels (pre-converted from image)
+                                    (aref palette-pixels src-x src-y)
+                                    0)))
               ;; Write 8-bit palette index
               (write-byte (logand color-index #xFF) out))))))
     (format *trace-output* " done - processed ~Dx~D image into 256x256 Mode 7 data." image-width image-height)))
@@ -4384,7 +4384,7 @@ producing 16 bytes per tile.  Output is binary @file{.chr}."
     (ensure-directories-exist (directory-namestring out-file))
     (format *trace-output* "~&Compiling SNES ~D×~D tiles to ~A…" tiles-across tiles-down out-file)
     (with-output-to-file (out out-file :element-type '(unsigned-byte 8)
-                                  :if-exists :supersede)
+                                       :if-exists :supersede)
       (dotimes (ty tiles-down)
         (dotimes (tx tiles-across)
           (let ((low (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0))
@@ -4536,12 +4536,12 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
 
 (defun pixels-to-ansi (pixels &key x y)
   (flet ((tb ()
-             (terpri)
-             (princ (ansi-color-pixel 0 0 0))
-             (dotimes (x0 (array-dimension pixels 0))
-               (princ (ansi-color-pixel 0 0 (if (eql x0 x) #xff 0))))
-             (princ (ansi-color-pixel 0 0 0))
-             (format t "~c[0m" #\Escape)))
+           (terpri)
+           (princ (ansi-color-pixel 0 0 0))
+           (dotimes (x0 (array-dimension pixels 0))
+             (princ (ansi-color-pixel 0 0 (if (eql x0 x) #xff 0))))
+           (princ (ansi-color-pixel 0 0 0))
+           (format t "~c[0m" #\Escape)))
     (format t "~& Image (~:d×~:d pixels):"
             (array-dimension pixels 0)
             (array-dimension pixels 1))
@@ -4561,11 +4561,11 @@ Palette contains these colors: ~{$~2,'0x~^, ~}"
 (defun pixels-to-clim (pixels &key x y (stream t))
   (let ((s (or stream t)))
     (flet ((tb ()
-               (terpri)
-               (print-clim-pixel (list 0 0 0) s)
-               (dotimes (x0 (array-dimension pixels 0))
-                 (print-clim-pixel (let ((val (if (= x x0) #xff 0))) (list val val val)) s))
-               (print-clim-pixel (list 0 0 0) s)))
+             (terpri)
+             (print-clim-pixel (list 0 0 0) s)
+             (dotimes (x0 (array-dimension pixels 0))
+               (print-clim-pixel (let ((val (if (= x x0) #xff 0))) (list val val val)) s))
+             (print-clim-pixel (list 0 0 0) s)))
       (format t "~& Image (~:d×~:d pixels):"
               (array-dimension pixels 0)
               (array-dimension pixels 1))
@@ -4602,7 +4602,7 @@ position within a larger image I."
                                   :best-fit-p best-fit-p))))
     output))
 
-(defun 7800-image-to-160a (image &key byte-width height palette best-fit-p)
+(defun 7800-image-to-160ab (image &key byte-width height palette best-fit-p)
   "Convert image to Atari 7800 160A graphics format.
 
 Converts a pixel image to 160A mode bytes for the Atari 7800. In 160A mode,
@@ -4766,11 +4766,11 @@ Used internally by BLOB ripping for color stamp conversion."
          (bytes-lists (list))
          (palettes (extract-palettes pixels)))
     (dolist (image images)
-      (dolist (bytes-list (7800-image-to-160a image
-                                              :byte-width byte-width
-                                              :height height
-                                              :palette (elt (2a-to-lol palettes)
-                                                            (best-palette image palettes))))
+      (dolist (bytes-list (7800-image-to-160ab image
+                                               :byte-width byte-width
+                                               :height height
+                                               :palette (elt (2a-to-lol palettes)
+                                                             (best-palette image palettes))))
         (push (reverse bytes-list) bytes-lists)))
     (reverse bytes-lists)))
 
@@ -5029,23 +5029,23 @@ Used internally by BLOB ripping for color stamp conversion."
 (defun read-7800-art-index (index-in)
   (let ((png-list (list)))
     (format *trace-output* "~&~A: reading art index …" (enough-namestring index-in))
-        (with-input-from-file (index index-in)
+    (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
-                while (and line (plusp (length line)) (not (char= #\; (char line 0))))
-                do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
-                                            line)))
-                     (cond
-                       ((emptyp line) nil)
-                       ((char= #\# (char line 0)) nil)
+            while (and line (plusp (length line)) (not (char= #\; (char line 0))))
+            do (let ((line (string-trim #(#\Space #\Tab #\Newline #\Return #\Page)
+                                        line)))
+                 (cond
+                   ((emptyp line) nil)
+                   ((char= #\# (char line 0)) nil)
                    (t (destructuring-bind (png-name mode cell-size)
-                                  (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
-                                  (destructuring-bind (width-px height-px)
-                                      (split-sequence #\× cell-size :test #'char=)
+                          (split-sequence #\Space line :remove-empty-subseqs t :test #'char=)
+                        (destructuring-bind (width-px height-px)
+                            (split-sequence #\× cell-size :test #'char=)
                           (push (list (make-keyword mode)
-                                                  (make-pathname :defaults index-in
-                                                                 :name (subseq png-name 0
-                                                                               (position #\. png-name :from-end t))
-                                                                 :type "png")
+                                      (make-pathname :defaults index-in
+                                                     :name (subseq png-name 0
+                                                                   (position #\. png-name :from-end t))
+                                                     :type "png")
                                       (parse-integer width-px)
                                       (parse-integer height-px))
                                 png-list))))))))
@@ -5070,9 +5070,9 @@ Input path for the 7800 art index file
   (let ((*machine* 7800)
         (*region* (if (boundp '*region*) *region* :ntsc)))
     (write-7800-binary index-out
-                      (interleave-7800-bytes
-                       (parse-into-7800-bytes
-                        (read-7800-art-index index-in))))))
+                       (interleave-7800-bytes
+                        (parse-into-7800-bytes
+                         (read-7800-art-index index-in))))))
 
 (defun read-nes-art-index (index-in)
   "Read NES art index file and return list of (png-name mode width-px height-px)"
@@ -5185,8 +5185,8 @@ Input path for the 7800 art index file
                 (let* ((px (+ (* tx 8) x))
                        (py (+ (* ty 8) y))
                        (palette-color (if (and (< px width-px) (< py height-px))
-                                        (aref palette-pixels py px)
-                                        (first palette)))  ; default to first palette color
+                                          (aref palette-pixels py px)
+                                          (first palette)))  ; default to first palette color
                        (color-index (gethash palette-color color-map 0))  ; map to 0-3
                        (bit0 (if (logbitp 0 color-index) 1 0))
                        (bit1 (if (logbitp 1 color-index) 1 0)))
@@ -5203,7 +5203,7 @@ Input path for the 7800 art index file
 (defun write-nes-chr-rom (index-out chr-data)
   "Write NES CHR ROM data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (tile chr-data)
       (dotimes (i 16)
         (write-byte (aref tile i) out))))
@@ -5656,11 +5656,11 @@ Output path: @file{Source/Generated/@emph{machine}/Assets/Blob.@emph{name}.s}"
        (format stream "~ASizeX EQU ~D~%" label cols)
        (format stream "~ASizeY EQU ~D~2%" label rows)
        ;; Pattern table: 8 bytes per tile
-        (format stream "~APatterns:~%" label)
-        (loop for u from 0 below (length uniq)
-              for row-bytes = (aref uniq u)
-              do (loop for byte in row-bytes
-                       do (format stream "  .byte $~2,'0X~%" byte)))
+       (format stream "~APatterns:~%" label)
+       (loop for u from 0 below (length uniq)
+             for row-bytes = (aref uniq u)
+             do (loop for byte in row-bytes
+                      do (format stream "  .byte $~2,'0X~%" byte)))
        ;; Name table
        (format stream "~ANameTable:~%" label)
        (loop for i from 0 below cells
@@ -5722,7 +5722,7 @@ producing paths like @file{…/Assets/Source/Generated/…/Blob.*.s} and a faile
       (unwind-protect
            (progn
              (with-output-to-file (out part :if-exists :supersede
-                                       :external-format :utf-8)
+                                            :external-format :utf-8)
                (funcall writer out))
              (when (probe-file dest)
                (ignore-errors (delete-file dest)))
@@ -5775,13 +5775,26 @@ Signals assertion errors for invalid dimensions."
   (assert (= (array-dimension palette-pixels 0) width))
   (assert (= (array-dimension palette-pixels 1) height)))
 
-(defun write-blob-palettes (png output &key (start-offset 0))
+(defun 320c-choose-limit-palette (stamp c2-entries)
+  (let ((stamp-colors (remove 0 (all-colors-in-tile stamp))))
+    (if (null stamp-colors)
+        (list 0 (aref c2-entries 0) (aref c2-entries 1) (aref c2-entries 2))
+        (loop for drop from 3 downto 0
+              for selected = (loop for i from 0 below 4
+                                   when (/= i drop)
+                                     collect (aref c2-entries i))
+              when (every (lambda (c) (member c selected)) stamp-colors)
+                return (cons 0 selected)
+              finally (return nil)))))
+
+(defun write-blob-palettes (png output &key (extractor 'extract-palettes) (start-offset 0))
+  (fresh-line output)
   (princ "Palette:" output)
   (dolist (*region* '(:ntsc :pal))
-    (let ((palettes (extract-palettes
-                     (png->palette (png-read:height png)
-                                   (png-read:width png)
-                                   (png-read:image-data png)))))
+    (let ((palettes (funcall extractor
+                             (png->palette (png-read:height png)
+                                           (png-read:width png)
+                                           (png-read:image-data png)))))
       (format output "~%~10t.if TV == ~a
 ~12t.byte ~a~{~%~12t.byte ~a, ~a, ~a~}
 ~10t.fi~%"
@@ -5802,11 +5815,11 @@ Signals assertion errors for invalid dimensions."
     (format output "~%~10tSpan~x = * + $~4,'0x" id start)
     (dotimes (stamp (length span))
       (let ((stamp-bytes
-              (let ((bytes-across (7800-image-to-160a (elt span stamp)
-                                                      :byte-width 1
-                                                      :height 16
-                                                      :palette #(0 1 2 3)
-                                                      :best-fit-p imperfectp)))
+              (let ((bytes-across (7800-image-to-160ab (elt span stamp)
+                                                       :byte-width 1
+                                                       :height 16
+                                                       :palette #(0 1 2 3)
+                                                       :best-fit-p imperfectp)))
                 (assert (= 1 (length bytes-across)))
                 (car bytes-across))))
         (dotimes (byte 16)
@@ -5928,10 +5941,10 @@ Signals assertion errors for invalid dimensions."
                           (car bytes-across))
                         ;; 320C mode: 4 pixels per byte, 4 colors
                         (let ((bytes-across (7800-image-to-320c stamp-data
-                                                               :byte-width 1
-                                                               :height 16
-                                                               :palette #(0 1 2 3)
-                                                               :best-fit-p imperfectp)))
+                                                                :byte-width 1
+                                                                :height 16
+                                                                :palette #(0 1 2 3)
+                                                                :best-fit-p imperfectp)))
                           (assert (= 1 (length bytes-across)))
                           (car bytes-across)))))
         (dotimes (byte 16)
@@ -6047,11 +6060,11 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
     ;; Route to appropriate ripping method based on width
     (if (= width 320)
         (blob-rip-7800-320ac png-file imperfectp$)
-        (blob-rip-7800-160a png-file imperfectp$))))
+        (blob-rip-7800-160ab png-file imperfectp$))))
 
-(defun blob-rip-7800-160a (png-file &optional (imperfectp$ nil))
+(defun blob-rip-7800-160ab (png-file &optional (imperfectp$ nil))
   "@cindex BLOB ripping
-@cindex 160A graphics mode
+@cindex 160A/B graphics mode
 @cindex sprite graphics
 
 @table @code
@@ -6061,21 +6074,24 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 @item Side Effects: Creates .s file with BLOB data, outputs progress to *trace-output*
 @end table
 
-Rip a Bitmap Large Object Block in 160A mode from PNG-FILE for standard sprite graphics.
+Rip a Bitmap Large Object Block in 160A/B mode from PNG-FILE for standard sprite graphics.
 
-@strong{Graphics Mode:}
+@strong{Graphics Modes:}
+
+160A
 @itemize
 @item 4 pixels per byte (2 bits per pixel)
-@item Up to 25 palettes (background + 8 palettes × 3 colors each)
+@item Up to 4 colors (background + 1 palette × 3 colors)
 @item Variable width (multiple of 4 pixels)
 @item Height multiple of 16 + 1 pixels (palette strip)
 @end itemize
 
-@strong{Use Cases:}
+160B
 @itemize
-@item Character sprites and animations
-@item Game objects and items
-@item General purpose graphics (non-320px wide)
+@item 2 pixels per byte (4 bits per pixel)
+@item Up to 13 colors (background + 4 palettes × 3 colors each)
+@item Variable width (multiple of 2 pixels)
+@item Height multiple of 16 + 1 pixels (palette strip)
 @end itemize
 
 Pass --imperfect to allow imperfect palette matches instead of signaling errors."
@@ -6099,73 +6115,75 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
            (stamp-counting 0)
            (next-span-id 0))
       (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-      (%write-blob-assembly-atomically output-pathname
+      (%write-blob-assembly-atomically
+       output-pathname
        (lambda (output)
-        (format output ";;; Bitmap Large Object Block for Atari 7800
+         (format output ";;; Bitmap Large Object Block for Atari 7800
 ;;; Derived from source file ~a. This is a generated file.~3%
 
-Blob_~a:~10t.block~2%"
-                (enough-namestring png-file)
-                (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output)
-        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-        (dotimes (zone zones)
-          (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span pal-index)
-                   (when span
-                     (let ((id (or (gethash span spans)
-                                   (prog1
-                                       (setf (gethash span spans) (prog1 next-span-id
-                                                                    (incf next-span-id)))
-                                     (cond
-                                       ((and (< stamp-counting #x100)
-                                             (< (+ stamp-counting (length span)) #x100))
-                                        (incf stamp-counting (length span)))
-                                       ((and (< stamp-counting #x100)
-                                             (>= (+ stamp-counting (length span)) #x100))
-                                        (setf stamp-counting #x100))
-                                       (t (incf stamp-counting)))))))
-                       (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                               id pal-index (length span)
-                               (- x (* 4 (length span))))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  for x from 0 by 4
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for palette = (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette)
-                        (setf span nil
-                              last-palette nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette))
-                       (t
-                        (emit-span x span last-palette)
-                        (setf span (list paletted-stamp)
-                              last-palette palette)))
-                  finally
-                     (emit-span x span last-palette)))
-          (format output "~%~10t.word $0000"))
-        (blob/write-spans spans output :imperfectp imperfectp))))
+Blob_~a:~10t.block
+    .byte Mode160AB~2%"
+                 (enough-namestring png-file)
+                 (assembler-label-name (pathname-name png-file)))
+         (write-blob-palettes png output)
+         (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+         (dotimes (zone zones)
+           (format output "~2&Zone~d:" zone)
+           (flet ((emit-span (x span pal-index)
+                    (when span
+                      (let ((id (or (gethash span spans)
+                                    (prog1
+                                        (setf (gethash span spans) (prog1 next-span-id
+                                                                     (incf next-span-id)))
+                                      (cond
+                                        ((and (< stamp-counting #x100)
+                                              (< (+ stamp-counting (length span)) #x100))
+                                         (incf stamp-counting (length span)))
+                                        ((and (< stamp-counting #x100)
+                                              (>= (+ stamp-counting (length span)) #x100))
+                                         (setf stamp-counting #x100))
+                                        (t (incf stamp-counting)))))))
+                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
+                                id pal-index (length span)
+                                (- x (* 4 (length span))))))))
+             (loop with span = nil
+                   with last-palette = nil
+                   for x from 0 by 4
+                   for column from 0 below columns
+                   for stamp = (aref stamps column zone)
+                   for palette = (or (when (and last-palette
+                                                (tile-fits-palette-p
+                                                 stamp
+                                                 (elt palettes-list last-palette)))
+                                       last-palette)
+                                     (best-palette stamp palettes
+                                                   :allow-imperfect-p imperfectp
+                                                   :x column :y zone))
+                   for paletted-stamp = (limit-region-to-palette
+                                         stamp (elt palettes-list palette)
+                                         :allow-imperfect-p imperfectp)
+                   do
+                      (cond
+                        ((zerop column)
+                         (setf span (list paletted-stamp)
+                               last-palette palette))
+                        ((blank-stamp-p stamp (aref palettes 0 0))
+                         (emit-span x span last-palette)
+                         (setf span nil
+                               last-palette nil))
+                        ((and (or (null last-palette)
+                                  (= palette last-palette))
+                              (< (length span) 31))
+                         (appendf span (list paletted-stamp))
+                         (setf last-palette palette))
+                        (t
+                         (emit-span x span last-palette)
+                         (setf span (list paletted-stamp)
+                               last-palette palette)))
+                   finally
+                      (emit-span x span last-palette)))
+           (format output "~%~10t.word $0000"))
+         (blob/write-spans spans output :imperfectp imperfectp))))
     (format *trace-output* " … done!~%")))
 
 (defun blob-rip-7800-320ac (png-file &optional (imperfectp$ nil))
@@ -6210,7 +6228,8 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
                          (equal imperfectp$ "--imperfect"))))
     (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
     (check-height+width-for-blob-320ac height width palette-pixels)
-    (let* ((palettes (extract-palettes palette-pixels))
+    (let* ((zone-spans nil)
+           (palettes (extract-palettes-320ac palette-pixels))
            (palettes-list (2a-to-lol palettes))
            (stamps (extract-4×16-stamps palette-pixels)) ; Use 4px stamps for 320C mode
            (zones (floor height 16))
@@ -6222,88 +6241,124 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
       (force-output *trace-output*)
       (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
       (force-output *trace-output*)
-      (%write-blob-assembly-atomically output-pathname
+      (%write-blob-assembly-atomically
+       output-pathname
        (lambda (output)
-        (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
+         (format output ";;; Bitmap Large Object Block for Atari 7800 (320A/C mode)
 ;;; Derived from source file ~a. This is a generated file.~3%
 
 Blob_~a:~10t.block~2%"
-                (enough-namestring png-file)
-                (assembler-label-name (pathname-name png-file)))
-        (write-blob-palettes png output :start-offset 2)
-        (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-        (dotimes (zone zones)
-          (format output "~2&Zone~d:" zone)
-          (flet ((emit-span (x span last-palette last-mode)
-                   ;; FIXME: Need  to switch  header types if  the current
-                   ;; mode ≠ the last mode to write an "alt" header with
-                   ;; the new mode enabled.
-                   (when span
-                     (let ((id (or (gethash span spans)
-                                   (prog1
-                                       (setf (gethash span spans) (prog1 next-span-id
-                                                                    (incf next-span-id)))
-                                     (cond
-                                       ((and (< stamp-counting #x100)
-                                             (< (+ stamp-counting (length span)) #x100))
-                                        (incf stamp-counting (length span)))
-                                       ((and (< stamp-counting #x100)
-                                             (>= (+ stamp-counting (length span)) #x100))
-                                        (setf stamp-counting #x100))
-                                       (t (incf stamp-counting)))))))
-                        (format output "~%~10t.DLHeader Span~x, ~d, ~d, ~d"
-                                id (+ last-palette 2) (length span)
-                                (- x (length span)))))))
-            (loop with span = nil
-                  with last-palette = nil
-                  with last-mode = nil
-                  for x from 0 by 1
-                  for column from 0 below columns
-                  for stamp = (aref stamps column zone)
-                  for mode = (if (stamp-is-monochrome-p stamp) :320a :320c) ; Auto-detect mode
-                  for palette = (or (when (and last-palette
-                                               (tile-fits-palette-p
-                                                stamp
-                                                (elt palettes-list last-palette)))
-                                      last-palette)
-                                    (best-palette stamp palettes
-                                                  :allow-imperfect-p imperfectp
-                                                  :x column :y zone))
-                  for paletted-stamp = (limit-region-to-palette
-                                        stamp (elt palettes-list palette)
-                                        :allow-imperfect-p imperfectp)
-                  do (when (= (mod column 20) 0)
-                       (format *trace-output* " col ~d/~d…" column columns)
-                       (force-output *trace-output*))
-                     (cond
-                       ((zerop column)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode))
-                       ((blank-stamp-p stamp (aref palettes 0 0))
-                        (emit-span x span last-palette last-mode)
-                        (setf span nil
-                              last-palette nil
-                              last-mode nil))
-                       ((and (or (null last-palette)
-                                 (= palette last-palette))
-                             (eq mode last-mode)
-                             (< (length span) 31))
-                        (appendf span (list paletted-stamp))
-                        (setf last-palette palette
-                              last-mode mode))
-                       (t
-                        (emit-span x span last-palette last-mode)
-                        (setf span (list paletted-stamp)
-                              last-palette palette
-                              last-mode mode)))
-                  finally
-                     (emit-span x span last-palette last-mode)))
-          (format output "~%~10t.word $0000"))
-        ;; One Spans:/stamp region for the whole blob (same as blob-rip-7800-160a).
-        ;; Calling write-spans-320ac inside dotimes duplicated SpanN = * + $… and .bend per zone.
-        (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-    (format *trace-output* " … done!~%")))
+                 (enough-namestring png-file)
+                 (assembler-label-name (pathname-name png-file)))
+         (format output "~%Mode:~10t.byte Mode320AC")
+         (write-blob-palettes png output :extractor 'extract-palettes-320ac :start-offset 2)
+         (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+         (dotimes (zone zones)
+           (format output "~2&Zone~d:" zone)
+           (flet ((collect-span (x span last-palette last-mode)
+                    (when span
+                      (push (list x span last-palette last-mode) zone-spans))))
+             (loop with span = nil
+                   with last-palette = nil
+                   with last-mode = nil
+                   for x from 0 by 1
+                   for column from 0 below columns
+                   for stamp = (aref stamps column zone)
+                   for mode = (if (stamp-is-monochrome-p stamp) :320a :320c)
+                   for palette = (if (eq mode :320c)
+                                     (let ((cands (if last-palette
+                                                      (list (if (< last-palette 4) 0 4))
+                                                      '(0 4))))
+                                       (block found
+                                         (dolist (base cands)
+                                           (let ((c2 (vector (aref palettes base 2)
+                                                             (aref palettes (1+ base) 2)
+                                                             (aref palettes (+ base 2) 2)
+                                                             (aref palettes (+ base 3) 2))))
+                                             (when (320c-choose-limit-palette stamp c2)
+                                               (return-from found base))))
+                                         (best-palette stamp palettes
+                                                       :allow-imperfect-p imperfectp
+                                                       :x column :y zone)))
+                                     (or (when (and last-palette
+                                                    (tile-fits-palette-p
+                                                     stamp
+                                                     (elt palettes-list last-palette)))
+                                           last-palette)
+                                         (best-palette stamp palettes
+                                                       :allow-imperfect-p imperfectp
+                                                       :x column :y zone)))
+                   for c2-entries = (when (eq mode :320c)
+                                      (let ((base (if (< palette 4) 0 4)))
+                                        (vector (aref palettes base 2)
+                                                (aref palettes (1+ base) 2)
+                                                (aref palettes (+ base 2) 2)
+                                                (aref palettes (+ base 3) 2))))
+                   for group-palette = (if (eq mode :320c)
+                                           (if (< palette 4) 0 4)
+                                           palette)
+                   for limit-palette = (if (eq mode :320c)
+                                           (or (320c-choose-limit-palette stamp c2-entries)
+                                               (list 0 (aref c2-entries 0)
+                                                     (aref c2-entries 1)
+                                                     (aref c2-entries 2)))
+                                           (elt palettes-list palette))
+                   for paletted-stamp = (limit-region-to-palette
+                                         stamp limit-palette
+                                         :allow-imperfect-p imperfectp)
+                   do (when (= (mod column 20) 0)
+                        (format *trace-output* " col ~d/~d…" column columns)
+                        (force-output *trace-output*))
+                      (cond
+                        ((zerop column)
+                         (setf span (list paletted-stamp)
+                               last-palette group-palette
+                               last-mode mode))
+                        ((blank-stamp-p stamp (aref palettes 0 0))
+                         (collect-span x span last-palette last-mode)
+                         (setf span nil
+                               last-palette nil
+                               last-mode nil))
+                        ((and (or (null last-palette)
+                                  (= group-palette last-palette))
+                              (eq mode last-mode)
+                              (< (length span) 31))
+                         (appendf span (list paletted-stamp))
+                         (setf last-palette group-palette
+                               last-mode mode))
+                        (t
+                         (collect-span x span last-palette last-mode)
+                         (setf span (list paletted-stamp)
+                               last-palette group-palette
+                               last-mode mode)))
+                   finally
+                      (collect-span x span last-palette last-mode)))
+           (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first)))
+             (setf zone-spans nil)
+              (dolist (entry spans-this-zone)
+                 (let* ((x (first entry))
+                        (span (second entry))
+                        (pal (third entry))
+                        (mode (fourth entry))
+                        (header (if (eq (fourth entry) :320c) "DLAltHeader" "DLHeader"))
+                        (id (or (gethash span spans)
+                                (prog1
+                                    (setf (gethash span spans) (prog1 next-span-id
+                                                                 (incf next-span-id)))
+                                  (cond
+                                    ((and (< stamp-counting #x100)
+                                          (< (+ stamp-counting (length span)) #x100))
+                                     (incf stamp-counting (length span)))
+                                    ((and (< stamp-counting #x100)
+                                          (>= (+ stamp-counting (length span)) #x100))
+                                     (setf stamp-counting #x100))
+                                    (t (incf stamp-counting)))))))
+                 (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
+                         header id pal (length span)
+                         (- x (length span)))))))
+          (format output "~%~10t.word $0000")
+          (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+   (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -6553,8 +6608,8 @@ Columns: ~d
               (let* ((px (+ (* tx 8) x))
                      (py (+ (* ty 8) y))
                      (pixel-value (if (and (< px width-px) (< py height-px))
-                                    (aref palette-pixels py px)
-                                    0)))
+                                      (aref palette-pixels py px)
+                                      0)))
                 ;; For ColecoVision, treat any non-zero as 1 (monochrome)
                 (when (> pixel-value 0)
                   (setf (aref tile-bytes y)
@@ -6565,7 +6620,7 @@ Columns: ~d
 (defun write-colecovision-chr-rom (index-out chr-data)
   "Write ColecoVision CHR ROM data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (tile chr-data)
       (dotimes (i 8)
         (write-byte (aref tile i) out))))
@@ -6653,8 +6708,8 @@ Malformed lines (e.g. missing mode) are skipped."
               (let* ((px (+ (* tx 8) x))
                      (py (+ (* ty 8) y))
                      (color-index (if (and (< px width-px) (< py height-px))
-                                    (mod (aref palette-pixels py px) (ash 1 bits-per-pixel))
-                                    0)))
+                                      (mod (aref palette-pixels py px) (ash 1 bits-per-pixel))
+                                      0)))
                 ;; Set bits in the bitplanes
                 (dotimes (bit  bits-per-pixel)
                   (when (logbitp bit color-index)
@@ -6667,7 +6722,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun write-snes-chr-rom (index-out chr-data)
   "Write SNES CHR ROM data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (tile chr-data)
       (dotimes (i (length tile))
         (write-byte (aref tile i) out))))
@@ -6692,9 +6747,9 @@ Malformed lines (e.g. missing mode) are skipped."
                                          (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
-                        (make-pathname :name (pathname-name png-file)
-                                     :type "s")
-                        (directory-namestring png-file))))
+                         (make-pathname :name (pathname-name png-file)
+                                        :type "s")
+                         (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; SNES tile data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"snes.inc\"~2%")
@@ -6713,8 +6768,8 @@ Malformed lines (e.g. missing mode) are skipped."
                     (let* ((px (+ (* tx 8) x))
                            (py (+ (* ty 8) y))
                            (color-index (if (and (< px width) (< py height))
-                                          (mod (aref palette-pixels py px) 4)
-                                          0)))
+                                            (mod (aref palette-pixels py px) 4)
+                                            0)))
                       ;; SNES 2BPP: 2 bitplanes, 8 bytes each
                       (dotimes (bit 2)
                         (when (logbitp bit color-index)
@@ -6733,9 +6788,9 @@ Malformed lines (e.g. missing mode) are skipped."
   (let ((*machine* 88))
     (format *trace-output* "~&Ripping SNES sprite data from ~a …" (enough-namestring png-file))
     (let ((output-file (merge-pathnames
-                       (make-pathname :name (pathname-name png-file)
-                                    :type "s")
-                       (directory-namestring png-file))))
+                        (make-pathname :name (pathname-name png-file)
+                                       :type "s")
+                        (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; SNES sprite data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"snes.inc\"~2%")
@@ -6750,9 +6805,9 @@ Malformed lines (e.g. missing mode) are skipped."
   (let ((*machine* 88))
     (format *trace-output* "~&Ripping SNES font data from ~a …" (enough-namestring png-file))
     (let ((output-file (merge-pathnames
-                       (make-pathname :name (pathname-name png-file)
-                                    :type "s")
-                       (directory-namestring png-file))))
+                        (make-pathname :name (pathname-name png-file)
+                                       :type "s")
+                        (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; SNES font data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"snes.inc\"~2%")
@@ -6826,7 +6881,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun write-lynx-chr-rom (index-out chr-data)
   "Write Lynx CHR ROM data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (sprite chr-data)
       (dotimes (i (length sprite))
         (write-byte (aref sprite i) out))))
@@ -6879,9 +6934,9 @@ Malformed lines (e.g. missing mode) are skipped."
                                          (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
-                        (make-pathname :name (pathname-name png-file)
-                                     :type "s")
-                        (directory-namestring png-file))))
+                         (make-pathname :name (pathname-name png-file)
+                                        :type "s")
+                         (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; TED bitmap data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"ted.inc\"~2%")
@@ -6916,9 +6971,9 @@ Malformed lines (e.g. missing mode) are skipped."
                                          (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
-                        (make-pathname :name (pathname-name png-file)
-                                     :type "s")
-                        (directory-namestring png-file))))
+                         (make-pathname :name (pathname-name png-file)
+                                        :type "s")
+                         (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; TED sprite data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"ted.inc\"~2%")
@@ -6950,9 +7005,9 @@ Malformed lines (e.g. missing mode) are skipped."
                                          (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
-                        (make-pathname :name (pathname-name png-file)
-                                     :type "s")
-                        (directory-namestring png-file))))
+                         (make-pathname :name (pathname-name png-file)
+                                        :type "s")
+                         (directory-namestring png-file))))
       (with-output-to-file (out output-file :if-exists :supersede :if-does-not-exist :create)
         (format out ";;; TED font data ripped from ~a~%;;; Generated automatically~2%" png-file)
         (format out ".include \"ted.inc\"~2%")
@@ -7062,7 +7117,7 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun write-sms-chr-rom (index-out chr-data)
   "Write SMS CHR ROM data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (tile chr-data)
       (dotimes (i 32)
         (write-byte (aref tile i) out))))
@@ -7106,7 +7161,7 @@ Malformed lines (e.g. missing mode) are skipped."
           (dotimes (ty tiles-high)
             (dotimes (tx tiles-wide)
               (let ((tile-pixels (extract-region image (* tx 8) (* ty 8)
-                                                (+ (* tx 8) 7) (+ (* ty 8) 7))))
+                                                 (+ (* tx 8) 7) (+ (* ty 8) 7))))
                 (let ((tile-bytes (cgb-tile-to-bytes tile-pixels palette-mode)))
                   (dotimes (i (length tile-bytes))
                     (vector-push-extend (aref tile-bytes i) tile-data)))))))))
@@ -7166,8 +7221,8 @@ Malformed lines (e.g. missing mode) are skipped."
             (when (logbitp bit color-index)
               (let ((byte-index (+ (* bit 8) y)))
                 (setf (aref tile-bytes byte-index)
-                      (logior (aref tile-bytes byte-index) (ash 1 (- 7 x))))))))))
-    tile-bytes))
+                      (logior (aref tile-bytes byte-index) (ash 1 (- 7 x))))))))
+        tile-bytes))))
 
 (defun compile-tg16-sprite (png-file target-dir height width palette-pixels)
   "Compile TurboGrafx-16/PC Engine sprite data from PNG image"
@@ -7181,27 +7236,27 @@ Malformed lines (e.g. missing mode) are skipped."
 ;;; TurboGrafx-16/PC Engine sprite format
 ;;; Dimensions: ~Dx~D pixels (4-bit color)
 ~2%" png-file width height)
-
+      
       ;; TG16 sprite data format: 4-bit pixels, planar arrangement
       (let* ((sprite-width-tiles (/ width 8))   ; in 8-pixel units
              (sprite-height-tiles (/ height 8))  ; in 8-pixel units
              (total-tiles (* sprite-width-tiles sprite-height-tiles)))
-
+        
         (format src-file ";;; Sprite dimensions: ~Dx~D tiles (~D total tiles)
 ;;; Each tile: 32 bytes (4 bitplanes x 8 bytes)
 ;;; Total sprite data: ~D bytes
 ~2%" sprite-width-tiles sprite-height-tiles total-tiles (* total-tiles 32))
-
+        
         ;; Generate sprite data structure
         (format src-file "~A_sprite_data:~%" (pathname-name png-file))
-
+        
         ;; For each 8x8 tile in the sprite (row-major order)
         (dotimes (tile-y sprite-height-tiles)
           (dotimes (tile-x sprite-width-tiles)
             (format src-file "~%    ;; Tile (~D,~D) - bytes ~D-~D~%"
                     tile-x tile-y (* (+ tile-x (* tile-y sprite-width-tiles)) 32)
                     (+ (* (+ tile-x (* tile-y sprite-width-tiles)) 32) 31))
-
+            
             ;; Convert tile to TG16 planar format
             (let ((tile-bytes (compile-tg16-tile-data palette-pixels tile-x tile-y)))
               ;; Output 4 bitplanes of 8 bytes each
@@ -7218,10 +7273,9 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte ~D  ; Height in tiles
     .word ~A_sprite_data  ; Data pointer
     .word ~D  ; Total tiles
-~2%" (pathname-name png-file) sprite-width-tiles sprite-height-tiles (pathname-name png-file) total-tiles))))
-
-    (format *trace-output* "~&Compiled TG16 sprite: ~A (~Dx~D tiles, ~D bytes)"
-            out-file sprite-width-tiles sprite-height-tiles (* sprite-width-tiles sprite-height-tiles 32))))
+~2%" (pathname-name png-file) sprite-width-tiles sprite-height-tiles (pathname-name png-file) total-tiles)))
+      (format *trace-output* "~&Compiled TG16 sprite: ~A (~Dx~D tiles, ~D bytes)"
+              out-file sprite-width-tiles sprite-height-tiles (* sprite-width-tiles sprite-height-tiles 32)))))
 
 (defun compile-tg16-background (png-file target-dir height width palette-pixels)
   "Compile TurboGrafx-16/PC Engine background data - TEMPORARILY DISABLED DUE TO COMPILATION ERROR"
@@ -7303,11 +7357,11 @@ Malformed lines (e.g. missing mode) are skipped."
 (defun write-gb-tile-data (index-out tile-data)
   "Write Game Boy tile data to binary file"
   (with-output-to-file (out index-out :element-type '(unsigned-byte 8)
-                           :if-exists :supersede)
+                                      :if-exists :supersede)
     (dolist (tile tile-data)
       (dotimes (i 16)
         (write-byte (aref tile i) out))))
-      (format *trace-output* "~&Wrote ~:D bytes (~:D tiles) to ~A"
+  (format *trace-output* "~&Wrote ~:D bytes (~:D tiles) to ~A"
           (* (length tile-data) 16) (length tile-data) index-out))
 
 (defun read-dmg-art-index (index-in)
@@ -7374,9 +7428,9 @@ Malformed lines (e.g. missing mode) are skipped."
                      (y (/ pixel-index 320)))
                 (when (< y 200)  ; Ensure we don't go beyond image height
                   (let ((color-index (if (and (< x (array-dimension palette-pixels 0))
-                                             (< y (array-dimension palette-pixels 1)))
-                                       (aref palette-pixels x y)
-                                       0)))
+                                              (< y (array-dimension palette-pixels 1)))
+                                         (aref palette-pixels x y)
+                                         0)))
                     ;; Extract the specific bit from the color index
                     (when (logbitp bitplane color-index)
                       (setf byte-value (logior byte-value (ash 1 (- 7 bit)))))))))
@@ -7411,8 +7465,8 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file) (pathname-name png-file))))
 
-    (format *trace-output* "~&Compiled Apple IIGS Super Hi-Res: ~A (320x200, 16 colors, 3200 bytes)"
-            out-file))
+  (format *trace-output* "~&Compiled Apple IIGS Super Hi-Res: ~A (320x200, 16 colors, 3200 bytes)"
+          out-file))
 
 (defun compile-a2gs-double-hires (png-file target-dir height width palette-pixels)
   "Compile Apple IIGS Double Hi-Res graphics (560x192, 16 colors)"
@@ -7450,9 +7504,9 @@ Malformed lines (e.g. missing mode) are skipped."
                      (y (/ pixel-index 560)))
                 (when (< y 192)  ; Ensure we don't go beyond image height
                   (let ((color-index (if (and (< x (array-dimension palette-pixels 0))
-                                             (< y (array-dimension palette-pixels 1)))
-                                       (aref palette-pixels x y)
-                                       0)))
+                                              (< y (array-dimension palette-pixels 1)))
+                                         (aref palette-pixels x y)
+                                         0)))
                     ;; Extract the specific bit from the color index
                     (when (logbitp bitplane color-index)
                       (setf byte-value (logior byte-value (ash 1 (- 7 bit)))))))))
@@ -7475,8 +7529,8 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file))))
 
-    (format *trace-output* "~&Compiled Apple IIGS Double Hi-Res: ~A (560x192, 16 colors, 5376 bytes)"
-            out-file))
+  (format *trace-output* "~&Compiled Apple IIGS Double Hi-Res: ~A (560x192, 16 colors, 5376 bytes)"
+          out-file))
 
 (defun compile-a2gs-hires (png-file target-dir height width palette-pixels)
   "Compile Apple IIGS Hi-Res graphics (280x192, 6 colors)"
@@ -7514,9 +7568,9 @@ Malformed lines (e.g. missing mode) are skipped."
                      (y (/ pixel-index 280)))
                 (when (< y 192)  ; Ensure we don't go beyond image height
                   (let ((color-index (if (and (< x (array-dimension palette-pixels 0))
-                                             (< y (array-dimension palette-pixels 1)))
-                                       (aref palette-pixels x y)
-                                       0)))
+                                              (< y (array-dimension palette-pixels 1)))
+                                         (aref palette-pixels x y)
+                                         0)))
                     ;; For Hi-Res, we use 3 bits but only 6 colors are actually distinct
                     ;; due to NTSC artifacting
                     (when (and (< color-index 8) (logbitp bitplane (logand color-index 7)))
@@ -7586,13 +7640,13 @@ Malformed lines (e.g. missing mode) are skipped."
               ;; Calculate pixel data for this byte
               (dotimes (bit 8)
                 (let* ((pixel-in-byte (+ (* byte 8) bit))
-                     (x-in-sprite (mod pixel-in-byte width))
-                     (y-in-sprite (/ pixel-in-byte width)))
+                       (x-in-sprite (mod pixel-in-byte width))
+                       (y-in-sprite (/ pixel-in-byte width)))
                   (when (< y-in-sprite height)
                     (let ((color-index (if (and (< x-in-sprite (array-dimension palette-pixels 0))
-                                               (< y-in-sprite (array-dimension palette-pixels 1)))
-                                         (aref palette-pixels x-in-sprite y-in-sprite)
-                                         0)))
+                                                (< y-in-sprite (array-dimension palette-pixels 1)))
+                                           (aref palette-pixels x-in-sprite y-in-sprite)
+                                           0)))
                       (when (logbitp bitplane color-index)
                         (setf byte-value (logior byte-value (ash 1 (- 7 bit)))))))))
 
@@ -7613,8 +7667,8 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file) width height))))
 
-      (format *trace-output* "~&Compiled Apple IIGS sprite: ~A (~Dx~D pixels)"
-            out-file width height))
+  (format *trace-output* "~&Compiled Apple IIGS sprite: ~A (~Dx~D pixels)"
+          out-file width height))
 
 ;; Apple IIGS Art Compilation Interface
 
@@ -7653,8 +7707,8 @@ Malformed lines (e.g. missing mode) are skipped."
                                       (parse-integer width-px)
                                       (parse-integer height-px))
                                 png-list)))))))
-    (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
-    (reverse png-list))))
+      (format *trace-output* " done. Got ~:D PNG files to read." (length png-list))
+      (reverse png-list))))
 
 (defgeneric compile-ted-art-by-mode (mode png-name directory height-px width-px)
   (:documentation "Compile TED art based on mode using EQL specializers")
@@ -7696,7 +7750,7 @@ Malformed lines (e.g. missing mode) are skipped."
   "Compile art assets for Apple II HIRES graphics mode"
   (let ((*machine* 2))
     (write-a2-art-index index-out
-                       (read-a2-art-index index-in))))
+                        (read-a2-art-index index-in))))
 
 ;; (defun compile-art-a2e (index-out index-in)
 ;;   "Compile art assets for Apple IIe Double HIRES graphics mode"

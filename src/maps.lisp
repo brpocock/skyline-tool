@@ -685,6 +685,17 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
                                       (aref palette-strip (+ c (* p 4)) 0)))))
     palettes))
 
+(defun extract-palettes-320ac (image &key (count 8))
+  (let* ((last-row (1- (array-dimension image 1)))
+         (palette-strip (extract-region image 0 last-row 27 last-row))
+         (palettes (make-array (list count 4) :element-type '(unsigned-byte 8))))
+    (dotimes (p count)
+      (setf (aref palettes p 0) (aref palette-strip (+ 8 (floor p 4)) 0)) ; BACKGRND
+      (setf (aref palettes p 1) (aref palette-strip (+ 12 p) 0))  ; C1
+      (setf (aref palettes p 2) (aref palette-strip p 0))          ; C2
+      (setf (aref palettes p 3) (aref palette-strip (+ 20 p) 0))) ; C3
+    palettes))
+
 (defun all-colors-in-tile (tile)
   (destructuring-bind (width height) (array-dimensions tile)
     (remove-duplicates (loop for y below height
@@ -1348,7 +1359,7 @@ after considering ~:d option~:p."
       (lparallel:end-kernel))))
 
 (defun hex-dump-comment (string)
-  (format t "~{~&     ;; ~
+  (format t "~{~&~10t;; ~
 ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~
 ~^  ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~
 ~^  ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~
@@ -1356,7 +1367,7 @@ after considering ~:d option~:p."
           (coerce string 'list)))
 
 (defun hex-dump-bytes (string &optional (stream t))
-  (format stream "~{~&     .byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~
+  (format stream "~{~&~10t.byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~
 ~^,   $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
           (coerce string 'list)))
 

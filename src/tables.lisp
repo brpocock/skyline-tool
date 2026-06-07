@@ -131,163 +131,6 @@ Number if parseable, otherwise NIL
               (invalid-number ())
               (sb-int:simple-parse-error ())))))
 
-(defun compile-enemies (&optional (pathname (merge-pathnames "Source/Tables/EnemyStats.ods" (project-root)))
-                                  (output-pathname (merge-pathnames (format nil "Source/Generated/~a/EnemyTables.s" (skyline-tool::machine-directory-name))
-                                                                    (project-root)))
-                                  index-pathname)
-  "Compile enemy statistics from spreadsheet into assembly source.
-
-Processes enemy stat data from an ODS spreadsheet and generates assembly
-code for game enemy definitions, including an index file for lookup.
-
-@table @asis
-@item PATHNAME
-Path to enemy stats ODS file (default: Source/Tables/EnemyStats.ods)
-@item OUTPUT-PATHNAME
-Path for generated assembly file (default: platform-specific EnemyTables.s)
-@item INDEX-PATHNAME
-Optional path for index file (default: Enemies.index alongside output)
-@end table
-
-@xref{fun:read-ods-into-lists}, @xref{fun:ss->lol}."
-  (unless index-pathname
-    (setf index-pathname (make-pathname :defaults output-pathname
-                                        :name "Enemies" :type "index")))
-  (format *trace-output* "~&Reading enemies stats sheets in ~a … "
-          (enough-namestring pathname))
-  (finish-output *trace-output*)
-  (let ((sheet (read-ods-into-lists pathname)))
-    (let* ((enemy-stats (first sheet))
-           (enemy-art (second sheet))
-           (data (ss->lol enemy-stats))
-           (art (ss->lol enemy-art)))
-      (with-output-to-file (output output-pathname :if-exists :supersede)
-        (with-output-to-file (index index-pathname :if-exists :supersede)
-          (format *trace-output* "writing ~a and ~a …"
-                  (enough-namestring output-pathname)
-                  (enough-namestring index-pathname))
-          (finish-output *trace-output*)
-          (format output ";;; Generated from ~a~2%Enemies: .block~%"
-                  (enough-namestring pathname))
-          (format output "~%~10t;; Order of enemies:~{~%~10t;; $~2,'0x = ~a~}"
-                  (loop for record in data
-                        for i from 0
-                        append (list i (getf record :enemy))))
-          (format index "~{~2,'0x~a~%~}"
-                  (loop for record in data
-                        for i from 0
-                        append (list i (getf record :enemy))))
-          (format output "~%Levels:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :level))
-                                     (getf record :enemy))))
-          (format output "~%HitPoints:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :hit-points))
-                                     (getf record :enemy))))
-          (format output "~%Flags:~{~%~10t.byte 0 ~@[| UNDEAD~]~40t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :undead-p)
-                                     (getf record :enemy))))
-          (format output "~%TouchDamage:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :touch-damage))
-                                     (getf record :enemy))))
-          (format output "~%Attack:~{~%~10t.byte ~:[0~;~:*Attack~a~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :attack)
-                                     (getf record :enemy))))
-          (format output "~%ProjectileRate:~{~%~10t.byte ~:[0~;~:*~d~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :projectile-rate)
-                                     (getf record :enemy))))
-          (format output "~%Projectile:~{~%~10t.byte ~:[0~;~:*Projectile~a~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :projectile)
-                                     (getf record :enemy))))
-          (format output "~2%~10t.bend~%")))))
-  (format *trace-output* " Done.~%"))
-
-(defun compile-item-drops (&optional (pathname (merge-pathnames "Source/Tables/ItemDrop.ods" (project-root)))
-                                     (output-pathname
-                                      (merge-pathnames (format nil "Source/Generated/~a/ItemDropTable.s" (skyline-tool::machine-directory-name))
-                                                      (project-root))))
-  "Compile the item drop tables from PATHNAME into OUTPUT-PATHNAME.
-
-@table @asis
-@item PATHNAME
-Path to the ODS file containing item drop data.
-@item OUTPUT-PATHNAME
-Path where the generated assembly file will be written.
-@end table
-
-Reads item drop tables from an ODS spreadsheet and generates assembly code."
-  (format *trace-output* "~&Reading item drops sheets in ~a … "
-          (enough-namestring pathname))
-  (unless (probe-file pathname)
-    (error "Item drop source file ~a not found" pathname))
-  (let ((sheet (read-ods-into-lists pathname)))
-    (destructuring-bind (enemies-page tiles-page) sheet
-      (let* ((enemies-drops (ss->lol enemies-page))
-             (tiles-drops (ss->lol tiles-page)))
-        (with-output-to-file (output output-pathname :if-exists :supersede)
-          (format *trace-output* "writing ~a … " (enough-namestring output-pathname))
-          (finish-output *trace-output*)
-          (format output ";;; Generated from ~a~2%EnemiesDrops: .block~%"
-                  (enough-namestring pathname))
-          (format output "~%Level:
-~10t.byte ~{~,3d~^, ~,3d~^, ~,3d~^, ~,3d~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop) (number? (getf drop :enemy-level)))
-                          enemies-drops))
-          (format output "~%Combo:
-~10t.byte ~{~3d~^, ~3d~^, ~3d~^, ~3d~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop) (number? (getf drop :combo)))
-                          enemies-drops))
-          (format output "~%Chance:
-~10t.byte ~{$~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop)
-                            (or (when-let (n (number? (getf drop :chance)))
-                                  (floor (* #x100 n) #x100))
-                                0))
-                          enemies-drops))
-          (format output "~%Item:~{~%~10t.byte Item~a ~}"
-                  (mapcar (lambda (drop) (getf drop :item))
-                          enemies-drops))
-          (format output "~%Flags:~{~%~10t.byte 0~@[ | ITEM_HEALING ~]~}"
-                  (mapcar (lambda (drop) (number? (getf drop :ihealing-p)))
-                          enemies-drops))
-          (format output "~%~10t.bend")
-          (format output "~2%TilesDrops:~{~%;;; ~{ ~a: ~s~^, ~}~}" tiles-drops)))))
-  (format *trace-output* "Done.~%"))
-
-(defun compile-shops (&optional (pathname (merge-pathnames "Source/Tables/Shops.ods" (project-root)))
-                                (output-pathname (merge-pathnames (format nil "Source/Generated/~a/ShoppingTable.s" (skyline-tool::machine-directory-name))
-                                                                 (project-root))))
-  "Compile the shopping tables from PATHNAME into OUTPUT-PATHNAME.
-
-@table @asis
-@item PATHNAME
-Path to the ODS file containing shopping data.
-@item OUTPUT-PATHNAME
-Path where the generated assembly file will be written.
-@end table
-
-Reads shop tables from an ODS spreadsheet and generates assembly code."
-  (format *trace-output* "~&Reading shopping sheets in ~a … "
-          (enough-namestring pathname))
-  (let* ((sheet (read-ods-into-lists pathname))
-         (page1 (first sheet))
-         (data (ss->lol page1)))
-    (with-output-to-file (output output-pathname :if-exists :supersede)
-      (format *trace-output* "writing ~a … " (enough-namestring output-pathname))
-      (finish-output *trace-output*)
-      (format output ";;; Generated from ~a~%;;; Shopping Tables:~%"
-              (enough-namestring pathname))
-      (format output "~%Shopping: .block")
-      (format output "~{~%~{~%;;; ~:(~a~): ~^~s~}~}" data)
-      (format output "~%~10t.bend")))
-  (format *trace-output* "Done.~%"))
-
 (defun write-projection-tables.s ()
   "Writes Source/Generated/$(PORT)/ProjectionTables.s database.
 This contains pre-computed sine and cosine values of various kinds for the 3D projection subsystem."
@@ -503,9 +346,10 @@ GameFlag: .block~2%"
                    (format code "~%~10t.bend~% ;;; end of file~%")
                    (format forth "~%( end of file )~%")))))))
 
-(defun write-characters-tables (&optional (spreadsheet-pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root)))
-                                          (source-pathname (merge-pathnames (format nil "Source/Generated/~a/CharacterTables.s" (skyline-tool::machine-directory-name))
-                                                                           (project-root))))
+(defun write-characters-tables
+    (&optional (spreadsheet-pathname #p"Source/Tables/NPCStats.ods")
+               (source-pathname (format nil "Source/Generated/~a/CharacterTables.s"
+                                        (skyline-tool::machine-directory-name)))) 
   "Write character tables from SPREADSHEET-PATHNAME to SOURCE-PATHNAME.
 
 SPREADSHEET-PATHNAME: Path to the NPC stats spreadsheet (default: Source/Tables/NPCStats.ods)
@@ -549,45 +393,30 @@ SOURCE-PATHNAME: Output path for the generated source file"
                                   (getf char :name)))))
       (format *trace-output* " done."))))
 
-(defun write-docks-index
-    (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/DocksIndex.s"
-                                                  (machine-directory-name))
-                                          (project-root))))
-  "Write the dock IDs from the maps index to PATHNAME"
-  (read-map-ids-table)
-  (let ((max-dock-id (loop for dock-id being the hash-keys of *dock-ids-maps*
-                           maximize dock-id into max-dock-id
-                           finally (return max-dock-id))))
-    (with-output-to-file (code pathname :if-exists :supersede)
-      (loop for i from 1 upto max-dock-id
-            for name = (gethash i *dock-ids-maps* "untitled")
-            do (format code "~%DockName~d: .ptext \"~a\""
-                       i
-                       (cl-change-case:lower-case (gethash name *maps-display-names* "untitled"))))
-      (format code "~2%~10tDockNames = (~{DockName~d~^, ~})"
-              (loop for i from 1 upto max-dock-id collecting i))
-      (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
-
-(defun find-dock-in-tmx (locale-name dock-name)
+(defun find-dock-in-tmx (locale-name &optional dock-name)
   "Find a dock object in the TMX file for LOCALE-NAME.
-Searches all object groups for an object with type=\"Dock\" and name
-matching DOCK-NAME.  Returns (values tether-x tether-y) in tile units
+Searches all object groups for an object with type=\"Dock\".
+When DOCK-NAME is provided, also filters on the object's name.
+Returns (values tether-x tether-y) in tile units
 (pixel coordinates divided by 16)."
+  (declare (ignore dock-name))
   (let ((xml (load-other-map locale-name)))
     (dolist (object-group (xml-matches "objectgroup" xml))
       (dolist (object (xml-matches "object" object-group))
         (let ((type (xml-attr "type" (second object)))
-              (name (xml-attr "name" (second object)))
               (x (xml-attr "x" (second object)))
               (y (xml-attr "y" (second object))))
-          (when (and type name
-                     (string-equal type "Dock")
-                     (string-equal name dock-name))
+          (when (and type (string-equal type "Dock"))
             (return-from find-dock-in-tmx
-              (values (floor (parse-integer x) 16)
-                      (floor (parse-integer y) 16))))))))
-  (error "No dock object with type=Dock and name=~s found in ~a"
-         dock-name locale-name))
+              (values (floor (parse-number:parse-number x) 16)
+                      (floor (parse-number:parse-number y) 16)))))))
+    ;; No Dock object found — default to 4 tiles from the right edge, midline
+    (let* ((map-attrs (second xml))
+           (map-width (parse-number (xml-attr "width" map-attrs)))
+           (map-height (parse-number (xml-attr "height" map-attrs)))
+           (default-x (- map-width 4))
+           (default-y (floor map-height 2)))
+      (values default-x default-y))))
 
 (defun read-flag-index (flag-name)
   "Read Flags.txt and return the 0-based line index of FLAG-NAME.
@@ -604,14 +433,14 @@ not found in the file."
                 for i from 0
                 while line
                 for trimmed = (string-trim '(#\Space #\Tab #\Return #\Newline) line)
-                do (when (string-equal trimmed flag-name)
+                do (when (string-equal (header-case trimmed) (header-case flag-name))
                      (return i))
                 finally (error "Flag ~s not found in ~a"
                                flag-name pathname))))))
 
 (defun write-sea-chart-docks-index
     (&optional (pathname (merge-pathnames
-                          (format nil "Source/Generated/~a/SeaChartDocksIndex.s"
+                          (format nil "Source/Generated/~a/Docks.s"
                                   (machine-directory-name))
                           (project-root)))
                (spreadsheet (merge-pathnames #p"Source/Tables/SeaChartDocks.ods"
@@ -626,74 +455,76 @@ a 64tass assembly file describing dock cursor positions and warps."
   (finish-output *trace-output*)
   (read-map-ids-table)
   (let* ((raw (first (read-ods-into-lists spreadsheet)))
-         (table (ss->lol raw))
-         (docks (loop for row in table
-                      for locale = (getf row :locale)
-                      for map-name = (getf row :map-name)
-                      for sea-chart-x = (getf row :sea-chart-x)
-                      for sea-chart-y = (getf row :sea-chart-y)
-                      for island-name = (getf row :island-name)
-                      for flag-name = (getf row :flag-name)
-                      when (and locale map-name
-                                (not (emptyp (string locale)))
-                                (not (emptyp (string map-name))))
-                        collect (list :locale locale
-                                      :map-name map-name
-                                      :sea-chart-x sea-chart-x
-                                      :sea-chart-y sea-chart-y
-                                      :island-name island-name
-                                      :flag-name flag-name)))))
-    (format *trace-output* " … read ~:d dock~:p." (length docks))
+         (table (and raw (ss->lol raw)))
+         (docks (and table
+                     (loop for row in table
+                           for locale = (getf row :island)
+                           for map-name = (getf row :map)
+                           for sea-chart-x = (getf row :chart-x)
+                           for sea-chart-y = (getf row :chart-y)
+                           for island-name = (getf row :island)
+                           for flag-name = (getf row :flag)
+                           when (and locale map-name
+                                     (not (emptyp (string locale)))
+                                     (not (emptyp (string map-name))))
+                             collect (list :locale locale
+                                           :map-name map-name
+                                           :sea-chart-x sea-chart-x
+                                           :sea-chart-y sea-chart-y
+                                           :island-name island-name
+                                           :flag-name flag-name)))))
+    (assert docks)
+    (format *trace-output* " … read ~:d dock~:p …" (length docks))
     (finish-output *trace-output*)
     (with-output-to-file (code pathname :if-exists :supersede)
       (format code ";;; Generated from ~a~2%;;; Sea Chart Dock Index~2%"
               (enough-namestring spreadsheet))
-      (format code "; Format per entry:~%;
-;   .byte SeaChartX, SeaChartY, MapID, TetherX, TetherY, FlagByte~%;
-;   .ptext \"Island Name\"~2%")
-      (loop for dock in docks
-            for i from 1
-            for locale-str = (string (getf dock :locale))
-            for map-name-str = (string (getf dock :map-name))
-            for sea-chart-x-val = (getf dock :sea-chart-x)
-            for sea-chart-y-val = (getf dock :sea-chart-y)
-            for island-name-val = (getf dock :island-name)
-            for flag-name-val = (getf dock :flag-name)
-            for segment-name = (concatenate 'string
-                                            (pascal-case locale-str)
-                                            "/"
-                                            (pascal-case map-name-str))
-            for map-id = (or (gethash segment-name *maps-ids*)
-                             (error "Map ~s not found in maps index"
-                                    segment-name))
-            for dock-label = (pascal-case locale-str)
-            do (multiple-value-bind (tether-x tether-y)
-                   (find-dock-in-tmx segment-name dock-label)
-                 (let ((sc-x (parse-integer (string sea-chart-x-val)))
-                       (sc-y (parse-integer (string sea-chart-y-val))))
-                   (format code "DockEntry_~d:~%" i)
-                   (format code "~10t.byte $~2,'0x, $~2,'0x~32t; Sea chart (~2,'0x, ~2,'0x)~%"
-                           sc-x sc-y sc-x sc-y)
-                   (format code "~10t.byte $~2,'0x~32t; Map ID ~d (~a)~%"
-                           map-id map-id segment-name)
-                   (format code "~10t.byte ~d, ~d~32t; Tether (~d, ~d)~%"
-                           tether-x tether-y tether-x tether-y)
-                   (format code "~10t.byte ~a~32t; Flag~%"
-                           (if (or (null flag-name-val)
-                                   (emptyp (string-trim
-                                            '(#\Space #\Tab)
-                                            (string flag-name-val))))
-                               "0"
-                               (progn
-                                 (read-flag-index (string flag-name-val))
-                                 (format nil "GameFlag.~a"
-                                         (pascal-case (string flag-name-val))))))
-                   (format code "~10t.ptext \"~a\"~2%"
-                           (if island-name-val
-                               (string island-name-val)
-                               "")))))
-      (format code "SeaChartNumDocks = ~d~%" (length docks)))
-    (format *trace-output* " wrote ~a." (enough-namestring pathname)))
+      (format code "~2%Docks: .block")
+      (format code "~2%MapID:")
+      (dolist (dock docks)
+        (format code "~%~10t.byte $~2,'0x~32t ~a/~a"
+                (gethash (format nil "~a/~a"
+                                 (pascal-case (getf dock :locale-name))
+                                 (pascal-case (getf dock :map-name)))
+                         *maps-index*)
+                (getf dock :locale) (getf dock :map-name)))
+      (format code "~2%Name:")
+      (dolist (dock docks)
+        (format code "~%~10t.ftext 20, \"~a\""
+                (string-trim #(#\space #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+                             (getf dock :map-name))))
+      (format code "~2%Flag:")
+      (dolist (dock docks)
+        (if-let ((flag-id (read-flag-index (getf dock :flag-name))))
+          (format code "~%~10t.byte $~2,'0x~32t; ~a … ~a"
+                  flag-id
+                  (getf dock :flag-name)
+                  (getf dock :locale-name))
+          (format code "~%~10t.byte 0~32t; — (~a)"
+                  (getf dock :locale-name))))
+      (format code "~2%TetherX:")
+      (dolist (dock docks)
+        (multiple-value-bind (tether-x tether-y)
+            (find-dock-in-tmx (format nil "~a/~a"
+                                      (pascal-case (getf dock :locale-name))
+                                      (pascal-case (getf dock :map-name))))
+          (declare (ignore tether-y))
+          (format code "~%~10t.byte ~d~32t; ~a"
+                  (parse-integer (string tether-x))
+                  (getf dock :locale-name))))
+      (format code "~2%TetherY:")
+      (dolist (dock docks)
+        (multiple-value-bind (tether-x tether-y)
+            (find-dock-in-tmx (format nil "~a/~a"
+                                      (pascal-case (getf dock :locale-name))
+                                      (pascal-case (getf dock :map-name))))
+          (declare (ignore tether-x))
+          (format code "~%~10t.byte ~d~32t; ~a"
+                  (parse-integer (string tether-y))
+                  (getf dock :locale-name)))        )
+      (format code "~2%~10t.bend~%")
+      (format code "~2%NumDocks = ~d" (length docks)))
+    (format *trace-output* " wrote ~a." (enough-namestring pathname))))
 
 (defun parse-number-or-fraction (value)
   "Parse VALUE as a number, supporting integers, decimals, and fractions (e.g. 20/3).
