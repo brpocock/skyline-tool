@@ -1728,6 +1728,9 @@ and target platform. Handles special cases for different machines and video mode
     (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
       (cond
         ((equal kind "Maps")
+         ;; Intv (2609): compile-map still emits 7800 .map; future compile-map-intv
+         ;; should emit per-quadrant TL/TR/BL/BR GROM ($0000-$00FF) or GRAM
+         ;; ($0100+) card refs with color in tileset data (GROM-first dedup).
          (format nil "bin/skyline-tool --port ${PORT} compile-map $<"))
         ((equal kind "Songs")
          (ecase *machine*

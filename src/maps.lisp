@@ -681,8 +681,8 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
     (dotimes (p count)
       (dotimes (c 4)
         (setf (aref palettes p c) (if (zerop c)
-                                      (aref palette-strip 0 0)
-                                      (aref palette-strip (+ c (* p 4)) 0)))))
+                                      (or (aref palette-strip 0 0) 0)
+                                      (or (aref palette-strip (+ c (* p 4)) 0) 0)))))
     palettes))
 
 (defun extract-palettes-320ac (image &key (count 8))
@@ -690,10 +690,10 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
          (palette-strip (extract-region image 0 last-row 27 last-row))
          (palettes (make-array (list count 4) :element-type '(unsigned-byte 8))))
     (dotimes (p count)
-      (setf (aref palettes p 0) (aref palette-strip (+ 8 (floor p 4)) 0)) ; BACKGRND
-      (setf (aref palettes p 1) (aref palette-strip (+ 12 p) 0))  ; C1
-      (setf (aref palettes p 2) (aref palette-strip p 0))          ; C2
-      (setf (aref palettes p 3) (aref palette-strip (+ 20 p) 0))) ; C3
+      (setf (aref palettes p 0) (or (aref palette-strip (+ 8 (floor p 4)) 0) 0)) ; BACKGRND
+      (setf (aref palettes p 1) (or (aref palette-strip (+ 12 p) 0) 0))  ; C1
+      (setf (aref palettes p 2) (or (aref palette-strip p 0) 0))          ; C2
+      (setf (aref palettes p 3) (or (aref palette-strip (+ 20 p) 0) 0))) ; C3
     palettes))
 
 (defun all-colors-in-tile (tile)
@@ -756,26 +756,56 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
               pal)
       (list pal (apply #'ansi-color-pixel (palette->rgb pal)))))
 
+(define-condition palette-fit-error (error)
+  ((tile :initarg :tile :reader palette-fit-error-tile)
+   (palettes :initarg :palettes :reader palette-fit-error-palettes)
+   (colors :initarg :colors :reader palette-fit-error-colors)
+   (tx :initarg :tx :reader palette-fit-error-tx :initform nil)
+   (ty :initarg :ty :reader palette-fit-error-ty :initform nil)))
+
+(defmethod print-object ((c palette-fit-error) s)
+  (with-slots (tile palettes colors tx ty) c
+    (format s "~&Tile could not fit any palette")
+    (when (and tx ty)
+      (format s " at (~3d,~3d)" tx ty))
+    (destructuring-bind (width height) (array-dimensions tile)
+      (format s ":~% Tile:  Image (~:d×~:d pixels):~%" width height)
+      (dotimes (row height)
+        (dotimes (col width)
+          (print-wide-pixel (aref tile col row) s))
+        (terpri s)))
+    (format s "  Palettes:")
+    (loop for (left right) on palettes by #'cddr
+          do (format s "~%~5t")
+             (loop for c in left
+                   for first = t then nil
+                   do (unless first (format s ", "))
+                      (format s "$~2,'0x " c)
+                      (print-wide-pixel c s))
+             (when right
+               (format s ";~45t")
+               (loop for c in right
+                     for first = t then nil
+                     do (unless first (format s ", "))
+                        (format s "$~2,'0x " c)
+                        (print-wide-pixel c s))))
+    (format s "~%All colors: ")
+    (loop for c in colors
+          for first = t then nil
+          do (unless first (format s ", "))
+             (format s "$~2,'0x " c)
+             (print-wide-pixel c s))))
+
+
 (defun best-palette (tile palettes &key allow-imperfect-p x y)
   (let ((palettes (mapcar (lambda (p) (coerce p 'list)) (2a-to-list palettes))))
     (labels ((tileset-palette-fail ()
-               ;; TODO: #1219 make a proper error with presentation methods to handle this
-               (cond
-                 ((clim:extended-output-stream-p *trace-output*)
-                  (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
-All colors: ~s~@[~% at (~3d,~3d)~]"
-                         tile palettes (all-colors-in-tile tile) x y))
-                 ((tty-xterm-p)
-                  (error "Tile could not fit any palette:~% Tile: ~a
- Palettes: ~{~%~5t~{~{$~2,'0x ~a~}~^, ~}~^;~45t~{~{$~2,'0x ~a~}~^, ~}~^; ~}
-All colors: ~{~{$~2,'0x ~a~}~^, ~}~@[~% at (~3d, ~3d)~]"
-                         (pixels-to-ansi-string tile)
-                         (mapcar #'palette-to-ansi-pairs palettes)
-                         (palette-to-ansi-pairs (all-colors-in-tile tile))
-                         x y))
-                 (t (error "Tile could not fit any palette:~% Tile: ~s~% Palettes: ~s
-All colors: ~s~@[~% at (~3d,~3d)~]"
-                           tile palettes (all-colors-in-tile tile) x y)))))
+               (error 'palette-fit-error
+                      :tile tile
+                      :palettes palettes
+                      :colors (all-colors-in-tile tile)
+                      :tx x
+                      :ty y)))
       (let ((exact (position-if (lambda (palette)
                                   (tile-fits-palette-p tile palette))
                                 palettes)))

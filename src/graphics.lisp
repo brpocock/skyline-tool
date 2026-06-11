@@ -4140,8 +4140,8 @@ chars-wide chars-high total-chars))))
 
 (defmethod dispatch-png% ((machine (eql 222)) png-file target-dir
                           png height width α palette-pixels)
-  "Dispatch PNG processing for Apple IIGS graphics - temporarily disabled"
-  (error "Apple IIGS graphics compilation not yet implemented"))
+  "Dispatch PNG processing for Apple //gs graphics - temporarily disabled"
+  (error "Apple //gs graphics compilation not yet implemented"))
 
 ;; vcs800 (7850) and Android reference PNGs directly from Hicolor folder;
 ;; no skyline-tool compilation needed.
@@ -4489,21 +4489,24 @@ one page for write-7800-binary). Empty input yields an empty list."
    (image-pixels :initarg :image-pixels :reader color-not-in-palette-image-pixels)))
 
 (defmethod print-object ((c color-not-in-palette-error) s)
-  (format s "The color found in the image data was not found in the palette.
-At ~d, ~d at index ~d ~@[in image ~s~]
-Pixel color: $~2,'0x
-Palette contains these colors: ~{$~2,'0x~^, ~}"
-          (color-not-in-palette-x c)
-          (color-not-in-palette-y c)
-          (color-not-in-palette-i c)
-          (when (not (emptyp (color-not-in-palette-image c)))
-            (color-not-in-palette-image c))
-          (color-not-in-palette-pixel c)
-          (coerce (color-not-in-palette-palette c) 'list))
+  (format s "The color found in the image data was not found in the palette:~%")
+  (let ((i (color-not-in-palette-i c))
+        (img (color-not-in-palette-image c)))
+    (format s "At ~a, ~a" (color-not-in-palette-x c) (color-not-in-palette-y c))
+    (when (and i (not (emptyp i)))
+      (format s " at index ~a" i))
+    (when (and img (not (emptyp img)))
+      (format s " in image ~s" img))
+    (format s "~%"))
+  (format s "Pixel: ")
+  (print-wide-pixel (color-not-in-palette-pixel c) s)
+  (format s "~%Palette:")
+  (dolist (p (coerce (color-not-in-palette-palette c) 'list))
+    (format s " ")
+    (print-wide-pixel p s))
   #+ () ;; TODO: #1243: #1242
   (print-image (color-not-in-palette-image-pixels c)
-               (color-not-in-palette-palette c)
-               ))
+               (color-not-in-palette-palette c)))
 
 (defun pixel-into-palette (pixel palette &key x0 y0 x i image best-fit-p)
   (check-type pixel (integer 0 #xff))
@@ -4800,7 +4803,9 @@ Used internally by BLOB ripping for color stamp conversion."
     #+mcclim
     ((typep stream 'clim:sheet)
      (print-clim-pixel color stream :shortp shortp :unit unit))
-    ((tty-xterm-p)
+    ((and (not (typep stream 'string-stream))
+          (tty-xterm-p))
+     (format stream "$~2,'0x " color)
      (print-ansi-pixel color stream))
     (t (if (consp color)
            (format stream " #~{~2,'0x~2,'0x~2,'0x~} " color)
@@ -5555,19 +5560,20 @@ Used by 320A/C mode ripping to automatically select appropriate graphics mode pe
       (<= (hash-table-count colors) 2))))
 
 (defun limit-region-to-palette (region palette &key (allow-imperfect-p t))
-  (let ((output (make-array (array-dimensions region)))
-        (rgb (mapcar #'palette->rgb (coerce palette 'list))))
+  (let ((output (make-array (array-dimensions region))))
     (destructuring-bind (width height) (array-dimensions region)
       (dotimes (x width)
         (dotimes (y height)
           (setf (aref output x y)
                 (if allow-imperfect-p
-                    (apply #'rgb->palette
-                           (apply #'find-nearest-in-palette rgb
-                                  (palette->rgb (aref region x y))))
+                    (pixel-into-palette (aref region x y) (coerce palette 'list)
+                                       :best-fit-p t)
                     (or (position (aref region x y) palette)
-                        (error "Color ~s  at (~d, ~d) is not in palette ~s"
-                               (aref region x y) x y palette)))))))
+                        (error 'color-not-in-palette-error
+                               :pixel (aref region x y)
+                               :x x :y y :i nil :image nil
+                               :palette palette
+                               :image-pixels region)))))))
     output))
 
 (defun png-to-blob-pathname (png-file)
@@ -6277,9 +6283,7 @@ Blob_~a:~10t.block~2%"
                                                              (aref palettes (+ base 3) 2))))
                                              (when (320c-choose-limit-palette stamp c2)
                                                (return-from found base))))
-                                         (best-palette stamp palettes
-                                                       :allow-imperfect-p imperfectp
-                                                       :x column :y zone)))
+                                         (first cands)))
                                      (or (when (and last-palette
                                                     (tile-fits-palette-p
                                                      stamp
@@ -6297,15 +6301,20 @@ Blob_~a:~10t.block~2%"
                    for group-palette = (if (eq mode :320c)
                                            (if (< palette 4) 0 4)
                                            palette)
-                   for limit-palette = (if (eq mode :320c)
-                                           (or (320c-choose-limit-palette stamp c2-entries)
-                                               (list 0 (aref c2-entries 0)
-                                                     (aref c2-entries 1)
-                                                     (aref c2-entries 2)))
+                    for limit-chosen = (when (eq mode :320c)
+                                        (320c-choose-limit-palette stamp c2-entries))
+                    for limit-palette = (if (eq mode :320c)
+                                            (or limit-chosen
+                                                (list 0 (aref c2-entries 0)
+                                                      (aref c2-entries 1)
+                                                      (aref c2-entries 2)))
                                            (elt palettes-list palette))
-                   for paletted-stamp = (limit-region-to-palette
-                                         stamp limit-palette
-                                         :allow-imperfect-p imperfectp)
+                    for use-imperfect = (if (eq mode :320c)
+                                            (or imperfectp (null limit-chosen))
+                                            imperfectp)
+                    for paletted-stamp = (limit-region-to-palette
+                                          stamp limit-palette
+                                          :allow-imperfect-p use-imperfect)
                    do (when (= (mod column 20) 0)
                         (format *trace-output* " col ~d/~d…" column columns)
                         (force-output *trace-output*))
@@ -7391,17 +7400,17 @@ Malformed lines (e.g. missing mode) are skipped."
                           (parse-into-gb-tile-data art-index
                                                    :color (some #'fourth art-index))))))
 
-;; Apple IIGS Graphics Conversion Functions
+;; Apple //gs Graphics Conversion Functions
 
 (defun compile-a2gs-super-hires (png-file target-dir height width palette-pixels)
-  "Compile Apple IIGS Super Hi-Res graphics (320x200, 16 colors)"
+  "Compile Apple //gs Super Hi-Res graphics (320x200, 16 colors)"
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
                    target-dir)))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Apple IIGS Super Hi-Res graphics compiled from ~A
+      (format src-file ";;; Apple //gs Super Hi-Res graphics compiled from ~A
 ;;; 320x200 pixels, 16 colors (4-bit)
 ;;; Generated automatically
 ~2%" png-file)
@@ -7413,7 +7422,7 @@ Malformed lines (e.g. missing mode) are skipped."
       ;; Generate bitplane data
       (format src-file "~A_data:~%" (pathname-name png-file))
 
-      ;; Apple IIGS Super Hi-Res uses 4 bitplanes
+      ;; Apple //gs Super Hi-Res uses 4 bitplanes
       (dotimes (bitplane 4)
         (format src-file "~%    ;; Bitplane ~D (bit ~D of color index)~%" bitplane bitplane)
         (format src-file "    .byte ")
@@ -7446,7 +7455,7 @@ Malformed lines (e.g. missing mode) are skipped."
       ;; Add palette information
       (format src-file "~2%;;; Palette data (16 colors)
 ~A_palette:
-    ;; Apple IIGS 16-color palette entries
+    ;; Apple //gs 16-color palette entries
     ;; Each entry is a 16-bit RGB value: 00000RRRRRGGGGGBBBBB
     .word $0000, $0000, $0000, $0000  ; Colors 0-3 (placeholder)
     .word $0000, $0000, $0000, $0000  ; Colors 4-7 (placeholder)
@@ -7465,31 +7474,31 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file) (pathname-name png-file))))
 
-  (format *trace-output* "~&Compiled Apple IIGS Super Hi-Res: ~A (320x200, 16 colors, 3200 bytes)"
+  (format *trace-output* "~&Compiled Apple //gs Super Hi-Res: ~A (320x200, 16 colors, 3200 bytes)"
           out-file))
 
 (defun compile-a2gs-double-hires (png-file target-dir height width palette-pixels)
-  "Compile Apple IIGS Double Hi-Res graphics (560x192, 16 colors)"
+  "Compile Apple //gs Double Hi-Res graphics (560x192, 16 colors)"
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
                    target-dir)))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Apple IIGS Double Hi-Res graphics compiled from ~A
+      (format src-file ";;; Apple //gs Double Hi-Res graphics compiled from ~A
 ;;; 560x192 pixels, 16 colors (4-bit)
 ;;; Generated automatically
 ~2%" png-file)
 
       (format src-file ";;; Double Hi-Res memory layout: 4 bitplanes x 1344 bytes each
 ;;; Total: 5376 bytes for 560x192 pixels
-;;; Note: Apple IIGS Double Hi-Res uses 560 pixels horizontally
+;;; Note: Apple //gs Double Hi-Res uses 560 pixels horizontally
 ~2%")
 
       ;; Generate bitplane data
       (format src-file "~A_data:~%" (pathname-name png-file))
 
-      ;; Apple IIGS Double Hi-Res uses 4 bitplanes
+      ;; Apple //gs Double Hi-Res uses 4 bitplanes
       (dotimes (bitplane 4)
         (format src-file "~%    ;; Bitplane ~D (bit ~D of color index)~%" bitplane bitplane)
         (format src-file "    .byte ")
@@ -7529,18 +7538,18 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file))))
 
-  (format *trace-output* "~&Compiled Apple IIGS Double Hi-Res: ~A (560x192, 16 colors, 5376 bytes)"
+  (format *trace-output* "~&Compiled Apple //gs Double Hi-Res: ~A (560x192, 16 colors, 5376 bytes)"
           out-file))
 
 (defun compile-a2gs-hires (png-file target-dir height width palette-pixels)
-  "Compile Apple IIGS Hi-Res graphics (280x192, 6 colors)"
+  "Compile Apple //gs Hi-Res graphics (280x192, 6 colors)"
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
                    target-dir)))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Apple IIGS Hi-Res graphics compiled from ~A
+      (format src-file ";;; Apple //gs Hi-Res graphics compiled from ~A
 ;;; 280x192 pixels, 6 colors (NTSC artifact colors)
 ;;; Generated automatically
 ~2%" png-file)
@@ -7553,7 +7562,7 @@ Malformed lines (e.g. missing mode) are skipped."
       ;; Generate bitplane data
       (format src-file "~A_data:~%" (pathname-name png-file))
 
-      ;; Apple IIGS Hi-Res uses 3 bitplanes (for 6 colors, but actually uses 2-bit encoding + NTSC artifacts)
+      ;; Apple //gs Hi-Res uses 3 bitplanes (for 6 colors, but actually uses 2-bit encoding + NTSC artifacts)
       (dotimes (bitplane 3)
         (format src-file "~%    ;; Bitplane ~D~%" bitplane)
         (format src-file "    .byte ")
@@ -7594,18 +7603,18 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 3            ; Effective bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file)))
 
-    (format *trace-output* "~&Compiled Apple IIGS Hi-Res: ~A (280x192, 6 colors, 2304 bytes)"
+    (format *trace-output* "~&Compiled Apple //gs Hi-Res: ~A (280x192, 6 colors, 2304 bytes)"
             out-file)))
 
 (defun compile-a2gs-sprite (png-file target-dir height width palette-pixels)
-  "Compile Apple IIGS sprite graphics"
+  "Compile Apple //gs sprite graphics"
   (let ((out-file (merge-pathnames
                    (make-pathname :name (pathname-name png-file)
                                   :type "s")
                    target-dir)))
     (ensure-directories-exist (directory-namestring out-file))
     (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; Apple IIGS sprite compiled from ~A
+      (format src-file ";;; Apple //gs sprite compiled from ~A
 ;;; ~Dx~D pixels
 ;;; Generated automatically
 ~2%" png-file width height)
@@ -7667,13 +7676,13 @@ Malformed lines (e.g. missing mode) are skipped."
     .byte 4            ; Bits per pixel
 ~2%" (pathname-name png-file) (pathname-name png-file) width height))))
 
-  (format *trace-output* "~&Compiled Apple IIGS sprite: ~A (~Dx~D pixels)"
+  (format *trace-output* "~&Compiled Apple //gs sprite: ~A (~Dx~D pixels)"
           out-file width height))
 
-;; Apple IIGS Art Compilation Interface
+;; Apple //gs Art Compilation Interface
 
 (defmethod compile-art-generic ((machine-type (eql 222)) format source-file-base-name art-input)
-  "Compile art for Apple IIGS platform"
+  "Compile art for Apple //gs platform"
   (declare (ignore format art-input))
   (let ((*machine* 222))
     (compile-atari-8×8 source-file-base-name #p"2gs/Fonts/" 8 8)))
@@ -7851,15 +7860,15 @@ Malformed lines (e.g. missing mode) are skipped."
             (format out "DHGR_~A = $~2,'0X~%" (nth i color-list) i)))))))
 
 (defun compile-art-a2gs (index-out index-in)
-  "Compile art assets for Apple IIGS platform"
+  "Compile art assets for Apple //gs platform"
   (let ((*machine* 222))
     (write-a2gs-art-index index-out
                           (read-a2gs-art-index index-in))))
 
 (defun read-a2gs-art-index (index-in)
-  "Read Apple IIGS art index file"
+  "Read Apple //gs art index file"
   (let ((png-list (list)))
-    (format *trace-output* "~&~A: reading Apple IIGS art index …" (enough-namestring index-in))
+    (format *trace-output* "~&~A: reading Apple //gs art index …" (enough-namestring index-in))
     (with-input-from-file (index index-in)
       (loop for line = (read-line index nil)
             while (and line (plusp (length line)) (not (char= #\; (char line 0))))
@@ -7883,14 +7892,14 @@ Malformed lines (e.g. missing mode) are skipped."
     (reverse png-list)))
 
 (defun write-a2gs-art-index (index-out art-index)
-  "Write Apple IIGS art data to output file"
+  "Write Apple //gs art data to output file"
   (with-output-to-file (out index-out :if-exists :supersede :if-does-not-exist :create)
-    (format out ";;; Apple IIGS Art Assets compiled
+    (format out ";;; Apple //gs Art Assets compiled
 ;;; Generated automatically
 ~2%")
     (dolist (art-item art-index)
       (destructuring-bind (mode png-name width-px height-px) art-item
-        (format *trace-output* "~&Processing Apple IIGS art: ~A (~Dx~D)…" png-name width-px height-px)
+        (format *trace-output* "~&Processing Apple //gs art: ~A (~Dx~D)…" png-name width-px height-px)
         ;; Dispatch to appropriate compilation function based on mode
         (ecase mode
           (:super-hires
@@ -7913,7 +7922,7 @@ Malformed lines (e.g. missing mode) are skipped."
                                 (png->palette width-px height-px
                                               (png-read:image-data (png-read:read-png-file png-name))
                                               (png-read:transparency (png-read:read-png-file png-name)))))))))
-  (format *trace-output* "~&Apple IIGS art compilation complete."))
+  (format *trace-output* "~&Apple //gs art compilation complete."))
 
 ;;; Commander X-16 (VERA) Graphics Converters (TODO later)
 
