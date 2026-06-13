@@ -6385,7 +6385,7 @@ Blob_~a:~10t.block~2%"
                           (* 2 (- x (length span)))))))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-      (format *trace-output* " … done!~%"))))
+   (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
