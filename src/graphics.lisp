@@ -3615,18 +3615,18 @@ Pixel width (640 or 320).
                                   png height width α palette-pixels)
   (when (clim:extended-output-stream-p *trace-output*)
     (clim:formatting-table (*trace-output*)
-      (clim:formatting-row (*trace-output*)
-        (clim:formatting-cell (*trace-output*)
-          (clim:with-text-face (*trace-output* :bold)
-            (princ "PNG file: " *trace-output*))
-          (clim:present png-file 'pathname :stream *trace-output*)))
-      (clim:formatting-row (*trace-output*)
-        (clim:formatting-cell (*trace-output*)
-          (clim:draw-pattern*
-           *trace-output*
-           (clim:make-pattern-from-bitmap-file png-file
-                                               :format :png)
-           0 0))))))
+                           (clim:formatting-row (*trace-output*)
+                                                (clim:formatting-cell (*trace-output*)
+                                                                      (clim:with-text-face (*trace-output* :bold)
+                                                                        (princ "PNG file: " *trace-output*))
+                                                                      (clim:present png-file 'pathname :stream *trace-output*)))
+                           (clim:formatting-row (*trace-output*)
+                                                (clim:formatting-cell (*trace-output*)
+                                                                      (clim:draw-pattern*
+                                                                       *trace-output*
+                                                                       (clim:make-pattern-from-bitmap-file png-file
+                                                                                                           :format :png)
+                                                                       0 0))))))
 
 (defun monochrome-image-p (palette-pixels)
   (> 3 (length (image-colors palette-pixels))))
@@ -5390,12 +5390,12 @@ Binary graphics data and updated asset index for game engine loading.
           (remove-if (curry #'> (array-dimension *tia-pf-colors* 0))
                      tiles))
   (maptimes (line 7)
-    (color-average
-     (remove-if #'null
-                (mapcar #'palette->rgb
-                        (mapcar (lambda (tile)
-                                  (aref *tia-pf-colors* tile line))
-                                tiles))))))
+            (color-average
+             (remove-if #'null
+                        (mapcar #'palette->rgb
+                                (mapcar (lambda (tile)
+                                          (aref *tia-pf-colors* tile line))
+                                        tiles))))))
 
 (defun tile-hash (left right big-endian-p)
   (logior (ash left 8) (ash right 16) (if big-endian-p 1 0)))
@@ -5420,8 +5420,8 @@ Binary graphics data and updated asset index for game engine loading.
   (make-instance 'grid/tia
                  :tiles (screen-to-grid/tia/tles screen)
                  :colors (maptimes (y 8)
-                           (collect-foreground-color/tia
-                            (maptimes (x 8) (aref screen x y))))
+                                   (collect-foreground-color/tia
+                                    (maptimes (x 8) (aref screen x y))))
                  ;; TODO: #1243
                  :background-color #x44))
 
@@ -5585,7 +5585,7 @@ Used by 320A/C mode ripping to automatically select appropriate graphics mode pe
           (setf (aref output x y)
                 (if allow-imperfect-p
                     (pixel-into-palette (aref region x y) (coerce palette 'list)
-                                       :best-fit-p t)
+                                        :best-fit-p t)
                     (or (position (aref region x y) palette)
                         (error 'color-not-in-palette-error
                                :pixel (aref region x y)
@@ -6155,9 +6155,9 @@ Blob_~a:~10t.block
            (format output "~2&Zone~d:" zone)
            (flet ((emit-span (x span pal-index)
                     (when span
-                      (let ((id (or (gethash span spans)
+                      (let ((id (or (gethash (list span zone) spans)
                                     (prog1
-                                        (setf (gethash span spans) (prog1 next-span-id
+                                        (setf (gethash (list span zone) spans) (prog1 next-span-id
                                                                      (incf next-span-id)))
                                       (cond
                                         ((and (< stamp-counting #x100)
@@ -6319,20 +6319,20 @@ Blob_~a:~10t.block~2%"
                    for group-palette = (if (eq mode :320c)
                                            (if (< palette 4) 0 4)
                                            palette)
-                    for limit-chosen = (when (eq mode :320c)
+                   for limit-chosen = (when (eq mode :320c)
                                         (320c-choose-limit-palette stamp c2-entries))
-                    for limit-palette = (if (eq mode :320c)
-                                            (or limit-chosen
-                                                (list 0 (aref c2-entries 0)
-                                                      (aref c2-entries 1)
-                                                      (aref c2-entries 2)))
+                   for limit-palette = (if (eq mode :320c)
+                                           (or limit-chosen
+                                               (list 0 (aref c2-entries 0)
+                                                     (aref c2-entries 1)
+                                                     (aref c2-entries 2)))
                                            (elt palettes-list palette))
-                    for use-imperfect = (if (eq mode :320c)
-                                            (or imperfectp (null limit-chosen))
-                                            imperfectp)
-                    for paletted-stamp = (limit-region-to-palette
-                                          stamp limit-palette
-                                          :allow-imperfect-p use-imperfect)
+                   for use-imperfect = (if (eq mode :320c)
+                                           (or imperfectp (null limit-chosen))
+                                           imperfectp)
+                   for paletted-stamp = (limit-region-to-palette
+                                         stamp limit-palette
+                                         :allow-imperfect-p use-imperfect)
                    do (when (= (mod column 20) 0)
                         (format *trace-output* " col ~d/~d…" column columns)
                         (force-output *trace-output*))
@@ -6362,30 +6362,30 @@ Blob_~a:~10t.block~2%"
                       (collect-span x span last-palette last-mode)))
            (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first)))
              (setf zone-spans nil)
-              (dolist (entry spans-this-zone)
-                 (let* ((x (first entry))
-                        (span (second entry))
-                        (pal (third entry))
-                        (mode (fourth entry))
-                        (header (if (eq (fourth entry) :320c) "DLAltHeader" "DLHeader"))
-                        (id (or (gethash span spans)
-                                (prog1
-                                    (setf (gethash span spans) (prog1 next-span-id
-                                                                 (incf next-span-id)))
-                                  (cond
-                                    ((and (< stamp-counting #x100)
-                                          (< (+ stamp-counting (length span)) #x100))
-                                     (incf stamp-counting (length span)))
-                                    ((and (< stamp-counting #x100)
-                                          (>= (+ stamp-counting (length span)) #x100))
-                                     (setf stamp-counting #x100))
-                                    (t (incf stamp-counting)))))))
+             (dolist (entry spans-this-zone)
+               (let* ((x (first entry))
+                      (span (second entry))
+                      (pal (third entry))
+                      (mode (fourth entry))
+                      (header (if (eq (fourth entry) :320c) "DLAltHeader" "DLHeader"))
+                      (id (or (gethash (list span zone) spans)
+                              (prog1
+                                  (setf (gethash (list span zone) spans) (prog1 next-span-id
+                                                               (incf next-span-id)))
+                                (cond
+                                  ((and (< stamp-counting #x100)
+                                        (< (+ stamp-counting (length span)) #x100))
+                                   (incf stamp-counting (length span)))
+                                  ((and (< stamp-counting #x100)
+                                        (>= (+ stamp-counting (length span)) #x100))
+                                   (setf stamp-counting #x100))
+                                  (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
-                          header id pal (length span)
-                          (- x (length span)))))))
-          (format output "~%~10t.word $0000")
-          (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-   (format *trace-output* " … done!~%")))
+                         header id pal (length span)
+                         (- x (* 2 (length span))))))))
+         (format output "~%~10t.word $0000")
+         (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+    (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -6488,61 +6488,61 @@ Columns: ~d
                (aref dump (+ address offset))
                #xff)))
     (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-      (dotimes (y #x10)
-        (clim:formatting-row (stream)
-          (ecase mode
-            (:160a (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte))))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b11000000 bits) -6))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00110000 bits) -4))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00001100 bits) -2))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (logand #b00000011 bits))
-                                           stream :unit unit)))))
-            (:160b (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte)))
-                            (left-pixel-c (ash (logand #b11000000 bits) -6))
-                            (right-pixel-c (ash (logand #b00110000 bits) -4))
-                            (left-pixel-p (ash (logand #b00001100 bits) -2))
-                            (right-pixel-p (logand #b00000011 bits))
-                            (left-color (logior (ash left-pixel-p 2) left-pixel-c))
-                            (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member left-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member left-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors left-color) #x100)
-                                              stream :unit unit))))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member right-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member right-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors right-color) #x100)
-                                              stream :unit unit)))))))))))))
+                           (dotimes (y #x10)
+                             (clim:formatting-row (stream)
+                                                  (ecase mode
+                                                    (:160a (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b11000000 bits) -6))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00110000 bits) -4))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00001100 bits) -2))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (logand #b00000011 bits))
+                                                                                                       stream :unit unit)))))
+                                                    (:160b (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte)))
+                                                                    (left-pixel-c (ash (logand #b11000000 bits) -6))
+                                                                    (right-pixel-c (ash (logand #b00110000 bits) -4))
+                                                                    (left-pixel-p (ash (logand #b00001100 bits) -2))
+                                                                    (right-pixel-p (logand #b00000011 bits))
+                                                                    (left-color (logior (ash left-pixel-p 2) left-pixel-c))
+                                                                    (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member left-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member left-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors left-color) #x100)
+                                                                                                          stream :unit unit))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member right-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member right-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors right-color) #x100)
+                                                                                                          stream :unit unit)))))))))))))
 (defun print-clim-color (color stream)
   (clim:with-output-as-presentation (stream color 'palette-color)
     (clim:with-room-for-graphics (stream :height 24)
@@ -7780,7 +7780,7 @@ Malformed lines (e.g. missing mode) are skipped."
                         (read-a2-art-index index-in))))
 
 ;; (defun compile-art-a2e (index-out index-in)
-;;   "Compile art assets for Apple IIe Double HIRES graphics mode"
+;;   "Compile art assets for Apple //e Double HIRES graphics mode"
 ;;   (let ((*machine* 23))
 ;;     (write-a2e-art-index index-out
 ;;                         (read-a2e-art-index index-in))))
@@ -7814,34 +7814,24 @@ Malformed lines (e.g. missing mode) are skipped."
       (destructuring-bind (png-name width height) png-entry
         (format out ";;; ~A: ~Dx~D pixels~%" png-name width height)
         (format out "~A_data:~%" (pathname-name png-name))
-        
-        ;; Generate placeholder HIRES bitmap data
+
+        ;; FIXME
         ;; Apple II HIRES stores 7 pixels per byte (140 bytes per line)
         (dotimes (y (ceiling height 192)) ; Handle multiple screens if needed
           (format out "~%    ;; Screen ~D~%" y)
-          (dotimes (line 192) ; 192 scan lines
+          (dotimes (line 192)           ; 192 scan lines
             (format out "~%    ;; Line ~D~%" line)
             ;; 40 bytes per line (280 pixels / 7 pixels per byte = 40 bytes)
-            (dotimes (byte 40)
-              (if (= byte 39)
-                  (format out "    .byte $00~%") ; Last byte
-                  (format out "    .byte $00, ")) ; Continuation bytes
-              )))
-        (format out "~%    ;; End of ~A data~2%" png-name)))
-    (format out "~%    ;; HIRES color palette constants~%")
-    (format out "HIRES_BLACK = $00~%")
-    (format out "HIRES_PURPLE = $01~%")
-    (format out "HIRES_ORANGE = $02~%")
-    (format out "HIRES_BLUE = $03~%")
-    (format out "HIRES_GREEN = $04~%")
-    (format out "HIRES_WHITE = $05~%")))
+            (format out "~{~%~10t.byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^,   ~
+$~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}" bytes)))
+        (format out "~%    ;; End of ~A data~2%" png-name)))))
 
 (defun write-a2e-art-index (index-out png-list)
-  "Write Apple IIe Double HIRES art assembly code"
-  (format *trace-output* "~&Apple IIe Double HIRES: writing art data …")
+  "Write Apple //e Double HIRES art assembly code"
+  (format *trace-output* "~&Apple //e Double HIRES: writing art data …")
   (with-output-to-file (out index-out :if-exists :supersede :if-does-not-exist :create)
-    (format out ";;; Apple IIe Double HIRES Art Assets compiled from index
-;;; Generated for Apple IIe Double HIRES graphics (560x192, 16 colors)
+    (format out ";;; Apple //e Double HIRES Art Assets compiled from index
+;;; Generated for Apple //e Double HIRES graphics (560x192, 16 colors)
 ~2%")
 
     (dolist (png-entry png-list)
