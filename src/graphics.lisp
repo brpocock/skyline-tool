@@ -6382,10 +6382,10 @@ Blob_~a:~10t.block~2%"
                                     (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
                          header id pal (length span)
-                         (* 4 (- x (length span)))))))
+                          (* 2 (- x (length span)))))))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-   (format *trace-output* " … done!~%")))
+      (format *trace-output* " … done!~%"))))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
