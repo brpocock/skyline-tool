@@ -4742,13 +4742,31 @@ Used internally by BLOB ripping for color stamp conversion."
                                               (1- (* (1+ b) 4)) y))
                  (indices (pixels-into-palette byte-pixels palette
                                                :x0 (* b 4) :y0 y
-                                               :best-fit-p best-fit-p)))
-            ;; 320C packs 4 pixels into 1 byte, 2 bits per pixel
+                                               :best-fit-p best-fit-p))
+                 ;; 320C encoding: D7-D4 = foreground bits (low bit of each pixel)
+                 ;; D3-D2 = palette select for pixel pair (0,1)
+                 ;; D1-D0 = palette select for pixel pair (2,3)
+                 ;; Palette pair select: if both pixels in pair are 0 → 0
+                 ;;                      if first pixel is 0 → C2 bits of second
+                 ;;                      otherwise → C2 bits of first
+                 ;; C2 bits = (pixel & #x06) >> 1 (bits 1-2 of palette index)
+                 (px-pair-palette (mapcar (lambda (pair)
+                                            (cond
+                                              ((and (zerop (car pair)) (zerop (cdr pair)))
+                                               0)
+                                              ((zerop (car pair))
+                                               (ash (logand (cdr pair) #x06) -1))
+                                              (t
+                                               (ash (logand (car pair) #x06) -1))))
+                                          (list (cons (aref indices 0) (aref indices 1))
+                                                (cons (aref indices 2) (aref indices 3))))))
             (push (logior
-                   (ash (aref indices 0) 6)
-                   (ash (aref indices 1) 4)
-                   (ash (aref indices 2) 2)
-                   (aref indices 3))
+                   (ash (logand (aref indices 0) #x01) 7)
+                   (ash (logand (aref indices 1) #x01) 6)
+                   (ash (logand (aref indices 2) #x01) 5)
+                   (ash (logand (aref indices 3) #x01) 4)
+                   (ash (first px-pair-palette) 2)
+                   (second px-pair-palette))
                   bytes)))
         (push (reverse bytes) bytes-across)))
     (reverse bytes-across)))
@@ -6364,7 +6382,7 @@ Blob_~a:~10t.block~2%"
                                     (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
                          header id pal (length span)
-                         (- x (length span)))))))
+                         (* 4 (- x (length span)))))))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
    (format *trace-output* " … done!~%")))

@@ -482,45 +482,71 @@
       (is (= max-scroll-position 12) "Max scroll position should be map-rows - viewport-rows")
       (is (<= current-top-row max-scroll-position) "Current position should not exceed max"))))
 
-#+() (test zone-regeneration-accuracy
-  "Test that full zone regeneration produces accurate display lists"
-  ;; Test that when we do need to regenerate a zone, it produces correct results
-  (let ((mem (make-test-memory 500))
-        (test-pixels (make-array '(16 16) :element-type '(unsigned-byte 8)
-                                 :initial-contents '(
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-                                   0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-                                   0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-                                   0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 2 2 2 2 0 0 0 0
-                                   0 0 0 0 0 0 0 0 2 2 2 2 0 0 0 0
-                                   0 0 0 0 0 0 0 0 2 2 2 2 0 0 0 0
-                                   0 0 0 0 0 0 0 0 2 2 2 2 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                                   0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))))
-    ;; Create a palette
-    (let ((palette (vector #(0 0 0) #(255 0 0) #(0 255 0) #(0 0 255))))
-      ;; Test 320A encoding (should handle monochrome sections)
-      (let ((result-320a (7800-image-to-320a test-pixels :byte-width 2 :height 16 :palette palette)))
-        (is (= 2 (length result-320a)) "Should produce 2 columns")
-        (is (= 16 (length (first result-320a))) "Each column should have 16 rows")
-        ;; Check that encoding produces consistent results
-        (let ((result2-320a (7800-image-to-320a test-pixels :byte-width 2 :height 16 :palette palette)))
-          (is (equalp result-320a result2-320a) "Regeneration should produce identical results")))
-
-      ;; Test 320C encoding (should handle color sections)
-      (let ((result-320c (7800-image-to-320c test-pixels :byte-width 2 :height 16 :palette palette)))
-        (is (= 2 (length result-320c)) "Should produce 2 columns")
-        (is (= 16 (length (first result-320c))) "Each column should have 16 rows")
-        ;; Check that regeneration produces consistent results
-        (let ((result2-320c (7800-image-to-320c test-pixels :byte-width 2 :height 16 :palette palette)))
-          (is (equalp result-320c result2-320c) "Regeneration should produce identical results"))))))
+(test zone-regeneration-accuracy
+  "Test that 320A/C conversion produces correct hardware-valid bytes"
+  (let ((test-pixels (make-array '(4 4) :element-type '(unsigned-byte 8)
+                                 :initial-contents
+                                 '((0 1 2 3)
+                                   (1 2 3 0)
+                                   (2 3 0 1)
+                                   (3 0 1 2)))))
+    (let ((id-palette (vector 0 1 2 3)))
+      ;; 320C: verify correct MARIA 320C hardware byte encoding
+      (let ((result-320c (7800-image-to-320c test-pixels
+                                             :byte-width 1 :height 4
+                                             :palette id-palette)))
+        (is (= 1 (length result-320c)) "4 pixels wide, 1 byte per column")
+        (is (= 4 (length (first result-320c))) "4 rows")
+        (let ((bytes (first result-320c)))
+          ;; Expected encoding (foreground + per-pair palette select):
+          ;; y=0, pix 0,1,2,3: fg=0,1,0,1; pair01 pal=0, pair23 pal=1 → #x51
+          ;; y=1, pix 1,2,3,0: fg=1,0,1,0; pair01 pal=0, pair23 pal=1 → #xA1
+          ;; y=2, pix 2,3,0,1: fg=0,1,0,1; pair01 pal=1, pair23 pal=0 → #x54
+          ;; y=3, pix 3,0,1,2: fg=1,0,1,0; pair01 pal=1, pair23 pal=0 → #xA4
+          (is (= #x51 (elt bytes 0)))
+          (is (= #xA1 (elt bytes 1)))
+          (is (= #x54 (elt bytes 2)))
+          (is (= #xA4 (elt bytes 3)))
+          ;; Idempotency: regeneration produces identical results
+          (let ((result2 (7800-image-to-320c test-pixels
+                                             :byte-width 1 :height 4
+                                             :palette id-palette)))
+            (is (equalp result-320c result2) "Regeneration produces identical results")))))
+    ;; 320A: verify correct monochrome byte packing (MSB-left)
+    (let ((mono-pixels (make-array '(8 4) :element-type '(unsigned-byte 8)
+                                   :initial-contents
+                                   '((1 0 1 0 1 0 1 0)
+                                     (1 1 0 0 1 1 0 0)
+                                     (1 1 1 1 0 0 0 0)
+                                     (0 0 0 0 1 1 1 1)))))
+      (let ((result-320a (7800-image-to-320a mono-pixels
+                                             :byte-width 1 :height 4
+                                             :palette (vector 0 1))))
+        (is (= 1 (length result-320a)))
+        (is (= 4 (length (first result-320a))))
+        (let ((bytes (first result-320a)))
+          ;; y=0: 1,0,1,0,1,0,1,0 → #b10101010 = #xAA
+          ;; y=1: 1,1,0,0,1,1,0,0 → #b11001100 = #xCC
+          ;; y=2: 1,1,1,1,0,0,0,0 → #b11110000 = #xF0
+          ;; y=3: 0,0,0,0,1,1,1,1 → #b00001111 = #x0F
+          (is (= #xAA (elt bytes 0)))
+          (is (= #xCC (elt bytes 1)))
+          (is (= #xF0 (elt bytes 2)))
+          (is (= #x0F (elt bytes 3))))))
+    ;; Edge case: all-zero stamp (transparent everywhere)
+    (let ((zero-pixels (make-array '(4 4) :element-type '(unsigned-byte 8)
+                                   :initial-element 0)))
+      (let ((result-320c (7800-image-to-320c zero-pixels
+                                             :byte-width 1 :height 4
+                                             :palette (vector 0 1 2 3)))
+            (result-320a (7800-image-to-320a zero-pixels
+                                             :byte-width 1 :height 4
+                                             :palette (vector 0 1))))
+        (is (= 1 (length result-320c)))
+        (is (= 1 (length result-320a)))
+        ;; All-zero pixels → all-zero bytes (transparent, palette 0)
+        (is (every #'zerop (first result-320c)))
+        (is (every #'zerop (first result-320a)))))))
 
 #+() (test display-list-bounded-growth
   "Test that display list operations don't cause unbounded growth"
