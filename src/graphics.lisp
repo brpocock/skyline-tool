@@ -6381,8 +6381,8 @@ Blob_~a:~10t.block~2%"
                                      (setf stamp-counting #x100))
                                     (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
-                         header id pal (length span)
-                         (* 4 (- x (length span)))))))
+                          header id pal (length span)
+                          (- x (length span)))))))
           (format output "~%~10t.word $0000")
           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
    (format *trace-output* " … done!~%")))
