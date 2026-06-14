@@ -12,6 +12,10 @@
    #:generate-invalid-tile-dimensions
    #:generate-random-pixels
    #:with-temp-file)
+  (:import-from :skyline-tool
+   #:7800-image-to-320c
+   #:7800-image-to-320a
+   #:stamp-is-monochrome-p)
   (:export #:action-tests
            #:animation-preview-tests
            #:graphics-tests
