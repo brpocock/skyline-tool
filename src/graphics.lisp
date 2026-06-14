@@ -6382,10 +6382,10 @@ Blob_~a:~10t.block~2%"
                                   (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
                          header id pal (length span)
-                         (* 2 (- x (length span)))))))
-           (format output "~%~10t.word $0000")
-           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-      (format *trace-output* " … done!~%"))))
+                          (* 2 (- x (length span)))))))
+          (format output "~%~10t.DLEnd")
+          (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+   (format *trace-output* " … done!~%")))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
@@ -7780,7 +7780,7 @@ Malformed lines (e.g. missing mode) are skipped."
                         (read-a2-art-index index-in))))
 
 ;; (defun compile-art-a2e (index-out index-in)
-;;   "Compile art assets for Apple IIe Double HIRES graphics mode"
+;;   "Compile art assets for Apple //e Double HIRES graphics mode"
 ;;   (let ((*machine* 23))
 ;;     (write-a2e-art-index index-out
 ;;                         (read-a2e-art-index index-in))))
@@ -7814,34 +7814,24 @@ Malformed lines (e.g. missing mode) are skipped."
       (destructuring-bind (png-name width height) png-entry
         (format out ";;; ~A: ~Dx~D pixels~%" png-name width height)
         (format out "~A_data:~%" (pathname-name png-name))
-        
-        ;; Generate placeholder HIRES bitmap data
+
+        ;; FIXME
         ;; Apple II HIRES stores 7 pixels per byte (140 bytes per line)
         (dotimes (y (ceiling height 192)) ; Handle multiple screens if needed
           (format out "~%    ;; Screen ~D~%" y)
-          (dotimes (line 192) ; 192 scan lines
+          (dotimes (line 192)           ; 192 scan lines
             (format out "~%    ;; Line ~D~%" line)
             ;; 40 bytes per line (280 pixels / 7 pixels per byte = 40 bytes)
-            (dotimes (byte 40)
-              (if (= byte 39)
-                  (format out "    .byte $00~%") ; Last byte
-                  (format out "    .byte $00, ")) ; Continuation bytes
-              )))
-        (format out "~%    ;; End of ~A data~2%" png-name)))
-    (format out "~%    ;; HIRES color palette constants~%")
-    (format out "HIRES_BLACK = $00~%")
-    (format out "HIRES_PURPLE = $01~%")
-    (format out "HIRES_ORANGE = $02~%")
-    (format out "HIRES_BLUE = $03~%")
-    (format out "HIRES_GREEN = $04~%")
-    (format out "HIRES_WHITE = $05~%")))
+            (format out "~{~%~10t.byte $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^,   ~
+$~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}" bytes)))
+        (format out "~%    ;; End of ~A data~2%" png-name)))))
 
 (defun write-a2e-art-index (index-out png-list)
-  "Write Apple IIe Double HIRES art assembly code"
-  (format *trace-output* "~&Apple IIe Double HIRES: writing art data …")
+  "Write Apple //e Double HIRES art assembly code"
+  (format *trace-output* "~&Apple //e Double HIRES: writing art data …")
   (with-output-to-file (out index-out :if-exists :supersede :if-does-not-exist :create)
-    (format out ";;; Apple IIe Double HIRES Art Assets compiled from index
-;;; Generated for Apple IIe Double HIRES graphics (560x192, 16 colors)
+    (format out ";;; Apple //e Double HIRES Art Assets compiled from index
+;;; Generated for Apple //e Double HIRES graphics (560x192, 16 colors)
 ~2%")
 
     (dolist (png-entry png-list)
