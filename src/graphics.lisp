@@ -6362,30 +6362,30 @@ Blob_~a:~10t.block~2%"
                       (collect-span x span last-palette last-mode)))
            (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first)))
              (setf zone-spans nil)
-              (dolist (entry spans-this-zone)
-                 (let* ((x (first entry))
-                        (span (second entry))
-                        (pal (third entry))
-                        (mode (fourth entry))
-                        (header (if (eq (fourth entry) :320c) "DLAltHeader" "DLHeader"))
-                        (id (or (gethash span spans)
-                                (prog1
-                                    (setf (gethash span spans) (prog1 next-span-id
-                                                                 (incf next-span-id)))
-                                  (cond
-                                    ((and (< stamp-counting #x100)
-                                          (< (+ stamp-counting (length span)) #x100))
-                                     (incf stamp-counting (length span)))
-                                    ((and (< stamp-counting #x100)
-                                          (>= (+ stamp-counting (length span)) #x100))
-                                     (setf stamp-counting #x100))
-                                    (t (incf stamp-counting)))))))
+             (dolist (entry spans-this-zone)
+               (let* ((x (first entry))
+                      (span (second entry))
+                      (pal (third entry))
+                      (mode (fourth entry))
+                      (header (if (eq (fourth entry) :320c) "DLAltHeader" "DLHeader"))
+                      (id (or (gethash span spans)
+                              (prog1
+                                  (setf (gethash span spans) (prog1 next-span-id
+                                                               (incf next-span-id)))
+                                (cond
+                                  ((and (< stamp-counting #x100)
+                                        (< (+ stamp-counting (length span)) #x100))
+                                   (incf stamp-counting (length span)))
+                                  ((and (< stamp-counting #x100)
+                                        (>= (+ stamp-counting (length span)) #x100))
+                                   (setf stamp-counting #x100))
+                                  (t (incf stamp-counting)))))))
                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
                          header id pal (length span)
-                          (* 2 (- x (length span)))))))
-          (format output "~%~10t.word $0000")
-          (blob/write-spans-320ac spans output :imperfectp imperfectp))))
-   (format *trace-output* " … done!~%")))
+                         (* 2 (- x (length span)))))))
+           (format output "~%~10t.word $0000")
+           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+      (format *trace-output* " … done!~%"))))
 
 (defun vcs-ntsc-color-names ()
   (loop for hue below #x10
