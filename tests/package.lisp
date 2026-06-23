@@ -135,7 +135,7 @@
 (defun unit-test-midi-input-pathname ()
   "Pathname for scratch MIDI input under Source/Songs (SkylineUnitTestInput.midi)."
   (merge-pathnames (pathname "Source/Songs/SkylineUnitTestInput.midi")
-                   (skyline-tool::project-root)))
+                   (uiop:getcwd)))
 
 (defun unit-test-midi-input-path ()
   "NAMESTRING for `unit-test-midi-input-pathname'."
@@ -144,19 +144,19 @@
 (defun unit-test-missing-midi-path ()
   "NAMESTRING for a Source/Songs .midi path that must not exist (negative tests)."
   (namestring (merge-pathnames (pathname "Source/Songs/NoSuchSkylineUnitTestInput.midi")
-                               (skyline-tool::project-root))))
+                               (uiop:getcwd))))
 
 (defun unit-test-missing-midi-nested-path ()
   "NAMESTRING for a nested Source/Songs .midi path that must not exist."
   (namestring (merge-pathnames (pathname "Source/Songs/DeepDir/NoSuchSkylineUnitTestInput.midi")
-                               (skyline-tool::project-root))))
+                               (uiop:getcwd))))
 
 (defun format-unit-test-midi-scratch-path ()
   "Unique NAMESTRING under Source/Songs for a writable .midi scratch file."
   (namestring (merge-pathnames
                (pathname (format nil "Source/Songs/SkylineScratch-~D.midi"
                                  (get-universal-time)))
-               (skyline-tool::project-root))))
+               (uiop:getcwd))))
 
 (defun ensure-unit-test-midi-input-file (&optional (data *unit-test-midi-stub-data*))
   "Write DATA readably to `unit-test-midi-input-pathname'; return its NAMESTRING."

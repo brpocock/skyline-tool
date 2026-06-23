@@ -399,9 +399,7 @@ all-default (@code{#xff}) record."
                   name)
           (return-from collect-decal-object (list x y id decal-props)))))))
 
-(defun collect-prototype-object (object prototypes base-tileset decal-tileset
-                                 &key (tile-width 8))
-  (declare (ignore base-tileset decal-tileset))
+(defun collect-prototype-object (object &key (tile-width 8))
   (let ((x (floor (parse-number (or (assocdr "x" (second object)) "0")) tile-width))
         (y (1- (floor (parse-number (or (assocdr "y" (second object)) "0")) 16))))
     (cond
@@ -563,9 +561,7 @@ Objects without any event properties are ignored."
                                              base-tileset decal-tileset
                                              :tile-width tile-width))
         (appendf decals-table (list decal)))
-      (when-let (prototype (collect-prototype-object object prototypes-table
-                                                     base-tileset decal-tileset
-                                                     :tile-width tile-width))
+      (when-let (prototype (collect-prototype-object object :tile-width tile-width))
         (appendf prototypes-table (list prototype))))
     (mark-palette-transitions output attributes-table)
     (values output
@@ -615,58 +611,33 @@ lowercase port directory @file{vcs800/}. For all other machines, prefer
 7850 also try legacy @file{7800/} (Maria-style 8×16 sheets). Missing-file
 fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
 @file{Tiles/}."
-  (let* ((name (pathname-name pathname$))
-         (root (or (project-root)
-                   (uiop:pathname-directory-pathname (uiop:getcwd))))
-         (machine-path (merge-pathnames
-                        (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
-                                                        (machine-directory-name))
-                                       :name name :type "png")
-                        root))
-         (hicolor-path (merge-pathnames
-                        (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
-                                                        "Hicolor")
-                                       :name name :type "png")
-                        root))
-         (7800-path (merge-pathnames
-                     (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
-                                                     "7800")
-                                    :name name :type "png")
-                     root)))
-    (load-tileset-image
-     (cond ((eql *machine* 7850)
-            (cond ((probe-file hicolor-path) hicolor-path)
-                  ((probe-file machine-path) machine-path)
-                  (t hicolor-path)))
-           ((probe-file machine-path) machine-path)
-           ((probe-file hicolor-path) hicolor-path)
-           ((and (not (eql *machine* 7850)) (probe-file 7800-path)) 7800-path)
-           (t machine-path)))))
+  (let* ((name (pathname-name pathname$)))
+    (load-tileset-image (if (member *machine* '(7850))
+                            (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                            "Hicolor")
+                                           :name name :type "png")
+                            (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
+                                                            (machine-directory-name))
+                                           :name name :type "png")))))
 
-(let ((tileset-image-cached nil)
-      (tileset-image-cache nil))
+(let ((tileset-image-cache (make-hash-table :test 'equal)))
   (defun load-tileset-image (pathname)
     "Load the “sprite sheet” image for a tile set from PATHNAME"
-    (when (equal tileset-image-cached pathname)
-      (return-from load-tileset-image tileset-image-cache))
-    (format *trace-output* "~&Loading tileset image from “~a”"
+    (when-let (cached (gethash (truename pathname) tileset-image-cache))
+      ;; fixme needs to check for file modification time
+      (return-from load-tileset-image cached))
+    (format *trace-output* "~&Loading tileset image from “~a”…"
             (enough-namestring pathname))
-    (setf tileset-image-cached pathname
-          tileset-image-cache
-          (let* ((png (png-read:read-png-file pathname))
-                 (height (png-read:height png))
-                 (width (png-read:width png))
-                 (α (png-read:transparency png)))
-            (png->palette height width
-                          (png-read:image-data png)
-                          α)))))
+    (setf (gethash (truename pathname) tileset-image-cache)
+          (let ((png (png-read:read-png-file pathname)))
+            (png->palette (png-read:image-data png) (png-read:transparency png))))))
 
 (defun extract-8×16-tiles (image)
   (let ((output (list)))
     (dotimes (row (floor (array-dimension image 1) 16))
       (dotimes (column (floor (array-dimension image 0) 8))
         (let ((tile (extract-region image (* column 8) (* row 16)
-                                    (+ (* column 8) 7) (+ (* row 16) 15))))
+                                    (+ (* column 8) 8) (+ (* row 16) 16))))
           (assert (= 8 (array-dimension tile 0)))
           (assert (= 16 (array-dimension tile 1)))
           (push tile output))))
@@ -676,18 +647,18 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
 
 (defun extract-palettes (image &key (count 8))
   (let* ((last-row (1- (array-dimension image 1)))
-         (palette-strip (extract-region image 0 last-row (1- (* 4 count)) last-row))
+         (strip-width (* 4 count))
+         (right (min (array-dimension image 0) strip-width))
+         (palette-strip (extract-region image 0 last-row right (1+ last-row)))
          (palettes (make-array (list count 4) :element-type '(unsigned-byte 8))))
-    (dotimes (p count)
-      (dotimes (c 4)
-        (setf (aref palettes p c) (if (zerop c)
-                                      (or (aref palette-strip 0 0) 0)
-                                      (or (aref palette-strip (+ c (* p 4)) 0) 0)))))
-    palettes))
+    (dotimes (p count palettes)
+      (dotimes (c 4 palettes)
+        (setf (aref palettes p c)
+              (or (aref palette-strip (if (zerop c) 0 (+ c (* p 4))) 0) 0))))))
 
 (defun extract-palettes-320ac (image &key (count 8))
   (let* ((last-row (1- (array-dimension image 1)))
-         (palette-strip (extract-region image 0 last-row 27 last-row))
+         (palette-strip (extract-region image 0 last-row 28 (1+ last-row)))
          (palettes (make-array (list count 4) :element-type '(unsigned-byte 8))))
     (dotimes (p count)
       (setf (aref palettes p 0) (or (aref palette-strip (+ 8 (floor p 4)) 0) 0)) ; BACKGRND
@@ -701,7 +672,9 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
     (remove-duplicates (loop for y below height
                              append
                              (loop for x below width
-                                   collect (aref tile x y)))
+                                   for pixel = (aref tile x y)
+                                   unless (null pixel)
+                                     collect pixel))
                        :test #'=)))
 
 (defun tile-fits-palette-p (tile palette)
@@ -732,9 +705,9 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
     (loop for y below height
           append
           (loop for x below width
-                for c = (aref tile x y)
-                unless (null c)
-                  collect c))))
+                for pixel = (aref tile x y)
+                unless (null pixel)
+                  collect pixel))))
 
 (defun color-distance-by-indices (index0 index1
                                   &key (palette (machine-palette)))
@@ -926,10 +899,7 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
 (defvar *maps-dock-ids* (make-hash-table :test 'equal))
 (defvar *dock-ids-maps* (make-hash-table :test 'equal))
 
-(defun read-map-ids-table (&optional (table (merge-pathnames #p"Source/Tables/MapsIndex.ods"
-                                                             (or (project-root)
-                                                                 (uiop:pathname-directory-pathname
-                                                                  (uiop:getcwd))))))
+(defun read-map-ids-table (&optional (table #p"Source/Tables/MapsIndex.ods"))
   (format *trace-output* "~&Reading maps table from “~a”… " (enough-namestring table))
   (setf *maps-ids* (make-hash-table :test 'equal)
         *maps-display-names* (make-hash-table :test 'equal)
@@ -1137,8 +1107,7 @@ Update map/s or script to agree with one another and DO-OVER."
                     (aref (elt attributes-table (aref grid x y 1)) 4))
             -5)))
 
-(let ((tileset-cached nil)
-      (tileset-cache nil))
+(let ((tileset-cache (make-hash-table :test 'equal)))
   (defun load-tileset (xml-reference &optional relative-path)
     "Loads tileset data from XML-REFERENCE for processing.
 
@@ -1174,10 +1143,9 @@ compile-tileset, compile-map (for embedded tilesets)
 
 @strong{Output:}
 Tileset object containing image data, tile dimensions, and palette information."
-    (when (equal xml-reference tileset-cached)
-      (return-from load-tileset tileset-cache))
-    (setf tileset-cached xml-reference
-          tileset-cache
+    (when-let (found (gethash xml-reference tileset-cache))
+      (return-from load-tileset found))
+    (setf (gethash xml-reference tileset-cache)
           (let* ((path (etypecase xml-reference
                          (cons (let ((source
                                        (xml-attr "source" (second xml-reference))))
@@ -1496,22 +1464,6 @@ range is 0 - #xffffffff (4,294,967,295)"
 (defun decal-invisible-p (decal)
   (= #xff (elt decal 2)))
 
-(defun assemble-binary (source-pathname)
-  (let (#+ () (combined-source-pathname
-                (make-pathname :directory (append (list "Source" "Generated")
-                                                  (subseq (pathname-directory source-pathname) 1))
-                               :defaults source-pathname)))
-    (cerror "Run Commands are not implemented properly yet! Pushing just an RTS for ~a"
-            (enough-namestring source-pathname))
-    #(#x60) ; rts
-    ))
-
-(defun run-commands-content-for-map (pathname)
-  (let ((run-commands-pathname (make-pathname :defaults pathname
-                                              :type "s")))
-    (when (probe-file run-commands-pathname)
-      (assemble-binary run-commands-pathname))))
-
 (defun tileset-rom-bank (xml)
   "Map TMX tileset @code{source} path to a ROM bank id for packed tile data.
 Returns @code{0} if no known prefix matches (FIXME #125)."
@@ -1746,8 +1698,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                         :base-name (concatenate 'string "Map."
                                                 canon-name
                                                 ".Data."
-                                                (string-upcase tv))))
-                     (run-commands-content (run-commands-content-for-map pathname)))
+                                                (string-upcase tv)))))
                 (assert (<= (* width height) 1024))
                 (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
 ~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~
@@ -1836,7 +1787,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
         (setf (aref images i)
               (extract-region (tileset-image tileset)
                               (* x 8) (* y 16)
-                              (1- (* (1+ x) 8)) (1- (* (1+ y) 16))))
+                              (+ (* x 8) 8) (+ (* y 16) 16)))
         (incf i)))))
 
 (defun palette-index (pixel palette)
@@ -1851,32 +1802,51 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
           (check-type byte-index (integer 0 (4096)))
           (dotimes (x 4)
             (setf (ldb (byte 2 (* 2 x)) (aref bytes byte-index))
-                  (palette-index (aref image
-                                       (+ (- 3 x) (* 4 half))
-                                       (- 15 y))
-                                 palette))))))))
+                  (or (palette-index (aref image
+                                          (+ (- 3 x) (* 4 half))
+                                          (- 15 y))
+                                    palette)
+                      0))))))))
+
+(defgeneric tiles-in-tileset-for-machine (machine)
+  (:method ((machine (eql 7800))) 128)
+  (:method ((machine t))
+    (warn "Machine does not declare tiles in tileset, assuming 256: ~d (~a)"
+          machine (machine-directory-name machine))
+    256))
+(defgeneric bytes-in-tileset-for-machine (machine)
+  (:method ((machine (eql 7800))) (* 256 16))
+  (:method ((machine t))
+    (warn "Machine does not declare bytes in tileset, assuming 4k: ~d (~a)"
+          machine (machine-directory-name machine))
+    (* 256 16)))
+
+(defun machine-tileset-size-tiles (&optional (machine *machine*))
+  (tiles-in-tileset-for-machine machine))
+(defun machine-tileset-size-bytes (&optional (machine *machine*))
+  (bytes-in-tileset-for-machine machine))
 
 (defun compile-tileset (pathname &optional common-pathname)
-  "Compiles tileset graphics for the current @code{*machine*}.
-
-For MARIA platforms (7800, 5200, 400, 800, 7850): extracts 8×16 tiles into
-binary format for the MARIA graphics processor.  For VIC-II platforms (C64,
-C128): dispatches to @code{compile-tileset-64} for C64 multicolor/monochrome
-character-cell tiles.  For other machines, signals an error."
+  "Compiles tileset graphics for the current @code{*machine*}."
   ;; Machine dispatch: non-MARIA platforms
   (when (member *machine* '(64 128))
-    (let* ((name (pathname-name pathname))
-           (png (load-tileset-image-for-machine pathname))
-           (height (png-read:height png))
-           (width (png-read:width png))
-           (α (png-read:transparency png))
-           (image-nybbles (png->palette height width (png-read:image-data png) α))
-           (out-dir (merge-pathnames
-                     (make-pathname :directory (list :relative "Source" "Generated"
-                                                     (machine-directory-name) "Assets"))
-                     (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))))
-      (compile-tileset-64 (make-pathname :name name :type "png")
-                          out-dir height width image-nybbles)
+    (let* ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
+                                   :name (format nil "Tileset.~a" (pathname-name pathname))
+                                   :type "o"))
+           
+           (tileset (load-tileset pathname))
+           (width (floor (array-dimension (tileset-image tileset) 0) 8))
+           (palettes (extract-palettes (tileset-image tileset)))
+           (images (make-array (machine-tileset-size-tiles)))
+           (bytes (make-array (machine-tileset-size-bytes) :element-type '(unsigned-byte 8))))
+      (rip-tiles-from-tileset tileset images)
+      (dotimes (i (machine-tileset-size-tiles))
+        (rip-bytes-from-image (aref images i) palettes bytes i
+                              :x (mod i width) :y (floor i width)))
+      (with-output-to-file (object outfile
+                                   :element-type '(unsigned-byte 8)
+                                   :if-exists :supersede)
+        (write-bytes bytes object))
       (return-from compile-tileset)))
   (when (member *machine* '(2609))
     ;; Intv tilesets use compile-tileset-intv-screen (separate pipeline);
@@ -1888,6 +1858,7 @@ character-cell tiles.  For other machines, signals an error."
     (warn "Tile set compiler not set up for ~a (~a); skipping"
           *machine* (machine-long-name))
     (return-from compile-tileset))
+  ;; MARIA platforms (7800, 5200, 400, 800, 7850, ...)
   (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                 :name (format nil "Tileset.~a" (pathname-name pathname))
                                 :type "o")))
@@ -1895,12 +1866,12 @@ character-cell tiles.  For other machines, signals an error."
     (let* ((tileset (load-tileset pathname))
            (width (floor (array-dimension (tileset-image tileset) 0) 8))
            (palettes (extract-palettes (tileset-image tileset)))
-           (images (make-array (list 128)))
-           (bytes (make-array (list (* 256 16)) :element-type '(unsigned-byte 8))))
+           (images (make-array (machine-tileset-size-tiles)))
+           (bytes (make-array (machine-tileset-size-bytes) :element-type '(unsigned-byte 8))))
       (rip-tiles-from-tileset tileset images)
       (when common-pathname
         (rip-tiles-from-tileset (load-tileset common-pathname) images 64))
-      (dotimes (i 128)
+      (dotimes (i (machine-tileset-size-tiles))
         (rip-bytes-from-image (aref images i) palettes bytes i
                               :x (mod i width) :y (floor i width)))
       (with-output-to-file (object outfile
@@ -1987,20 +1958,19 @@ PATHNAME is the tileset definition file (.tsx); writes assembly source to OUTFIL
                        (atari-colu-string (aref series palette-index 1))
                        (atari-colu-string (aref series palette-index 2))
                        (atari-colu-string (aref series palette-index 3))))))
-      (let* ((tileset (let ((*region* :ntsc))
-                        (load-tileset pathname))))
-        (format output ";;; Palette ~a~%;;; extracted from ~a"
-                (enough-namestring outfile) (enough-namestring pathname))
-        (dolist (*region* '(:ntsc :pal))
-          (let ((palettes (extract-palettes (tileset-image tileset))))
-            (format *trace-output* "~% ~a:~%" (enough-namestring outfile))
-            (format output "~2%~10t.if TV == ~a" *region*)
-            (dump-palettes palettes "Base")
-            (dump-palettes (adjust-palettes #'darken-color-in-palette palettes) "Dark")
-            (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes) "Light")
-            (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
-            (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
-            (format output "~%~10t.fi~%")))))))
+      (dolist (*region* '(:ntsc :pal))
+        (let* ((tileset (load-tileset pathname))
+              (palettes (extract-palettes (tileset-image tileset))))
+          (format output ";;; Palette ~a~%;;; extracted from ~a"
+                  (enough-namestring outfile) (enough-namestring pathname))
+          (format *trace-output* "~% ~a:~%" (enough-namestring outfile))
+          (format output "~2%~10t.if TV == ~a" *region*)
+          (dump-palettes palettes "Base")
+          (dump-palettes (adjust-palettes #'darken-color-in-palette palettes) "Dark")
+          (dump-palettes (adjust-palettes #'lighten-color-in-palette palettes) "Light")
+          (dump-palettes (adjust-palettes #'redden-color-in-palette palettes) "Red")
+          (dump-palettes (adjust-palettes #'cyanate-color-in-palette palettes) "Cyan")
+          (format output "~%~10t.fi~%"))))))
 
 (defun find-named-object-in-scene (name-object &optional (scene-name *current-scene*))
   (flet ((lookup-attr (attrs key &optional default)
@@ -2021,3 +1991,5 @@ PATHNAME is the tileset definition file (.tsx); writes assembly source to OUTFIL
                                 (parse-integer (lookup-attr attrs "gid") :junk-allowed t))
                            0)))))))
   (error "Can't find “~a” in scene “~a”" name-object scene-name))
+
+

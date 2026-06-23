@@ -656,7 +656,8 @@ RGB triple (R G B) for the palette entry
 @end table
 
 @xref{fun:machine-palette}."
-  (nth index (machine-palette)))
+  (mapcar (lambda (n) (coerce n 'single-float))
+          (nth index (machine-palette))))
 
 (defvar *palette-warnings* (make-hash-table :test 'eql))
 
@@ -700,6 +701,9 @@ May issue warnings for colors not in the palette
   (or (position (list red green blue) (machine-palette) :test 'equalp)
       (destructuring-bind (r g b) (find-nearest-in-palette
                                    (machine-palette) red green blue)
+        (check-type r (integer 0 #xff))
+        (check-type g (integer 0 #xff))
+        (check-type b (integer 0 #xff))
         (let ((use (position (list r g b) (machine-palette) :test 'equalp)))
           (incf (gethash (rgb->int r g b) *palette-warnings* 0))
           (cond
@@ -719,6 +723,11 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
              (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
           use))))
 
+(defun ansi-color-pixel (r g b)
+  "Return an ANSI color escape sequence for the given RGB components.
+The escape sequence resets after the character."
+  (format nil "~c[38;2;~d;~d;~dm" #\Escape (round r) (round g) (round b)))
+
 (defun find-nearest-palette-color (rgb-color)
   "Find the nearest Atari 2600 palette color to the given RGB color using DUFY.
 
@@ -734,20 +743,19 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
       (or (position (list nearest-r nearest-g nearest-b) (machine-palette) :test 'equalp)
           0))))
 
-(defun png->palette (height width rgb &optional α)
-  (check-type height (integer 0 *))
-  (check-type width (integer 0 *))
+(defun png->palette (rgb &optional α)
   (check-type rgb array)
   (check-type α (or null array))
-  (destructuring-bind (w h bpp) (array-dimensions rgb)
-    (unless (and (= h height) (= w width) (or (= bpp 3) (= bpp 4)))
-      (error "PNG image in an unsuitable format (wrong size or not RGB/RGBA)."))
+  (destructuring-bind (width height bpp) (array-dimensions rgb)
+    (unless (or (= bpp 3) (= bpp 4))
+      (error "PNG image must have 3 or 4 bytes per pixel (RGB/RGBA), but got ~D" bpp))
     (let ((image (make-array (list width height)
                              :element-type '(or null (unsigned-byte 8)))))
       (loop for x from 0 below width
             do (loop for y from 0 below height
                      do (setf (aref image x y)
-                              (if (and α (< 128 (aref α x y)))
+                              (if (or (and α (>= 128 (aref α x y)))
+                                      (and (= bpp 4) (>= 128 (aref rgb x y 3))))
                                   nil
                                   (rgb->palette (aref rgb x y 0)
                                                 (aref rgb x y 1)

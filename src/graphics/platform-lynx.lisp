@@ -36,8 +36,7 @@
         (let* ((png (png-read:read-png-file png-name))
                (height (png-read:height png))
                (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
+               (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png))))
           ;; Lynx CHR format: sprites with 16 colors per sprite
           (let ((sprite-data (parse-lynx-sprite-data palette-pixels width-px height-px mode)))
@@ -83,7 +82,7 @@
   (let ((*machine* 200))
     (declare (ignore format)) ;; Lynx uses a standard font format
     (compile-font-8×8 source-file-base-name "Lynx/Fonts" 8 8
-                      (png->palette 8 8 font-input nil))))
+                      (png->palette font-input nil))))
 
 ;; Blob ripping for Lynx
 
@@ -91,7 +90,7 @@
   "Dispatch Lynx sprite PNG through dispatch-png for auto-detection."
   (let ((*machine* 200)
         (out-dir (merge-pathnames (make-pathname :directory '(:relative "Source" "Generated" "Lynx" "Assets"))
-                                  (or (project-root) (uiop:getcwd)))))
+                                  (or (uiop:getcwd) (uiop:getcwd)))))
     (dispatch-png png-file out-dir)))
 
 (defun blob-rip-lynx-tile (png-file)

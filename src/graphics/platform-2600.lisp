@@ -378,7 +378,7 @@ Shape:~{~{~a~}~2%~}
       (error "Bitmap must be 42 pixels tall; got ~a" height))
     (let* ((*machine* 2600)
            (*region* tv-standard)
-           (palette (png->palette height width rgb alpha))
+           (palette (png->palette rgb alpha))
            (pixels (make-array (list width height)
                                :element-type '(unsigned-byte 8)))
            (label-name (cl-change-case:pascal-case (pathname-base-name input-path))))
@@ -556,7 +556,7 @@ Shape:~{~{~a~}~2%~}
                   (ensure-directories-exist zx7-pathname)
                   (write-byte-vector-into-file bytes bin-pathname :if-exists :overwrite
                                                                   :if-does-not-exist :create)
-                  (uiop:run-program (list (namestring (merge-pathnames "bin/zx7mini" (project-root)))
+                  (uiop:run-program (list (namestring (merge-pathnames "bin/zx7mini" (uiop:getcwd)))
                                           (namestring bin-pathname)
                                           (namestring zx7-pathname))
                                     :output t :error-output t)

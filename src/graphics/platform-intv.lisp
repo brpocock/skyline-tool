@@ -233,8 +233,7 @@ stores a GROM (@code{$0000}–@code{$00FF}) or GRAM (@code{$0100}+) card ID;
          (height (png-read:height png))
          (width (png-read:width png))
          (α (png-read:transparency png))
-         (palette-pixels (png->palette height width
-                                       (png-read:image-data png)
+         (palette-pixels (png->palette (png-read:image-data png)
                                        α)))
     (compile-blob-intv-screen png-file output-file palette-pixels width height)))
 
@@ -275,16 +274,15 @@ Invokes @command{as1600}.  Requires the jzIntv SDK to be built (@command{make
   (check-type source-files list)
   (check-type output-file (or pathname string))
   (let* ((main-source (first source-files))
-         (as1600 (or (probe-file (merge-pathnames #p"bin/as1600" (project-root)))
-                     (probe-file (merge-pathnames #p"Tools/jzIntv/bin/as1600" (project-root))))))
-    (unless as1600
-      (error "as1600 not found at bin/as1600 or Tools/jzIntv/bin/as1600; build jzIntv SDK first"))
+         (as1600 #p"bin/as1600"))
+    (unless (probe-file as1600)
+      (error "as1600 not found at bin/as1600; build jzIntv SDK first"))
     (format *trace-output* "~&Assembling Intellivision ROM: ~A -o ~A…~%" main-source output-file)
     (ensure-directories-exist output-file)
     (uiop:run-program (list (namestring as1600)
                             (namestring (merge-pathnames main-source))
-                            "-o" (namestring (merge-pathnames output-file))
-                            "-l" (namestring (merge-pathnames (make-pathname :type "lst" :defaults output-file))))
+                            "-o" (enough-namestring (merge-pathnames output-file))
+                            "-l" (enough-namestring (make-pathname :type "lst" :defaults output-file)))
                       :output *trace-output*
                       :error-output *trace-output*)
     output-file))
@@ -331,8 +329,7 @@ All cards in the source image are output as one file."
                                     (png-height (png-read:height png))
                                     (png-width (png-read:width png))
                                     (α (png-read:transparency png)))
-                               (png->palette png-height png-width
-                                             (png-read:image-data png)
+                               (png->palette (png-read:image-data png)
                                              α))))
          (array-width (array-dimension palette-pixels 0))
          (array-height (array-dimension palette-pixels 1))
@@ -405,8 +402,7 @@ compilation but for sprites that can be positioned anywhere on screen."
                                     (png-height (png-read:height png))
                                     (png-width (png-read:width png))
                                     (α (png-read:transparency png)))
-                               (png->palette png-height png-width
-                                             (png-read:image-data png)
+                               (png->palette (png-read:image-data png)
                                              α))))
          (array-width (array-dimension palette-pixels 0))
          (array-height (array-dimension palette-pixels 1))
@@ -427,7 +423,8 @@ compilation but for sprites that can be positioned anywhere on screen."
     ;; Check if monochrome (only black=0 and white=7 palette indices)
     (let ((colors (image-colors palette-pixels height width)))
       (unless (subsetp colors '(0 7) :test '=)
-        (warn "Sprite image ~A is not monochrome (found palette indices: ~{~D~^, ~}); treating non-black/non-white pixels as black"
+        (warn "Sprite image ~A is not monochrome (found palette indices: ~{~D~^, ~}); ~
+treating non-black/non-white pixels as black"
               png-file colors))
       (let ((out-file (merge-pathnames
                        (make-pathname :name
@@ -463,8 +460,6 @@ compilation but for sprites that can be positioned anywhere on screen."
                               (let ((bytes-list (reverse sprite-bytes)))
                                 (loop for i from 0 below 4
                                       for byte-first = (nth (* i 2) bytes-list)  ; First byte (high byte)
-(in-package :skyline-tool)
-
                                       for byte-second = (nth (+ (* i 2) 1) bytes-list)  ; Second byte (low byte)
                                       for word = (logior (ash byte-first 8) byte-second)
                                       do (format src-file "    DECLE   $~4,'0X~%" word)))))))

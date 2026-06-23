@@ -40,8 +40,7 @@ Malformed lines (e.g. missing mode) are skipped."
         (let* ((png (png-read:read-png-file png-name))
                (height (png-read:height png))
                (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
+               (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png))))
           ;; SNES CHR format: 8x8 tiles, various bit depths (2, 4, 8)
           (let ((tile-data (parse-snes-chr-tiles palette-pixels width-px height-px mode)))
@@ -103,8 +102,7 @@ Malformed lines (e.g. missing mode) are skipped."
     (let* ((png (png-read:read-png-file png-file))
            (height (png-read:height png))
            (width (png-read:width png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
+           (palette-pixels (png->palette (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
                          (make-pathname :name (pathname-name png-file)

@@ -395,8 +395,6 @@ producing 16 bytes per tile.  Output is binary @file{.chr}."
            (height (png-read:height png))
            (width (png-read:width png))
            (α (png-read:transparency png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
-                                         α)))
+           (palette-pixels (png->palette (png-read:image-data png) α)))
       (dispatch-png% *machine* png-file target-dir
                      png height width α palette-pixels))))

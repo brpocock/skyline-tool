@@ -3,6 +3,7 @@
 (defun compile-tg16-tile-data (palette-pixels tile-x tile-y)
   "Convert an 8x8 tile from palette-pixels to TG16 planar format (32 bytes)"
   (let ((tile-bytes (make-array 32 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (declare (type (simple-array (unsigned-byte 8) (*)) tile-bytes))
     ;; TG16 uses planar format: 4 bitplanes of 8 bytes each
     (dotimes (y 8)
       (dotimes (x 8)
@@ -22,8 +23,8 @@
             (when (logbitp bit color-index)
               (let ((byte-index (+ (* bit 8) y)))
                 (setf (aref tile-bytes byte-index)
-                      (logior (aref tile-bytes byte-index) (ash 1 (- 7 x))))))))
-        tile-bytes))))
+                      (logior (aref tile-bytes byte-index) (ash 1 (- 7 x))))))))))
+    tile-bytes))
 
 (defun compile-tg16-sprite (png-file target-dir height width palette-pixels)
   "Compile TurboGrafx-16/PC Engine sprite data from PNG image"

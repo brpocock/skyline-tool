@@ -513,12 +513,12 @@
                                              :palette id-palette)))
             (is (equalp result-320c result2) "Regeneration produces identical results")))))
     ;; 320A: verify correct monochrome byte packing (MSB-left)
-    (let ((mono-pixels (make-array '(8 4) :element-type '(unsigned-byte 8)
-                                   :initial-contents
-                                   '((1 0 1 0 1 0 1 0)
-                                     (1 1 0 0 1 1 0 0)
-                                     (1 1 1 1 0 0 0 0)
-                                     (0 0 0 0 1 1 1 1)))))
+(let ((mono-pixels (make-array '(4 8) :element-type '(unsigned-byte 8)
+                               :initial-contents
+                               '((1 0 1 0 1 0 1 0)
+                                 (1 1 0 0 1 1 0 0)
+                                 (1 1 1 1 0 0 0 0)
+                                 (0 0 0 0 1 1 1 1)))))
       (let ((result-320a (7800-image-to-320a mono-pixels
                                              :byte-width 1 :height 4
                                              :palette (vector 0 1))))

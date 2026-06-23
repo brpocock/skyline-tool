@@ -17,7 +17,7 @@
    Returns alist: ((class-name . ((slot-name . (offset . type)) ...)) ...)
    Where type is :string or :numeric."
   (let* ((pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
-                                    (project-root)))
+                                    (uiop:getcwd)))
          (file-time (file-write-date pathname)))
     (when (and *classes-defs-cache*
                (= *classes-defs-timestamp* file-time))
@@ -104,7 +104,7 @@
 (defun read-class-ids-from-file (&optional (pathname (merge-pathnames
                                                       (format nil "Source/Generated/~a/ClassConstants.s"
                                                               (skyline-tool::machine-directory-name))
-                                                      (project-root))))
+                                                      (uiop:getcwd))))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
     (let ((classes-table (make-hash-table)))
       (loop for line = (read-line labeled nil nil)
@@ -129,7 +129,7 @@
 
 (defun read-class-slots-from-defs (class-name &optional
                                                 (pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
-                                                                           (project-root))))
+                                                                           (uiop:getcwd))))
   (when (string= "BasicObject" class-name)
     (return-from read-class-slots-from-defs
       (list (cons (cons "ClassID" 0) nil) 1)))

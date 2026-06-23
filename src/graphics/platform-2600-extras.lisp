@@ -11,9 +11,9 @@
                                                      base-palette
                                                      lenient-palette-p)
   (let* ((base-dir (if (typep target-dir 'pathname)
-                       (merge-pathnames target-dir (project-root))
+                       target-dir
                        (merge-pathnames (pathname (or target-dir "Object/5200/"))
-                                        (project-root))))
+                                        (uiop:getcwd))))
          (out-file-name (or output-pathname
                             (merge-pathnames
                              (make-pathname :name
@@ -83,7 +83,7 @@ CoLu:
 (defun compile-gtia-player (png-file out-dir
                             height width image-pixels)
   (let* ((base-dir (merge-pathnames (pathname (or out-dir "Object/5200/"))
-                                    (project-root)))
+                                    (uiop:getcwd)))
          (out-file-name (merge-pathnames
                          (make-pathname :name
                                         (pathname-name png-file)
@@ -265,14 +265,57 @@ Proceed with caution."))
     (terpri source-file)))
 
 (defun tia-font-write (source-file pixels chars-width bit-shift)
-  (loop for i from 0 to 47
-        for x = (mod i chars-width)
-        for y = (floor i chars-width)
-        do (format source-file "~%	;; char #~x ~:[(right)~;(left)~]~{~a~}"
-                   i (= 4 bit-shift)
-                   (mapcar #'byte-and-art
-                           (mapcar (rcurry #'ash bit-shift)
-                                   (tia-font-interpret pixels x y))))))
+   (loop for i from 0 to 47
+      for x = (mod i chars-width)
+      for y = (floor i chars-width)
+      do (format source-file "~%	;; char #~x ~:[(right)~;(left)~]~{~a~}"
+                 i (= 4 bit-shift)
+                 (mapcar #'byte-and-art
+                         (mapcar (rcurry #'ash bit-shift)
+                                 (tia-font-interpret pixels x y))))))
+
+(defun blob-rip-5200 (png-file)
+   "Rip a Bitmap Large Object Block from PNG-FILE for Atari 5200 Mode E.
+
+@cindex BLOB ripping
+@cindex Mode E graphics
+@cindex ANTIC playfield
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: png-file (pathname or string)
+@item Returns: nil
+@item Side Effects: Creates @file{Source/Generated/5200/Assets/Blob.*.s}
+@end table
+
+5200 BLOBs are 160-pixel-wide ANTIC Mode E playfield bitmaps (four colors per
+scanline, per-row palette in @code{CoLu}), not 7800 MARIA display-list stamps."
+   (let* ((*machine* 5200)
+          (*region* :ntsc)
+          (png (png-read:read-png-file png-file))
+          (height (png-read:height png))
+          (width (png-read:width png))
+          (palette-pixels (png->palette height width
+                                        (png-read:image-data png)))
+          (output-pathname (png-to-blob-pathname png-file))
+          (blob-label (format nil "Blob_~a"
+                              (assembler-label-name (pathname-name png-file)))))
+     (assert (= width 160) ()
+             "5200 BLOB ripper requires 160px width (Mode E), not ~d" width)
+     (assert (zerop (mod width 4)) (width)
+             "5200 Mode E BLOB width must be a multiple of 4, not ~d" width)
+     (format *trace-output* "~&Ripping 5200 Mode E BLOB from ~a (~:d×~:d px)… "
+             (enough-namestring png-file) width height)
+     (finish-output *trace-output*)
+     (compile-5200-mode-e-bitmap palette-pixels
+                                 :png-file png-file
+                                 :output-pathname output-pathname
+                                 :block-label blob-label
+                                 :height height
+                                 :width width
+                                 :compressp t
+                                 :lenient-palette-p t)
+     (format *trace-output* " … done!~%")))
 
 (defun antic-font-write (source-file pixels)
   (loop with chars-width = (floor (array-dimension pixels 0) 8)
@@ -341,10 +384,6 @@ Proceed with caution."))
       (let ((*machine* (or (when (not (eql :unknown *machine*)) *machine*) 7800)))
         (compile-font-generic *machine* nil font font-input)))))
 
-(defun compile-font-8×8 (png-file out-dir height width image-nybbles)
-  "Compile 8×8 font with deduplication: unique char definitions + mapping table.
-
-Shared by 7800, 5200, Lynx, VIC-II, VDC, ClcV, and Intv.  Outputs
 (defun bitmaps-for-tia-merged-tiles (merged-tiles)
   (check-type merged-tiles hash-table)
   (let* ((tiles (sort-hash-table-by-values merged-tiles))
@@ -380,10 +419,7 @@ Shared by 7800, 5200, Lynx, VIC-II, VDC, ClcV, and Intv.  Outputs
 
 (defun write-tia-tiles-trailer (tile-count)
   (check-type tile-count (integer 2 255))
-  (format t "
- TilesEnd = *
-
- TileCount = ~d"
+  (format t "~% TilesEnd = *~%~% TileCount = ~d"
           tile-count))
 
 (defun write-tia-tile-bitmaps-interleaved (merged-tiles)
@@ -563,7 +599,7 @@ but world “~a” needs ~:d for the ~r level~:p
     (dotimes (row rows)
       (dotimes (column columns)
         (let ((stamp (extract-region image (* column 4) (* row 16)
-                                     (+ (* column 4) 3) (+ (* row 16) 15))))
+                                                                           (+ (* column 4) 4) (+ (* row 16) 16))))
           (assert (= 4 (array-dimension stamp 0)))
           (assert (= 16 (array-dimension stamp 1)))
           (setf (aref output column row) stamp))))

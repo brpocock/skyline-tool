@@ -43,8 +43,7 @@
         (let* ((png (png-read:read-png-file png-name))
                (height (png-read:height png))
                (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
+               (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png))))
           ;; SMS CHR format: 8x8 tiles, 4 colors (2 bits per pixel)
           (let ((tile-data (parse-sms-chr-tiles palette-pixels width-px height-px)))

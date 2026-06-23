@@ -7,8 +7,7 @@
     (let* ((png (png-read:read-png-file png-file))
            (height (png-read:height png))
            (width (png-read:width png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
+           (palette-pixels (png->palette (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
                          (make-pathname :name (pathname-name png-file)
@@ -44,8 +43,7 @@
     (let* ((png (png-read:read-png-file png-file))
            (height (png-read:height png))
            (width (png-read:width png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
+           (palette-pixels (png->palette (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
                          (make-pathname :name (pathname-name png-file)
@@ -78,8 +76,7 @@
     (let* ((png (png-read:read-png-file png-file))
            (height (png-read:height png))
            (width (png-read:width png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
+           (palette-pixels (png->palette (png-read:image-data png)
                                          (png-read:transparency png)))
            (output-file (merge-pathnames
                          (make-pathname :name (pathname-name png-file)
@@ -145,24 +142,24 @@
   (:documentation "Compile TED art based on mode using EQL specializers")
   (:method ((mode (eql :bitmap)) png-name directory height-px width-px)
     (compile-ted-bitmap png-name directory height-px width-px
-                        (png->palette width-px height-px
-                                      (png-read:image-data (png-read:read-png-file png-name))
-                                      (png-read:transparency (png-read:read-png-file png-name)))))
+                        (png->palette 
+                         (png-read:image-data (png-read:read-png-file png-name))
+                         (png-read:transparency (png-read:read-png-file png-name)))))
   (:method ((mode (eql :chars)) png-name directory height-px width-px)
     (compile-ted-charmap png-name directory height-px width-px
-                         (png->palette width-px height-px
-                                       (png-read:image-data (png-read:read-png-file png-name))
-                                       (png-read:transparency (png-read:read-png-file png-name)))))
+                         (png->palette
+                          (png-read:image-data (png-read:read-png-file png-name))
+                          (png-read:transparency (png-read:read-png-file png-name)))))
   (:method ((mode (eql :sprite)) png-name directory height-px width-px)
     (compile-ted-sprite png-name directory height-px width-px
-                        (png->palette width-px height-px
-                                      (png-read:image-data (png-read:read-png-file png-name))
-                                      (png-read:transparency (png-read:read-png-file png-name)))))
+                        (png->palette 
+                         (png-read:image-data (png-read:read-png-file png-name))
+                         (png-read:transparency (png-read:read-png-file png-name)))))
   (:method ((mode (eql :multicolor-sprite)) png-name directory height-px width-px)
     (compile-ted-multicolor-sprite png-name directory height-px width-px
-                                   (png->palette width-px height-px
-                                                 (png-read:image-data (png-read:read-png-file png-name))
-                                                 (png-read:transparency (png-read:read-png-file png-name))))))
+                                   (png->palette 
+                                    (png-read:image-data (png-read:read-png-file png-name))
+                                    (png-read:transparency (png-read:read-png-file png-name))))))
 
 (defun write-ted-art-index (index-out art-index)
   "Write TED art data to output file"
@@ -221,7 +218,6 @@ value ~D for tile-cell ~D is too far down for an image with width ~D" (tile-cell
             do (loop for y0 from 7 downto 0
                      do (format src-file "~t.byte %~0,8b" 0))))))
 
-(defun bits-to-art (byte)
 (defun vic2-cell-multicolor-map (tile-data colors)
   "Build a 3-color map for multicolor encoding of an 8×8 cell.
 

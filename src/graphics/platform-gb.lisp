@@ -87,8 +87,7 @@
     (format *trace-output* "~&SGB: parsing frame from ~a …" (enough-namestring frame-in))
     (let* ((height (png-read:height png))
            (width (png-read:width png))
-           (palette-pixels (png->palette height width
-                                         (png-read:image-data png)
+           (palette-pixels (png->palette (png-read:image-data png)
                                          (png-read:transparency png)))
            (frame-data (make-array (* height width) :element-type '(unsigned-byte 8))))
       ;; SGB frames are typically 256x224 pixels
@@ -136,8 +135,7 @@
         (let* ((png (png-read:read-png-file png-name))
                (height (png-read:height png))
                (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
+               (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png)))
                (palette (if color
                             +gameboy-color-palette+

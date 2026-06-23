@@ -1,21 +1,19 @@
 (in-package :skyline-tool)
 
 (defun extract-region (original left top right bottom)
-  "Copy a rectangular region from ORIGINAL into a new array.
+  "Copy a rectangular region from ORIGINAL, inclusive of LEFT and TOP, exclusive of RIGHT and BOTTOM.
 
-Uses @code{(array-element-type original)} when ORIGINAL is an array so that
-palette images from @code{png->palette} — which may store @code{NIL} for
-transparent pixels — are copied without coercing @code{NIL} into
-@code{(unsigned-byte 8)} (which signals @code{type-error})."
-  (let* ((elt (if (arrayp original)
-                  (array-element-type original)
-                  '(unsigned-byte 8)))
-         (copy (make-array (list (1+ (- right left)) (1+ (- bottom top)))
-                           :element-type elt)))
-    (loop for x from left to right
-          do (loop for y from top to bottom
-                   do (setf (aref copy (- x left) (- y top)) (aref original x y))))
-    copy))
+   ORIGINAL is  indexed as  (column row).  The returned  array preserves
+   that column/row (x,y) layout."
+  (let* ((height (- bottom top))
+         (width (- right left))
+         (element-type (if (arrayp original)
+                           (array-element-type original)
+                           '(unsigned-byte 8)))
+         (copy (make-array (list width height) :element-type element-type)))
+    (dotimes (y height copy)
+      (dotimes (x width copy)
+        (setf (aref copy x y) (aref original (+ left x) (+ top y)))))))
 
 (defun mob->mono-bits (mob)
   (mapcar #'code-char
@@ -139,15 +137,6 @@ transparent pixels — are copied without coercing @code{NIL} into
                                x-mob y-mob)))))
     (values mobs index)))
 
-
-  (check-type byte string)
-  (assert (= 8 (length byte)))
-  (assert (every (lambda (char) (member char '(#\0 #\1))) byte))
-  (substitute #\⬜ #\0
-              (substitute #\⬛ #\1
-                          (make-array 8
-                                      :element-type 'character
-                                      :initial-contents byte))))
 
 (defun bit-pairs-to-art (byte)
   (check-type byte (integer 0 #xff))
@@ -390,8 +379,8 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                 (vector-pop uniq))))
     nil)
 
-(defun compile-tileset-64 (png-file out-dir height width image-nybbles)
-  "Write VIC-II tileset to OUT-DIR: char data (2048 bytes) + color RAM (256 bytes).
+  (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
+    "Write VIC-II tileset to OUT-DIR: char data (2048 bytes) + color RAM (256 bytes).
 
 Each 16×16 tile is four 8×8 character cells (TL, TR, BL, BR).  Cells with
 0–1 distinct non-background colors emit monochrome bitmaps; cells with 2+
@@ -410,78 +399,77 @@ Pixel dimensions of the PNG.
 @item IMAGE-NYBBLES
 2D palette-pixel array from @code{png->palette}.
 @end table"
-  (declare (ignore height))
-  (let ((out-file (merge-pathnames
-                   (make-pathname :name (concatenate 'string "tiles."
-                                                     (pathname-name png-file))
-                                  :type "s")
-                   out-dir))
-        (cell-count 256)
-        (multi-cells 0))
-    (ensure-directories-exist (directory-namestring out-file))
-    (with-output-to-file (src-file out-file :if-exists :supersede)
-      (format src-file ";;; -*- asm -*-~%")
-      (format src-file ";;; VIC-II tileset compiled from ~A~%" png-file)
-      (format src-file ";;; ~D×~D px → ~D char cells, 4 per 16×16 tile~2%"
-              width height cell-count)
-      ;; Char data: 8 bytes per cell
-      (format src-file "~ATilesetChars:  ;; ~D cells × 8 bytes~%"
-              (pathname-name png-file) cell-count)
-      (loop for cell from 0 below cell-count
-            for x-cell = (tile-cell-vic2-x cell width)
-            for y-cell = (tile-cell-vic2-y cell width)
-            for tile-data = (extract-region image-nybbles x-cell y-cell
-                                            (+ 7 x-cell) (+ 7 y-cell))
-            for colors = (tile->color tile-data)
-            for n-colors = (length colors)
-            for multi-p = (> n-colors 1)
-            do (when multi-p (incf multi-cells))
-               (if multi-p
-                   ;; Multicolor: 4 big pixels per row, 2-bit pairs
-                   (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+    (let ((out-file (merge-pathnames
+                     (make-pathname :name (concatenate 'string "tiles."
+                                                       (pathname-name png-file))
+                                    :type "s")
+                     out-dir))
+          (cell-count 256)
+          (multi-cells 0))
+      (ensure-directories-exist (directory-namestring out-file))
+      (with-output-to-file (src-file out-file :if-exists :supersede)
+        (format src-file ";;; -*- asm -*-~%")
+        (format src-file ";;; VIC-II tileset compiled from ~A~%" png-file)
+        (format src-file ";;; ~D×~D px → ~D char cells, 4 per 16×16 tile~2%"
+                width height cell-count)
+        ;; Char data: 8 bytes per cell
+        (format src-file "~ATilesetChars:  ;; ~D cells × 8 bytes~%"
+                (pathname-name png-file) cell-count)
+        (loop for cell from 0 below cell-count
+              for x-cell = (tile-cell-vic2-x cell width)
+              for y-cell = (tile-cell-vic2-y cell width)
+              for tile-data = (extract-region image-nybbles x-cell y-cell
+                                              (+ 7 x-cell) (+ 7 y-cell))
+              for colors = (tile->color tile-data)
+              for n-colors = (length colors)
+              for multi-p = (> n-colors 1)
+              do (when multi-p (incf multi-cells))
+                 (if multi-p
+                     ;; Multicolor: 4 big pixels per row, 2-bit pairs
+                     (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+                       (loop for y from 0 below 8
+                             for byte = 0
+                             do (loop for x-pair from 0 below 4
+                                      for b0 = (aref tile-data (* x-pair 2) y)
+                                      for b1 = (aref tile-data (1+ (* x-pair 2)) y)
+                                      for pair = (cond
+                                                   ((and (zerop b0) (zerop b1)) 0)
+                                                   ((and (= b0 b1) (position b0 cmap))
+                                                    (position b0 cmap))
+                                                   (t (or (position b0 cmap)
+                                                          (position b1 cmap)
+                                                          0)))
+                                      do (setf byte (logior (ash byte 2) pair)))
+                                (format src-file "    .byte $~2,'0X~%" byte)))
+                     ;; Monochrome: 1 bit per pixel, 8 bytes per cell
                      (loop for y from 0 below 8
-                           for byte = 0
-                           do (loop for x-pair from 0 below 4
-                                    for b0 = (aref tile-data (* x-pair 2) y)
-                                    for b1 = (aref tile-data (1+ (* x-pair 2)) y)
-                                    for pair = (cond
-                                                 ((and (zerop b0) (zerop b1)) 0)
-                                                 ((and (= b0 b1) (position b0 cmap))
-                                                  (position b0 cmap))
-                                                 (t (or (position b0 cmap)
-                                                        (position b1 cmap)
-                                                        0)))
-                                    do (setf byte (logior (ash byte 2) pair)))
-                              (format src-file "    .byte $~2,'0X~%" byte)))
-                   ;; Monochrome: 1 bit per pixel, 8 bytes per cell
-                   (loop for y from 0 below 8
-                         for byte = (loop for x from 0 below 8
-                                          sum (if (zerop (aref tile-data x y))
-                                                  0
-                                                  (ash 1 (- 7 x))))
-                         do (format src-file "    .byte $~2,'0X~%" byte)))
-               ;; Color RAM: 1 byte per cell
-               (format src-file "~2%~ATilesetColorRAM:  ;; ~D cells~%"
-                       (pathname-name png-file) cell-count)
-               (loop for cell from 0 below cell-count
-                     for x-cell = (tile-cell-vic2-x cell width)
-                     for y-cell = (tile-cell-vic2-y cell width)
-                     for tile-data = (extract-region image-nybbles x-cell y-cell
-                                                     (+ 7 x-cell) (+ 7 y-cell))
-                     for colors = (tile->color tile-data)
-                     for n-colors = (length colors)
-                     for multi-p = (> n-colors 1)
-                     for cram = (if multi-p
-                                    (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
-                                      (logior (ash (or (nth 1 cmap) 0) 4)
-                                              (logand (or (nth 2 cmap) 0) #x0F)))
-                                    (or (first colors) 0))
-                     do (format src-file "    .byte $~2,'0X~%" cram))
-               ;; Constants
-               (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
-                       (pathname-name png-file) multi-cells))
-      (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
-              cell-count multi-cells out-file))))
+                           for byte = (loop for x from 0 below 8
+                                            sum (if (zerop (aref tile-data x y))
+                                                    0
+                                                    (ash 1 (- 7 x))))
+                           do (format src-file "    .byte $~2,'0X~%" byte)))
+                 ;; Color RAM: 1 byte per cell
+                 (format src-file "~2%~ATilesetColorRAM:  ;; ~D cells~%"
+                         (pathname-name png-file) cell-count)
+                 (loop for cell from 0 below cell-count
+                       for x-cell = (tile-cell-vic2-x cell width)
+                       for y-cell = (tile-cell-vic2-y cell width)
+                       for tile-data = (extract-region image-nybbles x-cell y-cell
+                                                       (+ 7 x-cell) (+ 7 y-cell))
+                       for colors = (tile->color tile-data)
+                       for n-colors = (length colors)
+                       for multi-p = (> n-colors 1)
+                       for cram = (if multi-p
+                                      (let ((cmap (vic2-cell-multicolor-map tile-data colors)))
+                                        (logior (ash (or (nth 1 cmap) 0) 4)
+                                                (logand (or (nth 2 cmap) 0) #x0F)))
+                                      (or (first colors) 0))
+                       do (format src-file "    .byte $~2,'0X~%" cram))
+                 ;; Constants
+                 (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
+                         (pathname-name png-file) multi-cells))
+        (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
+                cell-count multi-cells out-file)))))
 
 (defun collect-foreground-color/tia (tiles)
   (assert (= 7 (array-dimension *tia-pf-colors* 1)))
@@ -550,7 +538,6 @@ Binary graphics data and updated asset index for game engine loading.
                          (prog1
                              (parse-integer (first png-files))
                            (setf png-files (rest png-files))))
-                       (machine-from-filename index-out)
                        5200)))
     (dolist (file png-files)
       (dispatch-png file index-out))))
@@ -564,8 +551,8 @@ Binary graphics data and updated asset index for game engine loading.
 (defun limit-region-to-palette (region palette &key (allow-imperfect-p t))
   (let ((output (make-array (array-dimensions region))))
     (destructuring-bind (width height) (array-dimensions region)
-      (dotimes (x width)
-        (dotimes (y height)
+      (dotimes (x width output)
+        (dotimes (y height output)
           (setf (aref output x y)
                 (if allow-imperfect-p
                     (pixel-into-palette (aref region x y) (coerce palette 'list)
@@ -575,8 +562,7 @@ Binary graphics data and updated asset index for game engine loading.
                                :pixel (aref region x y)
                                :x x :y y :i nil :image nil
                                :palette palette
-                               :image-pixels region)))))))
-    output))
+                               :image-pixels region)))))))))
 
 (defun list-chomp (n list)
   (if (< (length list) n)
@@ -585,11 +571,10 @@ Binary graphics data and updated asset index for game engine loading.
 
 (defun map-region-to-palette (region palette &key allow-imperfect-p)
   (let ((output (make-array (array-dimensions region) :element-type '(unsigned-byte 8))))
-    (dotimes (x (array-dimension region 0))
-      (dotimes (y (array-dimension region 1))
+    (dotimes (x (array-dimension region 0) output)
+      (dotimes (y (array-dimension region 1) output)
         (setf (aref output x y) (palette-reference (aref region x y) palette
-                                                   :allow-imperfect-p allow-imperfect-p))))
-    output))
+                                                   :allow-imperfect-p allow-imperfect-p))))))
 
 (defun map-tiles/tia (world levels)
   (format *trace-output* "~&Sorting tile art into TIA format in world ~a…" world)
@@ -629,6 +614,32 @@ Blob PNG path; if under @file{Source/Blobs/@var{PORT}/}, output is
                         (etypecase color
                           (integer (elt (machine-palette *machine*) color))
                           (cons color)))))
+
+(defun print-clim-pixel (color stream &key shortp (unit #x10))
+  (setf unit (or unit #x10))
+  (clim:with-output-as-presentation (stream color 'palette-color)
+    (clim:with-room-for-graphics (stream)
+      (setf (clim:medium-ink stream) (apply #'clim:make-rgb-color
+                                            (mapcar (lambda (c) (/ c 255.0))
+                                                    (elt (machine-palette 7800) color))))
+      (clim:draw-rectangle* stream 0 0
+                            (* (if shortp 1 3/2) unit 2)
+                            (* (if shortp 1 3/2) unit) :filled t)
+      (setf (clim:medium-ink stream) clim:+foreground-ink+))))
+
+(defun print-wide-pixel (color stream &key shortp unit with-index-p)
+  (cond
+    #+mcclim
+    ((typep stream 'clim:sheet)
+     (print-clim-pixel color stream :shortp shortp :unit unit))
+    ((and (not (typep stream 'string-stream))
+          (tty-xterm-p))
+     (when with-index-p
+       (format stream "$~2,'0x " color))
+     (print-ansi-pixel color stream))
+    (t (if (consp color)
+           (format stream " #~{~2,'0x~2,'0x~2,'0x~} " color)
+           (format stream "[~2,'0x]" color)))))
 
 (defun print-clim-color (color stream)
   (clim:with-output-as-presentation (stream color 'palette-color)

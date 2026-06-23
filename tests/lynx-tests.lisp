@@ -68,7 +68,7 @@
     (unwind-protect
         (progn
           (uiop:copy-file (merge-pathnames "Source/Songs/Interworldly.midi"
-                                           (skyline-tool::project-root))
+                                           (uiop:getcwd))
                           input-file)
           (finishes (skyline-tool::compile-music-lynx temp-file input-file))
           (is-true (probe-file temp-file)

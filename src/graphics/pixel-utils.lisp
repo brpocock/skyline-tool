@@ -4,13 +4,12 @@
   "Split PIXELS into regions of WIDTH×HEIGHT"
   (let ((images (list)))
     (dotimes (y (floor (/ (array-dimension pixels 1) height)))
-      (dotimes (x (/ (array-dimension pixels 0) width))
+      (dotimes (x (floor (/ (array-dimension pixels 0) width)))
         (push (extract-region pixels
                               (* x width) (* y height)
-                              (1- (* (1+ x) width))
-                              (1- (* (1+ y) height)))
+                              (* (1+ x) width) (* (1+ y) height))
               images)))
-    (reverse images)))
+    (nreverse images)))
 
 (define-condition color-not-in-palette-error (error)
   ((x :initarg :x :reader color-not-in-palette-x)
@@ -63,7 +62,7 @@
 
 (defun ansi-color-rgb (r g b &optional (foregroundp t))
   (format nil "~c[~d;2;~d;~d;~dm"
-          #\Escape (if foregroundp 38 48) r g b))
+          #\Escape (if foregroundp 38 48) (round r) (round g) (round b)))
 
 (defun ansi-color-pixel (r g b)
   (format nil "~a~a██~c[0m" (ansi-color-rgb r g b)
@@ -137,31 +136,3 @@ position within a larger image I."
                                   :image image
                                   :best-fit-p best-fit-p))))
     output))
-
-(defun print-clim-pixel (color stream &key shortp (unit #x10))
-  (setf unit (or unit #x10))
-  (clim:with-output-as-presentation (stream color 'palette-color)
-    (clim:with-room-for-graphics (stream ;; :width (* (if shortp 1 3/2) unit 2)
-                                  ;; :height (* (if shortp 1 3/2) unit)
-			    )
-      (setf (clim:medium-ink stream) (apply #'clim:make-rgb-color
-                                            (mapcar (lambda (c) (/ c 255.0))
-                                                    (elt (machine-palette 7800) color))))
-      (clim:draw-rectangle* stream 0 0
-                            (* (if shortp 1 3/2) unit 2)
-                            (* (if shortp 1 3/2) unit) :filled t)
-      (setf (clim:medium-ink stream) clim:+foreground-ink+))))
-
-(defun print-wide-pixel (color stream &key shortp unit)
-  (cond
-    #+mcclim
-    ((typep stream 'clim:sheet)
-     (print-clim-pixel color stream :shortp shortp :unit unit))
-    ((and (not (typep stream 'string-stream))
-          (tty-xterm-p))
-     (format stream "$~2,'0x " color)
-     (print-ansi-pixel color stream))
-    (t (if (consp color)
-           (format stream " #~{~2,'0x~2,'0x~2,'0x~} " color)
-           (format stream " ~2,'0x " color)))))
-

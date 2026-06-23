@@ -8,11 +8,11 @@
 (defvar *object-prototype-index* nil
   "Hash table: prototype basename string → stable compile-time index.")
 
-(defun object-prototypes-directory (&optional (root (project-root)))
+(defun object-prototypes-directory (&optional (root (uiop:getcwd)))
   "Return pathname for JSON object prototypes under ROOT."
   (merge-pathnames #p"Source/Objects/" root))
 
-(defun list-object-prototype-json-files (&optional (root (project-root)))
+(defun list-object-prototype-json-files (&optional (root (uiop:getcwd)))
   "Return sorted list of @file{Source/Objects/*.json} pathnames under ROOT."
   (let ((dir (object-prototypes-directory root)))
     (if (probe-file dir)
@@ -52,7 +52,7 @@ JSON slot names (maintaining original capitalization)."
   (let ((ids (read-class-ids-from-file)))
     (gethash class-name ids)))
 
-(defun ensure-object-prototype-index (&optional (root (project-root)))
+(defun ensure-object-prototype-index (&optional (root (uiop:getcwd)))
   "Build or return hash NAME → index for @file{Source/Objects/*.json}."
   (or *object-prototype-index*
       (setf *object-prototype-index*
@@ -144,7 +144,7 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
     (terpri)
     (list label (class-id-for-name class-name) )))
 
-(defun write-object-prototypes (&optional (root (project-root)))
+(defun write-object-prototypes (&optional (root (uiop:getcwd)))
   "Compile @file{Source/Objects/*.json} into ObjectPrototypes.s for the port."
   (format *trace-output* "~&Writing object prototypes to ObjectPrototypes.s…")
   (setf *object-prototype-index* nil)

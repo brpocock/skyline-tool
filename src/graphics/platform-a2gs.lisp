@@ -417,22 +417,22 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}" bytes)))
         (ecase mode
           (:super-hires
            (compile-a2gs-super-hires png-name (directory-namestring index-out) height-px width-px
-                                     (png->palette width-px height-px
-                                                   (png-read:image-data (png-read:read-png-file png-name))
-                                                   (png-read:transparency (png-read:read-png-file png-name)))))
+                                     (png->palette
+                                      (png-read:image-data (png-read:read-png-file png-name))
+                                      (png-read:transparency (png-read:read-png-file png-name)))))
           (:double-hires
            (compile-a2gs-double-hires png-name (directory-namestring index-out) height-px width-px
-                                      (png->palette width-px height-px
-                                                    (png-read:image-data (png-read:read-png-file png-name))
-                                                    (png-read:transparency (png-read:read-png-file png-name)))))
+                                      (png->palette
+                                       (png-read:image-data (png-read:read-png-file png-name))
+                                       (png-read:transparency (png-read:read-png-file png-name)))))
           (:hires
            (compile-a2gs-hires png-name (directory-namestring index-out) height-px width-px
-                               (png->palette width-px height-px
-                                             (png-read:image-data (png-read:read-png-file png-name))
-                                             (png-read:transparency (png-read:read-png-file png-name)))))
+                               (png->palette 
+                                (png-read:image-data (png-read:read-png-file png-name))
+                                (png-read:transparency (png-read:read-png-file png-name)))))
           (:sprite
            (compile-a2gs-sprite png-name (directory-namestring index-out) height-px width-px
-                                (png->palette width-px height-px
-                                              (png-read:image-data (png-read:read-png-file png-name))
-                                              (png-read:transparency (png-read:read-png-file png-name)))))))))
+                                (png->palette
+                                 (png-read:image-data (png-read:read-png-file png-name))
+                                 (png-read:transparency (png-read:read-png-file png-name)))))))))
   (format *trace-output* "~&Apple //gs art compilation complete."))

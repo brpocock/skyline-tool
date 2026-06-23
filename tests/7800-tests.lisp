@@ -29,7 +29,7 @@
 (test 7800-image-to-320c-correct-encoding
   "7800-image-to-320c produces correct MARIA 320C hardware bytes"
   ;; 4x2 test image covering all pairwise palette combinations
-  (let ((test-image (make-array '(4 2) :element-type '(unsigned-byte 8)
+  (let ((test-image (make-array '(2 4) :element-type '(unsigned-byte 8)
                                 :initial-contents
                                 '((0 1 2 3)    ; row 0: all four pixel values
                                   (3 2 1 0)))) ; row 1: reversed
@@ -53,8 +53,8 @@
         (is (= #xA4 row1))))))
 
 (test 7800-image-to-320c-idempotency
-  "320C conversion is deterministic"
-  (let ((image (make-array '(8 4) :element-type '(unsigned-byte 8)
+   "320C conversion is deterministic"
+   (let ((image (make-array '(4 8) :element-type '(unsigned-byte 8)
                            :initial-contents
                            '((0 1 2 3 0 1 2 3)
                              (1 2 3 0 1 2 3 0)
@@ -66,22 +66,22 @@
       (is (equalp r1 r2) "Same input → same output"))))
 
 (test 7800-image-to-320c-all-transparent
-  "All-transparent pixels → all-zero bytes"
-  (let ((image (make-array '(4 16) :element-type '(unsigned-byte 8)
-                           :initial-element 0))
-        (palette (vector 0 1 2 3)))
-    (let ((result (7800-image-to-320c image :byte-width 1 :height 16 :palette palette)))
-      (is (= 1 (length result)))
-      (is (= 16 (length (first result))))
-      (is (every #'zerop (first result)) "All bytes are zero for all-transparent stamp"))))
+   "All-transparent pixels → all-zero bytes"
+   (let ((image (make-array '(4 16) :element-type '(unsigned-byte 8)
+                            :initial-element 0))
+         (palette (vector 0 1 2 3)))
+     (let ((result (7800-image-to-320c image :byte-width 1 :height 16 :palette palette)))
+       (is (= 1 (length result)))
+       (is (= 16 (length (first result))))
+       (is (every #'zerop (first result)) "All bytes are zero for all-transparent stamp"))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; 320A Encoding Tests
 ;;; ---------------------------------------------------------------------------
 
 (test 7800-image-to-320a-correct-encoding
-  "320A conversion packs 8 pixels into 1 byte, MSB-left"
-  (let ((image (make-array '(16 2) :element-type '(unsigned-byte 8)
+   "320A conversion packs 8 pixels into 1 byte, MSB-left"
+   (let ((image (make-array '(2 16) :element-type '(unsigned-byte 8)
                            :initial-contents
                            '((1 0 1 0 1 0 1 0 0 0 0 0 0 0 0 0)   ; #xAA in byte 0
                              (0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1)))) ; #xFF in byte 1
@@ -128,32 +128,31 @@
 ;;; ---------------------------------------------------------------------------
 
 (test 320c-encoding-matches-parse-7800-object
-  "7800-image-to-320c and parse-7800-object :320c produce consistent results
-   for identical pixel patterns (given identical palette mapping)"
-  ;; Create a 4x4 stamp with palette values 0-3 and a matching palette
-  (let ((stamp (make-array '(4 4) :element-type '(unsigned-byte 8)
-                           :initial-contents
-                           '((0 1 2 3)
-                             (1 2 3 0)
-                             (2 3 0 1)
-                             (3 0 1 2))))
-        (palette (vector 0 1 2 3))
-        ;; Build a full parse-7800-object-friendly image: 4px wide, 4+1 rows
-        (full-image (make-array '(4 5) :element-type '(unsigned-byte 8)
-                                :initial-contents
-                                '((0 1 2 3)   ; row 0
-                                  (1 2 3 0)   ; row 1
-                                  (2 3 0 1)   ; row 2
-                                  (3 0 1 2)   ; row 3
-                                  (0 1 2 3))))); palette strip (1 entry per pixel)
-    (let ((image-result (first (7800-image-to-320c stamp
+   "7800-image-to-320c and parse-7800-object :320c produce consistent results
+    for identical pixel patterns (given identical palette mapping)"
+   ;; Create a 4x4 stamp with palette values 0-3 and a matching palette
+   (let* ((stamp (make-array '(4 4) :element-type '(unsigned-byte 8)
+                               :initial-contents
+                               '((0 1 2 3)
+                                 (1 2 3 0)
+                                 (2 3 0 1)
+                                 (3 0 1 2))))
+          (palette (vector 0 1 2 3))
+          ;; Build a full parse-7800-object-friendly image: 4px wide, 4+1 rows
+          (full-image (make-array '(4 5) :element-type '(unsigned-byte 8)
+                                  :initial-contents
+                                  '((0 1 2 3 0)   ; column 0
+                                    (1 2 3 0 1)   ; column 1
+                                    (2 3 0 1 2)   ; column 2
+                                    (3 0 1 2 3)))) ; column 3
+          (image-result (first (7800-image-to-320c stamp
                                                    :byte-width 1 :height 4
                                                    :palette palette)))
           (object-result (first (skyline-tool::parse-7800-object :320c full-image
                                                                  :width 4 :height 4
                                                                  :palette palette))))
       (is (equalp image-result object-result)
-          "7800-image-to-320c and parse-7800-object :320c agree on byte output"))))
+          "7800-image-to-320c and parse-7800-object :320c agree on byte output"))
 
 ;;; ---------------------------------------------------------------------------
 ;;; 320AC BLOB stamp buffer writing
@@ -164,13 +163,13 @@
    for both 320A (monochrome) and 320C (color) stamps"
   (flet ((make-mono-stamp ()
            (let ((s (make-array '(4 16) :element-type '(unsigned-byte 8)
-                                :initial-element 0)))
+                                        :initial-element 0)))
              ;; Put some foreground pixels in an 8x16 area (after padding)
              (dotimes (y 16) (setf (aref s 0 y) 1))
              s))
          (make-color-stamp ()
            (let ((s (make-array '(4 16) :element-type '(unsigned-byte 8)
-                                :initial-element 0)))
+                                        :initial-element 0)))
              (dotimes (y 16)
                (setf (aref s 0 y) 1
                      (aref s 1 y) 2
@@ -184,21 +183,21 @@
     ;; Verify 7800-image-to-320c output for a color stamp has correct structure
     (let ((color (make-color-stamp)))
       (let ((bytes (7800-image-to-320c color
-                                       :byte-width 1 :height 16
+                                       :byte-width 1 :height 4
                                        :palette (vector 0 1 2 3))))
         (is (= 1 (length bytes)) "4px stamp → 1 byte-column in 320c")
         (is (= 16 (length (first bytes))) "16 rows of bytes")))
     ;; Verify 7800-image-to-320a output for a monochrome stamp
     ;; (after BLOB converter's binary conversion step)
     (let* ((mono (make-mono-stamp))
-           (binary (let ((b (make-array '(8 16) :element-type '(unsigned-byte 8))))
-                     (dotimes (x 4)
+           (binary (let ((b (make-array '(16 8) :element-type '(unsigned-byte 8))))
+                     (dotimes (x 8)
                        (dotimes (y 16)
                          (setf (aref b x y)
                                (if (zerop (aref mono x y)) 0 1))))
                      b))
            (bytes (7800-image-to-320a binary
-                                      :byte-width 1 :height 16
+                                      :byte-width 1 :height 8
                                       :palette (vector 0 1))))
       (is (= 1 (length bytes)) "8px padded stamp → 1 byte-column in 320a")
       (is (= 16 (length (first bytes))) "16 rows of bytes"))))
@@ -212,9 +211,9 @@
    This is a design-verification test: stamp column n → pixel position (* 4 n)"
   ;; Each stamp is 4 pixels wide in 320 mode.
   ;; x-position in MARIA display headers counts in graphics clocks = pixels in 320 mode.
-  (let ((column 5)          ; stamp column 5
-        (span-length 3))    ; span covers 3 stamps
-    ;; Starting pixel position of span = (* 4 (- column span-length))
-    ;; For a span starting at column 2, ending before column 5: (* 4 (- 5 3)) = 8
-    (is (= 8 (* 4 (- column span-length)))
-        "Stamp column 2 → pixel x=8 in 320 mode")))
+   (let ((column 5)          ; stamp column 5
+         (span-length 3))    ; span covers 3 stamps
+     ;; Starting pixel position of span = (* 4 (- column span-length))
+     ;; For a span starting at column 2, ending before column 5: (* 4 (- 5 3)) = 8
+     (is (= 8 (* 4 (- column span-length)))
+         "Stamp column 2 → pixel x=8 in 320 mode"))))

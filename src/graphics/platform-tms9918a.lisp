@@ -36,8 +36,7 @@
         (let* ((png (png-read:read-png-file png-name))
                (height (png-read:height png))
                (width (png-read:width png))
-               (palette-pixels (png->palette height width
-                                             (png-read:image-data png)
+               (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png))))
           ;; ColecoVision CHR format: similar to NES but monochrome or limited colors
           (let ((tile-data (parse-colecovision-chr-tiles palette-pixels width-px height-px)))
@@ -95,14 +94,14 @@ pattern data (8 bytes per tile), name table, and color table (per
 8-tile group, TMS9918 color-table format).
 
 Output path: @file{Source/Generated/@emph{machine}/Assets/Blob.@emph{name}.s}"
-  (let* ((root (uiop:ensure-directory-pathname (or (project-root) (uiop:getcwd))))
+  (let* ((root (uiop:ensure-directory-pathname (or (uiop:getcwd) (uiop:getcwd))))
          (out (merge-pathnames (generated-blob-assembly-pathname png-file) root))
          (label (assembler-label-name (pathname-name (merge-pathnames png-file))))
          (png (png-read:read-png-file png-file))
          (height (png-read:height png))
          (width (png-read:width png))
          (α (png-read:transparency png))
-         (pal (png->palette height width (png-read:image-data png) α))
+         (pal (png->palette (png-read:image-data png) α))
          (cols (floor width 8))
          (rows (floor height 8))
          (cells (* cols rows))

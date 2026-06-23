@@ -1893,7 +1893,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
   (tagbody
    top
-     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (project-root)))
+     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (uiop:getcwd)))
        (assert (equalp "[words]" (read-line speakjet.dic nil nil)) ()
                "SpeakJet.dic must begin with [words] magic cookie")
 
@@ -3280,7 +3280,7 @@ code for the game's scripting engine.
                  (member name (getf npc :nicks) :test #'string-equal))
         do (return npc)))
 
-(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root))))
+(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (uiop:getcwd))))
   "Load the NPC stats table from PATHNAME"
   (format *trace-output* "~&Reading NPC stats from “~a” …"
           (enough-namestring pathname))
@@ -3298,7 +3298,7 @@ code for the game's scripting engine.
             (length *npc-stats*))
     *npc-stats*))
 
-(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (project-root))))
+(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (uiop:getcwd))))
   "Load the registry of boats from PATHNAME"
   (unless (and *boat-ids* *boat-classes*)
     (format *trace-output* "~&Reading boats from “~a” …" (enough-namestring pathname))
@@ -3558,8 +3558,8 @@ ActorClassSize:
   "Write the prototype data for NPCs to ActorPrototypes.s"
   (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
   (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (project-root))
+    (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (uiop:getcwd))
                                             :if-exists :supersede)
       (print-actor-prototypes))
     (format *trace-output* " …done.")))
@@ -3568,8 +3568,8 @@ ActorClassSize:
   "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
   (format *trace-output* "~&Writing CharacterIDs.s …")
   (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (project-root))
+    (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (uiop:getcwd))
                                             :if-exists :supersede)
       (format t "~&;;; Generated character ID data from NPC Stats file~2%")
       (dolist (actor (load-npc-stats))
@@ -3589,10 +3589,10 @@ ActorClassSize:
 
     (format *trace-output* "~&Writing CharacterIDs.forth …")
     (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-      (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
+      (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
       (with-output-to-file (*standard-output*
                             (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
-                                             (project-root))
+                                             (uiop:getcwd))
                             :if-exists :supersede)
         (format t "~& ( Generated character ID data from NPC Stats file )~2%")
         (dolist (actor (load-npc-stats))

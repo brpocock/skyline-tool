@@ -15,9 +15,6 @@
            #:run-repl))
 
 (in-package :skyline-tool)
-(defun project-root ()
-  "Return the project root directory as a pathname"
-  (asdf:system-relative-pathname :skyline-tool #p"../"))
 
 (defvar *project.json*)
 (defvar *game-title*)
@@ -40,5 +37,5 @@
     (merge-pathnames (make-pathname :directory (list :relative "Source" "Generated" platform-dir)
                                     :name (pathname-name filename)
                                     :type (pathname-type filename))
-                     (project-root))))
+                     (uiop:getcwd))))
 

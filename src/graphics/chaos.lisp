@@ -125,7 +125,7 @@
       (error "Fonts must be a positive multiple of 16 pixels tall; got ~a" height))
     (let* ((*machine* 2600)
            (*region* :ntsc)
-           (palette (png->palette height width (png-read:image-data png)
+           (palette (png->palette (png-read:image-data png)
                                   (png-read:transparency png)))
            (chars-per-row (/ width 8))
            (char-rows (/ height 16))
@@ -228,7 +228,7 @@
                                 label-root))
       do (let* ((*machine* 2600)
                 (*region* conversion-region)
-                (palette (png->palette height width rgb alpha))
+                (palette (png->palette rgb alpha))
                 (rows (loop for y from 0 below height
                             collect (playfield-row->string palette width y)))
                 (color-indices (loop for y from 0 below height
@@ -262,7 +262,7 @@
       (error "ChaosFight character sprites must be 64 pixels wide; got ~a" width))
     (unless (= height 256)
       (error "ChaosFight character sprites must be 256 pixels tall; got ~a" height))
-    (let* ((palette (png->palette height width (png-read:image-data png)
+    (let* ((palette (png->palette (png-read:image-data png)
                                   (png-read:transparency png)))
            (frames (make-array 0 :adjustable t :fill-pointer 0))
            (frame-cache (make-hash-table :test 'equal))

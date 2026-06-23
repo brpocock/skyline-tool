@@ -597,7 +597,7 @@ See COPYING for details
 
 @itemize @bullet
 @item
-If @file{Makefile} in @code{(project-root)} resolves (truename) to
+If @file{Makefile} in @code{(uiop:getcwd)} resolves (truename) to
 @file{Source/Build/<PORT>.mak} (not @file{common.mak} nor
 @file{z80-common.mak}), return @code{<PORT>} as a string (e.g. Lynx,
 7800).
@@ -611,7 +611,7 @@ something starting with @samp{PORT=} is never mistaken for an assignment.
 @item
 If nothing matches, return @code{\"7800\"}.
 @end itemize"
-  (let ((makefile (merge-pathnames "Makefile" (project-root))))
+  (let ((makefile (merge-pathnames "Makefile" (uiop:getcwd))))
     (when (probe-file makefile)
       (multiple-value-bind (resolved err)
           (ignore-errors (values (uiop:truename* makefile) nil))
@@ -686,7 +686,7 @@ Example: bin/skyline-tool --port Intv ~a ?"
                              (find-default-port)
                              port-label))
          (json-name (format nil "Project.~a.json" effective-port))
-         (json-path (merge-pathnames json-name (project-root)))
+         (json-path (merge-pathnames json-name (uiop:getcwd)))
          (json-path (if (probe-file json-path)
                         json-path
                         (merge-pathnames json-name (uiop:pathname-directory-pathname
@@ -740,8 +740,6 @@ Executes the requested command, may exit the process
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
   ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
-  (unless (and (boundp '*machine*) *machine* *game-title*)
-    (load-project.json))
   (when (skyline-debug-backtrace-p)
     (sb-ext:disable-debugger))
   (format t "~&Skyline tool (© 2026) invoked:
@@ -754,8 +752,6 @@ Executes the requested command, may exit the process
                 when (or (string= token "--port") (string= token "-p"))
                   do (return (cadr args))
                 finally (return nil))))
-    (when (skyline-debug-backtrace-p)
-      (sb-ext:disable-debugger))
     ;; Parse an explicit --port/-p argument before loading Project.<port>.json.
     ;; The previous eager load used find-default-port on the top-level Makefile,
     ;; which can capture trailing text from generated variable assignments.
@@ -763,39 +759,34 @@ Executes the requested command, may exit the process
       (if explicit-port
           (load-project.json (ensure-valid-port-label explicit-port))
           (load-project.json)))
-    (format t "~&Skyline tool (© 2026) invoked:
-(Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
-            argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-    (let ((*command-line* (and (< 1 (length argv)) (subseq argv 1))))
-      (with-happy-restarts
-        (unless (< 1 (length argv))
-          (restart-case
-              (error "Ask for help if you need it, argument required")
-            (help () :report "Explain how this tool works"
-              (print-useful-help)
-              (bye))))
-        (destructuring-bind (self verb &rest invocation) argv
-          (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-            (flet ((runner ()
-                     (unless (char= #\- (char verb 0))
-                       (format *trace-output* "~&Running for game ‘~a’ for ~a" 
-                               *game-title* (machine-long-name))
-                       (finish-output *trace-output*))
-                     (apply fun (remove-if (curry #'string= self)
-                                           (flatten invocation)))
-                     (fresh-line)))
-              (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
-                  #+mcclim
-                  (clim-simple-echo:run-in-simple-echo
-                   #'runner
-                   :process-name
-                   (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                           (substitute #\Space #\- verb)
-                           invocation))
-                  #-mcclim nil
-                  (funcall #'runner)))
-            (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
-          (fresh-line))))))
+    (unless (< 1 (length argv))
+      (restart-case
+          (error "Ask for help if you need it, argument required")
+        (help () :report "Explain how this tool works"
+          (print-useful-help)
+          (bye))))
+    (destructuring-bind (self verb &rest invocation) argv
+      (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+        (flet ((runner ()
+                 (unless (char= #\- (char verb 0))
+                   (format *trace-output* "~&Running for game ‘~a’ for ~a" 
+                           *game-title* (machine-long-name))
+                   (finish-output *trace-output*))
+                 (apply fun (remove-if (curry #'string= self)
+                                       (flatten invocation)))
+                 (fresh-line)))
+          (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
+              #+mcclim
+              (clim-simple-echo:run-in-simple-echo
+               #'runner
+               :process-name
+               (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                       (substitute #\Space #\- verb)
+                       invocation))
+              #-mcclim nil
+              (funcall #'runner)))
+        (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
+      (fresh-line))))
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))
