@@ -1411,6 +1411,41 @@ Checks for files in Generated directories with specific names or containing 'Pal
                                      :directory
                                      (pathname-directory subdir))))))))
 
+(defun all-portable-assets ()
+  (let ((source-prefix-length
+          (length (pathname-directory (merge-pathnames #p"Source/")))))
+    (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "mscz")
+                                ("Scripts" . "fountain"))
+          append
+          (mapcar
+           (lambda (pathname)
+	   (subseq
+	    (enough-namestring
+	     (make-pathname :directory
+			(append (list :relative "Source")
+			        (subseq (pathname-directory (merge-pathnames pathname))
+				      source-prefix-length))
+			:name (pathname-name pathname)
+			:version nil
+			:type nil))
+	    (length "Source/")))
+           (recursive-directory
+	  (make-pathname :directory (list :relative "Source" dir)
+                           :name :wild
+                           :type type))))))
+
+(defun all-bare-assets ()
+  (append
+   (mapcar
+    (lambda (pathname)
+      (let ((path (enough-namestring pathname)))
+        (subseq path (length "Source/") (position #\. path :from-end t))))
+    (recursive-directory
+     (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
+		:name :wild
+		:type "xcf")))
+   (all-portable-assets)))
+
 (defun %asset-leaf-name (name)
   "Returns the final path component of asset NAME.
 
@@ -1505,14 +1540,12 @@ registered in @code{machine-directory-name}.
              8011   ; Jag
              9001)  ; PSX
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
-         (cond ((equal kind "Songs")
-	      (assert (not (null video)))
-	      (format nil "Object/~a/Assets/Song.~a.~a.o"
-                        machine-dir name video))
-	     ((equal kind "Maps")
-	      (assert (not (null video)))
-	      (format nil "Object/~a/Assets/Map.~a.~a.o"
-                        machine-dir (substitute #\. #\/ name) video))
+(cond ((equal kind "Songs")
+      (format nil "Object/~a/Assets/Song.~a.~a.o"
+              machine-dir name video))
+((equal kind "Maps")
+      (format nil "Object/~a/Assets/Map.~a.~a.o"
+              machine-dir (substitute #\. #\/ name) video))
 	     ((equal kind "Scripts")
 	      (format nil "Source/Generated/~a/Assets/Script.~a.s"
                         machine-dir (substitute #\. #\/ name)))
@@ -2174,8 +2207,10 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 
 Uses *ASSETS-FOR-BUILDS* as a cache"
   (or (gethash build *assets-for-builds*)
-      (let ((assets (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
-				     build)))
+      (let ((assets (concatenate 'list
+                                 (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
+			                            build)
+                                 (all-portable-assets))))
         (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected" build
                 (length assets))
         (setf (gethash build *assets-for-builds*) assets)
@@ -3307,7 +3342,7 @@ Creates parent directories if needed; overwrites the output file."
   (read-assets-list)
   (let ((absent nil))
     (dolist (asset-file (loop for wild in '(#p"Source/Blobs/*/*.xcf"
-				    #p"Source/Maps/*.tmx"
+				    #p"Source/Maps/*/*.tmx"
 				    #p"Source/Scripts/*.fountain"
 				    #p"Source/Songs/*.mscz")
 			append (recursive-directory wild)))

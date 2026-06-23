@@ -51,7 +51,7 @@
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("7800gd-debug" "eprom" "package"))
                  (:file "animation-editor" :depends-on ("package" "decode-animation-buffers"))
-                 (:file "asset-allocator" :depends-on ("package" "maps"))
+                 (:file "asset-allocator" :depends-on ("package" "maps" "graphics"))
                  (:file "cbm-tooling" :depends-on ("package"))
                  (:file "atarivox" :depends-on ("package" "runner"))
                  (:file "clim-simple-echo" :depends-on ("package"))
