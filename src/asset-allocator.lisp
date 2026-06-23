@@ -1766,17 +1766,66 @@ and target platform. Handles special cases for different machines and video mode
 	    (asset-compilation-line asset-indicator :video video)))))
 
 (defun write-asset-compilation/map (asset-indicator)
-  (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types))
-      (format t "~%
-~a: ~a \\
-          Source/Assets.index bin/skyline-tool
-	mkdir -p Object/~a/Assets
-	~a"
-	    (asset->object-name asset-indicator :video video)
-	    (asset->source-name asset-indicator)
-	    machine-dir
-	    (asset-compilation-line asset-indicator :video video)))))
+  (let* ((machine-dir (machine-directory-name))
+         (source (asset->source-name asset-indicator))
+         (source-pathname (merge-pathnames source (uiop:getcwd)))
+         (deps ()))
+    (when (probe-file source-pathname)
+      (handler-case
+          (let* ((xml (xmls:parse-to-list
+                       (alexandria:read-file-into-string source-pathname)))
+                 (source-dir (make-pathname
+                              :directory (pathname-directory source-pathname)
+                              :name nil :type nil)))
+            (dolist (ts (xml-matches "tileset" xml))
+              (let ((ts-source (xml-attr "source" (second ts))))
+                (when ts-source
+                  (let* ((ts-path (merge-pathnames
+                                   (parse-namestring ts-source) source-dir))
+                         (ts-name (pathname-name ts-path)))
+                    (push (format nil "Object/~a/Assets/Tileset.~a.o"
+                                  machine-dir ts-name)
+                          deps)))))
+            (let ((map-props (xml-match "properties" xml nil)))
+              (when map-props
+                (dolist (prop (xml-matches "property" map-props))
+                  (let* ((attrs (second prop))
+                         (name (xml-attr "name" attrs))
+                         (value (xml-attr "value" attrs)))
+                    (when (and name value (string-equal name "rc"))
+                      (push (format nil "Source/Generated/~a/RunCommands/~a.s"
+                                    (machine-directory-name)
+                                    (pascal-case (remove #\' value)))
+                            deps))))))
+            (dolist (og (xml-matches "objectgroup" xml))
+              (dolist (obj (xml-matches "object" og))
+                (let ((obj-props (xml-match "properties" obj nil)))
+                  (when obj-props
+                    (dolist (prop (xml-matches "property" obj-props))
+                      (let* ((attrs (second prop))
+                             (name (xml-attr "name" attrs))
+                             (value (xml-attr "value" attrs)))
+                         (when (and name value (string-equal name "Script"))
+                           (let* ((stripped (remove #\' value))
+                                  (path (mapcar #'pascal-case
+                                                (flatten
+                                                 (mapcar (lambda (s)
+                                                           (split-sequence #\/ s))
+                                                         (split-sequence #\- stripped)))))
+                                  (indicator (format nil "Scripts/~{~a~^/~}" path)))
+                             (push (asset->object-name indicator)
+                                   deps))))))))))
+        (error (c)
+          (warn "write-asset-compilation/map: failed to parse ~a for dependencies: ~a"
+                source c))))
+    (format t "~%~{~a~^ ~}: ~a \\~%          Source/Assets.index bin/skyline-tool"
+            (mapcar (lambda (v) (asset->object-name asset-indicator :video v))
+                    (supported-video-types))
+            source)
+    (dolist (dep (reverse deps))
+      (format t " \\~%          ~a" dep))
+    (format t "~%	mkdir -p Object/~a/Assets~%	bin/skyline-tool --port ${PORT} compile-map $<"
+            machine-dir)))
 
 (defun makefile-blob-videos ()
   "Video keywords to emit for blob compile rules.
@@ -2392,8 +2441,11 @@ Intellivision uses @code{compile-blob-intv} (tile map + GRAM cards)."
     (write-tsx-generation tileset)))
 
 (defun write-makefile-for-bare-assets ()
-  (dolist (asset (loop for (file builds) on (read-assets-list) by #'cddr collect file))
-    (write-asset-compilation asset)))
+  (maphash (lambda (asset builds)
+             (declare (ignore builds))
+             (when asset
+               (write-asset-compilation asset)))
+           (read-assets-list)))
 
 (defun write-makefile-header ()
   (format t "# Makefile (generated)~%# -*- makefile -*-~%"))
@@ -2495,6 +2547,17 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 "
               build video
               (mapcar #'pascal-case (eightbol-sources)))))
+  (let ((machine-dir (machine-directory-name)))
+    (dolist (ext '("cob" "bas"))
+      (dolist (f (directory (make-pathname :directory '(:relative "Source" "Maps" "RunCommands")
+                                           :name :wild
+                                           :type ext)))
+        (let* ((stem (pathname-name f))
+               (pascal (pascal-case stem))
+               (out (format nil "Source/Generated/~a/RunCommands/~a.s" machine-dir pascal))
+               (flag (if (string-equal ext "bas") "--basic " "")))
+          (format t "~%~a: ~a \\~%          bin/eightbol~%	mkdir -p Source/Generated/~a/RunCommands~%	bin/eightbol ~a$< -m $(CPUDIR) -o $@"
+                       out (enough-namestring f) machine-dir flag)))))
   (dolist (build +all-builds+)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))

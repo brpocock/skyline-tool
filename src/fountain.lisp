@@ -3316,9 +3316,10 @@ code for the game's scripting engine.
 
 (defun find-script-id (script-moniker)
   "Find the script ID for SCRIPT-MONIKER, defined by a scene number or the hash of its name"
-  (let* ((path (mapcar #'pascal-case
+  (let* ((moniker (remove #\' script-moniker))
+         (path (mapcar #'pascal-case
                        (flatten (mapcar (curry #'split-sequence #\/)
-                                        (split-sequence #\- script-moniker)))))
+                                        (split-sequence #\- moniker)))))
          (dir (mapcar (lambda (el)
                         (pascal-case (string-trim #(#\Space #\Tab) el)))
                       (butlast path)))
