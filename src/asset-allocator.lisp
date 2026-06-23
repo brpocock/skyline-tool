@@ -608,6 +608,8 @@ Prerequisites match the former per-bank rules; the recipe runs
       ;; ends with @samp{\\} before any @samp{:} appears on the continued logical line.
       (format t "~{~a~^ ~}: Source/Assets.index \\~%" target-lines)
       (format t "          bin/skyline-tool \\~%")
+      (when (and build video)
+        (format t "          Source/Generated/${PORT}/LastBankDefs.~a.~a.s \\~%" build video))
       (loop for dep on asset-objects
             do (if (cdr dep)
                    (format t "          ~a \\~%" (car dep))
@@ -3447,14 +3449,14 @@ Creates parent directories if needed; overwrites the output file."
                             "-I"
                             (enough-namestring
                              (merge-pathnames (make-pathname :directory (list :relative
-                                                                              "Source" "Generated"
-                                                                              machine))))
+                                                                               "Source" "Generated"
+                                                                               machine))))
                             "-I"
                             (enough-namestring
                              (merge-pathnames (make-pathname :directory (list :relative
-                                                                              "Source" "Generated"
-                                                                              machine
-                                                                              "Assets")))))
+                                                                               "Source" "Generated"
+                                                                               machine
+                                                                               "Assets")))))
                       (list (enough-namestring source-name)
                             "-o"
                             (enough-namestring object-name))))))
