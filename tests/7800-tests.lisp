@@ -29,10 +29,12 @@
 (test 7800-image-to-320c-correct-encoding
   "7800-image-to-320c produces correct MARIA 320C hardware bytes"
   ;; 4x2 test image covering all pairwise palette combinations
-  (let ((test-image (make-array '(2 4) :element-type '(unsigned-byte 8)
+  (let ((test-image (make-array '(4 2) :element-type '(unsigned-byte 8)
                                 :initial-contents
-                                '((0 1 2 3)    ; row 0: all four pixel values
-                                  (3 2 1 0)))) ; row 1: reversed
+                                '((0 3)
+                                  (1 2)
+                                  (2 1)
+                                  (3 0))))
         (palette (vector 0 1 2 3)))
     (let ((result (7800-image-to-320c test-image
                                       :byte-width 1 :height 2
@@ -54,12 +56,16 @@
 
 (test 7800-image-to-320c-idempotency
    "320C conversion is deterministic"
-   (let ((image (make-array '(4 8) :element-type '(unsigned-byte 8)
+   (let ((image (make-array '(8 4) :element-type '(unsigned-byte 8)
                            :initial-contents
-                           '((0 1 2 3 0 1 2 3)
-                             (1 2 3 0 1 2 3 0)
-                             (2 3 0 1 2 3 0 1)
-                             (3 0 1 2 3 0 1 2))))
+                           '((0 1 2 3)
+                             (1 2 3 0)
+                             (2 3 0 1)
+                             (3 0 1 2)
+                             (0 1 2 3)
+                             (1 2 3 0)
+                             (2 3 0 1)
+                             (3 0 1 2))))
         (palette (vector 0 1 2 3)))
     (let ((r1 (7800-image-to-320c image :byte-width 2 :height 4 :palette palette))
           (r2 (7800-image-to-320c image :byte-width 2 :height 4 :palette palette)))
@@ -81,10 +87,12 @@
 
 (test 7800-image-to-320a-correct-encoding
    "320A conversion packs 8 pixels into 1 byte, MSB-left"
-   (let ((image (make-array '(2 16) :element-type '(unsigned-byte 8)
+   (let ((image (make-array '(16 2) :element-type '(unsigned-byte 8)
                            :initial-contents
-                           '((1 0 1 0 1 0 1 0 0 0 0 0 0 0 0 0)   ; #xAA in byte 0
-                             (0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1)))) ; #xFF in byte 1
+                           '((1 0) (0 0) (1 0) (0 0)
+                             (1 0) (0 0) (1 0) (0 0)
+                             (0 1) (0 1) (0 1) (0 1)
+                             (0 1) (0 1) (0 1) (0 1))))
         (palette (vector 0 1)))
     (let ((result (7800-image-to-320a image :byte-width 2 :height 2 :palette palette)))
       (is (= 2 (length result)) "Two byte-columns for 16px width")
