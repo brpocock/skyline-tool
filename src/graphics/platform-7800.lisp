@@ -288,7 +288,7 @@ but world “~a” needs ~:d for the ~r level~:p
     (dotimes (row rows)
       (dotimes (column columns)
         (let ((stamp (extract-region image (* column 4) (* row 16)
-                                     (+ (* column 4) 3) (+ (* row 16) 15))))
+                                     (+ (* column 4) 4) (+ (* row 16) 16))))
           (assert (= 4 (array-dimension stamp 0)))
           (assert (= 16 (array-dimension stamp 1)))
           (setf (aref output column row) stamp))))
