@@ -2326,24 +2326,22 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
-      (format script "name ~a ~a.~a~%set tv~(~a~)~%~a"
+      (format script "name ~a~%set tv~(~a~)~%~a"
 	    (%makefile-game-title)
-	    build
-	    (string-upcase (symbol-name video))
 	    video
 	    *7800-a78-header-shared-script-lines*))))
-
-(defun write-test-header-script ()
-  "Write the header file for the test ROM (7800 only; same flags as other builds)."
-  (unless (eql *machine* 7800)
-    (return-from write-test-header-script nil))
-  (let ((script-pathname (make-pathname
-                          :directory `(:relative "Source" "Generated" ,(machine-directory-name))
-                          :name "header.Test"
-                          :type "script")))
-    (ensure-directories-exist script-pathname)
-    (with-output-to-file (script script-pathname :if-exists :supersede)
-      (format script "name ~a Test~%set tvntsc~%~a"
+ 
+ (defun write-test-header-script ()
+   "Write the header file for the test ROM (7800 only; same flags as other builds)."
+   (unless (eql *machine* 7800)
+     (return-from write-test-header-script nil))
+   (let ((script-pathname (make-pathname
+                           :directory `(:relative "Source" "Generated" ,(machine-directory-name))
+                           :name "header.Test"
+                           :type "script")))
+     (ensure-directories-exist script-pathname)
+     (with-output-to-file (script script-pathname :if-exists :supersede)
+       (format script "name ~a~%set tvntsc~%~a"
 	    (%makefile-game-title)
 	    *7800-a78-header-shared-script-lines*))))
 
