@@ -53,55 +53,100 @@ Returns a list of (r g b) triples from the machine palette."
             (push (nth pixel machine-colors) colors)))))
     (nreverse colors)))
 
+(defun tile-effective-rgb-colors (tile-image palette-table palette-index)
+  "Collect RGB colors from TILE-IMAGE mapped through the effective palette.
+
+PALETTE-TABLE is an 8×4 array of machine palette indices
+\(from @code{extract-palettes}).  PALETTE-INDEX (0-7) is the tile's
+assigned palette.  Returns a list of (r g b) triples where each pixel
+is mapped to its nearest color within the effective palette."
+  (let* ((machine-colors (machine-palette))
+         (palette (loop for c below 4 collect (aref palette-table palette-index c)))
+         (palette-rgbs (mapcar (lambda (idx) (nth idx machine-colors)) palette))
+         (colors nil))
+    (destructuring-bind (w h) (array-dimensions tile-image)
+      (dotimes (y h)
+        (dotimes (x w)
+          (let ((pixel (aref tile-image x y)))
+            (when pixel
+              (let ((pos (position pixel palette)))
+                (push (if pos
+                          (nth pos palette-rgbs)
+                          (destructuring-bind (r g b) (nth pixel machine-colors)
+                            (find-nearest-in-palette palette-rgbs r g b)))
+                      colors)))))))
+    (nreverse colors)))
+
+(defun compute-tile-average-cache (tileset)
+  "Precompute the average XYZ color for every tile in TILESET.
+
+Each tile's colors are mapped through its effective palette before
+averaging.  Returns a vector of (r g b) triples indexed by local tile-id."
+  (let* ((image (tileset-image tileset))
+         (palette-table (extract-palettes image))
+         (tiles-across (floor (array-dimension image 0) 8))
+         (tiles-down (floor (array-dimension image 1) 16))
+         (total-tiles (* tiles-across tiles-down))
+         (cache (make-array total-tiles)))
+    (dotimes (tile-id total-tiles cache)
+      (let* ((tx (mod tile-id tiles-across))
+             (ty (floor tile-id tiles-across))
+             (pal-idx (aref (tileset-palettes tileset) tile-id))
+             (tile (extract-region image
+                                   (* tx 8) (* ty 16)
+                                   (+ (* tx 8) 8) (+ (* ty 16) 16)))
+             (colors (tile-effective-rgb-colors tile palette-table pal-idx)))
+        (setf (aref cache tile-id) (average-rgb-via-xyz colors))))))
+
+(defun tileset-tile-count (tileset)
+  "Number of complete tiles in TILESET, derived from image dimensions.
+Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
+  (let ((image (tileset-image tileset)))
+    (* (floor (array-dimension image 0) 8)
+       (floor (array-dimension image 1) 16))))
+
+(defun resolve-gid (gid base-tileset decal-tileset)
+  "Return (values TILESET LOCAL-TILE-ID) for GID across two tilesets."
+  (flet ((in-range-p (ts)
+           (and ts
+                (let ((first (tileset-gid ts))
+                      (last (+ (tileset-gid ts)
+                               (tileset-tile-count ts) -1)))
+                  (<= first gid last)))))
+    (cond
+      ((in-range-p base-tileset)
+       (values base-tileset (- gid (tileset-gid base-tileset))))
+      ((in-range-p decal-tileset)
+       (values decal-tileset (- gid (tileset-gid decal-tileset))))
+      (t (values nil 0)))))
+
 (defun print-mini-tile-map (tileset &optional (stream *trace-output*))
   "Print a mini-tile-map of a TILESET to STREAM (default *trace-output*).
 
 Each tile is displayed as one print-wide-pixel whose color is the
 average (in CIE XYZ) of all non-nil pixels in that tile.
-Output is top-to-bottom rows, left-to-right within each row."
+Output is top-to-bottom rows, left-to-right within each row.
+Tile count is derived from the image to match @code{extract-8×16-tiles},
+handling both 64 and 128 tile tilesets correctly."
   (let* ((image (tileset-image tileset))
          (tile-width 8)
          (tile-height 16)
          (tiles-across (floor (array-dimension image 0) tile-width))
-         (tiles-down (floor (1- (array-dimension image 1)) tile-height)))
+         (tiles-down (floor (array-dimension image 1) tile-height))
+         (total-tiles (* tiles-across tiles-down)))
     (format stream "~&Mini-tile-map (~D×~D tiles):~%" tiles-across tiles-down)
-    (dotimes (ty tiles-down)
-      (dotimes (tx tiles-across)
-        (let* ((sx (* tx tile-width))
-               (sy (* ty tile-height))
-               (tile (extract-region image sx sy
-                                     (+ sx tile-width) (+ sy tile-height)))
-               (colors (tile-pixel-colors tile))
-               (avg (average-rgb-via-xyz colors)))
-          (print-wide-pixel avg stream)))
-      (terpri stream))
-    (finish-output stream)))
-
-(defun print-maptile-mini-view (tile-grid base-tileset &optional (stream *trace-output*))
-  "Print a miniature view of a map tile grid to STREAM (default *trace-output*).
-
-Each tile in the map grid is displayed as one print-wide-pixel whose
-color is the average (in CIE XYZ) of all non-nil pixels in that tile.
-Output is top-to-bottom rows, left-to-right within each row."
-  (let* ((map-width (array-dimension tile-grid 0))
-         (map-height (array-dimension tile-grid 1))
-         (tileset-image (tileset-image base-tileset))
-         (tiles-per-row (floor (array-dimension tileset-image 0) 8)))
-    (format stream "~&Mini-map (~D×~D tiles):~%" map-width map-height)
-    (dotimes (y map-height)
-      (dotimes (x map-width)
-        (let ((tile-id (aref tile-grid x y 0)))
-          (if (zerop tile-id)
-              (print-wide-pixel (list 0 0 0) stream)
-              (let* ((tx (mod (1- tile-id) tiles-per-row))
-                     (ty (floor (1- tile-id) tiles-per-row))
-                     (sx (* tx 8))
-                     (sy (* ty 16))
-                     (tile (extract-region tileset-image sx sy (+ sx 8) (+ sy 16)))
-                     (colors (tile-pixel-colors tile))
-                     (avg (average-rgb-via-xyz colors)))
-                (print-wide-pixel avg stream)))))
-      (terpri stream))
+    (dotimes (tile-id total-tiles)
+      (let* ((tx (mod tile-id tiles-across))
+             (ty (floor tile-id tiles-across))
+             (tile (extract-region image
+                                   (* tx tile-width) (* ty tile-height)
+                                   (+ (* tx tile-width) tile-width)
+                                   (+ (* ty tile-height) tile-height)))
+             (colors (tile-pixel-colors tile))
+             (avg (average-rgb-via-xyz colors)))
+        (print-wide-pixel avg stream))
+      (when (= (mod (1+ tile-id) tiles-across) 0)
+        (terpri stream)))
     (finish-output stream)))
 
 (defun print-mini-blob-view (palette-pixels &optional (stream *trace-output*))
@@ -128,5 +173,31 @@ The bottom palette-strip row (if present) is included in the display."
            (average-rgb-via-xyz
             (region-pixel-colors palette-pixels sx sy region-w region-h))
            stream)))
+      (terpri stream))
+    (finish-output stream)))
+
+(defun print-mini-map (width height gid-grid base-tileset decal-tileset
+                       &optional (stream *trace-output*))
+  "Print a mini-map of the tile grid to STREAM (default *trace-output*).
+
+Each grid cell is one print-wide-pixel whose color is the average (in
+CIE XYZ) of all pixels in the tile referenced by that cell, mapped
+through the tile's effective palette."
+  (let* ((base-cache (compute-tile-average-cache base-tileset))
+         (decal-cache (and decal-tileset (compute-tile-average-cache decal-tileset))))
+    (format stream "~&Mini-map (~D×~D tiles):~%" width height)
+    (dotimes (y height)
+      (dotimes (x width)
+        (let* ((gid (aref gid-grid x y))
+               (avg (multiple-value-bind (ts tid) (resolve-gid gid base-tileset decal-tileset)
+                      (cond
+                        ((eql ts base-tileset)
+                         (if (< tid (length base-cache))
+                             (aref base-cache tid)
+                             (list 0 0 0)))
+                        ((and decal-cache (< tid (length decal-cache)))
+                         (aref decal-cache tid))
+                        (t (list 0 0 0))))))
+          (print-wide-pixel avg stream)))
       (terpri stream))
     (finish-output stream)))

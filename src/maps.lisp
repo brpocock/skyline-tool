@@ -564,11 +564,21 @@ Objects without any event properties are ignored."
       (when-let (prototype (collect-prototype-object object :tile-width tile-width))
         (appendf prototypes-table (list prototype))))
     (mark-palette-transitions output attributes-table)
-    (values output
-            attributes-table
-            (rest decals-table)
-            (rest exits-table)
-            (rest prototypes-table))))
+    (let ((gid-grid (make-array (list (array-dimension ground 0)
+                                      (array-dimension ground 1))
+                                :element-type 'integer)))
+      (dotimes (y (array-dimension ground 1))
+        (dotimes (x (array-dimension ground 0))
+          (setf (aref gid-grid x y)
+                (if (and detail (plusp (aref detail x y)))
+                    (aref detail x y)
+                    (aref ground x y)))))
+      (values output
+              attributes-table
+              (rest decals-table)
+              (rest exits-table)
+              (rest prototypes-table)
+              gid-grid))))
 
 (defun map-layer-depth (layer.xml)
   "Look for properties in LAYER.XML to indicate if it is the ground (0) or detail (1) layer."
@@ -1642,6 +1652,9 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
             (objects (cddr (first object-groups))))
         (when (< 2 (length tilesets))
           (warn "Ignoring tilesets after the second: ~{~a~^, ~}" tilesets))
+        (print-mini-tile-map base-tileset)
+        (when decal-tileset
+          (print-mini-tile-map decal-tileset))
         (format *trace-output* "~&Parsing map layers…")
         (let* ((map-props (properties->plist (or (xml-match "properties" xml nil)
                                                  '("properties" nil))))
@@ -1658,9 +1671,12 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                (force-fields (collect-force-field-objects objects :tile-width tile-width)))
           (multiple-value-bind (tile-grid
                                 attributes-table decals-table
-                                exits-table prototypes-table)
+                                exits-table prototypes-table
+                                gid-grid)
               (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
-            (print-maptile-mini-view tile-grid base-tileset)
+            (let ((width (array-dimension tile-grid 0))
+                  (height (array-dimension tile-grid 1)))
+              (print-mini-map width height gid-grid base-tileset decal-tileset))
             (when (= *machine* 2609)
               (let* ((width (array-dimension tile-grid 0))
                      (height (array-dimension tile-grid 1))
