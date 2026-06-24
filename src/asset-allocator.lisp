@@ -2323,12 +2323,19 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
-      (format script "name ~a ~a.~a~%set tv~(~a~)~%~a"
-	    (%makefile-game-title)
-	    build
-	    (string-upcase (symbol-name video))
-	    video
-	    *7800-a78-header-shared-script-lines*))))
+      (let* ((title (string (%makefile-game-title)))
+             (build-str (or (uiop:getenv "BUILD") "0.000"))
+             (region (string-upcase (symbol-name video)))
+             (variant (cond ((string= build "AA") "AA  ")
+                            ((string= build "Public") "Pub.")
+                            ((string= build "Demo") "Demo")
+                            ((string= build "Test") "Test ")
+                            (t build)))
+             (name (format nil "~16a~6a ~4a ~4a"
+                           title build-str region variant)))
+        (format script "name ~a~%set tv~(~a~)~%~a"
+                name video
+                *7800-a78-header-shared-script-lines*)))))
 
 (defun write-test-header-script ()
   "Write the header file for the test ROM (7800 only; same flags as other builds)."
@@ -2340,9 +2347,13 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
                           :type "script")))
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname :if-exists :supersede)
-      (format script "name ~a Test~%set tvntsc~%~a"
-	    (%makefile-game-title)
-	    *7800-a78-header-shared-script-lines*))))
+      (let* ((title (string (%makefile-game-title)))
+             (build-str (or (uiop:getenv "BUILD") "0.000"))
+             (name (format nil "~16a~6a NTSC Test"
+                           title build-str)))
+        (format script "name ~a~%set tvntsc~%~a"
+                name
+                *7800-a78-header-shared-script-lines*)))))
 
 (defun write-makefile-test-banks ()
   "Write Makefile rules for test ROM banks
