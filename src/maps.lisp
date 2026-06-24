@@ -1551,6 +1551,129 @@ Returns @code{0} if no known prefix matches (FIXME #125)."
     (write-binary-animations-list decals-animations-list s :frame-rate frame-rate)
     s))
 
+(defun parse-world-file (pathname)
+  "Parse a Tiled .world JSON file.
+
+Parses the JSON format used by Tiled's world file feature, extracting map
+entries with their filenames and pixel coordinates.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: pathname (pathname designator to .world file)
+@item Returns: list of plists (:filename :x :y :width :height) or NIL
+@end table
+
+@table @asis
+@item @strong{Faults:} None; returns NIL if file does not exist.
+@end table"
+  (when (probe-file pathname)
+    (format *trace-output* "~&Parsing world file ~a… " (enough-namestring pathname))
+    (force-output *trace-output*)
+    (let ((json:*json-identifier-name-to-lisp* 'string))
+      (let ((json (json:decode-json-from-source pathname)))
+        (loop for entry in (assocdr "maps" json)
+              collect (list :filename (assocdr "fileName" entry)
+                            :x (assocdr "x" entry)
+                            :y (assocdr "y" entry)
+                            :width (assocdr "width" entry)
+                            :height (assocdr "height" entry)))))))
+
+(defun resolve-world-map-id (filename island-name)
+  "Resolve a TMX filename from a world file to a map asset ID.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments: filename (string like \"MapName.tmx\"), island-name (string)
+@item Returns: map asset ID (integer)
+@end table
+
+Looks up the map in MapsIndex.ods using the segment name IslandName/MapName.
+The MapName is PascalCased from the filename without extension."
+  (let* ((map-name (pathname-name filename))
+         (segment-name (format nil "~a/~a"
+                               (pascal-case (string island-name))
+                               (pascal-case map-name)))
+         (id (get-asset-id :map segment-name)))
+    (unless id
+      (error "Map ~s (from world file) not found in MapsIndex.ods" segment-name))
+    id))
+
+(defun compute-edge-links-for-map (world-entries current-filename
+                                   map-width map-height island-name tile-width)
+  "Compute edge links from a Tiled world file for the current map.
+
+@table @code
+@item Package: skyline-tool
+@item Arguments:
+@itemize
+@item world-entries: list of plists from parse-world-file
+@item current-filename: TMX filename of the map being compiled
+@item map-width: tile width of current map
+@item map-height: tile height of current map
+@item island-name: island directory name
+@item tile-width: pixel width of one tile (8 or 16)
+@end itemize
+@item Returns: list of (kind first-tile last-tile map-id) records, or NIL
+@end table
+
+For each other map in the world, checks all four edges for adjacency.
+Partial overlaps produce range-limited edge records."
+  (let* ((current (find current-filename world-entries
+                        :key (lambda (e) (getf e :filename))
+                        :test #'string=))
+         (tile-height 16))
+    (unless current
+      (return-from compute-edge-links-for-map nil))
+    (let ((cx (getf current :x))
+          (cy (getf current :y))
+          (cw (getf current :width))
+          (ch (getf current :height))
+          links)
+      (dolist (other world-entries links)
+        (let ((ofn (getf other :filename)))
+          (unless (string= ofn current-filename)
+            (let* ((ox (getf other :x))
+                   (oy (getf other :y))
+                   (ow (getf other :width))
+                   (oh (getf other :height))
+                   (x-overlap-start (max cx ox))
+                   (x-overlap-end (min (+ cx cw) (+ ox ow)))
+                   (y-overlap-start (max cy oy))
+                   (y-overlap-end (min (+ cy ch) (+ oy oh))))
+              ;; North: other's bottom == current's top, x overlap
+              (when (and (= (+ oy oh) cy)
+                         (< x-overlap-start x-overlap-end))
+                (push (list 1
+                            (truncate (- x-overlap-start cx) tile-width)
+                            (min 255 (truncate (- x-overlap-end cx) tile-width))
+                            (resolve-world-map-id ofn island-name))
+                      links))
+              ;; South: current's bottom == other's top, x overlap
+              (when (and (= (+ cy ch) oy)
+                         (< x-overlap-start x-overlap-end))
+                (push (list 2
+                            (truncate (- x-overlap-start cx) tile-width)
+                            (min 255 (truncate (- x-overlap-end cx) tile-width))
+                            (resolve-world-map-id ofn island-name))
+                      links))
+              ;; West: other's right == current's left, y overlap
+              (when (and (= (+ ox ow) cx)
+                         (< y-overlap-start y-overlap-end))
+                (push (list 3
+                            (truncate (- y-overlap-start cy) tile-height)
+                            (min 255 (truncate (- y-overlap-end cy) tile-height))
+                            (resolve-world-map-id ofn island-name))
+                      links))
+              ;; East: current's right == other's left, y overlap
+              (when (and (= (+ cx cw) ox)
+                         (< y-overlap-start y-overlap-end))
+                (push (list 4
+                            (truncate (- y-overlap-start cy) tile-height)
+                            (min 255 (truncate (- y-overlap-end cy) tile-height))
+                            (resolve-world-map-id ofn island-name))
+                      links))))))
+        links)))
+
 (defun compile-map (pathname)
   "Compile a Tiled map (TMX) file at PATHNAME into game-ready format.
 
@@ -1643,13 +1766,10 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                        (> (map-layer-depth (first layers))
                           (map-layer-depth (second layers)))))
           (setf layers (reversef layers))))
-      (assert (<= 0 (length object-groups) 1) ()
-              "This tool requires only one object group (layer), found ~:d object groups"
-              (length object-groups))
       (let ((base-tileset (first tilesets))
             (decal-tileset (when (<= 2 (length tilesets))
                              (second tilesets)))
-            (objects (cddr (first object-groups))))
+            (objects (loop for og in object-groups append (cddr og))))
         (when (< 2 (length tilesets))
           (warn "Ignoring tilesets after the second: ~{~a~^, ~}" tilesets))
         (print-mini-tile-map base-tileset)
@@ -1693,9 +1813,21 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                            :stic-override-grid stic-grid
                                            :stic-override-table stic-table))
                 (return-from compile-map nil)))
-            (dolist (tv '(:ntsc :pal))
-              (format *trace-output* "~&About to write map ~a for ~a… "
-                      (title-case canon-name) tv)
+            (let* ((island-name (lastcar (pathname-directory pathname)))
+                   (world-pathname (make-pathname :name island-name
+                                                  :directory (pathname-directory pathname)
+                                                  :type "world"))
+                   (world-entries (parse-world-file world-pathname))
+                   (edge-links (when world-entries
+                                 (compute-edge-links-for-map
+                                  world-entries
+                                  (format nil "~a.tmx" (pathname-name pathname))
+                                  (array-dimension tile-grid 0)
+                                  (array-dimension tile-grid 1)
+                                  island-name tile-width))))
+              (dolist (tv '(:ntsc :pal))
+                (format *trace-output* "~&About to write map ~a for ~a… "
+                        (title-case canon-name) tv)
               (let* ((width (array-dimension tile-grid 0))
                      (height (array-dimension tile-grid 1))
                      (spawn-table (map-spawn-table prototypes-table))
@@ -1760,8 +1892,11 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                     (write-byte (or bgm-id 0) object)
                     ;; offset 11-12, force fields pointer
                     (write-word (incf offset (1+ (* 5 (length spawn-table)))) object)
-                    ;; offset 13-14, unused
-                    (write-word 0 object)
+                    ;; offset 13-14, edge links
+                    (write-word (if edge-links
+                                    (incf offset (1+ (* 20 (length force-fields))))
+                                    0)
+                                object)
                     ;; offset 15, name (Pascal string)
                     (write-byte (length (unicode->minifont name)) object)
                     (write-bytes (unicode->minifont name) object)
@@ -1792,10 +1927,19 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                     (write-byte (length force-fields) object)
                     (dolist (ff force-fields)
                       (write-bytes ff object))
+                    ;; edge link records
+                    (when edge-links
+                      (dolist (link edge-links)
+                        (destructuring-bind (kind first-tile last-tile map-id) link
+                          (write-byte kind object)
+                          (write-byte first-tile object)
+                          (write-byte last-tile object)
+                          (write-byte map-id object)))
+                      (write-byte 0 object))
                     (format *trace-output* " end of file at $~4,'0x … "
                             (file-position object))
                     (force-output *trace-output*)))
-                (format *trace-output* "done.")))))))))
+                (format *trace-output* "done."))))))))))
 
 (defun rip-tiles-from-tileset (tileset images &optional (start-i 0))
   (let ((i start-i))
