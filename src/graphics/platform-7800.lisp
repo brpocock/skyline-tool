@@ -181,8 +181,8 @@ Used internally by BLOB ripping for color stamp conversion."
   (make-instance 'grid/tia
                  :tiles (screen-to-grid/tia/tles screen)
                  :colors (maptimes (y 8)
-                           (collect-foreground-color/tia
-                            (maptimes (x 8) (aref screen x y))))
+                                   (collect-foreground-color/tia
+                                    (maptimes (x 8) (aref screen x y))))
                  ;; TODO: #1243
                  :background-color #x44))
 
@@ -341,7 +341,7 @@ Used by 320A/C mode ripping to automatically select appropriate graphics mode pe
           (setf (aref output x y)
                 (if allow-imperfect-p
                     (pixel-into-palette (aref region x y) (coerce palette 'list)
-                                       :best-fit-p t)
+                                        :best-fit-p t)
                     (or (position (aref region x y) palette)
                         (error 'color-not-in-palette-error
                                :pixel (aref region x y)
@@ -577,10 +577,10 @@ Signals assertion errors for invalid dimensions."
                                         &key stamp-offsets serial output id
                                              imperfectp)
   (setf (gethash id stamp-offsets) serial)
-  (let ((start (+ (* #x1000 (floor serial #x100))
-                  (mod serial #x100))))
-    (when (>= start (array-dimension stamp-buffer 0))
-      (adjust-array stamp-buffer (+ #x1000 (array-dimension stamp-buffer 0))))
+  (let ((start (* serial #x1000)))
+    (let ((needed (+ start (* (max 0 (1- (length span))) #x100) 16)))
+      (when (>= needed (array-dimension stamp-buffer 0))
+        (adjust-array stamp-buffer (+ needed #x1000))))
     (format output "~%~10tSpan~x = * + $~4,'0x" id start)
     (dotimes (stamp (length span))
       (let ((stamp-bytes
@@ -592,7 +592,7 @@ Signals assertion errors for invalid dimensions."
                 (assert (= 1 (length bytes-across)))
                 (car bytes-across))))
         (dotimes (byte 16)
-          (let ((i (+ start stamp (* #x100 byte))))
+          (let ((i (+ start (* stamp #x100) byte)))
             (assert (let ((b (aref stamp-buffer i)))
                       (or (null b) (zerop b))) ()
                       "Stamp buffer contains ~x at index ~x; serial ~x, stamp ~x"
@@ -625,15 +625,15 @@ Signals assertion errors for invalid dimensions."
                                                 :imperfectp imperfectp)
                (incf serial (length span))))
     (format *trace-output* " writing stamps … ")
-    (format output "~2%;;; Binary stamp data follows.~%")
-    (hex-dump-bytes stamp-buffer output)
-    (format output "~2%~10t.bend~%")
-    (format output "~2%;;; This size marker is the estimated amount of ROM that this
+  (format output "~2%;;; Binary stamp data follows.~%")
+  (hex-dump-bytes stamp-buffer output)
+  (format output "~2%~10t.bend~%")
+  (format output "~2%;;; This size marker is the estimated amount of ROM that this
 ;;; blob may take up, used for allocation purposes.
 ;;; $SIZE$~x~%"
-            (+ #x20
-               (* 4 (hash-table-count spans))
-               (length stamp-buffer)))))
+          (+ #x20
+             (* 4 (hash-table-count spans))
+              (length stamp-buffer)))))
 
 (defun blob/write-spans-320ac (spans output &key imperfectp)
   "Write spans for 320A/C mode, handling both monochrome (320A) and color (320C) stamps.
@@ -658,15 +658,15 @@ Each span hash value is (id . mode)."
                                                       :imperfectp imperfectp)
                (incf serial (length span))))
     (format *trace-output* " writing 320A/C stamps … ")
-    (format output "~2%;;; Binary stamp data follows.~%")
-    (hex-dump-bytes stamp-buffer output)
-    (format output "~2%~10t.bend~%")
-    (format output "~2%;;; This size marker is the estimated amount of ROM that this
+  (format output "~2%;;; Binary stamp data follows.~%")
+  (hex-dump-bytes stamp-buffer output)
+  (format output "~2%~10t.bend~%")
+  (format output "~2%;;; This size marker is the estimated amount of ROM that this
 ;;; blob may take up, used for allocation purposes.
 ;;; $SIZE$~x~%"
-            (+ #x20
-               (* 4 (hash-table-count spans))
-               (length stamp-buffer)))))
+          (+ #x20
+             (* 4 (hash-table-count spans))
+             (length stamp-buffer)))))
 
 (defun convert-4x16-to-320c-bytes (stamp-data)
   "Convert a 4×16 pixel stamp to 16 bytes in 320C format (2 bits per pixel, 4 pixels per byte)."
@@ -726,18 +726,18 @@ Returns the palette entry index, or 0 if no match."
       (first cands))))
 
 (defun blob/write-span-to-stamp-buffer-320ac (span stamp-buffer
-                                               &key mode stamp-offsets serial output id
-                                                    imperfectp)
+                                              &key mode stamp-offsets serial output id
+                                                   imperfectp)
   "Write a span of stamps for 320A/C mode, converting each stamp according to MODE.
 
 When MODE is :320a, each element of SPAN is an 8×16 pixel array (two combined 4px stamps);
 when MODE is :320c, each element is a 4×16 pixel array."
   (declare (ignore imperfectp))
   (setf (gethash id stamp-offsets) serial)
-  (let ((start (+ (* #x1000 (floor serial #x100))
-                  (mod serial #x100))))
-    (when (>= start (array-dimension stamp-buffer 0))
-      (adjust-array stamp-buffer (+ #x1000 (array-dimension stamp-buffer 0))))
+  (let ((start (* serial #x1000)))
+    (let ((needed (+ start (* (max 0 (1- (length span))) #x100) 16)))
+      (when (>= needed (array-dimension stamp-buffer 0))
+        (adjust-array stamp-buffer (+ needed #x1000))))
     (format output "~%~10tSpan~x = * + $~4,'0x" id start)
     (dotimes (stamp (length span))
       (let* ((stamp-data (elt span stamp))
@@ -745,7 +745,7 @@ when MODE is :320c, each element is a 4×16 pixel array."
                       (:320c (convert-4x16-to-320c-bytes stamp-data))
                       (:320a (convert-8x16-to-320a-bytes stamp-data)))))
         (dotimes (byte 16)
-          (let ((i (+ start stamp (* #x100 byte))))
+          (let ((i (+ start (* stamp #x100) byte)))
             (assert (let ((b (aref stamp-buffer i)))
                       (or (null b) (zerop b))) ()
                       "Stamp buffer contains ~x at index ~x; serial ~x, stamp ~x"
@@ -997,131 +997,129 @@ Blob_~a:~10t.block~2%"
          (format output "~%Mode:~10t.byte Mode320AC")
          (write-blob-palettes png output :extractor 'extract-palettes-320ac :start-offset 2)
          (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
-          (dotimes (zone zones)
-            (format output "~2&Zone~d:" zone)
-            (let ((col 0)
-                  (span nil)
-                  (last-palette nil)
-                  (last-mode nil))
-              (flet ((collect-span ()
-                       (when span
-                         (push (list col span last-palette last-mode) zone-spans)
-                         (setf span nil last-palette nil last-mode nil))))
-                (loop while (< col columns)
-                      for stamp = (aref stamps col zone)
-                      for stamp-mode = (if (stamp-is-monochrome-p stamp) :320a :320c)
-                      do (when (= (mod col 20) 0)
-                           (format *trace-output* " col ~d/~d…" col columns)
-                           (force-output *trace-output*))
-                         (cond
-                           ;; 320A mode: combine two adjacent monochrome stamps
-                           ((and (eql stamp-mode :320a)
-                                 (< (1+ col) columns)
-                                 (stamp-is-monochrome-p (aref stamps (1+ col) zone)))
-                            (let* ((fg-color (car (remove 0 (all-colors-in-tile stamp))))
-                                   (pal-entry (320a-find-palette-entry fg-color palettes))
-                                   (left-normalized (limit-region-to-palette
-                                                     stamp '(0 1)
+         (dotimes (zone zones)
+           (format output "~2&Zone~d:" zone)
+           (let ((col 0)
+                 (span nil)
+                 (last-palette nil)
+                 (last-mode nil))
+             (flet ((collect-span ()
+                      (when span
+                        (push (list col span last-palette last-mode) zone-spans)
+                        (setf span nil last-palette nil last-mode nil))))
+               (loop while (< col columns)
+                     for stamp = (aref stamps col zone)
+                     for stamp-mode = (if (stamp-is-monochrome-p stamp) :320a :320c)
+                     do (when (= (mod col 20) 0)
+                          (format *trace-output* " col ~d/~d…" col columns)
+                          (force-output *trace-output*))
+                        (cond
+                          ;; 320A mode: combine two adjacent monochrome stamps
+                          ((and (eql stamp-mode :320a)
+                                (< (1+ col) columns)
+                                (stamp-is-monochrome-p (aref stamps (1+ col) zone)))
+                           (let* ((fg-color (car (remove 0 (all-colors-in-tile stamp))))
+                                  (pal-entry (320a-find-palette-entry fg-color palettes))
+                                  (left-normalized (limit-region-to-palette
+                                                    stamp '(0 1)
+                                                    :allow-imperfect-p t))
+                                  (right-stamp (aref stamps (1+ col) zone))
+                                  (right-normalized (limit-region-to-palette
+                                                     right-stamp '(0 1)
                                                      :allow-imperfect-p t))
-                                   (right-stamp (aref stamps (1+ col) zone))
-                                   (right-normalized (limit-region-to-palette
-                                                      right-stamp '(0 1)
-                                                      :allow-imperfect-p t))
-                                   (combined (combine-4x16-stamps
-                                              left-normalized right-normalized)))
-                              (cond
-                                ((null span)
-                                 (setf span (list combined)
-                                       last-palette pal-entry
-                                       last-mode :320a))
-                                ((and (= pal-entry last-palette)
-                                      (eql :320a last-mode)
-                                      (< (length span) 31))
-                                 (appendf span (list combined)))
-                                (t
-                                 (collect-span)
-                                 (setf span (list combined)
-                                       last-palette pal-entry
-                                       last-mode :320a)))
-                              (format *trace-output* " 320A")
-                              (incf col 2)))
-                           ;; Blank stamp — end current span
-                           ((blank-stamp-p stamp (aref palettes 0 0))
-                            (when span
-                              (collect-span))
-                            (incf col 1))
-                           ;; 320C mode (or isolated monochrome forced to 320C)
-                           (t
-                            (let* ((palette (320c-palette-for-column
+                                  (combined (combine-4x16-stamps
+                                             left-normalized right-normalized)))
+                             (cond
+                               ((null span)
+                                (setf span (list combined)
+                                      last-palette pal-entry
+                                      last-mode :320a))
+                               ((and (= pal-entry last-palette)
+                                     (eql :320a last-mode)
+                                     (< (length span) 31))
+                                (appendf span (list combined)))
+                               (t
+                                (collect-span)
+                                (setf span (list combined)
+                                      last-palette pal-entry
+                                      last-mode :320a)))
+                             (format *trace-output* " 320A")
+                             (incf col 2)))
+                          ;; Blank stamp — end current span
+                          ((blank-stamp-p stamp (aref palettes 0 0))
+                           (when span
+                             (collect-span))
+                           (incf col 1))
+                          ;; 320C mode (or isolated monochrome forced to 320C)
+                          (t
+                           (let* ((palette (320c-palette-for-column
                                             stamp last-palette palettes imperfectp col zone))
-                                   (c2-base (if (< palette 4) 0 4))
-                                   (c2-entries (vector (aref palettes c2-base 2)
-                                                       (aref palettes (1+ c2-base) 2)
-                                                       (aref palettes (+ c2-base 2) 2)
-                                                       (aref palettes (+ c2-base 3) 2)))
-                                   (group-pal (if (< palette 4) 0 4))
-                                   (limit-chosen (NEW-320C-MODE-LOGIC stamp c2-entries))
-                                   (limit-pal (or limit-chosen
-                                                  (list 0 (aref c2-entries 0)
-                                                        (aref c2-entries 1)
-                                                        (aref c2-entries 2))))
-                                   (use-imp (or imperfectp (null limit-chosen)))
-                                   (paletted (limit-region-to-palette
-                                              stamp limit-pal
-                                              :allow-imperfect-p use-imp)))
+                                  (c2-base (if (< palette 4) 0 4))
+                                  (c2-entries (vector (aref palettes c2-base 2)
+                                                      (aref palettes (1+ c2-base) 2)
+                                                      (aref palettes (+ c2-base 2) 2)
+                                                      (aref palettes (+ c2-base 3) 2)))
+                                  (group-pal (if (< palette 4) 0 4))
+                                  (limit-chosen (NEW-320C-MODE-LOGIC stamp c2-entries))
+                                  (limit-pal (or limit-chosen
+                                                 (list 0 (aref c2-entries 0)
+                                                       (aref c2-entries 1)
+                                                       (aref c2-entries 2))))
+                                  (use-imp (or imperfectp (null limit-chosen)))
+                                  (paletted (limit-region-to-palette
+                                             stamp limit-pal
+                                             :allow-imperfect-p use-imp)))
+                             (cond
+                               ((null span)
+                                (setf span (list paletted)
+                                      last-palette group-pal
+                                      last-mode :320c))
+                               ((and (= group-pal last-palette)
+                                     (eql :320c last-mode)
+                                     (< (length span) 31))
+                                (appendf span (list paletted)))
+                               (t
+                                (collect-span)
+                                (setf span (list paletted)
+                                      last-palette group-pal
+                                      last-mode :320c)))
+                             (incf col 1))))
+                     finally
+                        (collect-span)))))
+         (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first))
+               (first-320c-header t))
+           (setf zone-spans nil)
+           (dolist (entry spans-this-zone)
+             (let* ((x (first entry))
+                    (span (second entry))
+                    (pal (third entry))
+                    (mode (fourth entry))
+                    (header (if (and (eql mode :320c) first-320c-header)
+                                (progn (setf first-320c-header nil) "DLAltHeader")
+                                "DLHeader"))
+                    (existing (gethash span spans))
+                    (id (if existing
+                            (car existing)
+                            (let ((new-id next-span-id))
+                              (incf next-span-id)
                               (cond
-                                ((null span)
-                                 (setf span (list paletted)
-                                       last-palette group-pal
-                                       last-mode :320c))
-                                ((and (= group-pal last-palette)
-                                      (eql :320c last-mode)
-                                      (< (length span) 31))
-                                 (appendf span (list paletted)))
-                                (t
-                                 (collect-span)
-                                 (setf span (list paletted)
-                                       last-palette group-pal
-                                       last-mode :320c)))
-                              (incf col 1))))
-                      finally
-                         (collect-span)))))
-            (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first))
-                  (first-320c-header t))
-              (setf zone-spans nil)
-              (dolist (entry spans-this-zone)
-                (let* ((x (first entry))
-                       (span (second entry))
-                       (pal (third entry))
-                       (mode (fourth entry))
-                       (header (if (and (eql mode :320c) first-320c-header)
-                                   (progn (setf first-320c-header nil) "DLAltHeader")
-                                   "DLHeader"))
-                       (existing (gethash span spans))
-                       (id (if existing
-                               (car existing)
-                               (let ((new-id next-span-id))
-                                 (incf next-span-id)
-                                 (cond
-                                   ((and (< stamp-counting #x100)
-                                         (< (+ stamp-counting (length span)) #x100))
-                                    (incf stamp-counting (length span)))
-                                   ((and (< stamp-counting #x100)
-                                         (>= (+ stamp-counting (length span)) #x100))
-                                    (setf stamp-counting #x100))
-                                   (t (incf stamp-counting)))
-                                 (setf (gethash span spans) (cons new-id mode))
-                                 new-id)))
-                       (pos (if (eql mode :320a)
-                                (* 2 (- x (* 2 (length span))))
-                                (* 2 (- x (length span))))))
-                  (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
-                          header id pal (length span) pos)))
-            (format output "~%~10t.DLEnd")
-            (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+                                ((and (< stamp-counting #x100)
+                                      (< (+ stamp-counting (length span)) #x100))
+                                 (incf stamp-counting (length span)))
+                                ((and (< stamp-counting #x100)
+                                      (>= (+ stamp-counting (length span)) #x100))
+                                 (setf stamp-counting #x100))
+                                (t (incf stamp-counting)))
+                              (setf (gethash span spans) (cons new-id mode))
+                              new-id)))
+                    (pos (if (eql mode :320a)
+                             (* 2 (- x (* 2 (length span))))
+                             (* 2 (- x (length span))))))
+               (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
+                       header id pal (length span) pos)))
+           (format output "~%~10t.DLEnd")
+           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
       (format *trace-output* " … done!~%"))))
-
-(in-package :skyline-tool)
 
 (defun write-7800-binary (index-out bytes-lists)
   (with-output-to-file (binary index-out
@@ -1381,61 +1379,61 @@ Input path for the 7800 art index file
                (aref dump (+ address offset))
                #xff)))
     (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-      (dotimes (y #x10)
-        (clim:formatting-row (stream)
-          (ecase mode
-            (:160a (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte))))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b11000000 bits) -6))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00110000 bits) -4))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (ash (logand #b00001100 bits) -2))
-                                           stream :unit unit))
-                       (clim:formatting-cell (stream)
-                         (print-wide-pixel (elt colors
-                                                (logand #b00000011 bits))
-                                           stream :unit unit)))))
-            (:160b (dotimes (byte width)
-                     (let* ((bits (peek (+ (* (- #x0f y) #x100)
-                                           byte)))
-                            (left-pixel-c (ash (logand #b11000000 bits) -6))
-                            (right-pixel-c (ash (logand #b00110000 bits) -4))
-                            (left-pixel-p (ash (logand #b00001100 bits) -2))
-                            (right-pixel-p (logand #b00000011 bits))
-                            (left-color (logior (ash left-pixel-p 2) left-pixel-c))
-                            (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member left-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member left-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors left-color) #x100)
-                                              stream :unit unit))))
-                       (clim:formatting-cell (stream)
-                         (cond
-                           ((and var-colors (member right-color '(4 8 12)))
-                            (print-wide-pixel
-                             (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
-                             stream :unit unit))
-                           ((member right-color '(4 8 12))
-                            (print-wide-pixel (mod (elt colors 0) #x100)
-                                              stream :unit unit))
-                           (t
-                            (print-wide-pixel (mod (elt colors right-color) #x100)
-                                              stream :unit unit)))))))))))))
+                           (dotimes (y #x10)
+                             (clim:formatting-row (stream)
+                                                  (ecase mode
+                                                    (:160a (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b11000000 bits) -6))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00110000 bits) -4))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (ash (logand #b00001100 bits) -2))
+                                                                                                       stream :unit unit))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (print-wide-pixel (elt colors
+                                                                                                            (logand #b00000011 bits))
+                                                                                                       stream :unit unit)))))
+                                                    (:160b (dotimes (byte width)
+                                                             (let* ((bits (peek (+ (* (- #x0f y) #x100)
+                                                                                   byte)))
+                                                                    (left-pixel-c (ash (logand #b11000000 bits) -6))
+                                                                    (right-pixel-c (ash (logand #b00110000 bits) -4))
+                                                                    (left-pixel-p (ash (logand #b00001100 bits) -2))
+                                                                    (right-pixel-p (logand #b00000011 bits))
+                                                                    (left-color (logior (ash left-pixel-p 2) left-pixel-c))
+                                                                    (right-color (logior (ash right-pixel-p 2) right-pixel-c)))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member left-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ left-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member left-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors left-color) #x100)
+                                                                                                          stream :unit unit))))
+                                                               (clim:formatting-cell (stream)
+                                                                                     (cond
+                                                                                       ((and var-colors (member right-color '(4 8 12)))
+                                                                                        (print-wide-pixel
+                                                                                         (elt colors (mod (elt var-colors (mod (1- (/ right-color 4)) 3)) #x10))
+                                                                                         stream :unit unit))
+                                                                                       ((member right-color '(4 8 12))
+                                                                                        (print-wide-pixel (mod (elt colors 0) #x100)
+                                                                                                          stream :unit unit))
+                                                                                       (t
+                                                                                        (print-wide-pixel (mod (elt colors right-color) #x100)
+                                                                                                          stream :unit unit)))))))))))))
 (defun extract-4×16-stamps (image)
   (let* ((rows (floor (1- (array-dimension image 1)) 16))
          (columns (floor (array-dimension image 0) 4))
