@@ -1542,12 +1542,12 @@ registered in @code{machine-directory-name}.
              8011   ; Jag
              9001)  ; PSX
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
-(cond ((equal kind "Songs")
-      (format nil "Object/~a/Assets/Song.~a.~a.o"
-              machine-dir name video))
-((equal kind "Maps")
-      (format nil "Object/~a/Assets/Map.~a.~a.o"
-              machine-dir (substitute #\. #\/ name) video))
+         (cond ((equal kind "Songs")
+                (format nil "Object/~a/Assets/Song.~a.~a.o"
+                        machine-dir name video))
+               ((equal kind "Maps")
+                (format nil "Object/~a/Assets/Map.~a.~a.o"
+                        machine-dir (substitute #\. #\/ name) video))
 	     ((equal kind "Scripts")
 	      (format nil "Source/Generated/~a/Assets/Script.~a.s"
                         machine-dir (substitute #\. #\/ name)))
@@ -1807,16 +1807,16 @@ and target platform. Handles special cases for different machines and video mode
                       (let* ((attrs (second prop))
                              (name (xml-attr "name" attrs))
                              (value (xml-attr "value" attrs)))
-                         (when (and name value (string-equal name "Script"))
-                           (let* ((stripped (remove #\' value))
-                                  (path (mapcar #'pascal-case
-                                                (flatten
-                                                 (mapcar (lambda (s)
-                                                           (split-sequence #\/ s))
-                                                         (split-sequence #\- stripped)))))
-                                  (indicator (format nil "Scripts/~{~a~^/~}" path)))
-                             (push (asset->object-name indicator)
-                                   deps))))))))))
+                        (when (and name value (string-equal name "Script"))
+                          (let* ((stripped (remove #\' value))
+                                 (path (mapcar #'pascal-case
+                                               (flatten
+                                                (mapcar (lambda (s)
+                                                          (split-sequence #\/ s))
+                                                        (split-sequence #\- stripped)))))
+                                 (indicator (format nil "Scripts/~{~a~^/~}" path)))
+                            (push (asset->object-name indicator)
+                                  deps))))))))))
         (error (c)
           (warn "write-asset-compilation/map: failed to parse ~a for dependencies: ~a"
                 source c))))
@@ -2118,7 +2118,7 @@ Object/${PORT}/Bank~a.~a.~a.o ~
 "
 	  bank-hex build video
 	  (recursive-read-deps bank-source
-		:testp (string-equal build "Test"))
+		             :testp (string-equal build "Test"))
 	  (if (= *bank* *last-bank*)
 	      "Source/Generated/${PORT}/Orchestration.s"
 	      (format nil "Source/Generated/${PORT}/LastBankDefs.~a.~a.s" build video))
@@ -2131,7 +2131,7 @@ Object/${PORT}/Bank~a.~a.~a.o ~
                   (t ""))
 	  (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
 		(include-paths-for-current-bank
-		  :testp (string-equal build "Test"))))))
+		 :testp (string-equal build "Test"))))))
 
 (defun write-ram-bank-makefile (&key build video)
   "Writes the Makefile entry for the RAM bank used by 7800GD"
@@ -2326,22 +2326,24 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
-      (format script "name ~a~%set tv~(~a~)~%~a"
+      (format script "name ~a ~a.~a~%set tv~(~a~)~%~a"
 	    (%makefile-game-title)
+	    build
+	    (string-upcase (symbol-name video))
 	    video
 	    *7800-a78-header-shared-script-lines*))))
- 
- (defun write-test-header-script ()
-   "Write the header file for the test ROM (7800 only; same flags as other builds)."
-   (unless (eql *machine* 7800)
-     (return-from write-test-header-script nil))
-   (let ((script-pathname (make-pathname
-                           :directory `(:relative "Source" "Generated" ,(machine-directory-name))
-                           :name "header.Test"
-                           :type "script")))
-     (ensure-directories-exist script-pathname)
-     (with-output-to-file (script script-pathname :if-exists :supersede)
-       (format script "name ~a~%set tvntsc~%~a"
+
+(defun write-test-header-script ()
+  "Write the header file for the test ROM (7800 only; same flags as other builds)."
+  (unless (eql *machine* 7800)
+    (return-from write-test-header-script nil))
+  (let ((script-pathname (make-pathname
+                          :directory `(:relative "Source" "Generated" ,(machine-directory-name))
+                          :name "header.Test"
+                          :type "script")))
+    (ensure-directories-exist script-pathname)
+    (with-output-to-file (script script-pathname :if-exists :supersede)
+      (format script "name ~a Test~%set tvntsc~%~a"
 	    (%makefile-game-title)
 	    *7800-a78-header-shared-script-lines*))))
 
@@ -2389,8 +2391,7 @@ Object/${PORT}/Bank~2,'0x.Test.o:
 	  ;; Prerequisites: mirrors WRITE-BANK-MAKEFILE (see same ~:[ branch).
 	  ;; Non-last banks INCLUDE AssemblerSetup, which INCLUDEs LastBankDefs.
 	  ;; LASTBANK omit that include; a LastBankDefs prereq on the last bank is
-	  ;; a make cycle ( defs are emitted from LAST bank labels ).  ~:[ uses
-	  ;; one explicit FORMAT argument per CLHS 22.3.7.2.
+	  ;; a make cycle ( defs are emitted from LAST bank labels ).
 	  (format t "~%
 Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%                    Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s~] \\
                     bin/skyline-tool | $(EIGHTBOL_CLASS_OUTPUTS)
@@ -2403,7 +2404,7 @@ Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%      
 		*bank*
 		(if (probe-file bank-source)
                         (recursive-read-deps bank-source
-                          :testp t)
+                                             :testp t)
                         ;; Keep generated bank asm path platform-qualified.
                         ;; Asset-bank rules are emitted under Source/Generated/${PORT}/.
                         (list (make-pathname
@@ -2417,7 +2418,7 @@ Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%      
 		(first-assets-bank "Test")
 		(mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
 		        (include-paths-for-current-bank
-		          :testp t))))))))
+		         :testp t))))))))
 
 (defun write-makefile-for-blobs ()
   "Emit Makefile rules for @file{Source/Blobs/<platform>/*.xcf}.
@@ -2557,8 +2558,11 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
                (pascal (pascal-case stem))
                (out (format nil "Source/Generated/~a/RunCommands/~a.s" machine-dir pascal))
                (flag (if (string-equal ext "bas") "--basic " "")))
-          (format t "~%~a: ~a \\~%          bin/eightbol~%	mkdir -p Source/Generated/~a/RunCommands~%	bin/eightbol ~a$< -m $(CPUDIR) -o $@"
-                       out (enough-namestring f) machine-dir flag)))))
+          (format t "~%~a: ~a \\
+          bin/eightbol
+	mkdir -p Source/Generated/~a/RunCommands
+	bin/eightbol ~a$< -m $(CPUDIR) -o $@"
+                  out (enough-namestring f) machine-dir flag)))))
   (dolist (build +all-builds+)
     (dolist (video (supported-video-types machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
@@ -2671,8 +2675,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
                 (t (write-asset-bank-makefile *bank*
 				      :build build :video video)))))
           (emit-grouped-asset-bank-list-rules build video)
-          (format t "~%")
-          (format t "~%"))))))
+          (format t "~2%"))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 5200)))
   "Write makefile content for Atari 5200 (32 × 32 KiB banks, 1 MiB concatenated image)."
@@ -3447,14 +3450,14 @@ Creates parent directories if needed; overwrites the output file."
                             "-I"
                             (enough-namestring
                              (merge-pathnames (make-pathname :directory (list :relative
-                                                                               "Source" "Generated"
-                                                                               machine))))
+                                                                              "Source" "Generated"
+                                                                              machine))))
                             "-I"
                             (enough-namestring
                              (merge-pathnames (make-pathname :directory (list :relative
-                                                                               "Source" "Generated"
-                                                                               machine
-                                                                               "Assets")))))
+                                                                              "Source" "Generated"
+                                                                              machine
+                                                                              "Assets")))))
                       (list (enough-namestring source-name)
                             "-o"
                             (enough-namestring object-name))))))
@@ -3547,7 +3550,6 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Object/~a/Assets"
 	  object-name source-name machine-dir machine-dir)))
-
 
 (defun collect-assets (&rest args)
   "Stub function for collect-assets command"

@@ -378,8 +378,8 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                       do (setf (aref uniq i) (aref uniq (1+ i))))
                 (vector-pop uniq))))
     nil)
-
-  (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
+  
+(defun compile-tileset-64 (png-file out-dir height width image-nybbles)
     "Write VIC-II tileset to OUT-DIR: char data (2048 bytes) + color RAM (256 bytes).
 
 Each 16×16 tile is four 8×8 character cells (TL, TR, BL, BR).  Cells with
