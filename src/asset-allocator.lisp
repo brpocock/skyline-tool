@@ -2258,15 +2258,14 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 
 Uses *ASSETS-FOR-BUILDS* as a cache"
   (or (gethash build *assets-for-builds*)
-      (let* ((index (read-assets-list #p"Source/Assets.index"))
-             (filtered (filter-assets-for-build index build))
-             (portable (remove-if-not (lambda (a) (gethash a index))
-                                      (all-portable-assets))))
-        (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected (~:d from index, ~:d portable)"
-                build (+ (length filtered) (length portable))
-                (length filtered) (length portable))
-        (setf (gethash build *assets-for-builds*)
-              (remove-duplicates (append filtered portable) :test #'string=)))))
+      (let ((assets (concatenate 'list
+                                 (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
+			                            build)
+                                 (all-portable-assets))))
+        (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected" build
+                (length assets))
+        (setf (gethash build *assets-for-builds*) assets)
+        assets)))
 
 (defun write-assets-makefile (&key build video)
   "Write the makefile for assets for BUILD and VIDEO"
