@@ -2258,10 +2258,8 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 
 Uses *ASSETS-FOR-BUILDS* as a cache"
   (or (gethash build *assets-for-builds*)
-      (let ((assets (concatenate 'list
-                                 (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
-			                            build)
-                                 (all-portable-assets))))
+      (let ((assets (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
+                                             build)))
         (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected" build
                 (length assets))
         (setf (gethash build *assets-for-builds*) assets)
