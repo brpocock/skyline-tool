@@ -1660,6 +1660,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                 attributes-table decals-table
                                 exits-table prototypes-table)
               (parse-tile-grid layers objects base-tileset decal-tileset :tile-width tile-width)
+            (print-maptile-mini-view tile-grid base-tileset)
             (when (= *machine* 2609)
               (let* ((width (array-dimension tile-grid 0))
                      (height (array-dimension tile-grid 1))
@@ -1843,9 +1844,10 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
       (dotimes (i (machine-tileset-size-tiles))
         (rip-bytes-from-image (aref images i) palettes bytes i
                               :x (mod i width) :y (floor i width)))
+      (print-mini-tile-map tileset)
       (with-output-to-file (object outfile
-                                   :element-type '(unsigned-byte 8)
-                                   :if-exists :supersede)
+                                    :element-type '(unsigned-byte 8)
+                                    :if-exists :supersede)
         (write-bytes bytes object))
       (return-from compile-tileset)))
   (when (member *machine* '(2609))
@@ -1874,6 +1876,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
       (dotimes (i (machine-tileset-size-tiles))
         (rip-bytes-from-image (aref images i) palettes bytes i
                               :x (mod i width) :y (floor i width)))
+      (print-mini-tile-map tileset)
       (with-output-to-file (object outfile
                                    :element-type '(unsigned-byte 8)
                                    :if-exists :supersede)

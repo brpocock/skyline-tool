@@ -1716,11 +1716,12 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
     (check-height+width-for-blob height width palette-pixels)
 
-    (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
+        (print-mini-blob-view palette-pixels)
+        (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
 
-    (%write-blob-assembly-atomically
+        (%write-blob-assembly-atomically
 
-     output-pathname
+         output-pathname
 
      (lambda (output)
 
@@ -1960,6 +1961,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
            (next-span-id 0))
 
+      (print-mini-blob-view palette-pixels)
       (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
 
       (force-output *trace-output*)
@@ -3081,6 +3083,7 @@ and VS use @file{Blob.<stem>.s} like @code{png-to-blob-pathname}."
 
                (palette (grab-7800-palette mode palette-pixels)))
 
+          (print-mini-blob-view palette-pixels)
           (appendf bytes
 
                    (parse-7800-object mode palette-pixels :width width-px :height height-px

@@ -2324,7 +2324,10 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
       (let* ((title (string (%makefile-game-title)))
-             (build-str (or (uiop:getenv "BUILD") "0.000"))
+             (build-str (or (uiop:getenv "BUILD")
+                            (format nil "~2,'0d.~3,'0d"
+                                    (mod (current-year) 100)
+                                    (current-julian-date))))
              (region (string-upcase (symbol-name video)))
              (variant (cond ((string= build "AA") "AA  ")
                             ((string= build "Public") "Pub.")
@@ -2348,7 +2351,10 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname :if-exists :supersede)
       (let* ((title (string (%makefile-game-title)))
-             (build-str (or (uiop:getenv "BUILD") "0.000"))
+             (build-str (or (uiop:getenv "BUILD")
+                            (format nil "~2,'0d.~3,'0d"
+                                    (mod (current-year) 100)
+                                    (current-julian-date))))
              (name (format nil "~16a~6a NTSC Test"
                            title build-str)))
         (format script "name ~a~%set tvntsc~%~a"
