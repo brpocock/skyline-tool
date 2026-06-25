@@ -297,47 +297,11 @@ Used internally by BLOB ripping for color stamp conversion."
         (push (reverse bytes-list) bytes-lists)))
 
     (reverse bytes-lists)))
-    
-(defmethod parse-7800-object ((mode (eql :320c)) pixels &key width height palette)
-  (assert (>= 8 (length palette)))
-  (assert (zerop (mod width 4)) (width)
-          "Width for mode 320C must be modulo 4px, not ~:Dpx" width)
-  (let* ((byte-width (/ width 4))
-         (images (extract-regions pixels width height))
-         (bytes-lists (list)))
-    (dolist (image images)
-      (dotimes (b byte-width)
-        (let ((bytes (list)))
-          (dotimes (y height)
-            (let* ((byte-pixels (extract-region image
-                                                (* b 4) y
-                                                (* (1+ b) 4) (1+ y)))
-                   (indices (pixels-into-palette byte-pixels palette
-                                                 :x0 (* b 4) :y0 y))
-                   (px-pair-palette (mapcar (lambda (pair)
-                                              (cond
-                                                ((and (zerop (car pair))
-                                                      (zerop (cdr pair)))
-                                                 0)
-                                                ((zerop (car pair))
-                                                 (ash (logand (cdr pair) #x06) -1))
-                                                (t
-                                                 (ash (logand (car pair) #x06) -1))))
-                                            (list (cons (aref indices 0)
-                                                        (aref indices 1))
-                                                  (cons (aref indices 2)
-                                                        (aref indices 3))))))
-              (push (logior
-                     (ash (logand (aref indices 0) #x01) 7)
-                     (ash (logand (aref indices 1) #x01) 6)
-                     (ash (logand (aref indices 2) #x01) 5)
-                     (ash (logand (aref indices 3) #x01) 4)
-                     (ash (first px-pair-palette) 2)
-                     (second px-pair-palette))
-                    bytes)))
-           (push (reverse bytes) bytes-lists))))
-    (reverse bytes-lists)))
-   
+
+
+
+
+
 (defun color-average (colors)
 
   (let ((colors (remove-if #'null colors)))

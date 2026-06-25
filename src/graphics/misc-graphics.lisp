@@ -163,15 +163,40 @@
          (blocks (bits-to-art binary)))
     (format nil "~%	.byte %~a	; ~a" binary blocks)))
 
+(defun pascal-case (string)
+  (let ((words (list))
+        (current (make-array 0 :element-type 'character :fill-pointer 0 :adjustable t)))
+    (flet ((emit-word ()
+             (when (plusp (length current))
+               (push (string-capitalize current) words)
+               (setf (fill-pointer current) 0))))
+      (loop for char across string
+            do (cond
+                 ((alpha-char-p char)
+                  (vector-push-extend char current))
+                 ((digit-char-p char)
+                  (vector-push-extend char current))
+                 (t
+                  (emit-word))))
+      (emit-word))
+    (reduce (lambda (a b) (concatenate 'string a b))
+            (nreverse words) :initial-value "")))
+
 (defun assembler-label-name (string)
-  (let ((result (cl-change-case:pascal-case string)))
-    (when (search "Brp" result)
-      (setf result (cl-ppcre:regex-replace-all "Brp" result "BRP")))
-    (when (search "Aa" result)
-      (setf result (cl-ppcre:regex-replace-all "Aa" result "AA")))
-    (when (search "Zph" result)
-      (setf result (cl-ppcre:regex-replace-all "Zph" result "ZPH")))
-    result))
+  (let ((result (pascal-case string)))
+    (labels ((replace-all (string part replacement)
+               (loop with buffer = (copy-seq string)
+                     for start = (search part buffer)
+                     while start
+                     do (setf buffer (concatenate 'string
+                                                  (subseq buffer 0 start)
+                                                  replacement
+                                                  (subseq buffer (+ start (length part)))))
+                     finally (return buffer))))
+      (setf result (replace-all result "Brp" "BRP"))
+      (setf result (replace-all result "Aa" "AA"))
+      (setf result (replace-all result "Zph" "ZPH"))
+      result)))
 
 (defun pathname-base-name (pathname)
   (subseq (pathname-name pathname)
@@ -377,7 +402,7 @@ Returns NIL; modifies UNIQ and SLOT-MAP in place."
                 (loop for i from best-a below (1- n-uniq)
                       do (setf (aref uniq i) (aref uniq (1+ i))))
                 (vector-pop uniq))))
-    nil)
+    nil))
   
 (defun compile-tileset-64 (png-file out-dir height width image-nybbles)
     "Write VIC-II tileset to OUT-DIR: char data (2048 bytes) + color RAM (256 bytes).
@@ -469,7 +494,7 @@ Pixel dimensions of the PNG.
                  (format src-file "~2%~ATilesetMultiCells   EQU ~D~%"
                          (pathname-name png-file) multi-cells))
         (format *error-output* "~&Wrote VIC-II tileset (~D cells, ~D multicolor) to ~A."
-                cell-count multi-cells out-file)))))
+                cell-count multi-cells out-file))))
 
 (defun collect-foreground-color/tia (tiles)
   (assert (= 7 (array-dimension *tia-pf-colors* 1)))

@@ -921,30 +921,47 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
          (last-island nil))
     (declare (ignore header))
     (dolist (row data-rows)
-      (let* ((cell0 (and (< 0 (length row)) (elt row 0)))
-             (island (if (and cell0 (not (emptyp (string cell0))))
-                         (progn (setf last-island cell0) cell0)
-                         last-island))
-             (full-name (and (< 1 (length row)) (elt row 1)))
-             (id (and (< 2 (length row)) (elt row 2)))
+      (let* ((raw-cell0 (and (< 0 (length row)) (elt row 0)))
+             (cell0 (and raw-cell0
+                         (let ((s (string-trim '(#\Space #\Tab) (string raw-cell0))))
+                           (unless (emptyp s) s))))
+             (island
+               (let ((prev (and last-island
+                                (string-trim '(#\Space #\Tab) (string last-island)))))
+                 (cond
+                   ;; New island name: cell0 is non-empty and NOT a trailing
+                   ;; segment of the previous island (merged-cell artifact).
+                   ((and cell0
+                         (or (null prev)
+                             (not (search cell0 prev :test #'char-equal))))
+                    (setf last-island cell0))
+                   ;; Continuation cell (e.g. " Island" → "Island" inside
+                   ;; "Starcrost Island"): keep previous island name.
+                   (t
+                    (or prev last-island)))))
+             (full-name (and (< 1 (length row))
+                             (let ((v (elt row 1)))
+                               (and v (let ((s (string-trim '(#\Space #\Tab) (string v))))
+                                        (unless (emptyp s) s))))))
+             (id (and (< 2 (length row))
+                      (let ((v (elt row 2)))
+                        (and v (let ((s (string-trim '(#\Space #\Tab) (string v))))
+                                 (unless (emptyp s) s))))))
              (display-name (and (< 4 (length row)) (elt row 4)))
              (dock-id (and (< 6 (length row)) (elt row 6))))
-        (when (and island full-name (not (emptyp (string full-name)))
-                   id (not (emptyp (string id))))
-          (let* ((island-str (pascal-case (string island)))
-                 (full-str (string full-name))
-                 ;; Island header  rows use  "0" or  numeric id  as full
-                 ;; name; map path is Island/Island
+        (when (and island full-name id)
+          (let* ((island-str (pascal-case island))
+                 (full-str full-name)
                  (effective-full (if (every #'digit-char-p full-str)
                                      island-str
                                      (pascal-case full-str)))
                  (segment-name
                    (remove-if (lambda (c) (member c '(#\' #\_)))
                               (concatenate 'string island-str "/" effective-full))))
-            (setf (gethash segment-name *maps-ids*) (parse-integer (string id))
+            (setf (gethash segment-name *maps-ids*) (parse-integer id)
                   (gethash segment-name *maps-display-names*)
                   (lower-case (or (and display-name (string display-name)) "")))
-            #+()(format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer (string id))
+            #+()(format *trace-output* "~&• ~:d. ~s~20t~a" (parse-integer id)
                         segment-name (lower-case (or (and display-name (string display-name)) "")))
             (when (and dock-id (not (emptyp (string dock-id))))
               (let ((d (parse-integer (string dock-id))))
