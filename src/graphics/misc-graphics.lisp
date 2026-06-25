@@ -977,7 +977,7 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
                          (or (parse-integer cols-str :junk-allowed t) 80)
                          80))
          (max-cols (max 8 (floor (* term-width 8/10) 2)))
-         (base-rw (if (> width 160) 16 8))
+         (base-rw (if (> width 160) 16 4))
          (base-rh 16)
          (natural-cols (floor width base-rw))
          (natural-rows (floor height base-rh))
