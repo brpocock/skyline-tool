@@ -16,6 +16,10 @@
 
 (in-package :skyline-tool)
 
+(defun project-root ()
+  "Return the project root directory as a pathname"
+  (asdf:system-relative-pathname :skyline-tool #p"../"))
+
 (defvar *project.json*)
 (defvar *game-title*)
 (defvar *part-number*)
