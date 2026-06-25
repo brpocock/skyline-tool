@@ -1716,7 +1716,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
     (check-height+width-for-blob height width palette-pixels)
 
-        (print-mini-blob-view palette-pixels)
+        (print-thumbnail-image png-file)
         (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
 
         (%write-blob-assembly-atomically
@@ -1961,7 +1961,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
            (next-span-id 0))
 
-      (print-mini-blob-view palette-pixels)
+      (print-thumbnail-image png-file)
       (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
 
       (force-output *trace-output*)
@@ -2783,7 +2783,7 @@ Input path for the 7800 art index file
 
                (palette (grab-7800-palette mode palette-pixels)))
 
-          (print-mini-blob-view palette-pixels)
+          (print-thumbnail-image png-name)
           (appendf bytes
 
                    (parse-7800-object mode palette-pixels :width width-px :height height-px

@@ -171,7 +171,14 @@
                (push (string-capitalize current) words)
                (setf (fill-pointer current) 0))))
       (loop for char across string
+            for prev = (if (plusp (length current))
+                           (char current (1- (length current)))
+                           nil)
             do (cond
+                 ;; CamelCase boundary: lowercase immediately followed by uppercase
+                 ((and (upper-case-p char) prev (lower-case-p prev))
+                  (emit-word)
+                  (vector-push-extend char current))
                  ((alpha-char-p char)
                   (vector-push-extend char current))
                  ((digit-char-p char)
@@ -658,7 +665,7 @@ Blob PNG path; if under @file{Source/Blobs/@var{PORT}/}, output is
     ((typep stream 'clim:sheet)
      (print-clim-pixel color stream :shortp shortp :unit unit))
     ((and (not (typep stream 'string-stream))
-          (tty-xterm-p))
+          (tty-xterm-p stream))
      (when with-index-p
        (format stream "$~2,'0x " color))
      (print-ansi-pixel color stream))
@@ -746,4 +753,194 @@ Blob PNG path; if under @file{Source/Blobs/@var{PORT}/}, output is
 
 (defun tile-hash (left right big-endian-p)
   (logior (ash left 8) (ash right 16) (if big-endian-p 1 0)))
+
+;;; ============================================================
+;;; print-thumbnail-image — accurate colour-cell thumbnail views
+;;; ============================================================
+
+(defun %xyz-distance (x1 y1 z1 x2 y2 z2)
+  (sqrt (+ (expt (- x1 x2) 2)
+           (expt (- y1 y2) 2)
+           (expt (- z1 z2) 2))))
+
+(defun %rgb-xyz (rgb)
+  (multiple-value-list (dufy:rgb-to-xyz (first rgb) (second rgb) (third rgb))))
+
+(defun %rgb-hsl-lightness (rgb)
+  (destructuring-bind (r g b) rgb
+    (/ (+ (max r g b) (min r g b)) 2.0 255.0)))
+
+(defun %region-colors (palette-pixels x y w h)
+  (let ((mc (machine-palette))
+        (colors nil))
+    (dotimes (dy h)
+      (dotimes (dx w)
+        (let ((p (aref palette-pixels (+ x dx) (+ y dy))))
+          (when p
+            (push (nth p mc) colors)))))
+    (nreverse colors)))
+
+(defun %region->two-populations (palette-pixels x y w h)
+  "Split a rectangular region into two colour populations via 2-medoids in XYZ.
+Returns (values lighter-rgb darker-rgb light-count dark-count)."
+  (let* ((rgbs (%region-colors palette-pixels x y w h))
+         (n (length rgbs)))
+    (when (zerop n)
+      (return-from %region->two-populations (values nil nil 0 0)))
+    (let* ((unique (remove-duplicates rgbs :test #'equal))
+           (nu (length unique)))
+      (when (<= nu 1)
+        (return-from %region->two-populations
+          (values (first rgbs) nil n 0)))
+      (let ((xyz-cache (make-hash-table :test #'equal)))
+        (dolist (rgb rgbs)
+          (unless (nth-value 1 (gethash rgb xyz-cache))
+            (setf (gethash rgb xyz-cache) (%rgb-xyz rgb))))
+        (let ((freq (make-hash-table :test #'equal)))
+          (dolist (rgb rgbs)
+            (incf (gethash rgb freq 0)))
+          (let* ((pairs (loop for i below nu
+                              nconc (loop for j from (1+ i) below nu
+                                          collect (list (elt unique i) (elt unique j)))))
+                 (best-pair (first (sort pairs #'>
+                                         :key (lambda (p)
+                                                (apply #'%xyz-distance
+                                                       (append (gethash (first p) xyz-cache)
+                                                               (gethash (second p) xyz-cache))))))))
+            (let* ((best-a (first best-pair))
+                   (best-b (second best-pair))
+                   (xyz-a (gethash best-a xyz-cache))
+                   (xyz-b (gethash best-b xyz-cache))
+                   (sum1x 0.0) (sum1y 0.0) (sum1z 0.0) (cnt1 0)
+                   (sum2x 0.0) (sum2y 0.0) (sum2z 0.0) (cnt2 0))
+              (dolist (rgb rgbs)
+                (let* ((p-xyz (gethash rgb xyz-cache))
+                       (d1 (%xyz-distance (first p-xyz) (second p-xyz) (third p-xyz)
+                                          (first xyz-a) (second xyz-a) (third xyz-a)))
+                       (d2 (%xyz-distance (first p-xyz) (second p-xyz) (third p-xyz)
+                                          (first xyz-b) (second xyz-b) (third xyz-b))))
+                  (if (<= d1 d2)
+                      (progn
+                        (incf cnt1)
+                        (incf sum1x (first p-xyz))
+                        (incf sum1y (second p-xyz))
+                        (incf sum1z (third p-xyz)))
+                      (progn
+                        (incf cnt2)
+                        (incf sum2x (first p-xyz))
+                        (incf sum2y (second p-xyz))
+                        (incf sum2z (third p-xyz))))))
+              (flet ((clamp-value (v) (max 0 (min 255 (round v)))))
+                (let* ((avg1 (if (zerop cnt1)
+                                 nil
+                                 (multiple-value-bind (r g b)
+                                     (dufy:xyz-to-rgb (/ sum1x cnt1) (/ sum1y cnt1) (/ sum1z cnt1))
+                                   (mapcar #'clamp-value (list r g b)))))
+                       (avg2 (if (zerop cnt2)
+                                 nil
+                                 (multiple-value-bind (r g b)
+                                     (dufy:xyz-to-rgb (/ sum2x cnt2) (/ sum2y cnt2) (/ sum2z cnt2))
+                                   (mapcar #'clamp-value (list r g b))))))
+                  (cond
+                    ((null avg2) (values avg1 nil cnt1 0))
+                    ((null avg1) (values nil avg2 0 cnt2))
+                    ((>= (%rgb-hsl-lightness avg1) (%rgb-hsl-lightness avg2))
+                     (values avg1 avg2 cnt1 cnt2))
+                    (t (values avg2 avg1 cnt2 cnt1))))))))))))
+
+(defun %darkness-char (dark-count total)
+  (let ((ratio (/ dark-count (max 1 total))))
+    (cond ((<= ratio 1/5) #\Space)
+          ((<= ratio 2/5) #\░)
+          ((<= ratio 3/5) #\▒)
+          ((<= ratio 4/5) #\▓)
+          (t #\█))))
+
+(defun %ansi-two-color-cell (dark-rgb light-rgb char stream)
+  (format stream "~a~a~c~c~c[0m"
+          (ansi-color-rgb (first dark-rgb) (second dark-rgb) (third dark-rgb) t)
+          (ansi-color-rgb (first light-rgb) (second light-rgb) (third light-rgb) nil)
+          char char
+          #\Escape))
+
+(defun %print-thumbnail-cells (palette-pixels stream region-w region-h cols rows
+                                &key ansi-p)
+  (dotimes (ry rows)
+    (dotimes (rx cols)
+      (let ((sx (* rx region-w))
+            (sy (* ry region-h)))
+        (multiple-value-bind (light dark light-count dark-count)
+            (%region->two-populations palette-pixels sx sy region-w region-h)
+          (if (null dark)
+              (if ansi-p
+                  (print-wide-pixel light stream)
+                  (princ "██" stream))
+              (let ((char (%darkness-char dark-count (+ light-count dark-count))))
+                (if ansi-p
+                    (%ansi-two-color-cell dark light char stream)
+                    (format stream "~c~c" char char)))))))
+    (terpri stream))
+  (finish-output stream))
+
+(defun %print-thumbnail-ansi (palette-pixels stream region-w region-h cols rows)
+  (format stream "~&Thumbnail (ANSI, ~D×~D cells):~%" cols rows)
+  (%print-thumbnail-cells palette-pixels stream region-w region-h cols rows :ansi-p t))
+
+(defun %print-thumbnail-dumb (palette-pixels stream region-w region-h cols rows)
+  (format stream "~&Thumbnail (~D×~D cells):~%" cols rows)
+  (%print-thumbnail-cells palette-pixels stream region-w region-h cols rows :ansi-p nil))
+
+#+mcclim
+(defun %print-thumbnail-clim (stream png-file width height)
+  (let* ((mr (and (typep stream 'clim:sheet)
+                  (clim:sheet-mirror stream)))
+         (win-w (if mr
+                    (multiple-value-bind (x1 y1 x2 y2)
+                        (clim:bounding-rectangle* mr)
+                      (declare (ignore y1 y2))
+                      (- x2 x1))
+                    800))
+         (win-h (if mr
+                    (multiple-value-bind (x1 y1 x2 y2)
+                        (clim:bounding-rectangle* mr)
+                      (declare (ignore x1 x2))
+                      (- y2 y1))
+                    600))
+         (max-target-w (min (max 64 (floor (* win-w 3) 4)) 512))
+         (max-target-h (min (max 64 (floor win-h 3)) 512))
+         (scale (min (/ max-target-w width) (/ max-target-h height)))
+         (out-w (max 1 (floor (* width scale))))
+         (out-h (max 1 (floor (* height scale)))))
+    (clim:with-room-for-graphics (stream :height out-h)
+      (clim:with-output-as-presentation (stream png-file 'pathname)
+        (let ((pattern (clim:make-pattern-from-bitmap-file png-file :format :png)))
+          (clim:with-drawing-options (stream
+                                      :transformation (clim:make-scaling-transformation
+                                                        scale scale))
+            (clim:draw-pattern* stream pattern 0 0))))
+      (format stream "~&Scaled ~D×~D → ~D×~D (~,2F×)"
+              width height out-w out-h scale))
+    (finish-output stream)))
+
+(defun print-thumbnail-image (png-file &optional (stream *trace-output*))
+  (let* ((path (pathname png-file))
+         (png (png-read:read-png-file path))
+         (image-data (png-read:image-data png))
+         (width (array-dimension image-data 0))
+         (height (array-dimension image-data 1))
+         (palette-pixels (png->palette image-data))
+         (region-w (if (> width 160) 16 8))
+         (region-h 16)
+         (cols (floor width region-w))
+         (rows (floor height region-h)))
+    (cond
+      #+mcclim
+      ((typep stream 'clim:sheet)
+       (%print-thumbnail-clim stream path width height))
+      ((and (not (typep stream 'string-stream))
+            (tty-xterm-p))
+       (%print-thumbnail-ansi palette-pixels stream region-w region-h cols rows))
+      (t
+       (%print-thumbnail-dumb palette-pixels stream region-w region-h cols rows)))))
+
 

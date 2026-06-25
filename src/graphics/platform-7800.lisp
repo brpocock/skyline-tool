@@ -1988,7 +1988,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
     (check-height+width-for-blob height width palette-pixels)
 
-        (print-mini-blob-view palette-pixels)
+        (print-thumbnail-image png-file)
         (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
 
         (%write-blob-assembly-atomically
@@ -2233,7 +2233,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
            (next-span-id 0))
 
-      (print-mini-blob-view palette-pixels)
+      (print-thumbnail-image png-file)
       (format *trace-output* " generating 320A/C drawing lists in ~a… " (enough-namestring output-pathname))
 
       (force-output *trace-output*)
@@ -2621,7 +2621,7 @@ Blob_~a:~10t.block~2%"
     (check-height+width-for-blob-320bd height width palette-pixels)
 
     (let* ((zone-spans nil)
-           (palettes (extract-palettes palette-pixels))
+           (palettes (extract-palettes-320ac palette-pixels))
            (palettes-list (2a-to-lol palettes))
            (stamps (extract-4×16-stamps palette-pixels))
            (zones (floor height 16))
@@ -2630,7 +2630,7 @@ Blob_~a:~10t.block~2%"
            (stamp-counting 0)
            (next-span-id 0))
 
-      (print-mini-blob-view palette-pixels)
+      (print-thumbnail-image png-file)
       (format *trace-output* " generating 320B/D drawing lists in ~a… " (enough-namestring output-pathname))
       (force-output *trace-output*)
 
@@ -2650,7 +2650,7 @@ Blob_~a:~10t.block~2%"
 
          (format output "~%Mode:~10t.byte Mode320BD")
 
-         (write-blob-palettes png output)
+         (write-blob-palettes png output :extractor 'extract-palettes-320ac)
 
          (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
 
@@ -3325,7 +3325,7 @@ Input path for the 7800 art index file
 
                (palette (grab-7800-palette mode palette-pixels)))
 
-          (print-mini-blob-view palette-pixels)
+          (print-thumbnail-image png-name)
           (appendf bytes
 
                    (parse-7800-object mode palette-pixels :width width-px :height height-px
