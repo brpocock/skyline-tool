@@ -298,6 +298,156 @@ Used internally by BLOB ripping for color stamp conversion."
 
     (reverse bytes-lists)))
     
+(defmethod parse-7800-object ((mode (eql :160b)) pixels &key width height palette)
+  (assert (= 16 (length palette)))
+  (let ((total-width (array-dimension pixels 0))
+        (total-height (1- (array-dimension pixels 1))))
+    (assert (zerop (mod total-height height)) (total-height)
+            "Image height must be modulo ~:Dpx plus 1px for palette strip, but got ~:Dpx"
+            height (1+ total-height))
+    (assert (zerop (mod total-width width)) (total-width)
+            "Image width must be modulo ~:Dpx, but get ~:Dpx" width total-width)
+    (assert (zerop (mod width 2)) (width)
+            "Width for mode 160B must be modulo 2px, not ~:Dpx" width))
+  (let* ((width-in-bytes (/ width 2))
+         (images (extract-regions pixels width height))
+         (bytes-lists (list))
+         (i 0))
+    (dolist (image images)
+      (dotimes (byte-i width-in-bytes)
+        (let ((bytes (list)))
+          (dotimes (y height)
+            (handler-bind
+                ((color-not-in-palette-error
+                   (lambda (c)
+                     (princ c)
+                     (if (tty-xterm-p)
+                         (with-output-to-string (*standard-output*)
+                           (format t "~2&~c[2mProblem with this image:~c[0m~2%"
+                                   #\Escape #\Escape)
+                           (pixels-to-ansi image :x (* 2 byte-i) :y y))
+                         (format nil "Problem with this image"))
+                     (cerror (format nil "Continue, using $~2,'0x (probably transparent)"
+                                     (elt palette 0))
+                             "Color not in palette")
+                     (elt palette 0))))
+               (let* ((byte-pixels (extract-region image
+                                                   (* 2 byte-i) y
+                                                   (+ 2 (* 2 byte-i)) (1+ y)))
+                     (indices (pixels-into-palette byte-pixels palette
+                                                   :x0 (* 2 byte-i) :y0 y :i i)))
+                (let ((a (aref indices 0))
+                      (b (aref indices 1)))
+                  (flet ((binny (n e d)
+                           (ash (if (zerop (logand n (expt 2 e))) 0 1) d)))
+                    (push (logior (binny a 3 3) (binny b 3 1)
+                                  (binny a 2 2) (binny b 2 0)
+                                  (binny a 1 7) (binny b 1 5)
+                                  (binny a 0 6) (binny b 0 4))
+                          bytes))))))
+          (push bytes bytes-lists)))
+      (incf i))
+    (nreverse bytes-lists)))
+
+(defmethod parse-7800-object ((mode (eql :320a)) pixels &key width height palette)
+  (declare (ignore palette))
+  (let ((total-width (array-dimension pixels 0))
+        (total-height (array-dimension pixels 1)))
+    (unless (zerop (mod total-height height))
+      (warn "Image height must be modulo ~:Dpx, but got ~:Dpx"
+            height (1+ total-height)))
+    (assert (zerop (mod total-width width)) (total-width)
+            "Image width must be module ~:Dpx, but get ~:Dpx" width total-width)
+    (assert (zerop (mod width 8)) (width)
+            "Width for mode 320A must be modulo 8px, not ~:Dpx" width))
+  (let* ((byte-width (/ width 8))
+         (images (extract-regions pixels width height))
+         (bytes-lists (list)))
+    (dolist (image images)
+      (dotimes (b byte-width)
+        (let ((bytes (list)))
+          (dotimes (y height)
+            (let ((byte-pixels (extract-region image
+                                               (* b 8) y
+                                               (* (1+ b) 8) (1+ y))))
+              (push (reduce #'logior
+                            (mapcar (lambda (bit)
+                                      (ash (if (zerop (aref byte-pixels (- 7 bit) 0))
+                                               0 1)
+                                           bit))
+                                    '(7 6 5 4 3 2 1 0)))
+                    bytes)))
+          (push bytes bytes-lists))))
+    (reverse bytes-lists)))
+
+(defmethod parse-7800-object ((mode (eql :320b)) pixels &key width height palette)
+  (assert (>= 4 (length palette)))
+  (let ((total-width (array-dimension pixels 0))
+        (total-height (1- (array-dimension pixels 1))))
+    (assert (zerop (mod total-height height)) (total-height)
+            "Image height must be modulo ~:Dpx plus 1px for palette strip, but got ~:Dpx"
+            height (1+ total-height))
+    (assert (zerop (mod total-width width)) (total-width)
+            "Image width must be module ~:Dpx, but get ~:Dpx" width total-width)
+    (assert (zerop (mod width 4)) (width)
+            "Width for mode 320B must be modulo 4px, not ~:Dpx" width))
+  (let* ((byte-width (/ width 4))
+         (images (extract-regions pixels width height))
+         (bytes-lists (list)))
+    (dolist (image images)
+      (dotimes (b byte-width)
+        (let ((bytes (list)))
+          (dotimes (y height)
+            (let* ((byte-pixels (extract-region image
+                                                (* b 4) y
+                                                (* (1+ b) 4) (1+ y)))
+                   (indices (pixels-into-palette byte-pixels palette
+                                                  :x0 (* b 4) :y0 y)))
+              (push (logior
+                     (ash (aref indices 0) 6)
+                     (ash (aref indices 1) 4)
+                     (ash (aref indices 2) 2)
+                     (aref indices 3))
+                    bytes)))
+          (push bytes bytes-lists))))
+    (reverse bytes-lists)))
+
+(defmethod parse-7800-object ((mode (eql :320d)) pixels &key width height palette)
+  (assert (>= 8 (length palette)))
+  (let ((total-width (array-dimension pixels 0))
+        (total-height (1- (array-dimension pixels 1))))
+    (assert (zerop (mod total-height height)) (total-height)
+            "Image height must be modulo ~:Dpx plus 1px for palette strip, but got ~:Dpx"
+            height (1+ total-height))
+    (assert (zerop (mod total-width width)) (total-width)
+            "Image width must be module ~:Dpx, but get ~:Dpx" width total-width)
+    (assert (zerop (mod width 8)) (width)
+            "Width for mode 320D must be modulo 8px, not ~:Dpx" width))
+  (let* ((byte-width (/ width 8))
+         (images (extract-regions pixels width height))
+         (bytes-lists (list)))
+    (dolist (image images)
+      (dotimes (b byte-width)
+        (let ((bytes (list)))
+          (dotimes (y height)
+            (let* ((byte-pixels (extract-region image
+                                                (* b 8) y
+                                                (* (1+ b) 8) (1+ y)))
+                   (indices (pixels-into-palette byte-pixels palette
+                                                  :x0 (* b 8) :y0 y)))
+              (push (logior
+                     (ash (if (> (aref indices 0) 1) 1 0) 7)
+                     (ash (if (> (aref indices 1) 1) 1 0) 6)
+                     (ash (if (> (aref indices 2) 1) 1 0) 5)
+                     (ash (if (> (aref indices 3) 1) 1 0) 4)
+                     (ash (if (> (aref indices 4) 1) 1 0) 3)
+                     (ash (if (> (aref indices 5) 1) 1 0) 2)
+                     (ash (if (> (aref indices 6) 1) 1 0) 1)
+                     (ash (if (> (aref indices 7) 1) 1 0) 0))
+                    bytes)))
+          (push bytes bytes-lists))))
+    (reverse bytes-lists)))
+
 (defmethod parse-7800-object ((mode (eql :320c)) pixels &key width height palette)
   (assert (>= 8 (length palette)))
   (assert (zerop (mod width 4)) (width)
@@ -1000,13 +1150,13 @@ SBCL merges a relative destination with @code{*default-pathname-defaults*}, whic
 
 producing paths like @file{…/Assets/Source/Generated/…/Blob.*.s} and a failed rename."
 
-  (ensure-directories-exist output-pathname)
+  (let* ((output (merge-pathnames output-pathname (uiop:getcwd)))
 
-  (let* ((dir (uiop:pathname-directory-pathname output-pathname))
+         (dir (uiop:pathname-directory-pathname output))
 
          (wip-name (format nil "~A.wip.~36,6,'0R"
 
-                           (pathname-name output-pathname)
+                           (pathname-name output)
 
                            (logxor (ash (get-internal-real-time) 16)
 
@@ -1016,11 +1166,13 @@ producing paths like @file{…/Assets/Source/Generated/…/Blob.*.s} and a faile
 
                         (make-pathname :name wip-name
 
-                                       :type (pathname-type output-pathname))
+                                       :type (pathname-type output))
 
                         dir))
 
          (ok nil))
+
+    (ensure-directories-exist output)
 
     (unwind-protect
 
@@ -1032,7 +1184,7 @@ producing paths like @file{…/Assets/Source/Generated/…/Blob.*.s} and a faile
 
              (funcall writer out))
 
-           (rename-file wip-pathname output-pathname)
+           (rename-file wip-pathname output)
 
            (setf ok t))
 
@@ -1440,6 +1592,90 @@ Each span hash value is (id . mode)."
 
 
 
+(defun stamp-is-320d-p (stamp)
+
+  "Check if a palette-normalized 4×16 stamp fits 320D encoding.
+
+In 320D mode, even positions use the Background or PxC2 registers
+
+(palette indices 0 or 2), odd positions use PxC1 or PxC3 (indices 1 or 3).
+
+The 1-bit encoding maps index > 1 to bit 1.
+
+Returns T if the stamp satisfies this constraint."
+
+  (destructuring-bind (w h) (array-dimensions stamp)
+
+    (dotimes (x w t)
+
+      (dotimes (y h)
+
+        (let ((p (aref stamp x y)))
+
+          (when p
+
+            (if (evenp x)
+
+                (unless (or (= p 0) (= p 2))
+
+                  (return-from stamp-is-320d-p nil))
+
+                (unless (or (= p 1) (= p 3))
+
+                  (return-from stamp-is-320d-p nil)))))))))
+
+
+
+(defun convert-4x16-to-320b-bytes (stamp-data)
+
+  "Convert a 4×16 pixel stamp to 16 bytes in 320B format (2 bits per pixel, 4 pixels per byte)."
+
+  (let* ((h (array-dimension stamp-data 1))
+
+         (row-bytes (make-array h :element-type '(unsigned-byte 8))))
+
+    (dotimes (y h)
+
+      (let ((byte 0))
+
+        (dotimes (x 4)
+
+          (setf byte (logior byte (ash (logand (aref stamp-data x y) 3) (* 2 (- 3 x))))))
+
+        (setf (aref row-bytes y) byte)))
+
+    (coerce row-bytes 'list)))
+
+
+
+(defun convert-8x16-to-320d-bytes (stamp-data)
+
+  "Convert an 8×16 pixel stamp to 16 bytes in 320D format (1 bit per pixel, 8 pixels per byte).
+
+Each pixel's palette index maps to a bit: index 0 or 1 → 0, index 2+ → 1.
+
+Bit 7 = leftmost pixel (pixel 0 of 8)."
+
+  (let* ((h (array-dimension stamp-data 1))
+
+         (row-bytes (make-array h :element-type '(unsigned-byte 8))))
+
+    (dotimes (y h)
+
+      (let ((byte 0))
+
+        (dotimes (x 8)
+
+          (when (> (aref stamp-data x y) 1)
+
+            (setf byte (logior byte (ash 1 (- 7 x))))))
+
+        (setf (aref row-bytes y) byte)))
+
+    (coerce row-bytes 'list)))
+
+
+
 (defun 320a-find-palette-entry (fg-color palettes)
 
   "Find palette entry (0-7) whose C2 matches FG-COLOR for 320A monochrome mode.
@@ -1648,7 +1884,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
     (if (= width 320)
 
-        (blob-rip-7800-320ac png-file imperfectp$)
+        (blob-rip-7800-320bd png-file imperfectp$)
 
         (blob-rip-7800-160ab png-file imperfectp$))))
 
@@ -2026,7 +2262,7 @@ Blob_~a:~10t.block~2%"
 
          (format output "~%Mode:~10t.byte Mode320AC")
 
-         (write-blob-palettes png output :extractor 'extract-palettes-320ac :start-offset 2)
+         (write-blob-palettes png output :extractor 'extract-palettes-320ac)
 
          (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
 
@@ -2273,6 +2509,276 @@ Blob_~a:~10t.block~2%"
            (format output "~%~10t.DLEnd")
 
            (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+
+      (format *trace-output* " … done!~%"))))
+
+
+
+(defun check-height+width-for-blob-320bd (height width palette-pixels)
+
+  (assert (= width 320) (width)
+          "320B/D BLOB ripper requires width = 320px, not ~d" width)
+
+  (assert (zerop (mod (1- height) 16)) (height)
+          "320B/D BLOB ripper requires height mod 16 + 1, not ~d (16 × ~{~d + ~d~})"
+          height (multiple-value-list (floor height 16)))
+
+  (format *trace-output* " (~:d×~:d px)" width height)
+  (finish-output *trace-output*)
+
+  (assert (= (array-dimension palette-pixels 0) width))
+  (assert (= (array-dimension palette-pixels 1) height)))
+
+
+
+(defun blob/write-span-to-stamp-buffer-320bd (span stamp-buffer
+                                              &key mode stamp-offsets serial output id
+                                                   imperfectp)
+
+  (declare (ignore imperfectp))
+
+  (setf (gethash id stamp-offsets) serial)
+
+  (let ((start (+ (* #x1000 (floor serial #x100))
+                  (mod serial #x100))))
+
+    (when (>= start (array-dimension stamp-buffer 0))
+      (adjust-array stamp-buffer (+ #x1000 (array-dimension stamp-buffer 0))))
+
+    (format output "~%~10tSpan~x = * + $~4,'0x" id start)
+
+    (dotimes (stamp (length span))
+      (let* ((stamp-data (elt span stamp))
+             (bytes (ecase mode
+                      (:320b (convert-4x16-to-320b-bytes stamp-data))
+                      (:320d (convert-8x16-to-320d-bytes stamp-data)))))
+
+        (dotimes (byte 16)
+          (let ((i (+ start stamp (* #x100 byte))))
+            (assert (let ((b (aref stamp-buffer i)))
+                      (or (null b) (zerop b))) ()
+                    "Stamp buffer contains ~x at index ~x; serial ~x, stamp ~x"
+                    (aref stamp-buffer i) i serial stamp)
+            (setf (aref stamp-buffer i)
+                  (elt bytes (- 15 byte)))))))))
+
+
+
+(defun blob/write-spans-320bd (spans output &key imperfectp)
+
+  (format output "~2%Spans:~%")
+
+  (let ((stamp-buffer (make-array #x1000 :adjustable t))
+        (stamp-offsets (make-hash-table)))
+
+    (loop for span being the hash-keys in spans using (hash-value span-entry)
+          for (id . mode) = span-entry
+          for serial from 0
+          do (progn
+               (if (and (< serial #x100)
+                        (>= (+ serial (length span)) #x100))
+                   (setf serial #x100))
+               (blob/write-span-to-stamp-buffer-320bd span stamp-buffer
+                                                      :mode mode
+                                                      :stamp-offsets stamp-offsets
+                                                      :serial serial
+                                                      :output output
+                                                      :id id
+                                                      :imperfectp imperfectp)
+               (incf serial (length span))))
+
+    (format *trace-output* " writing 320B/D stamps … ")
+
+  (format output "~2%;;; Binary stamp data follows.~%")
+
+  (hex-dump-bytes stamp-buffer output)
+
+  (format output "~2%~10t.bend~%")
+
+  (format output "~2%;;; This size marker is the estimated amount of ROM that this
+;;; blob may take up, used for allocation purposes.
+;;; $SIZE$~x~%"
+          (+ #x20
+             (* 4 (hash-table-count spans))
+             (length stamp-buffer)))))
+
+
+
+(defun blob-rip-7800-320bd (png-file &optional (imperfectp$ nil))
+
+  (let* ((*machine* 7800)
+         (*region* :ntsc)
+         (png (png-read:read-png-file png-file))
+         (height (png-read:height png))
+         (width (png-read:width png))
+         (palette-pixels (png->palette (png-read:image-data png)))
+         (output-pathname (png-to-blob-pathname png-file))
+         (imperfectp (or (eql :imperfect imperfectp$)
+                         (equal imperfectp$ "--imperfect"))))
+
+    (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
+
+    (check-height+width-for-blob-320bd height width palette-pixels)
+
+    (let* ((zone-spans nil)
+           (palettes (extract-palettes palette-pixels))
+           (palettes-list (2a-to-lol palettes))
+           (stamps (extract-4×16-stamps palette-pixels))
+           (zones (floor height 16))
+           (columns (floor width 4))
+           (spans (make-hash-table :test 'equalp))
+           (stamp-counting 0)
+           (next-span-id 0))
+
+      (print-mini-blob-view palette-pixels)
+      (format *trace-output* " generating 320B/D drawing lists in ~a… " (enough-namestring output-pathname))
+      (force-output *trace-output*)
+
+      (format *trace-output* " zones=~d, stamps=~d×~d~%" zones columns zones)
+      (force-output *trace-output*)
+
+      (%write-blob-assembly-atomically
+       output-pathname
+       (lambda (output)
+
+         (format output ";;; Bitmap Large Object Block for Atari 7800 (320B/D mode)
+;;; Derived from source file ~a. This is a generated file.~3%
+
+Blob_~a:~10t.block~2%"
+                 (enough-namestring png-file)
+                 (assembler-label-name (pathname-name png-file)))
+
+         (format output "~%Mode:~10t.byte Mode320BD")
+
+         (write-blob-palettes png output)
+
+         (format output "~%Zones:~%~10t.byte ~d~10t; zone count" zones)
+
+         (dotimes (zone zones)
+           (format output "~2&Zone~d:" zone)
+
+           (let ((col 0)
+                 (span nil)
+                 (last-palette nil)
+                 (last-mode nil))
+
+             (flet ((collect-span ()
+                      (when span
+                        (push (list col span last-palette last-mode) zone-spans)
+                        (setf span nil last-palette nil last-mode nil))))
+
+                (loop while (< col columns)
+                      for stamp = (aref stamps col zone)
+                      do (when (= (mod col 20) 0)
+                           (format *trace-output* " col ~d/~d…" col columns)
+                           (force-output *trace-output*))
+                         (let* ((palette (or (when (and last-palette
+                                                        (tile-fits-palette-p
+                                                         stamp
+                                                         (elt palettes-list last-palette)))
+                                               last-palette)
+                                             (best-palette stamp palettes
+                                                           :allow-imperfect-p imperfectp
+                                                           :x col :y zone)))
+                                (paletted (limit-region-to-palette
+                                           stamp (elt palettes-list palette)
+                                           :allow-imperfect-p imperfectp))
+                                (stamp-mode (if (stamp-is-320d-p paletted) :320d :320b)))
+                           (cond
+                            ;; 320D mode: combine two adjacent stamps
+                            ((and (eql stamp-mode :320d)
+                                  (< (1+ col) columns)
+                                  (let ((next-paletted (limit-region-to-palette
+                                                        (aref stamps (1+ col) zone)
+                                                        (elt palettes-list palette)
+                                                        :allow-imperfect-p imperfectp)))
+                                    (stamp-is-320d-p next-paletted))
+                                  (< (length span) 31))
+                             (let* ((next-stamp (aref stamps (1+ col) zone))
+                                    (next-paletted (limit-region-to-palette
+                                                    next-stamp (elt palettes-list palette)
+                                                    :allow-imperfect-p imperfectp))
+                                    (combined (combine-4x16-stamps paletted next-paletted)))
+                               (cond
+                                 ((null span)
+                                  (setf span (list combined)
+                                        last-palette palette
+                                        last-mode :320d))
+                                 ((and (= palette last-palette)
+                                       (eql :320d last-mode))
+                                  (appendf span (list combined)))
+                                 (t
+                                  (collect-span)
+                                  (setf span (list combined)
+                                        last-palette palette
+                                        last-mode :320d)))
+                               (format *trace-output* " 320D")
+                               (incf col 2)))
+
+                            ;; Blank stamp — end current span
+                            ((blank-stamp-p stamp (aref palettes 0 0))
+                             (when span
+                               (collect-span))
+                             (incf col 1))
+
+                            ;; 320B mode
+                            (t
+                             (cond
+                               ((null span)
+                                (setf span (list paletted)
+                                      last-palette palette
+                                      last-mode :320b))
+                               ((and (= palette last-palette)
+                                     (eql :320b last-mode)
+                                     (< (length span) 31))
+                                (appendf span (list paletted)))
+                               (t
+                                (collect-span)
+                                (setf span (list paletted)
+                                      last-palette palette
+                                      last-mode :320b)))
+                             (incf col 1))))
+                     finally
+                        (collect-span)))))
+
+         (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first))
+               (first-320d-header t))
+
+           (setf zone-spans nil)
+
+           (dolist (entry spans-this-zone)
+             (let* ((x (first entry))
+                    (span (second entry))
+                    (pal (third entry))
+                    (mode (fourth entry))
+                    (header (if (and (eql mode :320d) first-320d-header)
+                                (progn (setf first-320d-header nil) "DLAltHeader")
+                                "DLHeader"))
+                    (existing (gethash span spans))
+                    (id (if existing
+                            (car existing)
+                            (let ((new-id next-span-id))
+                              (incf next-span-id)
+                              (cond
+                                ((and (< stamp-counting #x100)
+                                      (< (+ stamp-counting (length span)) #x100))
+                                 (incf stamp-counting (length span)))
+                                ((and (< stamp-counting #x100)
+                                      (>= (+ stamp-counting (length span)) #x100))
+                                 (setf stamp-counting #x100))
+                                (t (incf stamp-counting)))
+                              (setf (gethash span spans) (cons new-id mode))
+                              new-id)))
+                    (pos (if (eql mode :320d)
+                             (* 2 (- x (* 2 (length span))))
+                             (* 2 (- x (length span))))))
+
+               (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
+                       header id pal (length span) pos)))
+
+           (format output "~%~10t.DLEnd")
+
+           (blob/write-spans-320bd spans output :imperfectp imperfectp))))
 
       (format *trace-output* " … done!~%"))))
 
