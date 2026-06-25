@@ -36,9 +36,10 @@
   (dolist (p (coerce (color-not-in-palette-palette c) 'list))
     (format s " ")
     (print-wide-pixel p s))
-  #+ () ;; TODO: #1243: #1242
-  (print-image (color-not-in-palette-image-pixels c)
-               (color-not-in-palette-palette c)))
+  #+mcclim
+  (when (typep s 'clim:sheet)
+    (format s "~%Image region:")
+    (%print-clim-pixels (color-not-in-palette-image-pixels c) s)))
 
 (defun pixel-into-palette (pixel palette &key x0 y0 x i image best-fit-p)
   (check-type pixel (integer 0 #xff))

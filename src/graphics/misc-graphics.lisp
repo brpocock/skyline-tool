@@ -922,6 +922,29 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
               width height out-w out-h scale))
     (finish-output stream)))
 
+#+mcclim
+(defun %print-clim-pixels (palette-pixels stream &key (max-width 300) (max-height 200))
+  (let* ((width (array-dimension palette-pixels 0))
+         (height (array-dimension palette-pixels 1))
+         (scale (min (/ max-width (max 1 width)) (/ max-height (max 1 height))))
+         (out-w (max 1 (floor (* width scale))))
+         (out-h (max 1 (floor (* height scale)))))
+    (clim:with-room-for-graphics (stream :height out-h)
+      (dotimes (y height)
+        (dotimes (x width)
+          (let ((pixel (aref palette-pixels x y)))
+            (when pixel
+              (let ((rgb (elt (machine-palette) pixel)))
+                (setf (clim:medium-ink stream)
+                      (clim:make-rgb-color (/ (first rgb) 255.0)
+                                           (/ (second rgb) 255.0)
+                                           (/ (third rgb) 255.0)))
+                (clim:draw-rectangle* stream
+                                      (floor (* x scale)) (floor (* y scale))
+                                      (ceiling (* (1+ x) scale)) (ceiling (* (1+ y) scale))
+                                      :filled t))))))
+      (setf (clim:medium-ink stream) clim:+foreground-ink+))))
+
 (defun print-thumbnail-image (png-file &optional (stream *trace-output*))
   (let* ((path (pathname png-file))
          (png (png-read:read-png-file path))

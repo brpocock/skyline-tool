@@ -753,10 +753,17 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
       (format s " at (~3d,~3d)" tx ty))
     (destructuring-bind (width height) (array-dimensions tile)
       (format s ":~% Tile:  Image (~:d×~:d pixels):~%" width height)
-      (dotimes (row height)
-        (dotimes (col width)
-          (print-wide-pixel (aref tile col row) s))
-        (terpri s)))
+      (flet ((print-pixels ()
+               (dotimes (row height)
+                 (dotimes (col width)
+                   (print-wide-pixel (aref tile col row) s))
+                 (terpri s))))
+        #+mcclim
+        (if (typep s 'clim:sheet)
+            (%print-clim-pixels tile s)
+            (print-pixels))
+        #-mcclim
+        (print-pixels)))
     (format s "  Palettes:")
     (loop for (left right) on palettes by #'cddr
           do (format s "~%~5t")
