@@ -1543,12 +1543,14 @@ Returns @code{0} if no known prefix matches (FIXME #125)."
     ;; map tile graphics
     (dotimes (y height)
       (dotimes (x width)
-        (vector-push-extend (aref tile-grid x y 0) s)))
+        (let ((gid (aref tile-grid x y 0)))
+          (vector-push-extend (if gid gid (progn (warn "NIL tile GID at (~d,~d); substituting 0" x y) 0)) s))))
     ;; map tile attribute set indicator
     (setf (fill-pointer s) #x400)
     (dotimes (y height)
       (dotimes (x width)
-        (vector-push-extend (aref tile-grid x y 1) s)))
+        (let ((attr (aref tile-grid x y 1)))
+          (vector-push-extend (if attr attr (progn (warn "NIL tile attribute at (~d,~d); substituting 0" x y) 0)) s))))
     ;; attributes list
     (setf (fill-pointer s) #x800)
     (assert (every (lambda (attr) (= 6 (length attr)))
