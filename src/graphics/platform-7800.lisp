@@ -1884,7 +1884,7 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
 
     (if (= width 320)
 
-        (blob-rip-7800-320bd png-file imperfectp$)
+        (blob-rip-7800-320ac png-file imperfectp$)
 
         (blob-rip-7800-160ab png-file imperfectp$))))
 
@@ -2623,6 +2623,20 @@ Blob_~a:~10t.block~2%"
     (let* ((zone-spans nil)
            (palettes (extract-palettes-320ac palette-pixels))
            (palettes-list (2a-to-lol palettes))
+           (bg-color (aref palettes 0 0))
+           (group-palettes
+             (make-array (list 2 5) :initial-contents
+                         (list (list bg-color
+                                     (aref palettes 0 2)
+                                     (aref palettes 1 2)
+                                     (aref palettes 2 2)
+                                     (aref palettes 3 2))
+                               (list bg-color
+                                     (aref palettes 4 2)
+                                     (aref palettes 5 2)
+                                     (aref palettes 6 2)
+                                     (aref palettes 7 2)))))
+           (group-palettes-list (2a-to-lol group-palettes))
            (stamps (extract-4×16-stamps palette-pixels))
            (zones (floor height 16))
            (columns (floor width 4))
@@ -2672,32 +2686,65 @@ Blob_~a:~10t.block~2%"
                       do (when (= (mod col 20) 0)
                            (format *trace-output* " col ~d/~d…" col columns)
                            (force-output *trace-output*))
-                         (let* ((palette (or (when (and last-palette
-                                                        (tile-fits-palette-p
-                                                         stamp
-                                                         (elt palettes-list last-palette)))
-                                               last-palette)
-                                             (best-palette stamp palettes
-                                                           :allow-imperfect-p imperfectp
-                                                           :x col :y zone)))
-                                (paletted (limit-region-to-palette
-                                           stamp (elt palettes-list palette)
-                                           :allow-imperfect-p imperfectp))
-                                (stamp-mode (if (stamp-is-320d-p paletted) :320d :320b)))
+                                  (let* ((resolve-palette
+                                    (lambda (p)
+                                      (if (>= p 100)
+                                          (elt group-palettes-list (- p 100))
+                                          (elt palettes-list p))))
+                                  (match
+                                    (or (when (and last-palette
+                                                   (tile-fits-palette-p
+                                                    stamp
+                                                    (funcall resolve-palette last-palette)))
+                                          (list last-palette
+                                                (funcall resolve-palette last-palette)
+                                                nil))
+                                        ;; Try group matching (320C: BG + 4 C2 values)
+                                        (let ((group (best-palette
+                                                      stamp group-palettes
+                                                      :allow-imperfect-p imperfectp
+                                                      :x col :y zone)))
+                                          (when group
+                                            (let* ((c2-base (if (zerop group) 0 4))
+                                                   (c2-ents (vector (aref palettes c2-base 2)
+                                                                    (aref palettes (1+ c2-base) 2)
+                                                                    (aref palettes (+ c2-base 2) 2)
+                                                                    (aref palettes (+ c2-base 3) 2)))
+                                                   (limit-chosen
+                                                     (NEW-320C-MODE-LOGIC stamp c2-ents)))
+                                              (list (+ 100 group)
+                                                    (or limit-chosen
+                                                        (list 0 (aref c2-ents 0)
+                                                                 (aref c2-ents 1)
+                                                                 (aref c2-ents 2)))
+                                                    (null limit-chosen)))))
+                                        ;; Fall back to individual palette (320B/D)
+                                        (let ((idx (best-palette
+                                                    stamp palettes
+                                                    :allow-imperfect-p imperfectp
+                                                    :x col :y zone)))
+                                          (list idx (elt palettes-list idx) nil))))
+                                  (palette (first match))
+                                  (limit-pal (second match))
+                                  (approximate-p (third match))
+                                  (paletted (limit-region-to-palette
+                                             stamp limit-pal
+                                             :allow-imperfect-p (or imperfectp approximate-p)))
+                                 (stamp-mode (if (stamp-is-320d-p paletted) :320d :320b)))
                            (cond
                             ;; 320D mode: combine two adjacent stamps
                             ((and (eql stamp-mode :320d)
                                   (< (1+ col) columns)
-                                  (let ((next-paletted (limit-region-to-palette
-                                                        (aref stamps (1+ col) zone)
-                                                        (elt palettes-list palette)
-                                                        :allow-imperfect-p imperfectp)))
-                                    (stamp-is-320d-p next-paletted))
-                                  (< (length span) 31))
-                             (let* ((next-stamp (aref stamps (1+ col) zone))
-                                    (next-paletted (limit-region-to-palette
-                                                    next-stamp (elt palettes-list palette)
-                                                    :allow-imperfect-p imperfectp))
+                                    (let ((next-paletted (limit-region-to-palette
+                                                          (aref stamps (1+ col) zone)
+                                                          limit-pal
+                                                          :allow-imperfect-p imperfectp)))
+                                      (stamp-is-320d-p next-paletted))
+                                    (< (length span) 31))
+                               (let* ((next-stamp (aref stamps (1+ col) zone))
+                                      (next-paletted (limit-region-to-palette
+                                                      next-stamp limit-pal
+                                                      :allow-imperfect-p imperfectp))
                                     (combined (combine-4x16-stamps paletted next-paletted)))
                                (cond
                                  ((null span)
@@ -3254,15 +3301,8 @@ Input path for the 7800 art index file
                          collect (aref palette-strip i 0))))
 
       (if (tty-xterm-p)
-
-          (format *trace-output* "~&Palette detected: ~{
-
-~5t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;~
-
-~45t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;~}"
-
+          (format *trace-output* "~&Palette detected: ~5t~{~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^; ~45t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;~}"
                   (mapcar #'palette-to-ansi-pairs palette))
-
           (format *trace-output* "~&Palette detected: ~{$~2,'0x~^, ~}" palette))
 
       palette)))
