@@ -1686,7 +1686,7 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                      (every #'actor-name-char-p (subseq string 1)))
                 (list 'variable string))
                ((char= #\" (char string 0))
-                (list 'quoted (pascal-case (subseq string 1))))
+                 (list 'quoted (subseq string 1)))
                (t (list 'string string)))))
     (let ((parsed (loop with word = ""
                         for char = (read-char stream nil nil)
