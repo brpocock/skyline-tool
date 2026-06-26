@@ -142,22 +142,16 @@ left-to-right within each row."
           (let ((x0 (* tx tile-width))
                 (y0 (* ty tile-height)))
             (dotimes (qx 2)
-              (let* ((quad-rgb (mapcar (lambda (c) (round c))
-                                       (average-rgb-via-xyz
-                                        (tile-pixel-colors
-                                         (extract-region image
-                                                         (+ x0 (* qx half-w))
-                                                         (+ y0 (* qy half-h))
-                                                         (+ x0 (* (1+ qx) half-w))
-                                                         (+ y0 (* (1+ qy) half-h)))))))
-                     (darkness (- 1 (/ (+ (max (first quad-rgb) (second quad-rgb) (third quad-rgb))
-                                          (min (first quad-rgb) (second quad-rgb) (third quad-rgb)))
-                                       2.0 255.0)))
-                     (char (%darkness-char (round (* darkness 100)) 100)))
-                (princ char stream)
-                (princ char stream)))))
-        (terpri stream))
-      (terpri stream))
+              (let ((quad-rgb (mapcar (lambda (c) (round c))
+                                      (average-rgb-via-xyz
+                                       (tile-pixel-colors
+                                        (extract-region image
+                                                        (+ x0 (* qx half-w))
+                                                        (+ y0 (* qy half-h))
+                                                        (+ x0 (* (1+ qx) half-w))
+                                                        (+ y0 (* (1+ qy) half-h))))))))
+                (print-wide-pixel quad-rgb stream)))))
+        (terpri stream)))
     (finish-output stream)))
 
 (defun print-mini-blob-view (palette-pixels &optional (stream *trace-output*))
