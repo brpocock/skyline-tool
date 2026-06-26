@@ -151,7 +151,11 @@ left-to-right within each row."
                 (multiple-value-bind (light dark light-count dark-count)
                     (%region->two-populations image sx sy half-w half-h)
                   (if (null dark)
-                      (print-wide-pixel light stream)
+                      (let ((ansi-p (and (not (typep stream 'string-stream))
+                                        (tty-xterm-p))))
+                        (if ansi-p
+                            (print-wide-pixel light stream)
+                            (princ "██" stream)))
                       (let ((char (%darkness-char dark-count (+ light-count dark-count)))
                             (ansi-p (and (not (typep stream 'string-stream))
                                          (tty-xterm-p))))
