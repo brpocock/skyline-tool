@@ -164,6 +164,16 @@
     (format nil "~%	.byte %~a	; ~a" binary blocks)))
 
 (defun pascal-case (string)
+  "Convert STRING to PascalCase by splitting on word boundaries.
+
+Each run of alphanumeric characters is capitalized and concatenated.
+Non-alphanumeric characters (spaces, periods, apostrophes) act as
+word separators.  CamelCase boundaries (lowercase followed by
+uppercase, e.g. @code{OrnassSShop}) are also split, so possessive
+names like @code{Ornass's Shop} normalize to @code{OrnassSShop}
+but already-correct PascalCase like @code{OrnassSShop} becomes
+@code{OrnassSshop} (undesired).  Callers should avoid applying this
+function to strings that are already in the correct form."
   (let ((words (list))
         (current (make-array 0 :element-type 'character :fill-pointer 0 :adjustable t)))
     (flet ((emit-word ()
@@ -916,7 +926,7 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
          (out-h (max 1 (floor (* height scale)))))
     (clim:with-room-for-graphics (stream :height out-h)
       (clim:with-output-as-presentation (stream png-file 'pathname)
-        (let ((pattern (clim:make-pattern-from-bitmap-file png-file :format :png)))
+        (let ((pattern (clim:make-pattern-from-bitmap-file png-file)))
           (clim:with-drawing-options (stream
                                       :transformation (clim:make-scaling-transformation
                                                         (* scale pixel-aspect) scale))

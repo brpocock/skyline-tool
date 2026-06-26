@@ -899,6 +899,11 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
   nil)
 
 (defun locale-pathname (locale)
+  "Resolve LOCALE to a @file{.tmx} pathname.
+
+Splits LOCALE on @code{/}, applies @code{pascal-case} only to directory
+components for normalization.  The filename (last component) is used
+verbatim — it must already match the actual @file{.tmx} file on disk."
   (let* ((parts (split-sequence #\/ locale))
          (dirname-parts (if (equal "Maps" (elt parts 0))
                             (subseq parts 1 (1- (length parts)))
@@ -1001,7 +1006,13 @@ XML is the map element; *current-scene* must be bound to the segment name (e.g. 
   (get-asset-id :map *current-scene*))
 
 (defun find-entrance-by-name (xml name locale-name)
-  "Find entrance NAME in the map XML for  LOCALE-NAME"
+  "Find entrance NAME in map XML for LOCALE-NAME.
+
+Searches @code{objectgroup} elements for an @code{Entrance} property
+whose @code{value} matches NAME (both normalized via @code{pascal-case}
+for case/space-insensitive comparison).  Uses @code{assoc} to handle
+xmls assoc-list attribute format.  Returns @code{(locale-id x y)}
+triple on success, signals a continuable error on failure."
   (labels ((lookup-attr (attrs key &optional default)
              (or (second (find-if (lambda (kv)
                                     (destructuring-bind (k v) kv

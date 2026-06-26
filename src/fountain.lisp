@@ -3033,6 +3033,12 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
             (list :name actor :found-in-scene-p (when found-in-scene t)))))
 
 (defun fountain/write-scene-start (value)
+  "Set @code{*current-scene*} from a lexer-produced VALUE.
+
+VALUE is either a @code{cons} @code{(island locale)} (already
+pascal-cased by the lexer) or a @code{string}.  The components are
+joined with @code{/} verbatim — no additional @code{pascal-case}
+normalization is applied, since the lexer already handles that."
     (setf *current-scene*
           (etypecase value
             (cons (concatenate 'string (first value) "/" (second value)))
