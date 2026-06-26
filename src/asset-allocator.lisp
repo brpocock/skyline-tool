@@ -3112,9 +3112,29 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
          (go top)))))
 
 (defmethod get-asset-id ((kind (eql :script)) asset)
-  "Calls `FIND-SCRIPT-ID' for ASSET"
-  (or (find-script-id asset)
-      (error "Counld not get asset ID for ~s" asset)))
+  "Calls `FIND-SCRIPT-ID' for ASSET; falls back to .forth, then warns and returns 0"
+  (or (handler-case (find-script-id asset)
+        (error ()
+          (let* ((dir (butlast
+                       (mapcar #'pascal-case
+                               (flatten (mapcar (curry #'split-sequence #\/)
+                                                (split-sequence #\- asset))))))
+                 (dir (if (equal "Scripts" (first dir)) (subseq dir 1) dir))
+                 (title (pascal-case (car (last (split-sequence #\- asset)))))
+                 (forth-path (make-pathname :directory
+                                            (append (list :relative "Source" "Scripts") dir)
+                                            :name title :type "forth")))
+            (if (probe-file forth-path)
+                (let ((id (logand #x7ff (sxhash asset))))
+                  (format *trace-output*
+                          "~&//* Script “~a” (Forth) has ID $~3,'0x"
+                          (enough-namestring forth-path) id)
+                  id)
+                (progn
+                  (cerror "Continue with script ID 0"
+                          "Script ~s not found as .fountain or .forth" asset)
+                  0)))))
+      0))
 
 (defmethod get-asset-id ((kind (eql :art)) asset-name)
   "Find the asset-id of ASSET-NAME from its name"
