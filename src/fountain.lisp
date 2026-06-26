@@ -2417,15 +2417,16 @@ and processed/applied at the appropriate point in the scene setup.")
   (map nil #'stage-directions->code directions))
 
 (defstage music (start/stop song)
-  (ecase start/stop
-    (start (format t "
+  (let ((name (pascal-case song)))
+    (ecase start/stop
+      (start (format t "
 Song_~a_ID NextSong C!
 SoundSourceBackgroundMusic NextSoundSource C!
-PlaySong EXECUTE " song))
-    (incidental (format t "
+PlaySong EXECUTE " name))
+      (incidental (format t "
 Song_~a_ID NextSong C!
 SoundSourceIncidentalMusic NextSoundSource C!
-PlaySong EXECUTE "  song))))
+PlaySong EXECUTE " name)))))
 
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
