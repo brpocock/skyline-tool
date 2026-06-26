@@ -136,6 +136,10 @@ left-to-right within each row."
          (half-w (floor tile-width 2))
          (half-h (floor tile-height 2)))
     (format stream "~&Mini-tile-map (~D×~D tiles, 2×2 px each):~%" tiles-across tiles-down)
+    #+mcclim
+    (when (typep stream 'clim:sheet)
+      (%print-clim-pixels image stream)
+      (return-from print-mini-tile-map))
     (dotimes (ty tiles-down)
       (dotimes (qy 2)
         (dotimes (tx tiles-across)
