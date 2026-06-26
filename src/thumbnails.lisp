@@ -123,30 +123,41 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
 (defun print-mini-tile-map (tileset &optional (stream *trace-output*))
   "Print a mini-tile-map of a TILESET to STREAM (default *trace-output*).
 
-Each tile is displayed as one print-wide-pixel whose color is the
-average (in CIE XYZ) of all non-nil pixels in that tile.
-Output is top-to-bottom rows, left-to-right within each row.
-Tile count is derived from the image to match @code{extract-8×16-tiles},
-handling both 64 and 128 tile tilesets correctly."
+Each tile is displayed as 2×2 shaded grayscale pixels (4 characters
+across × 2 rows per tile).  Pixel darkness is the XYZ-luminance of
+the quadrant's average colour.  Output is top-to-bottom rows,
+left-to-right within each row."
   (let* ((image (tileset-image tileset))
          (tile-width 8)
          (tile-height 16)
          (tiles-across (floor (array-dimension image 0) tile-width))
          (tiles-down (floor (array-dimension image 1) tile-height))
-         (total-tiles (* tiles-across tiles-down)))
-    (format stream "~&Mini-tile-map (~D×~D tiles):~%" tiles-across tiles-down)
-    (dotimes (tile-id total-tiles)
-      (let* ((tx (mod tile-id tiles-across))
-             (ty (floor tile-id tiles-across))
-             (tile (extract-region image
-                                   (* tx tile-width) (* ty tile-height)
-                                   (+ (* tx tile-width) tile-width)
-                                   (+ (* ty tile-height) tile-height)))
-             (colors (tile-pixel-colors tile))
-             (avg (average-rgb-via-xyz colors)))
-        (print-wide-pixel avg stream))
-      (when (= (mod (1+ tile-id) tiles-across) 0)
-        (terpri stream)))
+         (total-tiles (* tiles-across tiles-down))
+         (half-w (floor tile-width 2))
+         (half-h (floor tile-height 2)))
+    (format stream "~&Mini-tile-map (~D×~D tiles, 2×2 px each):~%" tiles-across tiles-down)
+    (dotimes (ty tiles-down)
+      (dotimes (qy 2)
+        (dotimes (tx tiles-across)
+          (let ((x0 (* tx tile-width))
+                (y0 (* ty tile-height)))
+            (dotimes (qx 2)
+              (let* ((quad-rgb (mapcar (lambda (c) (round c))
+                                       (average-rgb-via-xyz
+                                        (tile-pixel-colors
+                                         (extract-region image
+                                                         (+ x0 (* qx half-w))
+                                                         (+ y0 (* qy half-h))
+                                                         (+ x0 (* (1+ qx) half-w))
+                                                         (+ y0 (* (1+ qy) half-h)))))))
+                     (darkness (- 1 (/ (+ (max (first quad-rgb) (second quad-rgb) (third quad-rgb))
+                                          (min (first quad-rgb) (second quad-rgb) (third quad-rgb)))
+                                       2.0 255.0)))
+                     (char (%darkness-char (round (* darkness 100)) 100)))
+                (princ char stream)
+                (princ char stream)))))
+        (terpri stream))
+      (terpri stream))
     (finish-output stream)))
 
 (defun print-mini-blob-view (palette-pixels &optional (stream *trace-output*))
