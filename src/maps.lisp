@@ -1019,7 +1019,7 @@ XML is the map element; *current-scene* must be bound to the segment name (e.g. 
                      (when (and (find-if (lambda (kv)
                                            (destructuring-bind (key value) kv
                                              (and (equalp key "value")
-                                                  (equalp (pascal-case value) name))))
+                                                   (equalp (pascal-case value) (pascal-case name))))
                                          (second prop))
                                 (find-if (lambda (kv)
                                            (destructuring-bind (key value) kv
