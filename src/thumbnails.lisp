@@ -146,25 +146,18 @@ left-to-right within each row."
           (let ((x0 (* tx tile-width))
                 (y0 (* ty tile-height)))
             (dotimes (qx 2)
-              (let* ((quad-rgb (mapcar (lambda (c) (round c))
-                                       (average-rgb-via-xyz
-                                        (tile-pixel-colors
-                                         (extract-region image
-                                                         (+ x0 (* qx half-w))
-                                                         (+ y0 (* qy half-h))
-                                                         (+ x0 (* (1+ qx) half-w))
-                                                         (+ y0 (* (1+ qy) half-h)))))))
-                     (r (first quad-rgb))
-                     (g (second quad-rgb))
-                     (b (third quad-rgb))
-                     (lightness (/ (+ (max r g b) (min r g b)) 2.0 255.0))
-                     (char (%darkness-char (round (* (- 1 lightness) 100)) 100)))
-                (if (and (not (typep stream 'string-stream)) (tty-xterm-p))
-                    (format stream "~a~a~c~c~c[0m"
-                            (ansi-color-rgb r g b t)
-                            (ansi-color-rgb r g b nil)
-                            char char #\Escape)
-                    (format stream "~c~c" char char))))))
+              (let ((sx (+ x0 (* qx half-w)))
+                    (sy (+ y0 (* qy half-h))))
+                (multiple-value-bind (light dark light-count dark-count)
+                    (%region->two-populations image sx sy half-w half-h)
+                  (if (null dark)
+                      (print-wide-pixel light stream)
+                      (let ((char (%darkness-char dark-count (+ light-count dark-count)))
+                            (ansi-p (and (not (typep stream 'string-stream))
+                                         (tty-xterm-p))))
+                        (if ansi-p
+                            (%ansi-two-color-cell dark light char stream)
+                            (format stream "~c~c" char char)))))))))
         (terpri stream)))
     (finish-output stream)))
 
