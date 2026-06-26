@@ -451,23 +451,20 @@ Objects without any event properties are ignored."
               (dotimes (i 4)
                 (when (string-equal normalized (nth i *force-field-event-properties*))
                   (let* ((script-name (or (second (assoc "value" (second prop) :test #'equal)) ""))
-                         (script-id (or (handler-case (get-asset-id :script script-name)
-                                         (error ()
-                                           (let ((rc-path
-                                                  (loop for ext in '("cob" "bas" "pas")
-                                                        for p = (make-pathname
-                                                                 :directory
-                                                                 (list :relative "Source" "Maps" "RunCommands")
-                                                                 :name (pascal-case script-name)
-                                                                 :type ext)
-                                                        thereis (and (probe-file p) p))))
-                                             (when rc-path
-                                               (let ((id (logand #x7ff (sxhash script-name))))
-                                                 (format *trace-output*
-                                                         "~&//* RunCommands module ~a has ID $~3,'0x"
-                                                         (enough-namestring rc-path) id)
-                                                 id)))))
-                                       0)))
+                         (rc-file (loop for ext in '("cob" "bas" "pas")
+                                        for p = (make-pathname
+                                                 :directory
+                                                 (list :relative "Source" "Maps" "RunCommands")
+                                                 :name (pascal-case script-name)
+                                                 :type ext)
+                                        thereis (and (probe-file p) p)))
+                         (script-id (if rc-file
+                                        (let ((id (logand #x7ff (sxhash script-name))))
+                                          (format *trace-output*
+                                                  "~&//* RunCommands module ~a has ID $~3,'0x"
+                                                  (enough-namestring rc-file) id)
+                                          id)
+                                        (or (get-asset-id :script script-name) 0))))
                     (setf (aref events i) script-id)
                     (setf has-event-p t))))))
           (when has-event-p
