@@ -3301,7 +3301,7 @@ Input path for the 7800 art index file
                          collect (aref palette-strip i 0))))
 
       (if (tty-xterm-p)
-          (format *trace-output* "~&Palette detected: ~5t~{~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^; ~45t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;~}"
+          (format *trace-output* "~&Palette detected:~%~{ ~5t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;  ~45t~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}, ~{$~2,'0x ~a~}~^;~}"
                   (mapcar #'palette-to-ansi-pairs palette))
           (format *trace-output* "~&Palette detected: ~{$~2,'0x~^, ~}" palette))
 
