@@ -3032,15 +3032,11 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
             (list :name actor :found-in-scene-p (when found-in-scene t)))))
 
 (defun fountain/write-scene-start (value)
-  (setf *current-scene*
-        (etypecase value
-          (cons (concatenate 'string
-                             (pascal-case (first value))
-                             "/"
-                             (pascal-case (second value))))
-          (string (format nil "~{~a~^/~}"
-                          (mapcar #'pascal-case
-                                  (split-sequence #\/ value))))))
+    (setf *current-scene*
+          (etypecase value
+            (cons (concatenate 'string (first value) "/" (second value)))
+            (string (format nil "~{~a~^/~}"
+                            (split-sequence #\/ value)))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
 
