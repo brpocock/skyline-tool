@@ -3326,38 +3326,63 @@ code for the game's scripting engine.
          (dir (if (equal "Scripts" (first dir))
                   (subseq dir 1)
                   dir))
-         (title (string-trim #(#\Space #\Tab) (last-elt path)))
-         (pathname (make-pathname
-                    :directory (append (list :relative "Source" "Scripts") dir)
-                    :name title
-                    :type "fountain"))
-         (dir-hash (ash
-                    (reduce #'logxor
-                            (mapcar (lambda (ch) (- (char-code ch) (char-code #\A)))
-                                    (remove-if-not #'upper-case-p
-                                                   (coerce (first dir) 'list))))
-                    11)))
-    (unless (probe-file pathname)
-      (error "Could not find expected script file “~a” for script named “~a”"
-             (enough-namestring pathname) title))
-    (with-input-from-file (fountain pathname)
-      (loop for line = (read-line fountain nil nil)
-            while line
-            do (when-let (matches (cl-ppcre:all-matches "^(INT|EXT).*#[0-9]+#" line))
-                 (let* ((scene-number (parse-integer
-                                       (subseq line (1+ (position #\# line)))
-                                       :junk-allowed t))
-                        (id (logior dir-hash scene-number)))
-                   (check-type scene-number (integer 0 #x7ff)
-                               "a scene number integer between 0 and 2,047")
-                   (format *trace-output*
-                           "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
-                           dir title scene-number dir-hash id)
-                   (return-from find-script-id id))))
-      (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
-        (format *trace-output* "~&//* Script “~a” is scene ~:d in locale ~:d; id $~4,'0x"
-                script-moniker (logand #x7ff id) dir-hash id)
-        id))))
+          (title (string-trim #(#\Space #\Tab) (last-elt path)))
+          (base-dir (append (list :relative "Source" "Scripts") dir))
+          (extensions '("fountain" "cob" "bas"))
+          (pathname (or (loop for ext in extensions
+                              for p = (make-pathname :directory base-dir
+                                                     :name title :type ext)
+                              thereis (and (probe-file p) p))
+                        (loop for ext in extensions
+                              for p = (make-pathname
+                                       :directory (list :relative "Source" "Classes")
+                                       :name title :type ext)
+                              thereis (and (probe-file p) p))
+                        (error "Could not find expected script file ~
+                                for script named "~a" (tried ~{~a~^, ~})"
+                               title
+                               (mapcan
+                                (lambda (ext)
+                                  (list (enough-namestring
+                                         (make-pathname :directory base-dir
+                                                        :name title :type ext))
+                                        (enough-namestring
+                                         (make-pathname
+                                          :directory (list :relative "Source" "Classes")
+                                          :name title :type ext))))
+                                extensions))))
+          (dir-hash (ash
+                     (reduce #'logxor
+                             (mapcar (lambda (ch) (- (char-code ch) (char-code #\A)))
+                                     (remove-if-not #'upper-case-p
+                                                    (coerce (first dir) 'list))))
+                     11)))
+     (if (string-equal "fountain" (pathname-type pathname))
+         (with-input-from-file (fountain pathname)
+           (loop for line = (read-line fountain nil nil)
+                 while line
+                 do (when-let (matches (cl-ppcre:all-matches "^(INT|EXT).*#[0-9]+#" line))
+                      (let* ((scene-number (parse-integer
+                                            (subseq line (1+ (position #\# line)))
+                                            :junk-allowed t))
+                             (id (logior dir-hash scene-number)))
+                        (check-type scene-number (integer 0 #x7ff)
+                                    "a scene number integer between 0 and 2,047")
+                        (format *trace-output*
+                                "~&//* Script "~{~a/~}~a" is scene ~:d in locale ~:d; id $~4,'0x"
+                                dir title scene-number dir-hash id)
+                        (return-from find-script-id id))))
+           (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
+             (format *trace-output*
+                     "~&//* Script "~a" is scene ~:d in locale ~:d; id $~4,'0x"
+                     script-moniker (logand #x7ff id) dir-hash id)
+             id))
+         (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
+           (format *trace-output*
+                   "~&//* Script "~a" (from ~a) is scene ~:d in locale ~:d; id $~4,'0x"
+                   script-moniker (enough-namestring pathname)
+                   (logand #x7ff id) dir-hash id)
+           id))))
 
 
 
