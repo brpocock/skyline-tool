@@ -701,11 +701,14 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
 		 finally (return output))))
 
 (defun 2a-to-lol (2a)
-  "Convert the two-dimensional array 2A into a list-of-lists"
-  (loop for row from 0 below (array-dimension 2a 0)
-        collecting (loop
-		 for column from 0 below (array-dimension 2a 1)
-		 collect (aref 2a row column))))
+  "Convert array 2A into a list (of lists for 2D arrays, or plain list for vectors)."
+  (if (= 1 (array-rank 2a))
+      (loop for i from 0 below (array-dimension 2a 0)
+            collect (aref 2a i))
+      (loop for row from 0 below (array-dimension 2a 0)
+            collecting (loop
+                       for column from 0 below (array-dimension 2a 1)
+                       collect (aref 2a row column)))))
 
 (defun region->list-of-colors (tile)
   "Extract the list of all colors found in the two-dimensional array TILE.
@@ -884,14 +887,14 @@ not palette indices and must not be passed to @code{color-distance-by-indices}."
 
 (defun locale-pathname (locale)
   (let* ((parts (split-sequence #\/ locale))
-         (parts (if (equal "Maps" (elt parts 0))
-                    (mapcar #'pascal-case (subseq parts 1))
-                    (mapcar #'pascal-case parts))))
-    (make-pathname :name (last-elt parts)
+         (dirname-parts (if (equal "Maps" (elt parts 0))
+                            (subseq parts 1 (1- (length parts)))
+                            (subseq parts 0 (1- (length parts)))))
+         (name (last-elt parts)))
+    (make-pathname :name name
                    :type "tmx"
                    :directory (append (list :relative "Source" "Maps")
-                                      (mapcar #'pascal-case
-                                              (subseq parts 0 (1- (length parts))))))))
+                                      (mapcar #'pascal-case dirname-parts)))))
 
 (defun load-other-map (locale)
   (xmls:parse-to-list (alexandria:read-file-into-string
@@ -995,10 +998,7 @@ XML is the map element; *current-scene* must be bound to the segment name (e.g. 
                  default)))
     (tagbody top
        (restart-case
-           (let ((locale-id (get-asset-id :map
-                                          (format nil "~{~a~^/~}"
-                                                  (mapcar #'pascal-case
-                                                          (split-sequence #\/ locale-name))))))
+           (let ((locale-id (get-asset-id :map locale-name)))
              (dolist (group (xml-matches "objectgroup" xml))
                (dolist (object (xml-matches "object" group))
                  (when-let (properties (xml-match "properties" object nil))
