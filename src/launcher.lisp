@@ -1457,7 +1457,7 @@ The signal code was ~a" break-code)
   "Undo last action (not yet implemented)."
   (format *query-io* "~&Undo is not yet implemented.~%"))
 
-(eval-when (:load-toplevel :execute)
+(eval-when (:load-toplevel)
   ;; Only bind keystrokes if CLIM is fully loaded
   (when (find-package :clim-internals)
     (flet ((bind (command-table gesture command)
