@@ -237,16 +237,15 @@ grestore
                (t
                 (princ "\\077" out))))))
 
-(defun write-ps-page-footer (ps page-num total-pages title-text date-str author)
+(defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
   "Write footer per branding spec:
    - Skyline-Tool icon at bottom left (~48pt)
    - Text indented ~1in (72pt) from left margin
    - 'Skyline-Tool' in Royal Blue, ' for ' in black, GAME in Italic Navy Blue
-   - Second line: date — author in 75% dark gray
+   - Second line: date — author (on hostname) in 75% dark gray
    - Far bottom right: 'Page N of M' in 75% dark gray
    All face: Times-Roman."
-  (let ((emdash (string (code-char #x2014))))
-    (format ps "gsave
+  (format ps "gsave
  0 12 translate
 ")
     (write-ps-header-icon ps)
@@ -265,13 +264,14 @@ currentpoint pop 3 add 38 moveto
 /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
 0.25 0.25 0.25 setrgbcolor
 72 22 moveto
-(~a ~a ~a) show
+(~a -- ~a~@[ (on ~a)~]) show
 522 12 moveto
 (Page ~d of ~d) show
 grestore
 " (escape-ps-string title-text)
-      (escape-ps-string date-str) emdash (escape-ps-string author)
-      page-num total-pages)))
+      (escape-ps-string date-str) (escape-ps-string author)
+      (and hostname (escape-ps-string hostname))
+      page-num total-pages))
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).

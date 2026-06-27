@@ -465,7 +465,7 @@
           (attr 410 "Write Mode" (string-downcase (simple-animation-sequence-write-mode seq)))
           (attr 395 "Frames" (format nil "~d" (simple-animation-sequence-frame-count seq)))
           (attr 380 "Rate" (princ-to-string (simple-animation-sequence-frame-rate-scalar seq))))
-        (skyline-tool::write-ps-page-footer ps 1 1 title date-str author)
+        (skyline-tool::write-ps-page-footer ps 1 1 title date-str author (machine-instance))
         (let ((scale (min (/ 692 (max 1 w)) (/ 360 h))) (rw (* w 3)))
           (format ps "/DeviceRGB setcolorspace~%")
           (format ps "gsave~%")
