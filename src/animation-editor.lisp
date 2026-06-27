@@ -242,7 +242,7 @@
                 "json")))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede)
-        (princ (sequence-to-json seq) f))
+        (skyline-tool::write-json-pretty (skyline-tool::sequence-alist seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-text :menu nil :name t) ()
   (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -1380,7 +1380,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
                                                                 :sequence sequence)))
                               (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
                                     (window-title "Animation Sequence"))
-                             (clim:run-frame-top-level *anim-seq-editor-frame*)))
+                             (let ((*application-frame* *anim-seq-editor-frame*))
+                               (clim:run-frame-top-level *anim-seq-editor-frame*))))
                          :name "Edit Animation Sequence"))
 
 (clim:define-command-table save-assignment-as-menu
@@ -1707,10 +1708,14 @@ Called from note-sheet-grafted after the frame is connected to the display."
                                       :action action
                                       :facing facing
                                       :parent parent)))
-                                (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
-                                      (window-title "Animation Assignment"))
-                               (clim:run-frame-top-level *anim-seq-assign-frame*)))
+                               (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
+                                     (window-title "Animation Assignment"))
+                               (let ((*application-frame* *anim-seq-assign-frame*))
+                                 (clim:run-frame-top-level *anim-seq-assign-frame*))))
                            :name "Assign Animation Sequence")))
+
+(clim:define-command-table print-assignments-menu
+  :menu ())
 
 (clim:define-command-table save-assignments-as-menu
   :menu (("To Spreadsheet" :command com-save-all-animations)
@@ -1720,6 +1725,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (clim:define-command-table animation-assignments-menu
   :menu (("Save" :menu save-assignments-as-menu)
+         (nil :divider :line)
+         ("Print To" :menu print-assignments-menu)
+         ("Discover Printers…" :command com-discover-printers-assigns)
          (nil :divider :line)
          ("Close Assignments" :command com-close-frame)))
 
@@ -1754,6 +1762,91 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (define-anim-seq-assigns-frame-command (com-save-animation-assignments :menu nil :name t) ()
   (save-all-animation-sequences)
   (format *query-io* "~&Saved all animation sequence assignments.~%"))
+
+(define-anim-seq-assigns-frame-command (com-save-assignments-as-json :menu nil :name t) ()
+  (let* ((default-name (format nil "AnimationAssignments.json"))
+         (path (prompt-save-pathname default-name "json"
+                                     :prefs-key :save-assignments-json-dir)))
+    (when path
+      (let ((alist
+              (loop for key being the hash-keys of *animation-assignments*
+                      using (hash-value seq)
+                    collect (cons (format nil "~(~a~)-~d-~(~a~)-~(~a~)"
+                                          (first key) (second key)
+                                          (third key) (fourth key))
+                                  (skyline-tool::sequence-alist seq)))))
+        (with-open-file (f path :direction :output :if-exists :supersede
+                           :external-format :utf-8)
+          (skyline-tool::write-json-pretty alist f))
+        (format *query-io* "~&Saved ~a~%" (namestring path))))))
+
+(define-anim-seq-assigns-frame-command (com-save-assignments-as-text :menu nil :name t) ()
+  (let* ((default-name (format nil "AnimationAssignments.txt"))
+         (path (prompt-save-pathname default-name "txt"
+                                     :prefs-key :save-assignments-text-dir)))
+    (when path
+      (with-open-file (f path :direction :output :if-exists :supersede
+                         :external-format :utf-8)
+        (format f "Animation Sequence Assignments~%")
+        (format f "============================~2%")
+        (loop for key being the hash-keys of *animation-assignments*
+                using (hash-value seq)
+              do (destructuring-bind (decal-kind body action facing) key
+                   (format f "~a Body ~d ~a Facing ~a~%"
+                           (string-capitalize decal-kind) body
+                           (string-capitalize action) (string-capitalize facing))
+                   (format f "  Sequence ~d: ~a~%"
+                           (simple-animation-sequence-index seq)
+                           (or (simple-animation-sequence-label seq) "(untitled)"))
+                   (format f "  Frames: ~d~%"
+                           (simple-animation-sequence-frame-count seq)))))
+      (format *query-io* "~&Saved ~a~%" (namestring path)))))
+
+(define-anim-seq-assigns-frame-command (com-save-assignments-as-pdf :menu nil :name t) ()
+  (let* ((default-name (format nil "AnimationAssignments.pdf"))
+         (path (prompt-save-pathname default-name "pdf"
+                                     :prefs-key :save-assignments-pdf-dir)))
+    (if (and path (probe-file path))
+        (format *query-io* "~&PDF export not yet fully implemented for assignments.~%")
+        (format *query-io* "~&Cancelled.~%"))))
+
+;; --- Print To printer list for assignments frame ---
+(defun %print-assignments-to-printer (printer-queue-name)
+  (let* ((pdf-path "/tmp/AnimationAssignments-print.pdf")
+         (table-path (make-pathname :name "Animation" :type "ods"
+                                    :directory (list :relative "Source" "Tables"))))
+    (save-all-animation-sequences)
+    (format *query-io* "~&Printing to ~a...~%" printer-queue-name)
+    (force-output *query-io*)
+    (uiop:run-program (list "lp" "-d" printer-queue-name (namestring table-path))
+                      :output nil :ignore-error-status t)
+    (format *query-io* "~&Sent assignment table to ~a.~%" printer-queue-name)))
+
+(defun populate-assignments-print-menu ()
+  (ignore-errors
+    (clim:remove-menu-item-from-command-table 'print-assignments-menu "No printers found")
+    (dolist (p (discover-printers))
+      (ignore-errors
+        (clim:remove-menu-item-from-command-table 'print-assignments-menu p))))
+  (let* ((printers (discover-printers-with-names)))
+    (if (null printers)
+        (clim:add-menu-item-to-command-table
+         'print-assignments-menu "No printers found" :function
+         (lambda (g n)
+           (declare (ignore g n))
+           (format *query-io* "~&No printers discovered.~%")))
+        (dolist (pair printers)
+          (let ((queue-name (car pair))
+                (display-name (cdr pair)))
+            (clim:add-menu-item-to-command-table
+             'print-assignments-menu display-name :function
+             (lambda (gesture numeric-arg)
+               (declare (ignore gesture numeric-arg))
+               (%print-assignments-to-printer queue-name))
+             :after :end))))))
+
+(define-anim-seq-assigns-frame-command (com-discover-printers-assigns :menu nil :name t) ()
+  (populate-assignments-print-menu))
 
 (defun body-count-for-decal-kind (kind)
   (case kind
@@ -1868,13 +1961,14 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (defun assign-animation-sequences ()
   "Select which animation sequence applies to which action(s)"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*anim-seq-assigns-frame*
-                         (clim:make-application-frame 'anim-seq-assigns-frame)))
+                  (load-all-animation-sequences)
+                  (let ((*anim-seq-assigns-frame*
+                          (clim:make-application-frame 'anim-seq-assigns-frame)))
                     (setf (clim:frame-pretty-name *anim-seq-assigns-frame*)
                           (window-title "Animation Assignments"))
-                   (clim:run-frame-top-level *anim-seq-assigns-frame*)))
-               :name "Assign Animation Sequences"))
+                    (let ((*application-frame* *anim-seq-assigns-frame*))
+                      (clim:run-frame-top-level *anim-seq-assigns-frame*))))
+                :name "Assign Animation Sequences"))
 
 (define-anim-seq-assigns-frame-command (com-edit-assignment :name t)
     ((decal-kind 'simple-animation-sequence-decal-kind)
@@ -2001,18 +2095,19 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (defun choose-tile-from-set (&key tileset callback artp write-mode palette)
   "Choose a tile from a set"
   (clim-sys:make-process (lambda ()
-                 (load-all-animation-sequences)
-                 (let ((*show-tileset-frame*
-                         (clim:make-application-frame 'show-tileset-frame
-                                                      :tileset tileset
-                                                      :callback callback
-                                                      :artp artp
-                                                      :write-mode write-mode
-                                                      :palette palette)))
-                    (setf (clim:frame-pretty-name *show-tileset-frame*)
-                          (window-title (format nil "Tileset ~a" (title-case tileset))))
-                   (clim:run-frame-top-level *show-tileset-frame*)))
-               :name "Show Tileset"))
+                  (load-all-animation-sequences)
+                  (let ((*show-tileset-frame*
+                          (clim:make-application-frame 'show-tileset-frame
+                                                       :tileset tileset
+                                                       :callback callback
+                                                       :artp artp
+                                                       :write-mode write-mode
+                                                       :palette palette)))
+                     (setf (clim:frame-pretty-name *show-tileset-frame*)
+                           (window-title (format nil "Tileset ~a" (title-case tileset))))
+                    (let ((*application-frame* *show-tileset-frame*))
+                      (clim:run-frame-top-level *show-tileset-frame*))))
+                :name "Show Tileset"))
 
 (define-show-tileset-frame-command (com-choose-tile :name t)
     ((index 'integer))
@@ -2206,7 +2301,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
                       body)))
     (setf *choose-sequence-frame* frame
           (clim:frame-pretty-name frame) name)
-    (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
+    (clim-sys:make-process (lambda ()
+                              (let ((*application-frame* frame))
+                                (clim:run-frame-top-level frame)))
                  :name name)))
 
 (define-anim-seq-assigns-frame-command (com-save-all-animations :name t :menu t) ()

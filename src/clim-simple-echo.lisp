@@ -144,11 +144,12 @@
                (game-title (string-capitalize (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "unknown")))
                (title (or frame-name (format nil "Skyline-Tool: ~a" game-title)))
                (author (ignore-errors (skyline-tool::user-real-name)))
+               (hostname (machine-instance))
                (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
                            (declare (ignore s))
                            (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m)))
                (lines (with-input-from-string (s text) (loop for l = (read-line s nil nil) while l count l)))
-               (lines-per-page (max 1 (floor (- 700 50) 10)))
+               (lines-per-page (max 1 (floor (- 680 80) 10)))
                (total-pages (max 1 (ceiling lines lines-per-page))))
           (with-open-file (ps ps-path :direction :output :if-exists :supersede
                                       :external-format :utf-8)
@@ -161,12 +162,12 @@
               (dotimes (page total-pages)
                 (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)
                 (skyline-tool::write-ps-header-bar ps title date-str author game-title)
-                ;; Body text
+                ;; Body text — start below header icon (y=690), stop above footer (y=80)
                 (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
-                (let ((y 700) (line-height 11) (bar-w 108) (bar-h 8))
+                (let ((y 680) (line-height 10) (bar-w 108) (bar-h 8))
                   (declare (ignore bar-w))
                   (loop for line = (read-line s nil nil)
-                        while (and line (>= y 65))
+                        while (and line (>= y 80))
                         do (let ((bracket-pos (position #\[ line))
                                  (pct-pos (position #\% line)))
                              (cond
@@ -210,7 +211,7 @@
                                         (skyline-tool::escape-ps-string line))))
                              (decf y line-height)))
                    ;; Footer: icon at lower-left, date/author, page number right
-                   (skyline-tool::write-ps-page-footer ps (1+ page) total-pages game-title date-str author)
+                    (skyline-tool::write-ps-page-footer ps (1+ page) total-pages game-title date-str author hostname)
                   (format ps "showpage~%")))))
           (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
                             :output nil :ignore-error-status t)

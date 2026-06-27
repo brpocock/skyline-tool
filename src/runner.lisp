@@ -216,6 +216,45 @@
       :output nil :ignore-error-status t))
    :name (format nil "Edit ~a with ThiefMD" script-full-name)))
 
+;; --- Presentation-to-command translators for script-name ---
+;; Click on a script name → run in playtest emulator
+(clim:define-presentation-to-command-translator click-to-run-script
+    (script-name com-run-script-in-emulator run-script-frame
+     :gesture :select :documentation "Run in playtest emulator")
+    (script-full-name)
+  (list script-full-name))
+
+;; Right-click context menu entries
+(clim:define-presentation-to-command-translator click-to-play-on-atarivox
+    (script-name com-play-on-atarivox run-script-frame
+     :gesture :menu :documentation "Read aloud on AtariVox")
+    (script-full-name)
+  (list script-full-name))
+
+(clim:define-presentation-to-command-translator click-to-edit-in-climacs
+    (script-name com-edit-script-in-climacs run-script-frame
+     :gesture :menu :documentation "Edit in Climacs")
+    (script-full-name)
+  (list script-full-name))
+
+(clim:define-presentation-to-command-translator click-to-edit-in-emacs
+    (script-name com-edit-script-in-emacs run-script-frame
+     :gesture :menu :documentation "Edit in Emacs")
+    (script-full-name)
+  (list script-full-name))
+
+(clim:define-presentation-to-command-translator click-to-edit-in-thiefmd
+    (script-name com-edit-script-in-thiefmd run-script-frame
+     :gesture :menu :documentation "Edit in ThiefMD")
+    (script-full-name)
+  (list script-full-name))
+
+(clim:define-presentation-to-command-translator click-to-save-script-as-pdf
+    (script-name com-save-script-as-pdf-quick run-script-frame
+     :gesture :menu :documentation "Save as PDF")
+    (script-full-name)
+  (list script-full-name))
+
 (define-run-script-frame-command (com-save-script-as-pdf-quick :name t)
     ((script-full-name 'script-name :gesture :select :menu nil))
   (let* ((default-name (format nil "~a.pdf"
@@ -349,7 +388,7 @@
 
 (defmethod display-script-list (frame (pane clim:pane))
   (clim:with-text-face (pane :bold)
-    (format pane "Click a script to run it in playtest mode~2%"))
+    (format pane "Click a script to run it in playtest — right-click for context menu~2%"))
   (let ((last-area nil))
     (dolist (script-name (all-script-names :reloadp t))
       (terpri pane)
@@ -386,7 +425,9 @@ Launches an emulator playtest session for the specified script.
         (let ((*run-script-frame* frame))
           (setf (clim:frame-pretty-name frame)
                 (window-title "Script Runner"))
-          (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
+          (clim-sys:make-process (lambda ()
+                                   (let ((*application-frame* frame))
+                                     (clim:run-frame-top-level frame)))
                                  :name "Script Runner (launcher)")))))
 
 ;;; ============================================================

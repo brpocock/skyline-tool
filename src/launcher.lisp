@@ -253,8 +253,7 @@
              (format *query-io* "~&Climacs error: ~a~%" e))))
        :name (format nil "Editing ~a" path)))))
 
-(clim:define-command (com-close-frame :command-table clim-internals::global-command-table
-                                      :keystroke ((#\w :control))) ()
+(clim:define-command (com-close-frame :command-table clim-internals::global-command-table) ()
   (let ((frame (when (boundp '*application-frame*) *application-frame*)))
     (unless frame
       ;; Fallback: try to find the frame from the port
@@ -363,8 +362,14 @@
       (files
        open-file-manager
        run-tiled
-       edit-assets-index
-       show-rom-budget)
+       edit-assets-index)
+      (regenerate
+       show-rom-budget-DEMO-NTSC
+       show-rom-budget-PUBLIC-NTSC
+       show-rom-budget-PUBLISHER-NTSC
+       show-rom-budget-DEMO-PAL
+       show-rom-budget-PUBLIC-PAL
+       show-rom-budget-PUBLISHER-PAL)
       (animation-editor
        assign-animation-sequences
        edit-animation-sequence)
@@ -541,7 +546,7 @@
                      results)))))))
     ;; Sort: Scripts, Songs, Maps, Blobs; alphabetically within each group;
     ;; for Scripts and Maps, sort by locale directory first.
-    (let ((order '("Scripts" "Songs" "Maps" "Blobs")))
+    (let ((order '("Scripts" "Songs" "Maps" "Characters" "Blobs")))
       (sort results (lambda (a b)
                       (let* ((ka (position (third a) order :test #'string-equal))
                              (kb (position (third b) order :test #'string-equal))
@@ -561,13 +566,210 @@
                                      (and (string= locale-a locale-b)
                                           (string-lessp (first a) (first b))))))))))))
 
+(defun color-rgb-for-kind (kind-name)
+  "Return PostScript setrgbcolor values for a KIND-NAME background."
+  (cond ((string-equal kind-name "Scripts") "0.0 0.0 0.502 setrgbcolor")
+        ((string-equal kind-name "Songs") "0.502 0.0 0.0 setrgbcolor")
+        ((string-equal kind-name "Maps") "0.302 0.149 0.0 setrgbcolor")
+        ((string-equal kind-name "Blobs") "0.0 0.302 0.0 setrgbcolor")
+        ((string-equal kind-name "Characters") "0.502 0.0 0.502 setrgbcolor")
+        (t "0.3 0.3 0.3 setrgbcolor")))
+
 (defun color-for-asset-kind (kind-name)
   "Return a CLIM color for the KIND-NAME."
   (cond ((string-equal kind-name "Scripts") (clim:make-rgb-color 0 0 0.502))
         ((string-equal kind-name "Songs") (clim:make-rgb-color 0.502 0 0))
         ((string-equal kind-name "Maps") (clim:make-rgb-color 0.302 0.149 0))
         ((string-equal kind-name "Blobs") (clim:make-rgb-color 0 0.302 0))
+        ((string-equal kind-name "Characters") (clim:make-rgb-color 0.502 0 0.502))
         (t (clim:make-rgb-color 0.3 0.3 0.3))))
+
+(defun write-assets-index-ps (path)
+  "Generate a PostScript document at PATH with the full Assets Index.
+   Uses proper kind badges, colored section headings, D/P/A checkboxes,
+   typographical quotes, bordered entries, and pagination."
+  (let* ((all-assets (collect-all-assets))
+         (kind-order '("Scripts" "Songs" "Maps" "Characters" "Blobs"))
+         (page-width 612) (page-height 792)
+         (margin-left 56) (margin-right 56)
+         (page-top 680) (page-bottom 80)
+         (line-h 12) (entry-h 14) (heading-h 20)
+         (y page-top)
+         (page-num 1))
+    (flet ((next-page (ps)
+             ;; Footer for the page we're closing (icon + branding)
+             (write-ps-page-footer ps page-num page-num
+                                   (string-capitalize *game-title*) nil
+                                   (user-real-name) (machine-instance))
+             (format ps "showpage~%%%Page: ~d ~d~%" (1+ page-num) (+ page-num 1))
+             (incf page-num)
+             (setf y page-top)
+             (write-ps-header-bar ps (format nil "Assets Index for ~a"
+                                              (string-capitalize *game-title*))
+                                  "" "" (string-capitalize *game-title*) 1 1)
+             (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%"))
+           (check-space (ps needed)
+             (when (< (- y needed) page-bottom)
+               (next-page ps))))
+      (with-open-file (ps path :direction :output :if-exists :supersede
+                                 :external-format :utf-8)
+        (format ps "%!PS-Adobe-3.0~%")
+        (write-ps-docinfo ps (format nil "Assets Index for ~a" (string-capitalize *game-title*))
+                          "Skyline-Tool" (format nil "~a on ~a" (user-real-name) (machine-instance)))
+        (format ps "<< /PageSize [~d ~d] >> setpagedevice~%" page-width page-height)
+        (write-ps-font-encodings ps)
+        (format ps "%%Page: 1 1~%")
+        (write-ps-header-bar ps (format nil "Assets Index for ~a"
+                                         (string-capitalize *game-title*))
+                             "" "" (string-capitalize *game-title*) 1 1)
+        (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
+        (setf y page-top)
+        ;; Group by kind
+        (let ((grouped (make-hash-table :test 'equal))
+              (locale-groups (make-hash-table :test 'equal)))
+          (dolist (entry all-assets)
+            (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
+                entry
+              (declare (ignore asset-id present-p full-path))
+              (push entry (gethash kind-name grouped))))
+          ;; Iterate kinds in order
+          (dolist (kind kind-order)
+            (let ((entries (reverse (gethash kind grouped nil))))
+              (unless entries (return))
+              ;; Kind heading
+              (check-space ps 30)
+              (format ps "gsave
+ newpath ~d ~d ~d ~d rectfill
+ 0.0 0.0 0.0 setrgbcolor
+ newpath ~d ~d ~d ~d rectstroke
+ grestore
+" margin-left (- y 18) (- page-width margin-left margin-right) 18
+  margin-left (- y 18) (- page-width margin-left margin-right) 18)
+              (format ps "gsave
+ ~a
+ /Times-Bold-ISOLatin1 findfont 12 scalefont setfont
+ 1.0 1.0 1.0 setrgbcolor
+ ~d ~d moveto (~a) show
+ grestore
+" (color-rgb-for-kind kind)
+  (+ margin-left 6) (- y 6) (escape-ps-string kind))
+              (decf y 24)
+              ;; Group by locale for Scripts and Maps
+              (clrhash locale-groups)
+              (dolist (e entries)
+                (destructuring-bind (moniker &rest rest) e
+                  (declare (ignore rest))
+                  (let* ((parts (split-sequence #\/ moniker))
+                         (locale (if (member kind '("Scripts" "Maps") :test #'string-equal)
+                                    (and (> (length parts) 2)
+                                         (cl-change-case:title-case (second parts)))
+                                    (if (string-equal kind "Characters")
+                                        (and (> (length parts) 1)
+                                             (cl-change-case:title-case (second parts)))
+                                        ""))))
+                    (push e (gethash (or locale "") locale-groups)))))
+              ;; Sort locales alphabetically
+              (let ((locale-keys (sort (loop for k being the hash-keys of locale-groups
+                                             collect k) #'string-lessp)))
+                (dolist (locale-key locale-keys)
+                  (let ((locale-entries (reverse (gethash locale-key locale-groups))))
+                    ;; Locale heading
+                    (unless (string= locale-key "")
+                      (check-space ps 20)
+                      (format ps "gsave
+ ~a
+ /Times-Bold-ISOLatin1 findfont 10 scalefont setfont
+ 1.0 1.0 1.0 setrgbcolor
+ ~d ~d moveto (~a) show
+ grestore
+" (color-rgb-for-kind kind)
+  (+ margin-left 12) (- y 4) (escape-ps-string locale-key))
+                      (decf y 16))
+                    ;; Asset entries
+                    (dolist (entry locale-entries)
+                      (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
+                          entry
+                        (declare (ignore asset-id full-path))
+                        (check-space ps entry-h)
+                        (let* ((parts (split-sequence #\/ moniker))
+                               (basename (car (last parts)))
+                               (kind-key (kind-by-name kind-name))
+                               (display-name
+                                 (case kind-key
+                                   ((:script :song :blob)
+                                    (format nil "~c~a~c" (code-char #x201C)
+                                            (cl-change-case:title-case
+                                             (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))
+                                            (code-char #x201D)))
+                                   (:map
+                                    (cl-change-case:title-case
+                                     (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
+                                   (t basename)))
+                               (rgb (if present-p "0 0 0" "0.8 0 0")))
+                          ;; Border
+                          (format ps "gsave
+ newpath ~d ~d ~d ~d rectstroke
+ grestore
+" margin-left (- y entry-h) (- page-width margin-left margin-right) entry-h)
+                          ;; Kind badge — golden rectangle (φ ≈ 1.618), full entry height, white text
+                          (format ps "gsave
+ ~a
+ newpath ~d ~d ~d ~d rectfill
+ 1.0 1.0 1.0 setrgbcolor
+ /Times-Bold-ISOLatin1 findfont 7 scalefont setfont
+ ~d ~d moveto (~a) show
+ grestore
+" (color-rgb-for-kind kind-name)
+  margin-left (- y entry-h) 22 entry-h
+  (+ margin-left 4) (- y 4) (escape-ps-string kind-name))
+                          ;; Asset name
+                          (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont
+ ~d ~d moveto (~a) show
+" (+ margin-left 66) (- y 4) (escape-ps-string display-name))
+                          ;; Map name trailing digits in gray
+                          (when (and (eq kind-key :map) (plusp (length display-name))
+                                     (digit-char-p (char display-name (1- (length display-name)))))
+                            (let* ((str (princ-to-string display-name))
+                                   (split (position-if-not #'digit-char-p str :from-end t :end (1- (length str)))))
+                              (when split
+                                (let ((digits (subseq str (1+ split))))
+                                  (format ps "0.25 0.25 0.25 setrgbcolor
+ ~d ~d moveto (~a) show
+ 0 0 0 setrgbcolor
+" (+ margin-left 66 (* 2 (length (subseq str 0 (1+ split))) 4))
+                                    (- y 4) (escape-ps-string digits))))))
+                          ;; Hex ID
+                          (when hex-str
+                            (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+ 0.5 0.5 0.5 setrgbcolor
+ ~d ~d moveto (~a) show
+ 0 0 0 setrgbcolor
+" (- page-width margin-right 80) (- y 4) (escape-ps-string hex-str)))
+                          ;; D/P/A checkboxes
+                          (let* ((x-check (+ (- page-width margin-right) 2))
+                                 (checked-d (and builds (member "Demo" builds :test #'string-equal)))
+                                 (checked-p (and builds (member "Public" builds :test #'string-equal)))
+                                 (checked-a (and builds (member "AA" builds :test #'string-equal))))
+                            (format ps "/Times-Bold-ISOLatin1 findfont 8 scalefont setfont
+ ~d ~d moveto
+" x-check (- y 2))
+                            (if checked-d
+                                (format ps "0.0 0.6 0.0 setrgbcolor (D) show ")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
+                            (format ps "~d ~d moveto" (+ x-check 10) (- y 2))
+                            (if checked-p
+                                (format ps "0.0 0.6 0.0 setrgbcolor (P) show ")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
+                            (format ps "~d ~d moveto" (+ x-check 20) (- y 2))
+                            (if checked-a
+                                (format ps "0.0 0.6 0.0 setrgbcolor (A) show~%")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show~%")))
+                          (decf y entry-h)))))))))
+        ;; Page footer and showpage
+        (write-ps-page-footer ps page-num page-num
+                              (string-capitalize *game-title*) nil
+                              (user-real-name) (machine-instance))
+        (format ps "showpage~%"))))))
 
 ;; --- Collapsible section state ---
 
@@ -615,14 +817,24 @@
                   skip-kind (gethash kind-name collapsed)
                   skip-locale nil)
             (terpri)
-            (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane*
-                                                  :background (color-for-asset-kind kind-name))
-              (clim:with-text-face (*standard-output* :bold)
-                (clim:with-text-size (*standard-output* :larger)
-                  (clim:with-output-as-presentation
-                      (*standard-output* kind-name 'assets-section-header)
-                    (format *standard-output* "~a ~a"
-                            (if skip-kind "▶ " "▼ ") kind-name)))))
+            (let* ((pane clim-simple-echo::*echo-pane*)
+                   (pane-width (clim:bounding-rectangle-width
+                                (clim:sheet-region pane))))
+              (clim:surrounding-output-with-border (pane
+                                                     :background (color-for-asset-kind kind-name))
+                (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
+                  (clim:with-text-face (*standard-output* :bold)
+                    (clim:with-text-size (*standard-output* :larger)
+                      (clim:with-output-as-presentation
+                          (*standard-output* kind-name 'assets-section-header)
+                        (format *standard-output* "~a ~a"
+                                (if skip-kind "▶ " "▼ ") kind-name)
+                        ;; Stretch to full pane width so border fills margin-to-margin
+                        (clim:stream-set-cursor-position
+                         *standard-output*
+                         (- pane-width 5)
+                         (nth-value 1 (clim:stream-cursor-position
+                                       *standard-output*)))))))))
             (terpri)
             (terpri))
           ;; --- Skip if kind collapsed ---
@@ -636,13 +848,23 @@
                 (setf last-locale this-locale)
                 (let ((locale-key (format nil "~a/~a" kind-name this-locale)))
                   (setf skip-locale (gethash locale-key collapsed))
-                  (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane*
-                                                        :background (color-for-asset-kind kind-name))
-                    (clim:with-output-as-presentation
-                        (*standard-output* locale-key 'assets-section-header)
-                      (clim:with-text-size (*standard-output* :smaller)
-                        (format *standard-output* "~a     ~a"
-                                (if skip-locale "▶ " "▼ ") this-locale)))))
+                  (let* ((pane clim-simple-echo::*echo-pane*)
+                         (pane-width (clim:bounding-rectangle-width
+                                      (clim:sheet-region pane))))
+                    (clim:surrounding-output-with-border (pane
+                                                           :background (color-for-asset-kind kind-name))
+                      (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
+                        (clim:with-output-as-presentation
+                            (*standard-output* locale-key 'assets-section-header)
+                          (clim:with-text-size (*standard-output* :smaller)
+                            (format *standard-output* "~a     ~a"
+                                    (if skip-locale "▶ " "▼ ") this-locale)
+                            ;; Stretch to full pane width
+                            (clim:stream-set-cursor-position
+                             *standard-output*
+                             (- pane-width 5)
+                             (nth-value 1 (clim:stream-cursor-position
+                                           *standard-output*))))))))
                 (terpri))
               ;; --- Entry display (skip if locale collapsed) ---
               (unless skip-locale
@@ -650,14 +872,15 @@
                        (basename (car (last parts)))
                        (kind-key (kind-by-name kind-name))
                        (display-name
-                         (case kind-key
-                           ((:script :song :blob)
-                            (format nil "~s" (cl-change-case:title-case
-                                              (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))))
-                           (:map
-                            (cl-change-case:title-case
-                             (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
-                           (t basename)))
+                          (case kind-key
+                            ((:script :song :blob)
+                             (let ((name (cl-change-case:title-case
+                                          (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))))
+                               (format nil "~c~a~c" (code-char #x201C) name (code-char #x201D))))
+                            (:map
+                             (cl-change-case:title-case
+                              (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
+                            (t basename)))
                        (locale-parts (butlast (rest parts)))
                        (locale (when locale-parts
                                  (cl-change-case:title-case (first locale-parts)))))
@@ -670,8 +893,9 @@
                       ;; Colored type square
                       (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane*
                                                             :background (color-for-asset-kind kind-name))
-                        (clim:with-text-face (*standard-output* :bold)
-                          (princ kind-name *standard-output*)))
+                        (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
+                          (clim:with-text-face (*standard-output* :bold)
+                            (format *standard-output* " ~a " kind-name))))
                       (write-string "  " *standard-output*)
                       (write-string "  " *standard-output*)
                       ;; Asset name — colored red if absent
@@ -725,41 +949,40 @@
                             (clim:with-text-size (*standard-output* :small)
                               (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
                                 (princ locale *standard-output*))))))
-                      ;; Right side: hex ID and checkboxes
-                      (format *standard-output* "~55t~@[~a~]  " hex-str)
-                      (clim:with-output-as-presentation
-                          (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                   full-path #\D)
-                                             'build-checkbox)
-                        (if (and builds (member "Demo" builds :test #'string-equal))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                              (princ "■" *standard-output*))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                              (princ "□" *standard-output*)))
-                        (princ "D" *standard-output*))
-                      (write-string " " *standard-output*)
-                      (clim:with-output-as-presentation
-                          (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                   full-path #\P)
-                                             'build-checkbox)
-                        (if (and builds (member "Public" builds :test #'string-equal))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                              (princ "■" *standard-output*))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                              (princ "□" *standard-output*)))
-                        (princ "P" *standard-output*))
-                      (write-string " " *standard-output*)
-                      (clim:with-output-as-presentation
-                          (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                   full-path #\A)
-                                             'build-checkbox)
-                        (if (and builds (member "AA" builds :test #'string-equal))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                              (princ "■" *standard-output*))
-                            (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                              (princ "□" *standard-output*)))
-                        (princ "A" *standard-output*))
-                      (terpri))))))))))))
+                       ;; Right side: hex ID and checkboxes
+                       (format *standard-output* "~55t~@[~a~]  " hex-str)
+                       (clim:with-output-as-presentation
+                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                    full-path #\D)
+                                              'build-checkbox)
+                         (if (and builds (member "Demo" builds :test #'string-equal))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                               (princ "D" *standard-output*))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                               (princ " " *standard-output*))))
+                       (write-string " " *standard-output*)
+                       (clim:with-output-as-presentation
+                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                    full-path #\P)
+                                              'build-checkbox)
+                         (if (and builds (member "Public" builds :test #'string-equal))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                               (princ "P" *standard-output*))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                               (princ " " *standard-output*))))
+                       (write-string " " *standard-output*)
+                       (clim:with-output-as-presentation
+                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                    full-path #\A)
+                                              'build-checkbox)
+                         (if (and builds (member "AA" builds :test #'string-equal))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                               (princ "A" *standard-output*))
+                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                              (princ " " *standard-output*))))
+                       )                             ; close surrounding-output-with-border
+                      (terpri)                       ; newline between entries (inside presentation)
+                      )))))))))))
 
 (clim:define-command (com-toggle-assets-section :command-table clim-internals::global-command-table
                                                 :menu t :name t)
@@ -777,49 +1000,14 @@
     ((entry 'unified-asset-entry :gesture :select))
   (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
       entry
-    (declare (ignore builds asset-id present-p))
-    (let* ((kind-key (kind-by-name kind-name))
-           (actions
-             (append
-              (when (eq kind-key :map)
-                (list (list "Edit in Tiled"
-                            (lambda () (uiop:run-program
-                                        (list "xdg-open" (namestring full-path))
-                                        :output nil :ignore-error-status t)))
-                      (list "Edit Map Data" ; TODO
-                            (lambda () (format *query-io*
-                                               "~&Map Data editor not yet implemented.~%")))))
-              (when (eq kind-key :script)
-                (list (list "Edit in Emacs"
-                            (lambda () (uiop:run-program
-                                        (list "emacsclient" (namestring full-path))
-                                        :output nil :ignore-error-status t)))
-                      (list "Edit in ThiefMD"
-                            (lambda () (uiop:run-program
-                                        (list "thiefmd" (namestring full-path))
-                                        :output nil :ignore-error-status t)))
-                      (list "Run in Emulator"
-                            (lambda () (FIXME)))
-                      (list "Play on AtariVox"
-                            (lambda () (FIXME)))))
-              (when (probe-file full-path)
-                (list (list "Open File"
-                            (lambda () (uiop:run-program
-                                        (list "xdg-open" (namestring full-path))
-                                        :output nil :ignore-error-status t)))))
-              (list (list "Copy Moniker"
-                          (lambda () (clim-simple-echo::%clipboard-copy moniker)))
-                    (list "Copy Hex ID"
-                          (lambda () (when hex-str
-                                       (clim-simple-echo::%clipboard-copy hex-str))))))))
-      (if actions
-          (let ((choice (clim:menu-choose
-                         (mapcar (lambda (a) (list (first a) (first a))) actions)
-                         :label (format nil "Actions for ~a" moniker))))
-            (when choice
-              (let ((fn (second (find choice actions :key #'first :test #'equal))))
-                (when fn (funcall fn)))))
-          (format *query-io* "~&No actions available for ~a.~%" moniker)))))
+    (%show-asset-context-menu moniker builds kind-name asset-id hex-str present-p full-path)))
+
+(clim:define-command (com-asset-context-menu :command-table clim-internals::global-command-table
+                                             :menu t :name t)
+    ((entry 'unified-asset-entry :gesture :menu))
+  (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
+      entry
+    (%show-asset-context-menu moniker builds kind-name asset-id hex-str present-p full-path)))
 
 (clim:define-command (com-toggle-build-flag :command-table clim-internals::global-command-table
                                               :menu t :name t)
@@ -919,7 +1107,31 @@
                       (format *query-io* "~&Sent.~%")))))))
           (:blob ($ "Open in Gimp" (run "gimp" (or file-path moniker))))
           (:map  ($ "Open in Tiled" (run "tiled" (or file-path moniker))))
-          (:song ($ "Open in MuseScore" (run "musescore" (or file-path moniker)))))
+                     (:song ($ "Open in MuseScore" (run "musescore" (or file-path moniker)))
+                  ($ "View Score as PDF"
+                     (let* ((src (or file-path moniker))
+                            (pdf (format nil "/tmp/~a.pdf"
+                                         (pathname-name (pathname src)))))
+                       (run "musescore" src "-o" pdf)
+                       (run "xdg-open" pdf)))
+                  ($ "Play as MIDI"
+                     (let* ((src (or file-path moniker))
+                            (mid (format nil "/tmp/~a.mid"
+                                         (pathname-name (pathname src)))))
+                       (run "musescore" src "-o" mid)
+                       (run "xdg-open" mid)))
+                  ($ "Play as Ogg Vorbis"
+                     (let* ((src (or file-path moniker))
+                            (ogg (format nil "/tmp/~a.ogg"
+                                         (pathname-name (pathname src)))))
+                       (run "musescore" src "-o" ogg)
+                       (run "xdg-open" ogg)))
+                  ($ "Play as FLAC"
+                     (let* ((src (or file-path moniker))
+                            (flac (format nil "/tmp/~a.flac"
+                                          (pathname-name (pathname src)))))
+                       (run "musescore" src "-o" flac)
+                       (run "xdg-open" flac)))))
         ;; Toggle build flags
         (---)
         ($ "Toggle Demo" (%toggle-build-flag moniker builds #\D))
@@ -1191,102 +1403,227 @@ The signal code was ~a" break-code)
             do (return-from read-asset-bank-size (parse-integer line :start 2)))
     (error "Could not figure out size of bank $~2,'0x for ~a ~a" bank build region)))
 
-(defun emit-progress-bar (fraction x y width height)
-  "Draw a progress bar as two CLIM rectangles — background light blue, fill navy.
-   FRACTION 0-1 fills from left.  Drawn on *STANDARD-OUTPUT*."
-  (clim:with-room-for-graphics (*standard-output* :height height)
-    (let ((fill-w (max 1 (round (* fraction width)))))
-      (clim:draw-rectangle* *standard-output* 0 0 width height
-                            :filled t :ink (clim:make-rgb-color 0.7 0.85 1.0))
-      (clim:draw-rectangle* *standard-output* 0 0 fill-w height
-                            :filled t :ink (clim:make-rgb-color 0.0 0.0 0.5)))))
+(defun make-progress-bar (fraction width)
+  "Return a text string representing a progress bar FRACTION (0-1) of WIDTH characters."
+  (let* ((fill (round (* fraction width)))
+         (buf (make-string width :initial-element #\space)))
+    (dotimes (i (min fill width))
+      (setf (char buf i) #\#))
+    buf))
+
+(defun emit-clim-progress-bar (stream fraction &key (width nil) (height nil) (label ""))
+  "Draw a progress bar in the CLIM stream STREAM at cursor position.
+   Light blue background + black outline, navy fill portion.
+   Width defaults to ~1/3 pane width, height defaults to ex-height."
+  (let* ((pane-width (ignore-errors
+                      (clim:bounding-rectangle-width (clim:sheet-region stream))))
+         (bar-width (or width (if pane-width (round (/ pane-width 3)) 200)))
+         (bar-height (or height 12)))
+    (clim:with-room-for-graphics (stream :height bar-height)
+      (let ((fill-w (max 1 (round (* fraction bar-width)))))
+        ;; Light blue background fill
+        (clim:draw-rectangle* stream 0 0 bar-width bar-height
+                              :filled t :ink (clim:make-rgb-color 0.7 0.85 1.0))
+        ;; Black outline
+        (clim:draw-rectangle* stream 0 0 bar-width bar-height
+                              :filled nil :ink (clim:make-rgb-color 0 0 0))
+        ;; Navy fill portion
+        (clim:draw-rectangle* stream 0 0 fill-w bar-height
+                              :filled t :ink (clim:make-rgb-color 0.0 0.0 0.5))))))
+
+(defun compute-bank-size (bank build region)
+  "Return the size in bytes used by BANK for this BUILD/REGION, or #x4000 on error."
+  (cond
+    ((< bank (first-assets-bank build))
+     ;; Low bank (Stagehand low code)
+     (let* ((size-path (make-pathname :directory '(:relative "Source" "Generated")
+                                      :type "size"
+                                      :name (format nil "Bank~(~2,'0x~).~a.~a"
+                                                    bank build (string-upcase region))))
+            (base-size (ignore-errors
+                        (parse-integer
+                         (remove-if-not #'digit-char-p
+                                        (read-file-into-string size-path))))))
+       (or base-size
+           (progn (format t "~%Bank $~2,'0x size file not found" bank) #x4000))))
+    ((= bank #x3e)
+     #x4000)
+    ((= bank #x3f)
+     ;; StagehandHigh .o size
+     (let ((o-path (merge-pathnames
+                    (make-pathname :directory (list :relative "Object" (machine-directory-name))
+                                   :name "StagehandHigh" :type "o")
+                    (uiop:getcwd))))
+       (if (probe-file o-path)
+           (with-open-file (o-file o-path :direction :input :element-type '(unsigned-byte 8))
+             (file-length o-file))
+           (progn (format t "~%Bank $3F: StagehandHigh.o not found") #x4000))))
+    (t
+     ;; Asset bank
+     (or (ignore-errors (read-asset-bank-size bank build region))
+         (progn (format t "~%Bank $~2,'0x size file not found" bank) #x4000)))))
 
 (defun rom-budget (&optional (build "Public") (region :ntsc))
   "Generate a ROM budget report for BUILD and REGION, with visual usage bars.
    BUILD: \"Demo\", \"Public\", or \"Publisher\".
-   REGION: :ntsc or :pal."
+   REGION: :ntsc or :pal.
+   Returns (VALUES bank-data-list total-sum total-banks)."
   (format t "(generating size files …")
   (force-output)
   (write-master-makefile)
   (uiop:run-program (list "make" "-j4" "-s"
                           "Source/Generated/Makefile")
-                    :output :string :ignore-error-status t) ; discard make output
+                    :output :string :ignore-error-status t)
   (format t "~2&Build: ~a ~20tRegion: ~a" build (string-upcase region))
-  (let ((sum 0) (bank-count 0)
-        (bank-sizes (make-array 0 :fill-pointer t :adjustable t))
-        (bank-pcts (make-array 0 :fill-pointer t :adjustable t))
+  (let ((sum 0)
+        (bank-count 0)
+        (bank-data (make-array 0 :fill-pointer t :adjustable t))
         (total-banks #x40))
     (dotimes (bank total-banks)
-      (cond
-        ((or (< bank (first-assets-bank build)) (= bank #x3f))
-         (let* ((size-path (make-pathname :directory '(:relative "Source" "Generated")
-                                          :type "size"
-                                          :name (format nil "Bank~(~2,'0x~).~a.~a"
-                                                        bank build (string-upcase region))))
-                (base-size (ignore-errors
-                            (parse-integer
-                             (remove-if-not #'digit-char-p
-                                            (read-file-into-string size-path))))))
-           (let ((size (if (= bank #x3f)
-                           ;; Bank $3F: StagehandHigh .o size
-                           (let ((o-path (merge-pathnames
-                                          (make-pathname
-                                           :directory (list :relative "Object"
-                                                            (machine-directory-name))
-                                           :name "StagehandHigh" :type "o")
-                                          (uiop:getcwd))))
-                             (if (probe-file o-path)
-                                 (with-open-file (o-file o-path :direction :input
-                                                                :element-type '(unsigned-byte 8))
-                                   (file-length o-file))
-                                 (progn (format t "~%Bank $3F: StagehandHigh.o not found")
-                                        #x4000)))
-                           (or base-size
-                               (progn
-                                 (format t "~%Bank $~2,'0x size file not found" bank)
-                                 #x4000)))))
-             (incf sum size)
-             (incf bank-count)
-             (let ((pct (round (/ size 163.84))))
-               (vector-push-extend size bank-sizes)
-               (vector-push-extend pct bank-pcts)
-               (format t "~%Bank $~2,'0x — $~4,'0x (~:d)~35t" bank size size)
-               (emit-progress-bar (/ size #x4000) 350 0 108 8)
-               (format t " ~d%" pct)))))
-        ((= bank #x3e)
-         (format t "~%Bank $3E — unavailable on 7800GD~35t[░░░░░░░░░░░░░░░░░░░░] 100%")
-         (incf sum #x4000)
-         (incf bank-count)
-         (vector-push-extend #x4000 bank-sizes)
-         (vector-push-extend 100 bank-pcts))
-        (t
-         (let ((size (or (ignore-errors (read-asset-bank-size bank build region))
-                         (progn
-                           (format t "~%Bank $~2,'0x size file not found" bank)
-                           #x4000))))
-           (incf sum size)
-           (incf bank-count)
-           (let ((pct (round (/ size 163.84))))
-             (vector-push-extend size bank-sizes)
-             (vector-push-extend pct bank-pcts)
-             (format t "~&Bank $~2,'0x — $~4,'0x (~:d)~35t~a ~d%"
-                     bank size size (make-progress-bar (/ size #x4000) 20) pct)))))
-      (let ((total-pct (round (* 100 (/ sum (* total-banks #x4000))))))
-        (format t "~2% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)~%"
-                build (string-upcase region) sum sum (floor sum 1024)
-                (round (* 100 (/ sum (* total-banks #x4000)))))
-        ;; Overall usage bar — much larger
-        (let ((bar-width 600) (bar-height 24))
-          (format t "~%~%     ")
-          (emit-progress-bar (/ sum (* total-banks #x4000)) 0 0 bar-width bar-height)
-          (format t " ~d% (~:d / ~:d bytes)~%~%" total-pct sum (* total-banks #x4000)))))))
+      (let* ((size (compute-bank-size bank build region))
+             (pct (round (/ size 163.84)))
+             (bar-text (make-progress-bar (/ size #x4000) 24))
+             (label (format nil "Bank $~2,'0x" bank)))
+        (incf sum size)
+        (incf bank-count)
+        (vector-push-extend (list :bank bank :label label :size size :pct pct :bar-text bar-text)
+                            bank-data)
+        (if (= bank #x3e)
+            (format t "~%Bank $3E — unavailable on 7800GD~35t[░░░░░░░░░░░░░░░░░░░░] 100%")
+            (format t "~%Bank $~2,'0x — $~4,'0x (~:d)~35t~a ~d%"
+                    bank size size bar-text pct))))
+    (let ((total-pct (round (* 100 (/ sum (* total-banks #x4000))))))
+      (format t "~2% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)~%"
+              build (string-upcase region) sum sum (floor sum 1024)
+              total-pct)
+      (let ((bar-width 600) (bar-height 24))
+        (format t "~%~%     ")
+        (emit-clim-progress-bar *standard-output* (/ sum (* total-banks #x4000))
+                                 :width bar-width :height bar-height)
+        (format t " ~d% (~:d / ~:d bytes)~%~%" total-pct sum (* total-banks #x4000))))
+    (values bank-data sum total-banks)))
 
-(defun show-rom-budget ()
-  "ROM Budget report (NTSC Public by default)"
-  (clim-simple-echo:run-in-simple-echo (lambda ()
-                                         (rom-budget "Public" :ntsc))
-                                       :process-name "ROM Budget"
-                                       :height 700))
+;; --- ROM Budget two-pane CLIM frame ---
+
+(clim:define-application-frame rom-budget-frame (standard-application-frame)
+  ((bank-data :initform nil :accessor rb-bank-data)
+   (total-sum :initform 0 :accessor rb-total-sum)
+   (total-banks :initform #x40 :accessor rb-total-banks)
+   (build :initform "Public" :accessor rb-build)
+   (region :initform :ntsc :accessor rb-region))
+  (:panes
+   (bank-list-pane :application :scroll-bars t
+                   :height 550 :width 800
+                   :display-function 'display-rom-budget-bank-list)
+   (summary-pane :application :height 100 :width 800
+                  :display-function 'display-rom-budget-summary))
+  (:layouts
+   (default (clim:vertically () bank-list-pane summary-pane)))
+  (:menu-bar rom-budget-menu-bar)
+  (:icon (skyline-tool-icon)))
+
+(clim:define-command-table rom-budget-file-menu
+  :menu (("Close" :command com-close-rom-budget)))
+
+(clim:define-command-table rom-budget-regen-menu
+  :menu (("NTSC Demo" :command com-rb-regen-ntsc-demo)
+         ("NTSC Public" :command com-rb-regen-ntsc-public)
+         ("NTSC Publisher" :command com-rb-regen-ntsc-publisher)
+         (nil :divider :line)
+         ("PAL Demo" :command com-rb-regen-pal-demo)
+         ("PAL Public" :command com-rb-regen-pal-public)
+         ("PAL Publisher" :command com-rb-regen-pal-publisher)))
+
+(clim:define-command-table rom-budget-menu-bar
+  :menu (("Report" :menu rom-budget-file-menu)
+         ("Regenerate" :menu rom-budget-regen-menu)))
+
+(clim:define-command (com-close-rom-budget :menu nil :name t) ()
+  (frame-exit *application-frame*))
+
+;; --- ROM Budget regenerate commands ---
+
+(defun %regen-rom-budget (frame build region)
+  "Helper: run rom-budget for BUILD/REGION and update FRAME slots, then redisplay."
+  (with-slots (bank-data total-sum total-banks) frame
+    (multiple-value-bind (bd ts tb) (rom-budget build region)
+      (setf bank-data bd total-sum ts total-banks tb
+            (rb-build frame) build (rb-region frame) region))
+    (clim:redisplay-frame-panes frame :force-p t)))
+
+(clim:define-command (com-rb-regen-ntsc-demo :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Demo" :ntsc) nil)
+
+(clim:define-command (com-rb-regen-ntsc-public :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Public" :ntsc) nil)
+
+(clim:define-command (com-rb-regen-ntsc-publisher :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Publisher" :ntsc) nil)
+
+(clim:define-command (com-rb-regen-pal-demo :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Demo" :pal) nil)
+
+(clim:define-command (com-rb-regen-pal-public :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Public" :pal) nil)
+
+(clim:define-command (com-rb-regen-pal-publisher :menu nil :name t)
+    ((frame 'clim:application-frame))
+  (%regen-rom-budget frame "Publisher" :pal) nil)
+
+;; --- ROM Budget launcher entry functions ---
+
+(defun %open-rom-budget-frame (build region)
+  "Create and run a rom-budget-frame for the given BUILD and REGION."
+  (let* ((fm (find-frame-manager :port (or (find-port) (find-port :server-path :x))))
+         (frame (make-application-frame 'rom-budget-frame
+                                        :build build :region region
+                                        :frame-manager fm
+                                        :width 820 :height 680)))
+    (clim-sys:make-process
+     (lambda ()
+       (let ((*application-frame* frame))
+         (multiple-value-bind (bd ts tb) (rom-budget build region)
+           (setf (rb-bank-data frame) bd
+                 (rb-total-sum frame) ts
+                 (rb-total-banks frame) tb))
+         (clim:run-frame-top-level frame)))
+     :name (format nil "ROM Budget ~a ~a"
+                   (string-capitalize build)
+                   (if (eq region :ntsc) "NTSC" "PAL")))))
+
+(defun show-rom-budget-DEMO-NTSC () (%open-rom-budget-frame "Demo" :ntsc))
+(defun show-rom-budget-PUBLIC-NTSC () (%open-rom-budget-frame "Public" :ntsc))
+(defun show-rom-budget-PUBLISHER-NTSC () (%open-rom-budget-frame "Publisher" :ntsc))
+(defun show-rom-budget-DEMO-PAL () (%open-rom-budget-frame "Demo" :pal))
+(defun show-rom-budget-PUBLIC-PAL () (%open-rom-budget-frame "Public" :pal))
+(defun show-rom-budget-PUBLISHER-PAL () (%open-rom-budget-frame "Publisher" :pal))
+
+(defun display-rom-budget-bank-list (frame pane)
+  "Display per-bank entries from ROM Budget data."
+  (clim:window-clear pane)
+  (with-slots (bank-data build region) frame
+    (format pane "~2&Build: ~a ~20tRegion: ~a~2%" build (string-upcase region))
+    (dotimes (i (length bank-data))
+      (let ((entry (aref bank-data i)))
+        (format pane "~&~a — $~4,'0x (~:d)~24t~a ~d%"
+                (getf entry :label) (getf entry :size) (getf entry :size)
+                (getf entry :bar-text) (getf entry :pct))))))
+
+(defun display-rom-budget-summary (frame pane)
+  "Display the overall progress bar from ROM Budget data."
+  (clim:window-clear pane)
+  (with-slots (total-sum total-banks build region) frame
+    (let ((total-pct (round (* 100 (/ total-sum (* total-banks #x4000))))))
+      (format pane "~%~%     ")
+      (emit-clim-progress-bar pane (/ total-sum (* total-banks #x4000))
+                               :width 600 :height 24)
+      (format pane " ~d% (~:d / ~:d bytes)~%" total-pct total-sum
+              (* total-banks #x4000)))))
 
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
@@ -1402,22 +1739,25 @@ The signal code was ~a" break-code)
       (let ((frame (aref (simple-animation-sequence-frames seq) i)))
         (format s "  [~d] tile reference ~d~%" i frame)))))
 
+(defun sequence-alist (seq)
+  "Return the animation sequence as an alist for JSON serialization."
+  (list (cons "index" (simple-animation-sequence-index seq))
+        (cons "label" (or (simple-animation-sequence-label seq) ""))
+        (cons "majorKind" (string-downcase (simple-animation-sequence-major-kind seq)))
+        (cons "decalKind" (string-downcase (simple-animation-sequence-decal-kind seq)))
+        (cons "body" (simple-animation-sequence-decal-body seq))
+        (cons "tileSheet" (simple-animation-sequence-tile-sheet seq))
+        (cons "writeMode" (string-downcase (simple-animation-sequence-write-mode seq)))
+        (cons "bytesWidth" (simple-animation-sequence-bytes-width seq))
+        (cons "frameCount" (simple-animation-sequence-frame-count seq))
+        (cons "frameRateScalar" (simple-animation-sequence-frame-rate-scalar seq))
+        (cons "frames"
+              (loop for i below (simple-animation-sequence-frame-count seq)
+                    collect (aref (simple-animation-sequence-frames seq) i)))))
+
 (defun sequence-to-json (seq)
-  "Return a JSON representation of an animation sequence."
-  (json:encode-json-to-string
-   (list (cons "index" (simple-animation-sequence-index seq))
-         (cons "label" (or (simple-animation-sequence-label seq) ""))
-         (cons "majorKind" (string-downcase (simple-animation-sequence-major-kind seq)))
-         (cons "decalKind" (string-downcase (simple-animation-sequence-decal-kind seq)))
-         (cons "body" (simple-animation-sequence-decal-body seq))
-         (cons "tileSheet" (simple-animation-sequence-tile-sheet seq))
-         (cons "writeMode" (simple-animation-sequence-write-mode seq))
-         (cons "bytesWidth" (simple-animation-sequence-bytes-width seq))
-         (cons "frameCount" (simple-animation-sequence-frame-count seq))
-         (cons "frameRateScalar" (simple-animation-sequence-frame-rate-scalar seq))
-         (cons "frames"
-               (loop for i below (simple-animation-sequence-frame-count seq)
-                     collect (aref (simple-animation-sequence-frames seq) i))))))
+  "Return a compact JSON string for an animation sequence."
+  (json:encode-json-to-string (sequence-alist seq)))
 
 (defun sequence-from-json (json-string)
   "Parse a JSON string into a simple-animation-sequence instance."

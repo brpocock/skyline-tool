@@ -139,10 +139,10 @@ gsave
 ")
   (write-ps-header-icon ps)
   (format ps "
-  /Times-Roman-ISOLatin1 findfont 12 scalefont setfont
+  /Times-Roman-ISOLatin1 findfont 10 scalefont setfont
   0.0 0.0 0.3 setrgbcolor
-  0 36 moveto (~a) show
-grestore
+  56 0 moveto (~a) show
+ grestore
 " (escape-ps-string title-text)))
 
 (defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
@@ -240,38 +240,49 @@ grestore
 (defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
   "Write footer per branding spec:
    - Skyline-Tool icon at bottom left (~48pt)
-   - Text indented ~1in (72pt) from left margin
+   - Text indented ~3/4in (54pt) from page bottom
    - 'Skyline-Tool' in Royal Blue, ' for ' in black, GAME in Italic Navy Blue
-   - Second line: date — author (on hostname) in 75% dark gray
-   - Far bottom right: 'Page N of M' in 75% dark gray
+   - Second line: date — author (on hostname) in 75% dark gray,
+     with 'Page N of M' right-justified on SAME baseline
    All face: Times-Roman."
+  ;; Icon at bottom-left corner (54pt from bottom, icon extends to 6pt from bottom)
+  (format ps "gsave 56 54 translate~%")
+  (write-ps-header-icon ps)
+  (format ps "grestore~%")
+  ;; Branding line: Skyline-Tool for GameName — at 56pt from bottom
   (format ps "gsave
- 0 12 translate
-")
-    (write-ps-header-icon ps)
-    (format ps "
-/Times-Roman-ISOLatin1 findfont 10 scalefont setfont
-72 38 moveto
-0.0 0.2 0.6 setrgbcolor
-(Skyline-Tool) show
-currentpoint pop 5 add 38 moveto
-0.0 0.0 0.0 setrgbcolor
-(for ) show
-currentpoint pop 3 add 38 moveto
-/Times-Italic-ISOLatin1 findfont 10 scalefont setfont
-0.0 0.0 0.5 setrgbcolor
-(~a) show
-/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
-0.25 0.25 0.25 setrgbcolor
-72 22 moveto
-(~a -- ~a~@[ (on ~a)~]) show
-522 12 moveto
-(Page ~d of ~d) show
-grestore
-" (escape-ps-string title-text)
-      (escape-ps-string date-str) (escape-ps-string author)
-      (and hostname (escape-ps-string hostname))
-      page-num total-pages))
+ 56 62 translate
+ /Times-Roman-ISOLatin1 findfont 8 scalefont setfont
+ 0 0 moveto
+ 0.0 0.2 0.6 setrgbcolor
+ (Skyline-Tool) show
+ currentpoint pop 3 add 0 moveto
+ 0.0 0.0 0.0 setrgbcolor
+ (for ) show
+ currentpoint pop 2 add 0 moveto
+ /Times-Italic-ISOLatin1 findfont 8 scalefont setfont
+ 0.0 0.0 0.5 setrgbcolor
+ (~a) show
+ grestore
+" (escape-ps-string title-text))
+  ;; Date/author + Page N of M on same baseline at 44pt from bottom
+  (format ps "gsave
+ 56 44 translate
+ /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+ 0.25 0.25 0.25 setrgbcolor
+ 0 0 moveto
+ (~a) show
+ currentpoint pop 3 add 0 moveto
+ gsave currentpoint 2 add moveto 0 2 rlineto stroke grestore  % em dash as line
+ currentpoint pop 3 add 0 moveto
+ (~a~@[ on ~a~]) show
+ 466 0 moveto
+ (Page ~d of ~d) show
+ grestore
+" (escape-ps-string date-str)
+    (escape-ps-string author)
+    (and hostname (escape-ps-string hostname))
+    page-num total-pages))
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).
@@ -391,17 +402,51 @@ grestore
         (loop for (key . value) in alist
               append (list (intern (string-upcase key) :keyword) value))))))
 
+(defun write-json-pretty (data stream &optional (depth 0))
+  "Write DATA as pretty-printed JSON to STREAM.
+   DATA is an alist (→ object), list (→ array), string, number, or null.
+   DEPTH controls indentation — start at 0."
+  (labels ((indent (d) (format stream "~%~v@t" (* d 2)))
+           (out (obj d)
+             (etypecase obj
+               (null (princ "null" stream))
+               (string (format stream "~s" obj))
+               (integer (princ obj stream))
+               (float (format stream "~f" obj))
+               (cons
+                (if (and (car obj) (consp (car obj)))
+                    (progn
+                      (princ "{" stream)
+                      (loop for (key . value) in obj
+                            for sep = "" then ","
+                            do (princ sep stream) (indent (1+ d))
+                               (format stream "~s: " (string key))
+                               (out value (1+ d)))
+                      (when obj (indent d))
+                      (princ "}" stream))
+                    (progn
+                      (princ "[" stream)
+                      (loop for item in obj
+                            for sep = "" then ", "
+                            do (princ sep stream)
+                               (if (and (consp item) (consp (car item)))
+                                   (progn (indent (1+ d))
+                                          (out item (1+ d))
+                                          (indent d))
+                                   (out item d)))
+                      (princ "]" stream)))))))
+    (out data depth)))
+
 (defun save-prefs (plist)
-  "Write PLIST as JSON to the preferences file.
+  "Write PLIST as pretty-printed JSON to the preferences file.
    Creates the directory if it does not exist."
   (let ((path (prefs-pathname)))
     (ensure-directories-exist path)
     (with-open-file (s path :direction :output :if-exists :supersede
                        :external-format :utf-8)
-      (princ (cl-json:encode-json-to-string
-              (loop for (key value) on plist by #'cddr
-                    collect (cons (string-downcase (symbol-name key)) value)))
-             s))))
+      (write-json-pretty (loop for (key value) on plist by #'cddr
+                               collect (cons (string-downcase (symbol-name key)) value))
+                          s))))
 
 (defun get-pref (key &optional default)
   "Read a preference value from the cached prefs.
