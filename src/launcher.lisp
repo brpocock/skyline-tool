@@ -531,15 +531,27 @@
                     (full-path (namestring (truename file))))
                (push (list moniker nil kind-name asset-id hex-str t full-path)
                      results)))))))
-    ;; Sort: Scripts, Songs, Maps, Blobs; alphabetically within each group
+    ;; Sort: Scripts, Songs, Maps, Blobs; alphabetically within each group;
+    ;; for Scripts and Maps, sort by locale directory first.
     (let ((order '("Scripts" "Songs" "Maps" "Blobs")))
       (sort results (lambda (a b)
                       (let* ((ka (position (third a) order :test #'string-equal))
                              (kb (position (third b) order :test #'string-equal))
                              (ka (or ka most-positive-fixnum))
-                             (kb (or kb most-positive-fixnum)))
+                             (kb (or kb most-positive-fixnum))
+                             (locale-a (if (member (third a) '("Scripts" "Maps") :test #'string-equal)
+                                          (let ((p (split-sequence #\/ (first a))))
+                                            (if (> (length p) 2) (second p) ""))
+                                          ""))
+                             (locale-b (if (member (third b) '("Scripts" "Maps") :test #'string-equal)
+                                          (let ((p (split-sequence #\/ (first b))))
+                                            (if (> (length p) 2) (second p) ""))
+                                          "")))
                         (or (< ka kb)
-                            (and (= ka kb) (string-lessp (first a) (first b))))))))))
+                            (and (= ka kb)
+                                 (or (string-lessp locale-a locale-b)
+                                     (and (string= locale-a locale-b)
+                                          (string-lessp (first a) (first b))))))))))))
 
 (defun color-for-asset-kind (kind-name)
   "Return a CLIM color for the KIND-NAME."
@@ -555,22 +567,36 @@
   "Display all assets with colored type squares, title-cased names,
    hex IDs, D/P/A checkboxes. Click name for action menu.
    Assets absent from disk appear in red."
-  (let ((all-assets (collect-all-assets))
-        (last-kind nil))
+  (let ((*trace-output* (make-broadcast-stream))
+        (all-assets (collect-all-assets))
+        (last-kind nil) (last-locale nil))
     (terpri)
     (dolist (entry all-assets)
       (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
           entry
         (unless (string-equal kind-name last-kind)
-          (setf last-kind kind-name)
+          (setf last-kind kind-name
+                last-locale nil)
           (terpri)
           ;; Full-width color banner for section header
-          (clim:surrounding-output (*standard-output*
+          (clim:surrounding-output-with-border (*standard-output*
                                      :background (color-for-asset-kind kind-name))
             (clim:with-text-face (*standard-output* :bold)
               (clim:with-text-size (*standard-output* :larger)
                 (princ kind-name *standard-output*))))
           (terpri)
+          (terpri))
+        ;; Locale group header for Scripts and Maps
+        (let* ((parts (split-sequence #\/ moniker))
+               (this-locale (when (member kind-name '("Scripts" "Maps") :test #'string-equal)
+                              (and (> (length parts) 2)
+                                   (cl-change-case:title-case (second parts))))))
+          (when (and this-locale (not (string-equal this-locale last-locale)))
+            (setf last-locale this-locale)
+            (clim:surrounding-output-with-border (*standard-output*
+                                       :background (color-for-asset-kind kind-name))
+              (clim:with-text-size (*standard-output* :smaller)
+                (princ (format nil "     ~a" this-locale) *standard-output*))))
           (terpri))
         (let* ((parts (split-sequence #\/ moniker))
                (basename (car (last parts)))
@@ -592,7 +618,7 @@
                                   'unified-asset-entry)
             (write-string "  " *standard-output*)
             ;; Colored type square — white text on colored background
-            (clim:surrounding-output (*standard-output* :background (color-for-asset-kind kind-name))
+            (clim:surrounding-output-with-border (*standard-output* :background (color-for-asset-kind kind-name))
               (clim:with-text-face (*standard-output* :bold)
                 (write-string (format nil " ~4a " (subseq kind-name 0
                                                           (min 4 (length kind-name))))
@@ -783,29 +809,36 @@
                                        :external-format :utf-8)
                  (princ text f))
                (format *query-io* "~&Saved ~a~%" (namestring path)))))
-        ($ "Save List as PDF"
-           (let* ((text (%script-list-text))
-                  (path (prompt-save-pathname "ScriptList.pdf" "pdf"))
-                  (lines (count #\Newline text))
-                  (pages (max 1 (ceiling lines (- 700 50)))))
-             (when path
-               (let ((ps (make-pathname :type "ps" :defaults path)))
-                 (with-open-file (f ps :direction :output :if-exists :supersede)
-                   (format f "%!PS-Adobe-3.0~%")
-                   (format f "<< /PageSize [612 792] >> setpagedevice~%")
-                   (with-input-from-string (s text)
-                     (dotimes (p pages)
-                       (format f "%%Page: ~d ~d~%" (1+ p) pages)
-                       (let ((y 700))
-                         (loop for line = (read-line s nil nil)
-                               while (and line (>= y 50))
-                               do (format f "50 ~d moveto (~a) show~%" y
-                                          (escape-ps-string line))
-                                  (decf y 10)))
-                       (format f "showpage~%"))))
-                 (run "ps2pdf" (namestring ps) (namestring path))
-                 (ignore-errors (delete-file ps))
-                 (format *query-io* "~&Saved ~a~%" (namestring path))))))
+         ($ "Save List as PDF"
+            (let* ((text (%script-list-text))
+                   (path (prompt-save-pathname "ScriptList.pdf" "pdf"))
+                   (lines (count #\Newline text))
+                   (pages (max 1 (ceiling lines (- 700 50))))
+                   (title (format nil "Skyline-Tool for ~a" (string-capitalize *game-title*)))
+                   (author (user-real-name))
+                   (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
+                               (declare (ignore s))
+                               (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m))))
+              (when path
+                (let ((ps (make-pathname :type "ps" :defaults path)))
+                  (with-open-file (f ps :direction :output :if-exists :supersede)
+                    (format f "%!PS-Adobe-3.0~%")
+                    (format f "<< /PageSize [612 792] >> setpagedevice~%")
+                    (write-ps-font-encodings f)
+                    (with-input-from-string (s text)
+                      (dotimes (p pages)
+                        (format f "%%Page: ~d ~d~%" (1+ p) pages)
+                        (let ((y 700))
+                          (loop for line = (read-line s nil nil)
+                                while (and line (>= y 50))
+                                do (format f "50 ~d moveto (~a) show~%" y
+                                           (escape-ps-string line))
+                                   (decf y 10)))
+                        (write-ps-page-footer f (1+ p) pages title date-str author)
+                        (format f "showpage~%"))))
+                  (run "ps2pdf" (namestring ps) (namestring path))
+                  (ignore-errors (delete-file ps))
+                  (format *query-io* "~&Saved ~a~%" (namestring path))))))
         ($ "Copy List"
            (let ((text (%script-list-text)))
              (clim:with-application-frame (frame)

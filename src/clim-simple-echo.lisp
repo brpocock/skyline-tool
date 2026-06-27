@@ -2,7 +2,10 @@
 
 (defpackage clim-simple-echo
   (:use :clim :clim-lisp :clim-extensions)
-  (:export #:run-in-simple-echo))
+  (:export #:run-in-simple-echo
+           #:capturing-stream
+           #:capturing-target
+           #:frame-captured-text))
 
 (in-package :clim-simple-echo)
 
@@ -19,7 +22,7 @@
          ("PDF..." :command com-print-pdf)))
 
 (define-command-table echo-print-to-menu
-  :menu (("Select Printer..." :command com-print-select)))
+  :menu ())
 
 (define-command-table echo-regenerate-builds-menu
   :menu (("NTSC Demo" :command com-regenerate-ntsc-demo)
@@ -129,13 +132,17 @@
                          save-dir)))
          (pdf-path (%zenity-or-clim "Save As PDF..." default-name)))
     (when pdf-path
+      (unless (and text (stringp text) (plusp (length text)))
+        (format *query-io* "~&No content to save (frame text is empty).~%")
+        (return-from com-print-pdf))
       (let* ((base (pathname-name pdf-path))
              (dir (make-pathname :defaults pdf-path :name nil :type nil))
              (ps-path (merge-pathnames (make-pathname :name base :type "ps") dir))
              (pdf-final (merge-pathnames (make-pathname :name base :type "pdf") dir)))
         ;; Calculate page layout
-        (let* ((game-title (string-capitalize (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "unknown")))
-               (title (format nil "Skyline-Tool for ~a" game-title))
+        (let* ((frame-name (ignore-errors (clim:frame-pretty-name frame)))
+               (game-title (string-capitalize (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "unknown")))
+               (title (or frame-name (format nil "Skyline-Tool: ~a" game-title)))
                (author (ignore-errors (skyline-tool::user-real-name)))
                (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
                            (declare (ignore s))
@@ -144,32 +151,69 @@
                (lines-per-page (max 1 (floor (- 700 50) 10)))
                (total-pages (max 1 (ceiling lines lines-per-page))))
           (with-open-file (ps ps-path :direction :output :if-exists :supersede
-                               :external-format :utf-8)
+                                      :external-format :utf-8)
             (format ps "%!PS-Adobe-3.0~%")
             (format ps "<< /PageSize [612 792] >> setpagedevice~%")
             (skyline-tool::write-ps-font-encodings ps)
             (with-input-from-string (s text)
               (dotimes (page total-pages)
                 (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)
-                (skyline-tool::write-ps-header-bar ps title date-str author game-title)
+                (skyline-tool::write-ps-header-bar ps title date-str author game-title (1+ page) total-pages)
                 ;; Body text
-                (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont~%")
-                (let ((y 700) (line-height 10))
+                (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
+                 (let ((y 730) (line-height 11) (bar-w 108) (bar-h 8))
                   (loop for line = (read-line s nil nil)
                         while (and line (>= y 50))
-                        do (format ps "50 ~d moveto (~a) show~%" y (skyline-tool::escape-ps-string line))
+                        do (let ((bracket-pos (position #\[ line))
+                                (pct-pos (position #\% line)))
+                            (cond
+                             ;; Per-bank progress bar: contains "[...]NNN%"
+                             ((and bracket-pos pct-pos (find #\] line :start bracket-pos)
+                                   (> (length line) (+ bracket-pos 10)))
+                              (let* ((end-bracket (position #\] line :start bracket-pos))
+                                     (pct-str (string-trim " " (subseq line (1+ end-bracket))))
+                                     (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
+                                     (bar-x 350) (bar-w 108)
+                                     (pct (or pct 0)))
+                                ;; Text label (bank name) on the left
+                                (let ((label (string-trim " " (subseq line 0 bracket-pos))))
+                                  (format ps "50 ~d moveto (~a) show~%" y
+                                          (skyline-tool::escape-ps-string label)))
+                                ;; Hollow light-blue rectangle with black border
+                                (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
+                                        bar-x y bar-w bar-h)
+                                ;; Navy-blue fill for used portion
+                                (when (> pct 0)
+                                  (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
+                                    (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
+                                            bar-x y fill-w bar-h)
+                                    (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
+                             ;; Overall bar: contains "[...]NNN%" but different position pattern
+                             ((and bracket-pos pct-pos (> bracket-pos 20))
+                              (let* ((end-bracket (position #\] line :start bracket-pos))
+                                     (pct-str (string-trim " " (subseq line (1+ end-bracket))))
+                                     (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
+                                     (pct (or pct 0))
+                                     (bar-x 50) (bar-w 512) (bar-h 16))
+                                (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
+                                        bar-x y bar-w bar-h)
+                                (when (> pct 0)
+                                  (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
+                                    (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
+                                            bar-x y fill-w bar-h)
+                                    (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
+                             (t
+                              (format ps "50 ~d moveto (~a) show~%" y
+                                      (skyline-tool::escape-ps-string line))))
                            (decf y line-height)))
-                ;; Footer: page number right-justified
-                (format ps "gsave~%")
-                (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor~%")
-                (format ps "550 15 moveto (~d of ~d) show~%" (1+ page) total-pages)
-                (format ps "grestore~%")
+                ;; Footer: icon at lower-left, date/author/host, page number right
+                (skyline-tool::write-ps-footer ps date-str author (machine-instance) game-title (1+ page) total-pages)
                 (format ps "showpage~%")))))
-        (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
-                          :output nil :ignore-error-status t)
-        (ignore-errors (delete-file ps-path))
-        (format *query-io* "~&Saved ~a~%" (namestring pdf-final))
-        (uiop:run-program (list "xdg-open" (namestring pdf-final)) :output nil :ignore-error-status t)))))
+          (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
+                            :output nil :ignore-error-status t)
+          (ignore-errors (delete-file ps-path))
+          (format *query-io* "~&Saved ~a~%" (namestring pdf-final))
+          (uiop:run-program (list "xdg-open" (namestring pdf-final)) :output nil :ignore-error-status t))))))
 
 (defun %framed-text-content ()
   "Return the captured text of the current echo frame, or nil."
@@ -335,11 +379,50 @@
 
 ;; --- Display function with output capture ---
 
+(defclass capturing-stream (fundamental-character-output-stream)
+  ((target :initarg :target :reader capturing-target)
+   (capture :initarg :capture :reader capturing-capture))
+  (:default-initargs :capture (make-string-output-stream)))
+
+(defmethod stream-write-char ((s capturing-stream) c)
+  (write-char c (slot-value s 'target))
+  (write-char c (slot-value s 'capture)))
+
+(defmethod stream-write-string ((s capturing-stream) string &optional (start 0) (end (length string)))
+  (write-string string (slot-value s 'target) :start start :end end)
+  (write-string string (slot-value s 'capture) :start start :end end))
+
+(defmethod stream-force-output ((s capturing-stream))
+  (force-output (slot-value s 'target)))
+
+(defmethod stream-fresh-line ((s capturing-stream))
+  (fresh-line (slot-value s 'target))
+  (fresh-line (slot-value s 'capture)))
+
+(defmethod stream-terpri ((s capturing-stream))
+  (terpri (slot-value s 'target))
+  (terpri (slot-value s 'capture)))
+
+(defmethod stream-start-line-p ((s capturing-stream))
+  (start-line-p (slot-value s 'target)))
+
+;; Delegate CLIM output recording to the target (pane) stream
+(defmethod clim:invoke-with-output-to-output-record ((stream capturing-stream) continuation record-type &key parent)
+  (clim:invoke-with-output-to-output-record (slot-value stream 'target) continuation record-type :parent parent))
+
+(defmethod clim:stream-add-output-record ((stream capturing-stream) record)
+  (clim:stream-add-output-record (slot-value stream 'target) record))
+
+(defmethod clim:stream-output-history ((stream capturing-stream))
+  (clim:stream-output-history (slot-value stream 'target)))
+
 (defun echo-echo (frame pane)
   (clim:window-clear pane)
   (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))
-  (let ((capture (make-string-output-stream)))
-    (let ((*standard-output* (make-broadcast-stream pane capture))
+  (let* ((capture (make-string-output-stream))
+         (capturing-stream (make-instance 'capturing-stream
+                            :target pane :capture capture)))
+    (let ((*standard-output* capturing-stream)
           (*trace-output* *standard-output*)
           (*error-output* *standard-output*))
       (funcall (frame-pipe frame)))

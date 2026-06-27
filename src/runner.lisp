@@ -295,12 +295,11 @@
    Shows display names in the menu, but sends to the queue name via lp."
   ;; Remove old items from previous calls
   (ignore-errors
-    (clim:remove-menu-item-from-command-table command-table "Select Printer...")
-    (clim:remove-menu-item-from-command-table command-table "No printers found")
-    (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)")
-    (dolist (p (discover-printers))
-      (ignore-errors
-         (clim:remove-menu-item-from-command-table command-table p)))))
+   (clim:remove-menu-item-from-command-table command-table "No printers found")
+   (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)")
+   (dolist (p (discover-printers))
+     (ignore-errors
+      (clim:remove-menu-item-from-command-table command-table p))))
   ;; Refresh printer list (cache managed by discover-printers)
   (let* ((queues (discover-printers))
          (printers (when queues (discover-printers-with-names))))
@@ -310,16 +309,16 @@
          (lambda (g n)
            (declare (ignore g n))
            (%print-text-to-lp "lpr"
-             (or (ignore-errors
-                   (when (boundp '*application-frame*)
-                     (typecase *application-frame*
-                       (clim-simple-echo::simple-echo
-                        (clim-simple-echo::frame-captured-text *application-frame*))
-                       (run-script-frame
-                        (format nil "Script: ~a"
-                                (ignore-errors
-                                  (clim:frame-pretty-name *application-frame*)))))))
-                 (format nil "Skyline-Tool print at ~a~%" (get-universal-time))))))
+                              (or (ignore-errors
+                                   (when (boundp '*application-frame*)
+                                     (typecase *application-frame*
+                                       (clim-simple-echo::simple-echo
+                                        (clim-simple-echo::frame-captured-text *application-frame*))
+                                       (run-script-frame
+                                        (format nil "Script: ~a"
+                                                (ignore-errors
+                                                 (clim:frame-pretty-name *application-frame*)))))))
+                                  (format nil "Skyline-Tool print at ~a~%" (get-universal-time))))))
         (dolist (pair printers)
           (let ((queue-name (car pair))
                 (display-name (cdr pair)))
@@ -328,17 +327,17 @@
              (lambda (gesture numeric-arg)
                (declare (ignore gesture numeric-arg))
                (%print-text-to-lp queue-name
-                 (or (ignore-errors
-                       (when (boundp '*application-frame*)
-                         (typecase *application-frame*
-                           (clim-simple-echo::simple-echo
-                            (clim-simple-echo::frame-captured-text *application-frame*))
-                           (run-script-frame
-                            (format nil "Script: ~a"
-                                    (ignore-errors
-                                       (clim:frame-pretty-name *application-frame*)))))))
-                     (format nil "Skyline-Tool print at ~a~%" (get-universal-time)))))
-              :after :end)))))
+                                  (or (ignore-errors
+                                       (when (boundp '*application-frame*)
+                                         (typecase *application-frame*
+                                           (clim-simple-echo::simple-echo
+                                            (clim-simple-echo::frame-captured-text *application-frame*))
+                                           (run-script-frame
+                                            (format nil "Script: ~a"
+                                                    (ignore-errors
+                                                     (clim:frame-pretty-name *application-frame*)))))))
+                                      (format nil "Skyline-Tool print at ~a~%" (get-universal-time)))))
+             :after :end))))))
 
 (defmethod display-script-list (frame (pane clim:pane))
   (clim:with-text-face (pane :bold)
@@ -466,6 +465,46 @@ Launches an emulator playtest session for the specified script.
                ((#\™) (princ "TM" out))
                (t (princ c out))))))
 
+(defun %count-lines (text chars-per-line)
+  "Count lines needed for word-wrapped TEXT at CHARS-PER-LINE."
+  (let ((words (split-sequence #\Space text))
+        (line-len 0)
+        (count 1))
+    (dolist (word words)
+      (let ((sep (if (zerop line-len) 0 1)))
+        (if (> (+ line-len (length word) sep) chars-per-line)
+            (progn (incf count)
+                   (setf line-len (length word)))
+            (incf line-len (+ (length word) sep)))))
+    count))
+
+(defun %fountain-page-count (elements body-cw dialogue-cw lh bm page-h tm)
+  "Dry-run page layout to count total pages."
+  (let ((y (- page-h tm lh))
+        (page-num 1))
+    (labels ((need-lines (n)
+               (unless (>= y (+ bm (* n lh)))
+                 (incf page-num)
+                 (setf y (- page-h tm lh)))))
+      (dolist (elem elements page-num)
+        (let ((type (getf elem :type))
+              (text (getf elem :text)))
+          (case type
+            (:blank (decf y lh))
+            (:page-break (incf page-num) (setf y (- page-h tm lh)))
+            (:scene-heading (need-lines 2) (decf y lh))
+            (:transition (need-lines 2) (decf y lh))
+            (:character (need-lines 2) (decf y lh))
+            (:parenthetical (need-lines 1) (decf y lh))
+            (:dialogue
+             (loop repeat (%count-lines text dialogue-cw)
+                   do (need-lines 1) (decf y lh)))
+            (:action
+             (loop repeat (%count-lines text body-cw)
+                   do (need-lines 1) (decf y lh)))
+            (:notes (need-lines 1) (decf y lh))
+            (:centered (need-lines 1) (decf y lh))))))))
+
 (defun %fountain->ps (ps elements title-text date-str author-str pdf-path)
   "Write a Hollywood-format screenplay PostScript to PS stream.
    Format: US Letter, Courier 12pt, standard screenplay margins."
@@ -483,16 +522,19 @@ Launches an emulator playtest session for the specified script.
          (dialogue-cw (floor (- page-w dialogue-x rm) cw))
          (paren-x 223)   ; parenthetical at 3.1"
          (y (- page-h tm lh))
-         (page-num 0)
+         (page-num 1)
+          (total-pages (%fountain-page-count elements body-cw dialogue-cw lh bm page-h tm))
          (scene-heading nil)
          (last-character ""))
 
     (labels ((header (&optional extra)
-               (format ps "gsave~%")
-               (format ps "newpath 0 ~d moveto ~d ~d lineto stroke~%"
-                       (- page-h tm 14) (- page-w lm) (- page-h tm 14))
+               (format ps "gsave
+ 56 745 translate
+")
                (skyline-tool::write-ps-header-icon ps)
-               (format ps " 56 22 moveto /Helvetica-Bold-ISOLatin1 findfont 10 scalefont setfont 0.2 0.2 0.25 setrgbcolor (~a) show~%"
+               (format ps "newpath 48 -3 moveto 500 -3 lineto stroke~%")
+               (format ps "/Helvetica-Bold-ISOLatin1 findfont 10 scalefont setfont 0.2 0.2 0.25 setrgbcolor~%")
+               (format ps "56 22 moveto (~a) show~%"
                        (skyline-tool::escape-ps-string title-text))
                ;; Page number top right
                (format ps " /Helvetica-ISOLatin1 findfont 10 scalefont setfont 0.4 0.4 0.45 setrgbcolor~%")
@@ -500,11 +542,34 @@ Launches an emulator playtest session for the specified script.
                (when extra (princ extra ps))
                (format ps "grestore~%"))
              (footer ()
-               (format ps "gsave~%")
-               (format ps " /Helvetica-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor~%")
-               (format ps " 50 15 moveto (Page ~d -- Exported by Skyline-Tool on ~a) show~%"
-                       page-num (skyline-tool::escape-ps-string date-str))
-               (format ps "grestore~%"))
+               (let ((emdash (string (code-char #x2014))))
+                 (format ps "gsave
+ 0 12 translate
+")
+                 (skyline-tool::write-ps-header-icon ps)
+                 (format ps "
+/Times-Roman-ISOLatin1 findfont 10 scalefont setfont
+72 38 moveto
+0.0 0.2 0.6 setrgbcolor
+(Skyline-Tool) show
+currentpoint pop 5 add 38 moveto
+0.0 0.0 0.0 setrgbcolor
+(for ) show
+currentpoint pop 3 add 38 moveto
+/Times-Italic-ISOLatin1 findfont 10 scalefont setfont
+0.0 0.0 0.5 setrgbcolor
+(~a) show
+/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+0.25 0.25 0.25 setrgbcolor
+72 22 moveto
+(~a ~a ~a) show
+522 12 moveto
+(Page ~d of ~d) show
+grestore
+" (skyline-tool::escape-ps-string title-text)
+      (skyline-tool::escape-ps-string date-str) emdash
+      (skyline-tool::escape-ps-string author-str)
+      page-num total-pages)))
              (new-page ()
                (footer)
                (format ps "showpage~%")
@@ -679,6 +744,15 @@ Launches an emulator playtest session for the specified script.
 
 (defmethod (setf clim::.stream-cursor-position-star.)
     (value _ (stream swank/gray::slime-output-stream)))
+
+(defmethod clim:stream-cursor-position ((stream broadcast-stream))
+  1)
+
+(defmethod clim:stream-vertical-spacing ((stream broadcast-stream))
+  1)
+
+(defmethod clim:stream-drawing-p ((stream broadcast-stream))
+  nil)
 
 (defmethod clim:sheet-direct-mirror ((stream swank/gray::slime-output-stream)))
 

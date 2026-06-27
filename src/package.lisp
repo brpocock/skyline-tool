@@ -114,27 +114,49 @@ gsave
           do (format ps "~a~%" (subseq hex i (min (+ i 72) (length hex)))))
     (format ps "grestore~%")))
 
-(defun write-ps-header-bar (ps title-text date-str author game-title)
-  "Write the standard PDF header bar: icon (56pt wide) + title line + date/author.
-   GAME-TITLE appears in Times-Italic; date and author use en-dash separator."
+(defun write-ps-header-bar (ps title-text date-str author game-title &optional page-num total-pages)
+  "Write PDF header bar: icon at top-left, centered document title, no date.
+   PAGE-NUM and TOTAL-PAGES, if provided, draw a top-right page number."
+  (format ps "gsave
+ 56 745 translate
+")
   (write-ps-header-icon ps)
   (format ps "
+ /Times-Roman-ISOLatin1 findfont 14 scalefont setfont
+ 0.0 0.0 0.3 setrgbcolor
+ (~a) dup stringwidth pop 250 exch sub 2 div 36 moveto show
+" (escape-ps-string title-text))
+  (when (and page-num total-pages)
+    (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+ 0.3 0.3 0.4 setrgbcolor
+ 500 38 moveto (~d) show
+" page-num))
+  (format ps "grestore~%"))
+
+(defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
+  "Write PDF footer: icon at lower-left, game title + date/author/host, page number right."
+  (write-ps-header-icon ps)
+  (let ((emdash (string (code-char #x2014))))
+    (format ps "
 gsave
- 56 0 translate
- /Times-Roman-ISOLatin1 findfont 12 scalefont setfont
- 0.2 0.2 0.25 setrgbcolor
- 0 36 moveto (~a) show
- /Times-Italic-ISOLatin1 findfont 12 scalefont setfont
- 0.2 0.2 0.25 setrgbcolor
- 0 20 moveto (~a) show
- /Times-Roman-ISOLatin1 findfont 8 scalefont setfont
- 0.4 0.4 0.45 setrgbcolor
- 0 6 moveto (~a -- ~a) show
+ 56 12 translate
+ /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+ 0.5 0.5 0.55 setrgbcolor
+ 0 0 moveto (Skyline-Tool for ~a) show
+ /Times-Roman-ISOLatin1 findfont 6 scalefont setfont
+ 0.5 0.5 0.55 setrgbcolor
+ 0 -10 moveto (~a ~a ~a (on ~a)) show
 grestore
-" (escape-ps-string title-text)
-  (escape-ps-string game-title)
-  (escape-ps-string date-str)
-  (escape-ps-string author)))
+/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+0.5 0.5 0.55 setrgbcolor
+460 15 moveto (Page ~d of ~d) show
+"
+    (escape-ps-string game-title)
+    (escape-ps-string date-str)
+    emdash
+    (escape-ps-string author)
+    (escape-ps-string hostname)
+    page-num total-pages)))
 
 (defun write-ps-font-encodings (ps)
   "Write PostScript font re-encoding prologue for ISOLatin1 support (© ® etc)."
@@ -180,8 +202,8 @@ grestore
           do (cond
                ((member c '(#\( #\) #\\) :test 'char=)
                 (princ "\\" out) (princ c out))
-               ((char= c (code-char #x2013)) (princ "--" out))  ; en dash
-               ((char= c (code-char #x2014)) (princ "--" out))  ; em dash
+               ((char= c (code-char #x2014)) (princ "—" out))  ; em dash — keep as Unicode char for Ghostscript
+               ((char= c (code-char #x2013)) (princ "–" out))  ; en dash
                ((char= c (code-char #x2018)) (princ "'" out))   ; left single quote
                ((char= c (code-char #x2019)) (princ "'" out))   ; right single quote
                ((char= c (code-char #x201C)) (princ "\"" out))  ; left double quote
@@ -202,25 +224,40 @@ grestore
                 (princ "\\077" out))))))
 
 (defun write-ps-page-footer (ps page-num total-pages title-text date-str author)
-  "Write footer with Skyline-Tool icon, title, date/author, and page number.
-   All text uses Times-Roman (serif)."
-  (format ps "gsave~%")
-  (write-ps-header-icon ps)
-  (format ps "
-gsave
- 56 0 translate
- /Times-Roman findfont 9 scalefont setfont
- 0.2 0.2 0.25 setrgbcolor
- 0 36 moveto (~a) show
- /Times-Roman findfont 7 scalefont setfont
- 0.4 0.4 0.45 setrgbcolor
- 0 22 moveto (~a -- ~a) show
+  "Write footer per branding spec:
+   - Skyline-Tool icon at bottom left (~48pt)
+   - Text indented ~1in (72pt) from left margin
+   - 'Skyline-Tool' in Royal Blue, ' for ' in black, GAME in Italic Navy Blue
+   - Second line: date — author in 75% dark gray
+   - Far bottom right: 'Page N of M' in 75% dark gray
+   All face: Times-Roman."
+  (let ((emdash (string (code-char #x2014))))
+    (format ps "gsave
+ 0 12 translate
+")
+    (write-ps-header-icon ps)
+    (format ps "
+/Times-Roman-ISOLatin1 findfont 10 scalefont setfont
+72 38 moveto
+0.0 0.2 0.6 setrgbcolor
+(Skyline-Tool) show
+currentpoint pop 5 add 38 moveto
+0.0 0.0 0.0 setrgbcolor
+(for ) show
+currentpoint pop 3 add 38 moveto
+/Times-Italic-ISOLatin1 findfont 10 scalefont setfont
+0.0 0.0 0.5 setrgbcolor
+(~a) show
+/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+0.25 0.25 0.25 setrgbcolor
+72 22 moveto
+(~a ~a ~a) show
+522 12 moveto
+(Page ~d of ~d) show
 grestore
-/Times-Roman findfont 7 scalefont setfont
-0.6 0.6 0.6 setrgbcolor
- 550 12 moveto (~d/~d) show
-grestore
-" title-text date-str author page-num total-pages))
+" (escape-ps-string title-text)
+      (escape-ps-string date-str) emdash (escape-ps-string author)
+      page-num total-pages)))
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).

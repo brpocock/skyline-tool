@@ -125,6 +125,7 @@
           (format ps "%!PS-Adobe-3.0~%")
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
           (format ps "%%Page: 1 1~%")
+          (skyline-tool::write-ps-font-encodings ps)
           (skyline-tool::write-ps-header-bar ps title date-str author)
           (skyline-tool::write-ps-page-footer ps 1 1 title date-str author)
           (format ps "/Helvetica findfont 9 scalefont setfont~%")
