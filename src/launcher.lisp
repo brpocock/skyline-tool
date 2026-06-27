@@ -897,7 +897,14 @@
                                                             :background (color-for-asset-kind kind-name))
                         (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
                           (clim:with-text-face (*standard-output* :bold)
-                            (format *standard-output* " ~a " kind-name))))
+                            (let ((label (case kind-name
+                                          ("Scripts" "Script")
+                                          ("Songs" "Song")
+                                          ("Blobs" "Blob")
+                                          ("Maps" "Map")
+                                          ("Characters" "Char.")
+                                          (t "   "))))
+                              (format *standard-output* " ~a " label)))))
                       (write-string "  " *standard-output*)
                       (write-string "  " *standard-output*)
                       ;; Asset name — colored red if absent
@@ -971,7 +978,7 @@
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
                                   (princ "P" *standard-output*))
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                                  (princ " " *standard-object*))))
+                                  (princ " " *standard-output*))))
                           (clim:stream-set-cursor-position *standard-output* right-offset (+ y-pos 42))
                           (clim:with-output-as-presentation
                               (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
@@ -981,7 +988,7 @@
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
                                   (princ "A" *standard-output*))
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                                  (princ " " *standard-object*)))))
+                                  (princ " " *standard-output*)))))
                         (terpri)                       ; newline between entries (inside presentation)
                         ;; Locale in small gray text underneath
                         (when (and locale (member kind-key '(:script :map)))
