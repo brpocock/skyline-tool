@@ -1293,7 +1293,7 @@
 (defun edit-assets-index ()
   "Open the unified Assets Index in a simple-echo window."
   (clim-simple-echo:run-in-simple-echo #'show-full-assets-index
-                                       :process-name "Assets Index"
+                                       :process-name "All Resources"
                                        :width 450 :height 700))
 
 (defun check-for-absent-assets-in-project-folder ()
