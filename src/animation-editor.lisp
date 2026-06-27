@@ -410,7 +410,7 @@
          (format ps "<< /PageSize [792 612] >> setpagedevice~%")
          (skyline-tool::write-ps-font-encodings ps)
         ;; Header bar with icon
-        (skyline-tool::write-ps-header-bar ps title date-str author)
+        (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
         (format ps "/Helvetica findfont 9 scalefont setfont~%")
         (flet ((attr (y label value)
                  (format ps "50 ~d moveto (~a:) show 200 ~d moveto (~a) show~%" y label y value)))
@@ -438,7 +438,7 @@
           (terpri ps)
           (format ps "grestore~%"))
         (format ps "showpage~%"))
-      (uiop:run-program (list "ps2pdf" (namestring ps-path) pdf-pathname)
+      (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-pathname))
                         :output nil :ignore-error-status t)
       (ignore-errors (delete-file ps-path))
       (format stream "~&Saved ~a~%" pdf-pathname)
@@ -638,7 +638,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
                (aref colors 12) (aref palettes palette-index 0))))
       colors)))
 
-(define-anim-seq-editor-frame-command (com-set-label :name t) ((label 'string))
+(define-anim-seq-editor-frame-command (com-set-label :name t)
+    ((label 'string :default (simple-animation-sequence-label
+                              (anim-seq-editor-sequence *anim-seq-editor-frame*))))
   (setf (simple-animation-sequence-label
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
         label)
@@ -1390,8 +1392,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (format *query-io* "~&Saved all animation sequences.~%"))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-pdf :menu nil :name t) ()
-  (let* ((default-name (format nil "Animation~@[-~a~].pdf"
-                               (anim-seq-assign-decal-kind *application-frame*)))
+  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+         (default-name (format nil "Animation~@[-~a~].pdf"
+                               (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
                 (uiop:run-program
@@ -1404,8 +1407,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
         (format *query-io* "~&Cancelled.~%"))))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-text :menu nil :name t) ()
-  (let* ((default-name (format nil "Animation~@[-~a~].txt"
-                               (anim-seq-assign-decal-kind *application-frame*)))
+  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+         (default-name (format nil "Animation~@[-~a~].txt"
+                               (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
                 (uiop:run-program
@@ -1418,8 +1422,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
         (format *query-io* "~&Cancelled.~%"))))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-json :menu nil :name t) ()
-  (let* ((default-name (format nil "Animation~@[-~a~].json"
-                               (anim-seq-assign-decal-kind *application-frame*)))
+  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+         (default-name (format nil "Animation~@[-~a~].json"
+                               (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
                 (uiop:run-program
@@ -1433,6 +1438,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (defmethod display-anim-seq-assignment ((frame anim-seq-assign-frame) pane)
   (clim:window-clear pane)
+  (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))
   (block nil
     (clim:with-text-size (pane :large)
       (format pane "Decal Kind: "))
@@ -1650,9 +1656,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (clim:define-command-table save-assignments-as-menu
   :menu (("To Spreadsheet" :command com-save-all-animations)
-         ("As JSON..." :command com-save-animation-assignments)
-         ("As Text..." :command com-save-animation-assignments)
-         ("As PDF..." :command com-save-animation-assignments)))
+         ("As JSON..." :command com-save-assignments-as-json)
+         ("As Text..." :command com-save-assignments-as-text)
+         ("As PDF..." :command com-save-assignments-as-pdf)))
 
 (clim:define-command-table animation-assignments-menu
   :menu (("Save" :menu save-assignments-as-menu)
@@ -1739,6 +1745,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (defmethod display-anim-seq-assignments ((frame anim-seq-assigns-frame) pane)
   (clim:window-clear pane)
+  (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))
   (unless *npc-stats*
     (load-npc-stats))
   (block nil

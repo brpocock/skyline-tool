@@ -416,6 +416,24 @@
 (defmethod clim:stream-output-history ((stream capturing-stream))
   (clim:stream-output-history (slot-value stream 'target)))
 
+(defmethod clim:window-clear ((stream capturing-stream))
+  (clim:window-clear (slot-value stream 'target)))
+
+(defmethod clim-internals::invoke-with-sheet-medium (continuation (stream capturing-stream))
+  ;; bordered-output and other CLIM infrastructure may need the sheet medium;
+  ;; delegate to the target (pane) stream which has a proper medium.
+  (clim-internals::invoke-with-sheet-medium continuation (slot-value stream 'target)))
+
+;; Delegate common CLIM stream queries to the target pane
+(defmethod clim:stream-cursor-position ((stream capturing-stream))
+  (clim:stream-cursor-position (slot-value stream 'target)))
+
+(defmethod clim:stream-set-cursor-position ((stream capturing-stream) x y)
+  (clim:stream-set-cursor-position (slot-value stream 'target) x y))
+
+(defmethod stream-line-height ((stream capturing-stream) &key text-style)
+  (stream-line-height (slot-value stream 'target) :text-style text-style))
+
 (defun echo-echo (frame pane)
   (clim:window-clear pane)
   (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))

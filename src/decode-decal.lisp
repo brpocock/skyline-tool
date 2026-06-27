@@ -126,8 +126,8 @@
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
           (format ps "%%Page: 1 1~%")
           (skyline-tool::write-ps-font-encodings ps)
-          (skyline-tool::write-ps-header-bar ps title date-str author)
-          (skyline-tool::write-ps-page-footer ps 1 1 title date-str author)
+          (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
+          (skyline-tool::write-ps-footer ps date-str author (machine-instance) (title-case *game-title*) 1 1)
           (format ps "/Helvetica findfont 9 scalefont setfont~%")
           (format ps "50 500 moveto (Decal: $~x  Mode: ~a  Width: ~d  Palette: ~d) show~%"
                   index decal-mode width palette-index)

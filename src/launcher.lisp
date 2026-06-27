@@ -61,11 +61,20 @@
       (format *query-io* "~&Cut is not yet implemented. Use Copy then delete manually.~%")))
 (clim:define-command (com-copy :command-table clim-internals::global-command-table) ()
   "Copy: publish selection via the resource-specific clipboard system."
-  (if (not (boundp '*application-frame*))
-      (format *query-io* "~&Nothing to copy.~%")
-      (handler-case (publish-current-resource)
-        (error (e)
-          (format *query-io* "~&Copy error: ~a~%" e)))))
+  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*)
+                    (let ((found nil))
+                      (ignore-errors
+                        (clim:map-over-frames (lambda (f)
+                                                (when (typep f 'clim:application-frame)
+                                                  (setf found f)))
+                                              :port (clim:find-port)))
+                      found)))
+         (*application-frame* frame))
+    (if frame
+        (handler-case (publish-current-resource)
+          (error (e)
+            (format *query-io* "~&Copy error: ~a~%" e)))
+        (format *query-io* "~&Nothing to copy.~%"))))
 (clim:define-command (com-paste :command-table clim-internals::global-command-table) ()
   "Paste: request :clipboard as 'string."
   (if (not (boundp '*application-frame*))
@@ -246,11 +255,18 @@
        :name (format nil "Editing ~a" path)))))
 
 (clim:define-command (com-close-frame :command-table clim-internals::global-command-table
-                                       :keystroke ((#\w :control))) ()
+                                      :keystroke ((#\w :control))) ()
   (let ((frame (when (boundp '*application-frame*) *application-frame*)))
-    (if frame
-        (clim:frame-exit frame)
-        (format *query-io* "~&Nothing to close.~%"))))
+    (unless frame
+      ;; Fallback: try to find the frame from the port
+      (ignore-errors
+       (clim:map-over-frames (lambda (f)
+                               (when (typep f 'clim:application-frame)
+                                 (setf frame f)))
+                             :port (clim:find-port)))))
+  (if frame
+      (clim:frame-exit frame)
+      (format *query-io* "~&Nothing to close.~%")))
 
 ;; --- Global keyboard shortcuts with frame-type dispatch ---
 
@@ -348,7 +364,7 @@
         (files
          open-file-manager
          run-tiled
-         show-assets-index-in-project-folder
+         edit-assets-index
          show-rom-budget)
        (animation-editor
         assign-animation-sequences
@@ -567,7 +583,7 @@
   "Display all assets with colored type squares, title-cased names,
    hex IDs, D/P/A checkboxes. Click name for action menu.
    Assets absent from disk appear in red."
-  (let ((*trace-output* (make-broadcast-stream))
+  (let ((*trace-output* (make-string-output-stream))
         (all-assets (collect-all-assets))
         (last-kind nil) (last-locale nil))
     (terpri)
@@ -580,7 +596,7 @@
           (terpri)
           ;; Full-width color banner for section header
           (clim:surrounding-output-with-border (*standard-output*
-                                     :background (color-for-asset-kind kind-name))
+                                                :background (color-for-asset-kind kind-name))
             (clim:with-text-face (*standard-output* :bold)
               (clim:with-text-size (*standard-output* :larger)
                 (princ kind-name *standard-output*))))
@@ -594,7 +610,7 @@
           (when (and this-locale (not (string-equal this-locale last-locale)))
             (setf last-locale this-locale)
             (clim:surrounding-output-with-border (*standard-output*
-                                       :background (color-for-asset-kind kind-name))
+                                                  :background (color-for-asset-kind kind-name))
               (clim:with-text-size (*standard-output* :smaller)
                 (princ (format nil "     ~a" this-locale) *standard-output*))))
           (terpri))
@@ -613,9 +629,9 @@
                (locale (when locale-parts
                          (cl-change-case:title-case (first locale-parts)))))
           (clim:with-output-as-presentation
-               (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                         full-path)
-                                  'unified-asset-entry)
+              (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                       full-path)
+                                 'unified-asset-entry)
             (write-string "  " *standard-output*)
             ;; Colored type square — white text on colored background
             (clim:surrounding-output-with-border (*standard-output* :background (color-for-asset-kind kind-name))
@@ -629,14 +645,14 @@
             (flet ((present-name (name)
                      (case kind-key
                        (:map (clim:with-text-style (*standard-output*
-                                                     (clim:make-text-style :serif :roman :normal))
-                              (if present-p
-                                  (princ name *standard-output*)
-                                  (clim:with-drawing-options
-                                      (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                                    (princ name *standard-output*)))))
+                                                    (clim:make-text-style :serif :roman :normal))
+                               (if present-p
+                                   (princ name *standard-output*)
+                                   (clim:with-drawing-options
+                                       (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                                     (princ name *standard-output*)))))
                        (t (clim:with-text-style (*standard-output*
-                                                  (clim:make-text-style :serif :italic :normal))
+                                                 (clim:make-text-style :serif :italic :normal))
                             (if present-p
                                 (princ name *standard-output*)
                                 (clim:with-drawing-options
@@ -648,7 +664,7 @@
                 (terpri *standard-output*)
                 (write-string "               " *standard-output*)
                 (clim:with-text-style (*standard-output*
-                                        (clim:make-text-style :fix :roman :normal))
+                                       (clim:make-text-style :fix :roman :normal))
                   (clim:with-text-size (*standard-output* :small)
                     (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
                       (princ locale *standard-output*))))))
@@ -657,7 +673,7 @@
             (format *standard-output* "~10t~@[~a~]  " hex-str)
             (clim:with-output-as-presentation
                 (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                          full-path #\D)
+                                         full-path #\D)
                                    'build-checkbox)
               (if (and builds (member "Demo" builds :test #'string-equal))
                   (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
@@ -668,7 +684,7 @@
             (write-string " " *standard-output*)
             (clim:with-output-as-presentation
                 (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                          full-path #\P)
+                                         full-path #\P)
                                    'build-checkbox)
               (if (and builds (member "Public" builds :test #'string-equal))
                   (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
@@ -679,7 +695,7 @@
             (write-string " " *standard-output*)
             (clim:with-output-as-presentation
                 (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                          full-path #\A)
+                                         full-path #\A)
                                    'build-checkbox)
               (if (and builds (member "AA" builds :test #'string-equal))
                   (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
@@ -945,7 +961,7 @@
 
 ;; --- Launcher wrappers ---
 
-(defun show-assets-index-in-project-folder ()
+(defun edit-assets-index ()
   "Open the unified Assets Index in a simple-echo window."
   (clim-simple-echo:run-in-simple-echo #'show-full-assets-index
                                        :process-name "Assets Index"
@@ -953,7 +969,7 @@
 
 (defun check-for-absent-assets-in-project-folder ()
   "Open the unified Assets Index (includes absent-asset detection)."
-  (show-assets-index-in-project-folder))
+  (edit-assets-index))
 
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"
@@ -1079,9 +1095,7 @@ The signal code was ~a" break-code)
   (write-master-makefile)
   (uiop:run-program (list "make" "-j4" "-s"
                           "Source/Generated/Makefile")
-                    :output t :ignore-error-status t)
-  (format t " done.)")
-  (clim:window-clear *standard-output*)
+                    :output :string :ignore-error-status t) ; discard make output
   (format t "~2&Build: ~a ~20tRegion: ~a" build (string-upcase region))
   (let ((sum 0) (bank-count 0)
         (bank-sizes (make-array 0 :fill-pointer t :adjustable t))

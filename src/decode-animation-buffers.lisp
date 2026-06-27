@@ -467,7 +467,7 @@
           (format ps "%!PS-Adobe-3.0~%")
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
           (format ps "%%Page: 1 1~%")
-          (skyline-tool::write-ps-header-bar ps title date-str author)
+          (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
           (format ps "/Helvetica-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor 50 15 moveto (Page 1 of 1) show~%")
           (format ps "/Helvetica findfont 9 scalefont setfont~%")
           (format ps "50 500 moveto (Buffer: $~x  Address: $~4,'0x  Mode: ~a) show~%"
