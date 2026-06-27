@@ -154,24 +154,22 @@
 (defclass animation-preview-pane (clim:application-pane) ()
   (:documentation "Preview pane for animation sequences. Handles timer events for animation."))
 
-(clim:define-command-table set-major-kind-menu
-  :menu (("NPC" :command (com-select-major-kind :npc))
-         ("Background/Scenery" :command (com-select-major-kind :background))))
-
 (clim:define-command-table set-decal-kind-menu
   :menu (("Player" :command (com-select-decal-kind :player))
-         ("Tranh" :command (com-select-decal-kind :tranh))
-         ("Ornass" :command (com-select-decal-kind :ornass))
-         ("Nessa" :command (com-select-decal-kind :nessa))
+         ("Human" :command (com-select-decal-kind :human))
+         ("Earl" :command (com-select-decal-kind :earl))
+         ("Captain" :command (com-select-decal-kind :captain))
+         ("Princess" :command (com-select-decal-kind :princess))
+         ("Elder" :command (com-select-decal-kind :elder))
          ("Nefertem" :command (com-select-decal-kind :nefertem))
-         ("Elder Tranh" :command (com-select-decal-kind :tranh-elder))
-         ("Mayor" :command (com-select-decal-kind :mayor))
-         ("Maria" :command (com-select-decal-kind :maria))
-         ("Erdack" :command (com-select-decal-kind :erdack))
+         ("Vizier" :command (com-select-decal-kind :vizier))
          ("Sentinel" :command (com-select-decal-kind :sentinel))
+         ("Sailor" :command (com-select-decal-kind :sailor))
          ("Enemy" :command (com-select-decal-kind :enemy))
-         (nil :divider :line)
-         ("Switch Decal Kind" :command com-switch-decal-kind)))
+         ("Block 1" :command (com-select-decal-kind :block1))
+         ("Block 2" :command (com-select-decal-kind :block2))
+         ("Block 3" :command (com-select-decal-kind :block3))
+         ("Block 4" :command (com-select-decal-kind :block4))))
 
 (clim:define-command-table set-frames-menu
   :menu (("One Frame" :command (com-set-frame-count 1))
@@ -211,7 +209,6 @@
          ("Go To Sequence..." :command com-switch-to-sequence)
          (nil :divider :line)
          ("Change Label..." :command com-set-label)
-         ("Set Major Kind" :menu set-major-kind-menu)
          ("Set Decal Kind" :menu set-decal-kind-menu)
          ("Set Frames" :menu set-frames-menu)
          ("Set Speed" :menu set-speed-menu)
