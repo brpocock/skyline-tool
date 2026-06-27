@@ -131,9 +131,12 @@
     (when path
       (let* ((ps-path (make-pathname :type "ps" :defaults path))
              (lines (count #\Newline text))
-             (total-pages (max 1 (ceiling lines (/ (- 700 50) 10)))))
+             (total-pages (max 1 (ceiling lines (/ (- 700 50) 10))))
+             (title "Skyline-Tool Script List")
+             (author (skyline-tool::user-real-name)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
+          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
           (format ps "<< /PageSize [612 792] >> setpagedevice~%")
           (with-input-from-string (s text)
             (dotimes (page total-pages)
@@ -269,9 +272,14 @@
          (ps-path (format nil "~a.ps" base))
          (pdf-path (format nil "~a.pdf" base))
          (lines (count #\Newline text))
-         (total-pages (max 1 (ceiling lines (- 700 50)))))
+         (total-pages (max 1 (ceiling lines (- 700 50))))
+         (author (skyline-tool::user-real-name))
+         (title (format nil "Skyline-Tool for ~a"
+                        (string-capitalize
+                         (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game")))))
     (with-open-file (ps ps-path :direction :output :if-exists :supersede)
       (format ps "%!PS-Adobe-3.0~%")
+      (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
       (format ps "<< /PageSize [612 792] >> setpagedevice~%")
       (with-input-from-string (s text)
         (dotimes (page total-pages)
@@ -718,6 +726,8 @@ grestore
     (with-open-file (ps ps-path :direction :output :if-exists :supersede
                                 :external-format :utf-8)
       (format ps "%!PS-Adobe-3.0~%")
+      (skyline-tool::write-ps-docinfo ps script-title "Skyline-Tool"
+                                     (format nil "~a on ~a" author (machine-instance)))
       (format ps "<< /PageSize [612 792] >> setpagedevice~%")
       (skyline-tool::write-ps-font-encodings ps)
       (%fountain->ps ps elements script-title date-str author pdf-pathname))

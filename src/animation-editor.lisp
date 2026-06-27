@@ -254,13 +254,20 @@
       (with-open-file (f path :direction :output :if-exists :supersede)
         (princ (sequence-property-text seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
-(define-anim-seq-editor-frame-command (com-copy :menu nil :name t) ()
-  (let* ((frame *anim-seq-editor-frame*)
-         (seq (anim-seq-editor-sequence frame))
-         (json (sequence-to-json seq)))
-    (clime:publish-selection
-     (clim:find-pane-named frame 'interactor)
-     :clipboard json 'clipboard-json)
+ (define-anim-seq-editor-frame-command (com-copy :menu nil :name t) ()
+   (let* ((frame *anim-seq-editor-frame*)
+          (seq (anim-seq-editor-sequence frame))
+          (json (sequence-to-json seq)))
+     (handler-case
+         (clime:publish-selection
+          (clim:find-pane-named frame 'interactor)
+          :clipboard json 'clipboard-json)
+       (error (e)
+         ;; Fallback: strip non-ASCII for Latin-1 clipboard targets
+         (let ((safe (remove-if (lambda (c) (> (char-code c) 255)) json)))
+           (clime:publish-selection
+            (clim:find-pane-named frame 'interactor)
+            :clipboard safe 'clipboard-json))))
     (format *query-io* "~&Copied animation sequence ~d as JSON (~d chars) to clipboard.~%"
             (simple-animation-sequence-index seq) (length json))))
 (define-anim-seq-editor-frame-command (com-paste :menu nil :name t) ()
@@ -434,16 +441,19 @@
          (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
                      (declare (ignore s))
                      (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m)))
-         (title (format nil "Skyline-Tool for ~a" (title-case *game-title*))))
+         (title (format nil "Animation Sequence ~d: ~a"
+                        (simple-animation-sequence-index seq)
+                        (or (simple-animation-sequence-label seq) "untitled"))))
      (multiple-value-bind (pixels w h) (render-filmstrip-pixels seq)
        (with-open-file (ps ps-path :direction :output :if-exists :supersede)
-         (format ps "%!PS-Adobe-3.0~%")
-         (format ps "%%Page: 1 1~%")
+          (format ps "%!PS-Adobe-3.0~%")
+          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+          (format ps "%%Page: 1 1~%")
          (format ps "<< /PageSize [792 612] >> setpagedevice~%")
          (skyline-tool::write-ps-font-encodings ps)
         ;; Header bar with icon
         (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
-        (format ps "/Helvetica findfont 9 scalefont setfont~%")
+        (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont~%")
         (flet ((attr (y label value)
                  (format ps "50 ~d moveto (~a:) show 200 ~d moveto (~a) show~%" y label y value)))
           (attr 500 "Index" (princ-to-string (simple-animation-sequence-index seq)))

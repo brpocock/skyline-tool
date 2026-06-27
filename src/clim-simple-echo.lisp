@@ -153,6 +153,8 @@
           (with-open-file (ps ps-path :direction :output :if-exists :supersede
                                       :external-format :utf-8)
             (format ps "%!PS-Adobe-3.0~%")
+            (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+                                           (format nil "~a on ~a" author (machine-instance)))
             (format ps "<< /PageSize [612 792] >> setpagedevice~%")
             (skyline-tool::write-ps-font-encodings ps)
             (with-input-from-string (s text)
@@ -207,8 +209,8 @@
                                 (format ps "50 ~d moveto (~a) show~%" y
                                         (skyline-tool::escape-ps-string line))))
                              (decf y line-height)))
-                  ;; Footer: icon at lower-left, date/author/host, page number right
-                  (skyline-tool::write-ps-footer ps date-str author (machine-instance) game-title (1+ page) total-pages)
+                   ;; Footer: icon at lower-left, date/author, page number right
+                   (skyline-tool::write-ps-page-footer ps (1+ page) total-pages game-title date-str author)
                   (format ps "showpage~%")))))
           (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
                             :output nil :ignore-error-status t)
@@ -230,10 +232,16 @@
          (ps-path (format nil "~a.ps" base))
          (pdf-path (format nil "~a.pdf" base))
          (lines (and text (count #\Newline text)))
-         (total-pages (and lines (max 1 (ceiling lines (- 700 50))))))
+         (total-pages (and lines (max 1 (ceiling lines (- 700 50)))))
+         (title (format nil "Skyline-Tool for ~a"
+                        (string-capitalize
+                         (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game"))))
+         (author (ignore-errors (skyline-tool::user-real-name))))
     (when text
       (with-open-file (ps ps-path :direction :output :if-exists :supersede)
         (format ps "%!PS-Adobe-3.0~%")
+        (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+                                       (format nil "~a on ~a" author (machine-instance)))
         (format ps "<< /PageSize [612 792] >> setpagedevice~%")
         (with-input-from-string (s text)
           (dotimes (page total-pages)
@@ -262,17 +270,23 @@
           (dotimes (i (length printers))
             (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
           (force-output *query-io*)
-          (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
-                 (printer (elt printers (1- choice)))
-                 (base (format nil "EchoOutput-~d" (get-universal-time)))
-                 (ps-path (format nil "~a.ps" base))
-                 (pdf-path (format nil "~a.pdf" base))
-                 (lines (count #\Newline text))
-                 (lines-per-page (- 700 50))
-                 (total-pages (max 1 (ceiling lines lines-per-page))))
-            (with-open-file (ps ps-path :direction :output :if-exists :supersede)
-              (format ps "%!PS-Adobe-3.0~%")
-              (format ps "<< /PageSize [612 792] >> setpagedevice~%")
+           (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
+                  (printer (elt printers (1- choice)))
+                  (base (format nil "EchoOutput-~d" (get-universal-time)))
+                  (ps-path (format nil "~a.ps" base))
+                  (pdf-path (format nil "~a.pdf" base))
+                  (lines (count #\Newline text))
+                  (lines-per-page (- 700 50))
+                  (total-pages (max 1 (ceiling lines lines-per-page)))
+                  (title (format nil "Skyline-Tool for ~a"
+                                (string-capitalize
+                                 (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game"))))
+                  (author (ignore-errors (skyline-tool::user-real-name))))
+             (with-open-file (ps ps-path :direction :output :if-exists :supersede)
+               (format ps "%!PS-Adobe-3.0~%")
+               (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+                                              (format nil "~a on ~a" author (machine-instance)))
+               (format ps "<< /PageSize [612 792] >> setpagedevice~%")
               (with-input-from-string (s text)
                 (dotimes (page total-pages)
                   (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)

@@ -470,6 +470,7 @@
              (pdf-path (format nil "~a.pdf" base)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
+          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
           (format ps "%%Page: 1 1~%")
           (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))

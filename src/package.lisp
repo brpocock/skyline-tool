@@ -13,7 +13,12 @@
            #:run-for-port
            #:run-gui
            #:run-repl
-           #:skyline-tool-icon))
+            #:skyline-tool-icon
+            #:prefs-pathname
+            #:load-prefs
+            #:save-prefs
+            #:get-pref
+            #:set-pref))
 
 (in-package :skyline-tool)
 
@@ -113,6 +118,17 @@ gsave
     (loop for i from 0 below (length hex) by 72
           do (format ps "~a~%" (subseq hex i (min (+ i 72) (length hex)))))
     (format ps "grestore~%")))
+
+(defun write-ps-docinfo (ps title creator author)
+  "Write PDF Document Info (DSC comments + pdfmark) for ps2pdf."
+  (format ps "%%%%Title: ~a~%" (escape-ps-string title))
+  (when creator
+    (format ps "%%%%Creator: ~a~%" (escape-ps-string creator)))
+  (when author
+    (format ps "%%%%Author: ~a~%" (escape-ps-string author)))
+  (format ps "[ /Title (~a) /Creator (~a) /Author (~a) /DOCINFO pdfmark~%"
+          (escape-ps-string title) (escape-ps-string (or creator ""))
+          (escape-ps-string (or author ""))))
 
 (defun write-ps-header-bar (ps title-text date-str author game-title &optional page-num total-pages)
   "Write PDF header bar: icon at top-left, document title in navy blue.
@@ -307,17 +323,21 @@ grestore
 
 (defun find-save-directory ()
   "Return the best default directory for Save As dialogs.
-   Checks *last-save-directory*, then ~/work/, ~/Work/, ~/Documents/."
+   Checks *last-save-directory*, then saved preferences,
+   then ~/work/, ~/Work/, ~/Documents/."
   (or *last-save-directory*
+      (let ((saved (get-pref :last-save-directory)))
+        (and saved (probe-file (pathname saved)) (pathname saved)))
       (let ((home (user-homedir-pathname)))
         (or (some (lambda (d) (let ((p (merge-pathnames d home)))
                                (when (probe-file p) p)))
                   '("work/" "Work/" "Documents/"))
             (merge-pathnames "Work/" home)))))
 
-(defun prompt-save-pathname (default-name &optional (type "txt"))
+(defun prompt-save-pathname (default-name &optional (type "txt") &key prefs-key)
   "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
    DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
+   PREFS-KEY is a keyword used to persist the chosen directory in preferences.
    Returns the chosen pathname, or NIL if cancelled."
   (let* ((dir (find-save-directory))
          (default (merge-pathnames default-name dir)))
@@ -331,13 +351,74 @@ grestore
                          :output :string :ignore-error-status t)))
                  (path (when (and out (> (length out) 0)) (pathname out))))
             (when path
-              (setf *last-save-directory* (make-pathname :name nil :type nil :defaults path))
-              path)))
+              (let ((dir (make-pathname :name nil :type nil :defaults path)))
+                (setf *last-save-directory* dir)
+                (when prefs-key
+                  (set-pref prefs-key (namestring dir))
+                  (set-pref :last-save-directory (namestring dir)))
+                path))))
         ;; Fallback to CLIM pathname prompter
         (let ((path (clim:accept 'pathname :prompt "Save As" :default default)))
           (when path
-            (setf *last-save-directory* (make-pathname :name nil :type nil :defaults path))
-            path)))))
+            (let ((dir (make-pathname :name nil :type nil :defaults path)))
+              (setf *last-save-directory* dir)
+              (when prefs-key
+                (set-pref prefs-key (namestring dir))
+                (set-pref :last-save-directory (namestring dir)))
+              path))))))
+
+(defvar *prefs-cache* nil
+  "Cached preference plist loaded from the prefs file, or NIL if not yet loaded.")
+
+(defun prefs-pathname ()
+  "Return the pathname for the preferences file.
+   Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.prefs.json
+   using *game-title* (capitalized) and machine-directory-name."
+  (let ((game (string-capitalize (if (boundp '*game-title*) *game-title* "Game")))
+        (port (ignore-errors (machine-directory-name))))
+    (merge-pathnames
+     (make-pathname :directory (list :relative ".config" "Skyline-Tool" game)
+                    :name port
+                    :type "prefs.json")
+     (user-homedir-pathname))))
+
+(defun load-prefs ()
+  "Read the preferences JSON file and return a plist.
+   Returns NIL if the file does not exist."
+  (let ((path (prefs-pathname)))
+    (when (probe-file path)
+      (let ((alist (cl-json:decode-json-from-string (uiop:read-file-string path))))
+        (loop for (key . value) in alist
+              append (list (intern (string-upcase key) :keyword) value))))))
+
+(defun save-prefs (plist)
+  "Write PLIST as JSON to the preferences file.
+   Creates the directory if it does not exist."
+  (let ((path (prefs-pathname)))
+    (ensure-directories-exist path)
+    (with-open-file (s path :direction :output :if-exists :supersede
+                       :external-format :utf-8)
+      (princ (cl-json:encode-json-to-string
+              (loop for (key value) on plist by #'cddr
+                    collect (cons (string-downcase (symbol-name key)) value)))
+             s))))
+
+(defun get-pref (key &optional default)
+  "Read a preference value from the cached prefs.
+   Returns DEFAULT (default NIL) if KEY is not found."
+  (unless *prefs-cache*
+    (setf *prefs-cache* (load-prefs)))
+  (if *prefs-cache*
+      (getf *prefs-cache* key default)
+      default))
+
+(defun set-pref (key value)
+  "Set a preference value, update the cache, and save the file."
+  (unless *prefs-cache*
+    (setf *prefs-cache* (load-prefs)))
+  (setf (getf *prefs-cache* key) value)
+  (save-prefs *prefs-cache*)
+  value)
 
 (defvar *printer-cache* nil
   "Cached list of (queue-name . display-name) printer pairs, or NIL if no cache.")
