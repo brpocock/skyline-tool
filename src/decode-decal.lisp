@@ -11,12 +11,15 @@
   :menu (("As JSON..." :command com-save-decal)
          ("As Text..." :command com-save-decal)
          ("As PDF..." :command com-save-decal)
-         ("As PNG..." :command com-save-decal)))
+          ("As PNG..." :command com-save-decal)))
+
+(clim:define-command-table print-decal-menu
+  :menu ())
 
 (clim:define-command-table decal-menu
   :menu (("Save As" :menu decal-save-as-menu)
          (nil :divider :line)
-         ("Print to Default Printer" :command com-discover-printers-decal)
+         ("Print Decal" :menu print-decal-menu)
          (nil :divider :line)
          ("Switch Decal..." :command com-switch-decal)
          ("Next Palette" :command com-next-palette)
@@ -86,6 +89,9 @@
           (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
           (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
 (define-show-decal-frame-command (com-discover-printers-decal :menu nil :name t) ()
+  (populate-decal-print-menu))
+
+(defun %print-decal-to-printer (printer-queue-name)
   (let* ((frame *show-decal-frame*)
          (dump (decal-from-dump frame))
          (index (decal-index frame))
@@ -98,18 +104,18 @@
          (has-zone2 (plusp (logand #x40 (aref dump (+ index (find-label-from-files "DecalFlags"))))))
          (palette (loop for i from 0 below #x10
                         collect (cond ((zerop i) (aref dump (find-label-from-files "MapBackground")))
-                                     ((<= 1 i 3) (aref dump (+ (find-label-from-files "MapPalettes")
-                                                               (* 3 palette-index) (- i 1))))
-                                     ((= 4 i) (aref dump (find-label-from-files "VarColor1")))
-                                     ((<= 5 i 7) (aref dump (+ (find-label-from-files "MapPalettes") 3
-                                                               (* 3 palette-index) (- i 5))))
-                                     ((= 8 i) (aref dump (find-label-from-files "VarColor2")))
-                                     ((<= 9 i 11) (aref dump (+ (find-label-from-files "MapPalettes") 6
-                                                                (* 3 palette-index) (- i 9))))
-                                     ((= 12 i) (aref dump (find-label-from-files "VarColor3")))
-                                     ((<= 13 i 15) (aref dump (+ (find-label-from-files "MapPalettes") 9
-                                                                 (* 3 palette-index) (- i 13))))
-                                     (t nil))))
+                                      ((<= 1 i 3) (aref dump (+ (find-label-from-files "MapPalettes")
+                                                                (* 3 palette-index) (- i 1))))
+                                      ((= 4 i) (aref dump (find-label-from-files "VarColor1")))
+                                      ((<= 5 i 7) (aref dump (+ (find-label-from-files "MapPalettes") 3
+                                                                (* 3 palette-index) (- i 5))))
+                                      ((= 8 i) (aref dump (find-label-from-files "VarColor2")))
+                                      ((<= 9 i 11) (aref dump (+ (find-label-from-files "MapPalettes") 6
+                                                                 (* 3 palette-index) (- i 9))))
+                                      ((= 12 i) (aref dump (find-label-from-files "VarColor3")))
+                                      ((<= 13 i 15) (aref dump (+ (find-label-from-files "MapPalettes") 9
+                                                                  (* 3 palette-index) (- i 13))))
+                                      (t nil))))
          (colors (coerce palette 'vector))
          (title (format nil "~a: Decal $~x" (title-case *game-title*) index))
          (author (user-real-name))
@@ -119,8 +125,7 @@
     (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump decal-mode address width colors)
       (let* ((base (format nil "Decal-$~x" index))
              (ps-path (format nil "~a.ps" base))
-             (pdf-path (format nil "~a.pdf" base))
-             (printers (and (fboundp (quote discover-printers)) (discover-printers))))
+             (pdf-path (format nil "~a.pdf" base)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
@@ -158,18 +163,32 @@
         (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                           :output nil :ignore-error-status t)
         (ignore-errors (delete-file ps-path))
-        (format *query-io* "~&Saved ~a~%" pdf-path)
-        (uiop:run-program (list "xdg-open" pdf-path) :output nil :ignore-error-status t)
-        (when printers
-          (format *query-io* "~&Select printer (1-~d):~%" (length printers))
-          (dotimes (i (length printers))
-            (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
-          (force-output *query-io*)
-          (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
-                 (printer (elt printers (1- choice))))
-            (uiop:run-program (list "lp" "-d" printer pdf-path)
-                              :output nil :ignore-error-status t)
-            (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer)))))))
+        (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+                          :output nil :ignore-error-status t)
+        (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
+
+(defun populate-decal-print-menu ()
+  (ignore-errors
+    (clim:remove-menu-item-from-command-table 'print-decal-menu "No printers found")
+    (dolist (p (discover-printers))
+      (ignore-errors
+        (clim:remove-menu-item-from-command-table 'print-decal-menu p))))
+  (let* ((printers (discover-printers-with-names)))
+    (if (null printers)
+        (clim:add-menu-item-to-command-table
+         'print-decal-menu "No printers found" :function
+         (lambda (g n)
+           (declare (ignore g n))
+           (format *query-io* "~&No printers discovered.~%")))
+        (dolist (pair printers)
+          (let ((queue-name (car pair))
+                (display-name (cdr pair)))
+            (clim:add-menu-item-to-command-table
+             'print-decal-menu display-name :function
+             (lambda (gesture numeric-arg)
+               (declare (ignore gesture numeric-arg))
+               (%print-decal-to-printer queue-name))
+             :after :end))))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)
@@ -623,4 +642,6 @@
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
+(eval-when (:load-toplevel)
+  (populate-decal-print-menu))
 )

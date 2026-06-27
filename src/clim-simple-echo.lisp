@@ -158,12 +158,12 @@
             (with-input-from-string (s text)
               (dotimes (page total-pages)
                 (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)
-                (skyline-tool::write-ps-header-bar ps title date-str author game-title (1+ page) total-pages)
+                (skyline-tool::write-ps-header-bar ps title date-str author game-title)
                 ;; Body text
                 (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
-                 (let ((y 730) (line-height 11) (bar-w 108) (bar-h 8))
+                (let ((y 700) (line-height 11) (bar-w 108) (bar-h 8))
                   (loop for line = (read-line s nil nil)
-                        while (and line (>= y 50))
+                        while (and line (>= y 65))
                         do (let ((bracket-pos (position #\[ line))
                                 (pct-pos (position #\% line)))
                             (cond

@@ -115,41 +115,39 @@ gsave
     (format ps "grestore~%")))
 
 (defun write-ps-header-bar (ps title-text date-str author game-title &optional page-num total-pages)
-  "Write PDF header bar: icon at top-left, centered document title, no date.
-   PAGE-NUM and TOTAL-PAGES, if provided, draw a top-right page number."
+  "Write PDF header bar: icon at top-left, document title in navy blue.
+   Header is positioned 3/4\" (54pt) from page top. No page number."
+  (declare (ignore date-str author page-num total-pages game-title))
   (format ps "gsave
- 56 745 translate
+ 56 738 translate
 ")
   (write-ps-header-icon ps)
   (format ps "
- /Times-Roman-ISOLatin1 findfont 14 scalefont setfont
- 0.0 0.0 0.3 setrgbcolor
- (~a) dup stringwidth pop 250 exch sub 2 div 36 moveto show
-" (escape-ps-string title-text))
-  (when (and page-num total-pages)
-    (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
- 0.3 0.3 0.4 setrgbcolor
- 500 38 moveto (~d) show
-" page-num))
-  (format ps "grestore~%"))
+  /Times-Roman-ISOLatin1 findfont 12 scalefont setfont
+  0.0 0.0 0.3 setrgbcolor
+  0 36 moveto (~a) show
+grestore
+" (escape-ps-string title-text)))
 
 (defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
-  "Write PDF footer: icon at lower-left, game title + date/author/host, page number right."
+  "Write PDF footer: icon at lower-left, 'Skyline-Tool for *game-title*',
+   date---author (on host), page number right. All 75% black.
+   Footer is positioned 3/4\" (54pt) from page bottom."
   (write-ps-header-icon ps)
   (let ((emdash (string (code-char #x2014))))
     (format ps "
 gsave
- 56 12 translate
+ 56 54 translate
  /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
- 0.5 0.5 0.55 setrgbcolor
+ 0.25 0.25 0.25 setrgbcolor
  0 0 moveto (Skyline-Tool for ~a) show
  /Times-Roman-ISOLatin1 findfont 6 scalefont setfont
- 0.5 0.5 0.55 setrgbcolor
+ 0.25 0.25 0.25 setrgbcolor
  0 -10 moveto (~a ~a ~a (on ~a)) show
 grestore
 /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
-0.5 0.5 0.55 setrgbcolor
-460 15 moveto (Page ~d of ~d) show
+0.25 0.25 0.25 setrgbcolor
+460 55 moveto (Page ~d of ~d) show
 "
     (escape-ps-string game-title)
     (escape-ps-string date-str)

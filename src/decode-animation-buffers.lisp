@@ -7,12 +7,15 @@
   :menu (("As JSON..." :command com-save-buffer)
          ("As Text..." :command com-save-buffer)
          ("As PDF..." :command com-save-buffer)
-         ("As PNG..." :command com-save-buffer)))
+          ("As PNG..." :command com-save-buffer)))
+
+(clim:define-command-table print-buffer-menu
+  :menu ())
 
 (clim:define-command-table animation-buffer-menu
   :menu (("Save As" :menu buffer-save-as-menu)
          (nil :divider :line)
-         ("Print to Default Printer" :command com-discover-printers-buffer)
+         ("Print Buffer" :menu print-buffer-menu)
          (nil :divider :line)
          ("Toggle Write Mode" :command com-toggle-mode)
          ("Switch Palette" :command com-change-palette-for-buffer)
@@ -446,6 +449,9 @@
           (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
           (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
 (define-anim-buffer-frame-command (com-discover-printers-buffer :menu nil :name t) ()
+  (populate-buffer-print-menu))
+
+(defun %print-buffer-to-printer (printer-queue-name)
   (let* ((frame *anim-buffer-frame*)
          (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
          (dump (anim-buffer-from-dump frame))
@@ -461,8 +467,7 @@
     (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
       (let* ((base (format nil "AnimBuffer-$~x" (anim-buffer-index frame)))
              (ps-path (format nil "~a.ps" base))
-             (pdf-path (format nil "~a.pdf" base))
-             (printers (and (fboundp (quote discover-printers)) (discover-printers))))
+             (pdf-path (format nil "~a.pdf" base)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
@@ -477,8 +482,8 @@
           (dotimes (i (min (length colors) 16))
             (let* ((reg (elt colors i))
                    (col (elt (ecase *region*
-                               (:ntsc +prosystem-ntsc-palette+)
-                               (:pal +prosystem-pal-palette+)) reg)))
+                                (:ntsc +prosystem-ntsc-palette+)
+                                (:pal +prosystem-pal-palette+)) reg)))
               (when col
                 (destructuring-bind (r g b) col
                   (format ps "~f ~f ~f setrgbcolor~%" (/ r 255.0) (/ g 255.0) (/ b 255.0))
@@ -496,15 +501,33 @@
         (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                           :output nil :ignore-error-status t)
         (ignore-errors (delete-file ps-path))
-        (format *query-io* "~&Saved ~a~%" pdf-path)
-        (when printers
-          (format *query-io* "~&Select printer (1-~d):~%" (length printers))
-          (dotimes (i (length printers))
-            (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
-          (force-output *query-io*)
-          (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
-                 (printer (elt printers (1- choice))))
-            (uiop:run-program (list "lp" "-d" printer pdf-path)
-                              :output nil :ignore-error-status t)
-            (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer)))))))
+        (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+                          :output nil :ignore-error-status t)
+        (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
+
+(defun populate-buffer-print-menu ()
+  (ignore-errors
+    (clim:remove-menu-item-from-command-table 'print-buffer-menu "No printers found")
+    (dolist (p (discover-printers))
+      (ignore-errors
+        (clim:remove-menu-item-from-command-table 'print-buffer-menu p))))
+  (let* ((printers (discover-printers-with-names)))
+    (if (null printers)
+        (clim:add-menu-item-to-command-table
+         'print-buffer-menu "No printers found" :function
+         (lambda (g n)
+           (declare (ignore g n))
+           (format *query-io* "~&No printers discovered.~%")))
+        (dolist (pair printers)
+          (let ((queue-name (car pair))
+                (display-name (cdr pair)))
+            (clim:add-menu-item-to-command-table
+             'print-buffer-menu display-name :function
+             (lambda (gesture numeric-arg)
+               (declare (ignore gesture numeric-arg))
+               (%print-buffer-to-printer queue-name))
+             :after :end))))))
+
+(eval-when (:load-toplevel)
+  (populate-buffer-print-menu))
 )

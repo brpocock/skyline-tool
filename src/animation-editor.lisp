@@ -177,7 +177,7 @@
          ("As GIF (4×)" :command com-save-animation-seq-as-gif)))
 
 (clim:define-command-table print-animation-sequence-menu
-  :menu (         ("Discover printers..." :command com-discover-printers-anim-seq)))
+  :menu ())
 
 (clim:define-command-table anim-seq-help-menu
   :menu (("How to Edit Animation Sequences" :command com-help-for-window)
@@ -444,6 +444,42 @@
       (format stream "~&Saved ~a~%" pdf-pathname)
       (uiop:run-program (list "xdg-open" (namestring pdf-pathname)) :output nil :ignore-error-status t))))
 
+(defun %print-anim-seq-to-printer (printer-queue-name)
+  (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
+         (pdf-path (format nil "AnimationSequence-~d.pdf"
+                           (simple-animation-sequence-index seq))))
+    (unless (probe-file pdf-path)
+      (format *query-io* "~&Generating PDF first...~%")
+      (write-animation-sequence-pdf seq pdf-path *query-io*))
+    (format *query-io* "~&Printing to ~a...~%" printer-queue-name)
+    (force-output *query-io*)
+    (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+                      :output nil :ignore-error-status t)
+    (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))
+
+(defun populate-anim-seq-print-menu ()
+  (ignore-errors
+    (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu "No printers found")
+    (dolist (p (discover-printers))
+      (ignore-errors
+        (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu p))))
+  (let* ((printers (discover-printers-with-names)))
+    (if (null printers)
+        (clim:add-menu-item-to-command-table
+         'print-animation-sequence-menu "No printers found" :function
+         (lambda (g n)
+           (declare (ignore g n))
+           (format *query-io* "~&No printers discovered.~%")))
+        (dolist (pair printers)
+          (let ((queue-name (car pair))
+                (display-name (cdr pair)))
+            (clim:add-menu-item-to-command-table
+             'print-animation-sequence-menu display-name :function
+             (lambda (gesture numeric-arg)
+               (declare (ignore gesture numeric-arg))
+               (%print-anim-seq-to-printer queue-name))
+             :after :end))))))
+
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-pdf :menu nil :name t) ()
   (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
          (path (prompt-save-pathname
@@ -453,27 +489,7 @@
     (when path
       (write-animation-sequence-pdf seq path *query-io*))))
 (define-anim-seq-editor-frame-command (com-discover-printers-anim-seq :menu nil :name t) ()
-  (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
-         (pdf-path (format nil "AnimationSequence-~d.pdf"
-                           (simple-animation-sequence-index seq)))
-         (printers (and (fboundp 'discover-printers) (discover-printers))))
-    (if (null printers)
-        (format *query-io* "~&No printers discovered.~%")
-        (progn
-          (format *query-io* "~&Select a printer (1-~d):~%" (length printers))
-          (dotimes (i (length printers))
-            (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
-          (force-output *query-io*)
-          (let* ((choice (clim:accept 'integer :prompt "Printer number :" :default 1))
-                 (printer (elt printers (1- choice))))
-            (unless (probe-file pdf-path)
-              (format *query-io* "~&Generating PDF first...~%")
-              (write-animation-sequence-pdf seq pdf-path *query-io*))
-            (format *query-io* "~&Printing to ~a...~%" printer)
-            (force-output *query-io*)
-            (uiop:run-program (list "lp" "-d" printer pdf-path)
-                              :output nil :ignore-error-status t)
-            (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer))))))
+  (populate-anim-seq-print-menu))
 
 (defun find-animation-sequence (id)
   (when id
@@ -2265,6 +2281,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
             nil)
            (t (< (simple-animation-sequence-index a)
                  (simple-animation-sequence-index b))))))))
+
+(eval-when (:load-toplevel)
+  (populate-anim-seq-print-menu))
 
 (defun compile-animation-sequences ()
   (format *trace-output* "~&Compiling animation sequence data …")
