@@ -583,9 +583,7 @@
         ((string-equal kind-name "Songs") (clim:make-rgb-color 0.502 0 0))
         ((string-equal kind-name "Maps") (clim:make-rgb-color 0.302 0.149 0))
         ((string-equal kind-name "Blobs") (clim:make-rgb-color 0 0.302 0))
-        ((string-equal kind-name "Characters") (clim:make-rgb-color 0.502 0 0.125))
-        ((string-equal kind-name "Tilesets") (clim:make-rgb-color 0.8 0.4 0))
-        ((string-equal kind-name "Sprite Sheets") (clim:make-rgb-color 0 0.4 0.4))
+        ((string-equal kind-name "Characters") (clim:make-rgb-color 0.502 0 0.502))
         (t (clim:make-rgb-color 0.3 0.3 0.3))))
 
 (defun write-assets-index-ps (path)
@@ -899,16 +897,7 @@
                                                             :background (color-for-asset-kind kind-name))
                         (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
                           (clim:with-text-face (*standard-output* :bold)
-                             (let ((label (case kind-name
-                                           ("Scripts" "Script")
-                                           ("Songs" "Song")
-                                           ("Blobs" "Blob")
-                                           ("Maps" "Map")
-                                           ("Characters" "Char.")
-                                           ("Tilesets" "Tileset")
-                                           ("Sprite Sheets" "Sprites")
-                                           (t "   "))))
-                               (format *standard-output* " ~a " label)))))
+                            (format *standard-output* " ~a " kind-name))))
                       (write-string "  " *standard-output*)
                       (write-string "  " *standard-output*)
                       ;; Asset name — colored red if absent
@@ -982,7 +971,7 @@
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
                                   (princ "P" *standard-output*))
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                                  (princ " " *standard-output*))))
+                                  (princ " " *standard-object*))))
                           (clim:stream-set-cursor-position *standard-output* right-offset (+ y-pos 42))
                           (clim:with-output-as-presentation
                               (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
@@ -992,14 +981,9 @@
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
                                   (princ "A" *standard-output*))
                                 (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                                  (princ " " *standard-output*)))))
+                                  (princ " " *standard-object*)))))
                         (terpri)                       ; newline between entries (inside presentation)
                         ;; Locale in small gray text underneath
-                        (when (and *locale* (member kind-key '(:script :map)))
-                          (terpri *standard-output*)
-                          (write-string "               " *standard-output*)
-                          (clim:with-text-style (*standard-output*
-                                                 (clim:make-text-style :fix :roman :normal))
                             (clim:with-text-size (*standard-output* :small)
                               (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
                                 (princ locale *standard-output*))))
@@ -1304,7 +1288,7 @@
 (defun edit-assets-index ()
   "Open the unified Assets Index in a simple-echo window."
   (clim-simple-echo:run-in-simple-echo #'show-full-assets-index
-                                       :process-name "All Resources"
+                                       :process-name "Assets Index"
                                        :width 450 :height 700))
 
 (defun check-for-absent-assets-in-project-folder ()
@@ -1592,7 +1576,7 @@ The signal code was ~a" break-code)
 
 (defun %open-rom-budget-frame (build region)
   "Create and run a rom-budget-frame for the given BUILD and REGION."
-  (let* ((fm (find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
+  (let* ((fm (find-frame-manager :port (or (find-port) (find-port :server-path :x))))
          (frame (make-application-frame 'rom-budget-frame
                                         :build build :region region
                                         :frame-manager fm

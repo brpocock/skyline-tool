@@ -174,20 +174,16 @@
          ("Switch Decal Kind" :command com-switch-decal-kind)))
 
 (clim:define-command-table set-frames-menu
-  :menu (("One Frame" :command (com-switch-frame-count 1))
-         ("Two Frames" :command (com-switch-frame-count 2))
-         ("Four Frames" :command (com-switch-frame-count 4))
-         ("Eight Frames" :command (com-switch-frame-count 8))))
+  :menu (("One Frame" :command (com-set-frame-count 1))
+         ("Two Frames" :command (com-set-frame-count 2))
+         ("Four Frames" :command (com-set-frame-count 4))
+         ("Eight Frames" :command (com-set-frame-count 8))))
 
 (clim:define-command-table set-speed-menu
-  :menu (("1 (10 fps; 2/5s)" :command (com-switch-frame-rate-scalar 1))
-         ("2 (20 fps; 1/5s)" :command (com-switch-frame-rate-scalar 2))
-         ("3 (30 fps; 3/15s)" :command (com-switch-frame-rate-scalar 3))
-         ("4 (40 fps; 2/25s)" :command (com-switch-frame-rate-scalar 4))
-         ("5 (50 fps; 1/10s)" :command (com-switch-frame-rate-scalar 5))
-         ("6 (60 fps; 1/12s)" :command (com-switch-frame-rate-scalar 6))
-         ("7 (70 fps; 7/60s)" :command (com-switch-frame-rate-scalar 7))
-         ("8 (80 fps; 1/15s)" :command (com-switch-frame-rate-scalar 8))))
+  :menu (("1 (full speed)" :command (com-set-frame-rate-scalar 1))
+         ("1/2 (half speed)" :command (com-set-frame-rate-scalar 1/2))
+         ("1/4 (quarter speed)" :command (com-set-frame-rate-scalar 1/4))
+         ("1/8 (eighth speed)" :command (com-set-frame-rate-scalar 1/8))))
 
 (clim:define-command-table set-palette-menu
   :menu (("0" :command (com-switch-palette 0))
@@ -204,7 +200,7 @@
          ("As Text..." :command com-save-animation-seq-as-text)
          ("As PDF..." :command com-save-animation-seq-as-pdf)
          ("As PNG..." :command com-save-animation-seq-as-png)
-         ("As GIF (4×)" :command com-save-animation-seq-as-gif)))
+         ("As GIF" :command com-save-animation-seq-as-gif)))
 
 (clim:define-command-table print-animation-sequence-menu
   :menu ())
@@ -436,7 +432,7 @@
         (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
 
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-gif :menu nil :name t) ()
-  "Export animation sequence as an animated GIF at 4× upscaling.
+  "Export animation sequence as an animated GIF.
    Requires ImageMagick's 'convert' command."
   (let* ((frame *anim-seq-editor-frame*)
          (seq (anim-seq-editor-sequence frame))
@@ -473,9 +469,11 @@
                                    (mapcar #'namestring png-files)
                                    (list (namestring path)))))
                  (uiop:run-program args :output nil :ignore-error-status t))
-               (when (probe-file path)
-                 (format *query-io* "~&Saved ~a (~d frames, 4×)~%"
-                         (namestring path) fc)))
+                (when (probe-file path)
+                  (format *query-io* "~&Saved ~a (~d frames)~%"
+                          (namestring path) fc)
+                  (uiop:run-program (list "xdg-open" (namestring path))
+                                    :output nil :ignore-error-status t)))
           ;; Cleanup temp PNGs
           (dolist (png png-files)
             (ignore-errors (delete-file png))))))))
@@ -845,6 +843,12 @@ Called from note-sheet-grafted after the frame is connected to the display."
     (object)
   (list))
 
+(define-anim-seq-editor-frame-command (com-set-frame-rate-scalar :name t) ((scalar 'rational))
+  (setf (simple-animation-sequence-frame-rate-scalar
+         (anim-seq-editor-sequence *anim-seq-editor-frame*))
+        scalar)
+  (update-params *anim-seq-editor-frame*))
+
 (define-anim-seq-editor-frame-command (com-switch-frame-rate-scalar :name t :menu t) ()
   (setf (simple-animation-sequence-frame-rate-scalar
          (anim-seq-editor-sequence *anim-seq-editor-frame*))
@@ -863,6 +867,12 @@ Called from note-sheet-grafted after the frame is connected to the display."
      :documentation "Change frame rate scalar")
     (object)
   (list))
+
+(define-anim-seq-editor-frame-command (com-set-frame-count :name t) ((frames 'integer))
+  (setf (simple-animation-sequence-frame-count
+         (anim-seq-editor-sequence *anim-seq-editor-frame*))
+        frames)
+  (update-params *anim-seq-editor-frame*))
 
 (define-anim-seq-editor-frame-command (com-switch-frame-count :name t) ()
   (setf (simple-animation-sequence-frame-count
@@ -1442,10 +1452,12 @@ Called from note-sheet-grafted after the frame is connected to the display."
          ("As PDF..." :command com-save-assignment-as-pdf)
          ("As PNG..." :command com-save-animation-assignment)))
 
+(clim:define-command-table print-assignment-menu
+  :menu ())
+
 (clim:define-command-table animation-assignment-menu
   :menu (("Save As" :menu save-assignment-as-menu)
-         (nil :divider :line)
-         ("Print to Default Printer" :command com-save-animation-assignment)
+         ("Print To" :menu print-assignment-menu)
          (nil :divider :line)
          ("Close Assignment" :command com-close-frame)))
 
