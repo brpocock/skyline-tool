@@ -37,8 +37,15 @@
   (:icon (skyline-tool-icon :resource :decal))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
 
+(clim:define-command-table decal-help-menu
+  :menu (("How to Inspect Decals" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table decal-menu-bar
-  :menu (("Decal" :menu decal-menu) ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+  :menu (("Decal" :menu decal-menu) ("Edit" :menu edit-menu) ("Help" :menu decal-help-menu)))
 
 (define-show-decal-frame-command (com-new-decal :menu nil :name t) ()
   (format *query-io* "~&New Decal is not yet implemented.~%"))

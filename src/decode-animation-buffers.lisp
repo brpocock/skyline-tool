@@ -39,9 +39,16 @@
   (:icon (skyline-tool-icon :resource :animation-buffer))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
 
+(clim:define-command-table buffer-help-menu
+  :menu (("How to Inspect Animation Buffers" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table anim-buffer-menu-bar
   :menu (("Animation Buffer" :menu animation-buffer-menu)
-         ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+         ("Edit" :menu edit-menu) ("Help" :menu buffer-help-menu)))
 
 (defun set-animation-buffer-colors (frame)
   (setf (anim-buffer-colors frame)

@@ -179,9 +179,16 @@
 (clim:define-command-table print-animation-sequence-menu
   :menu (         ("Discover printers..." :command com-discover-printers-anim-seq)))
 
+(clim:define-command-table anim-seq-help-menu
+  :menu (("How to Edit Animation Sequences" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table anim-seq-menu-bar
   :menu (("Animation Sequence" :menu animation-sequence-menu)
-         ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+         ("Edit" :menu edit-menu) ("Help" :menu anim-seq-help-menu)))
 (clim:define-application-frame anim-seq-editor-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
    (%sequence :accessor anim-seq-editor-sequence)
@@ -1331,9 +1338,16 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (clim:define-command-table assignment-edit-menu
   :menu (("Find..." :command com-find)))
 
+(clim:define-command-table assign-help-menu
+  :menu (("How to Assign Animations" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table anim-assign-menu-bar
   :menu (("Assignment" :menu animation-assignment-menu)
-         ("Edit" :menu assignment-edit-menu) ("Help" :menu help-menu)))
+          ("Edit" :menu assignment-edit-menu) ("Help" :menu assign-help-menu)))
 (clim:define-application-frame anim-seq-assign-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-assign-index :initarg :sequence)
    (%sequence :accessor anim-seq-assign-sequence)
@@ -1644,9 +1658,16 @@ Called from note-sheet-grafted after the frame is connected to the display."
          (nil :divider :line)
          ("Close Assignments" :command com-close-frame)))
 
+(clim:define-command-table assigns-help-menu
+  :menu (("How to Manage Assignments" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table anim-assigns-menu-bar
   :menu (("Assignments" :menu animation-assignments-menu)
-         ("Edit" :menu assignment-edit-menu) ("Help" :menu help-menu)))
+          ("Edit" :menu assignment-edit-menu) ("Help" :menu assigns-help-menu)))
 (clim:define-application-frame anim-seq-assigns-frame ()
   ()
   (:panes (anim-seq-assignments-pane :application :height 600 :width 1600
@@ -1851,8 +1872,15 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (clim:define-command-table tileset-menu
   :menu (("Close Tileset" :command com-close-frame)))
 
+(clim:define-command-table tileset-help-menu
+  :menu (("How to Browse Tilesets" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table tileset-menu-bar
-  :menu (("Tileset" :menu tileset-menu) ("Help" :menu help-menu)))
+  :menu (("Tileset" :menu tileset-menu) ("Help" :menu tileset-help-menu)))
 (clim:define-application-frame show-tileset-frame ()
   ((%tileset :type string :initarg :tileset :accessor show-which-tileset)
    (%artp :type boolean :initarg :artp :accessor show-tileset-artp)
@@ -1948,8 +1976,15 @@ Called from note-sheet-grafted after the frame is connected to the display."
          ("As PDF..." :command com-save-sequence)
          ("As PNG..." :command com-save-sequence)))
 
+(clim:define-command-table seq-help-menu
+  :menu (("How to Choose Sequences" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table seq-menu-bar
-  :menu (("Sequence" :menu sequence-menu) ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+  :menu (("Sequence" :menu sequence-menu) ("Edit" :menu edit-menu) ("Help" :menu seq-help-menu)))
 (clim:define-application-frame choose-sequence-frame ()
   ((%major-kind :accessor choose-sequence-major-kind :initarg :major-kind)
    (%decal-kind :accessor choose-sequence-decal-kind :initarg :decal-kind)

@@ -42,7 +42,9 @@
   :menu (("Copy" :command com-copy-clipboard)))
 
 (define-command-table echo-help-menu
-  :menu (("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+  :menu (("How to Use This Window" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
          (nil :divider :line)
          ("About Skyline-Tool" :command com-about-echo)))
 

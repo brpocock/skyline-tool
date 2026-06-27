@@ -25,8 +25,9 @@
   :menu (("Copy List" :command com-copy-script-list)))
 
 (clim:define-command-table script-list-help-menu
-  :menu (("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Fountain Scripting Language Manual" :command com-open-fountain-manual)
+  :menu (("How to Run and Export Scripts" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
          (nil :divider :line)
          ("About Skyline-Tool" :command com-about-skyline-tool)))
 
@@ -694,5 +695,5 @@ Launches an emulator playtest session for the specified script.
 
 (defmethod clim:invoke-with-new-output-record ((stream swank/gray::slime-output-stream)
                                                continuation record-type &rest initargs)
-  (funcall continuation stream (apply #'make-instance record-type initargs))))
+  (funcall continuation stream (apply #'make-instance record-type initargs)))
 

@@ -10,9 +10,16 @@
 (clim:define-command-table launcher-tool-menu
   :menu (("Quit" :command com-quit-skyline-tool)))
 
+(clim:define-command-table launcher-help-menu
+  :menu (("How to Use the Launcher" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table launcher-menu-bar
   :menu (("Skyline-Tool" :menu launcher-tool-menu)
-         ("Help" :menu help-menu)))
+          ("Help" :menu launcher-help-menu)))
 
 (clim:define-command-table edit-menu
   :menu (("Cut" :command com-cut)
@@ -22,7 +29,9 @@
          ("Find..." :command com-find)))
 
 (clim:define-command-table help-menu
-  :menu (("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+  :menu (("How To Do Things In This Window" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
          (nil :divider :line)
          ("About Skyline-Tool" :command com-about-skyline-tool)))
 
@@ -118,6 +127,56 @@
     (if (probe-file pdf-path)
         (uiop:run-program (list "xdg-open" (namestring pdf-path)) :output nil)
         (format *query-io* "~&Fountain Scripting Language Manual not found. Build it from Manual/FountainScripting.tex~%"))))
+
+(defvar *devguide-html-dir* nil
+  "Cached absolute path to the Developer Guide HTML directory.")
+
+(defun devguide-html-page (node-name)
+  "Open the DEV Guide HTML page for NODE-NAME (a string like \"Tools-GUI-Launcher\")."
+  (let* ((html-dir (or *devguide-html-dir*
+                       (setf *devguide-html-dir*
+                             (namestring
+                              (asdf:system-relative-pathname
+                               :skyline-tool
+                               #p"../Dist/7800/PhantasiaDevGuide-html/")))))
+         (page (format nil "~a~a.html" html-dir node-name)))
+    (if (probe-file page)
+        (uiop:run-program (list "xdg-open" page) :output nil)
+        (format *query-io* "~&Dev Guide HTML not found; run ‘make doc’ first.~%"))))
+
+(clim:define-command (com-help-for-window :command-table clim-internals::global-command-table) ()
+  "Open the Developer Guide section relevant to the current window."
+  (if (boundp '*application-frame*)
+      (let ((frame *application-frame*))
+        (devguide-html-page
+         (typecase frame
+           (launcher-frame "Tools-GUI-Launcher")
+           (run-script-frame "Tools-GUI-Assets-Index")
+           (read-script-frame "Tools-GUI-Assets-Index")
+           (anim-seq-editor-frame "Tools-GUI-Animation-Editor")
+           (anim-seq-assign-frame "Tools-GUI-Animation-Editor")
+           (anim-seq-assigns-frame "Tools-GUI-Animation-Editor")
+           (show-tileset-frame "Tools-GUI-Animation-Editor")
+           (choose-sequence-frame "Tools-GUI-Animation-Editor")
+           (anim-buffer-frame "Tools-GUI-Core-Dump")
+           (show-decal-frame "Tools-GUI-Core-Dump")
+            (otherwise
+             (cond ((and (find-package :clim-simple-echo)
+                         (typep frame (find-class 'clim-simple-echo::simple-echo nil)))
+                    "Tools-GUI-Output-Windows")
+                   ((typep frame 'clim-debugger::clim-debugger)
+                    "Tests-Crash-Detection-and-Core-Dumps")
+                   (t "Tools-Skyline-Tool-GUI"))))))
+      (format *query-io* "~&No active window.~%")))
+
+(clim:define-command (com-open-scripting-guide :command-table clim-internals::global-command-table) ()
+  "Open the Skyline-Tool Scripting Guide (Fountain) PDF."
+  (let ((pdf-path (asdf:system-relative-pathname
+                    :skyline-tool
+                    #p"../Manual/FountainScripting.pdf")))
+    (if (probe-file pdf-path)
+        (uiop:run-program (list "xdg-open" (namestring pdf-path)) :output nil)
+        (format *query-io* "~&Skyline-Tool Scripting Guide PDF not found. Build it from Manual/FountainScripting.tex via ‘make doc’.~%"))))
 
 (clim:define-command (com-about-skyline-tool :command-table clim-internals::global-command-table) ()
   (clim-simple-echo:run-in-simple-echo

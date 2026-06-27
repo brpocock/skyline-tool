@@ -252,8 +252,15 @@ the dictionary lacks an entry."
          (nil :divider :line)
          ("Close Script" :command com-close-frame)))
 
+(clim:define-command-table script-help-menu
+  :menu (("How to Read Scripts" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
 (clim:define-command-table read-menu-bar
-  :menu (("Script" :menu read-script-menu) ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+  :menu (("Script" :menu read-script-menu) ("Edit" :menu edit-menu) ("Help" :menu script-help-menu)))
 
 (clim:define-application-frame read-script-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
