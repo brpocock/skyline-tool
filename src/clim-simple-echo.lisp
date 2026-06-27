@@ -380,7 +380,7 @@
                                          frame-manager
                                          (process-name (format nil "Echo from ~s" function))
                                          (window-title process-name))
-  (let* ((fm (or frame-manager (find-frame-manager :port (or port (find-port)))))
+  (let* ((fm (or frame-manager (find-frame-manager :port (or port (clim:find-port)))))
          (pipe function)
          (frame (make-application-frame 'simple-echo
                                         :pretty-name window-title

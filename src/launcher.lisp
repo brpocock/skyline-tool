@@ -8,7 +8,9 @@
 ;; --- Command Tables (defined first, just store symbol references) ---
 
 (clim:define-command-table launcher-tool-menu
-  :menu (("Quit" :command com-quit-skyline-tool)))
+  :menu (("Edit Project" :command com-edit-project.json)
+         ("Edit Preferences" :command com-edit-skyline-config-prefs)
+         ("Quit" :command com-quit-skyline-tool)))
 
 (clim:define-command-table launcher-help-menu
   :menu (("How to Use the Launcher" :command com-help-for-window)
@@ -591,7 +593,7 @@
   (let* ((all-assets (collect-all-assets))
          (kind-order '("Scripts" "Songs" "Maps" "Characters" "Blobs"))
          (page-width 612) (page-height 792)
-         (margin-left 56) (margin-right 56)
+         (margin-left 102) (margin-right 102)
          (page-top 680) (page-bottom 80)
          (line-h 12) (entry-h 14) (heading-h 20)
          (y page-top)
@@ -852,7 +854,7 @@
                          (pane-width (clim:bounding-rectangle-width
                                       (clim:sheet-region pane))))
                     (clim:surrounding-output-with-border (pane
-                                                           :background (color-for-asset-kind kind-name))
+                                                          :background (color-for-asset-kind kind-name))
                       (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
                         (clim:with-output-as-presentation
                             (*standard-output* locale-key 'assets-section-header)
@@ -865,10 +867,10 @@
                              (- pane-width 5)
                              (nth-value 1 (clim:stream-cursor-position
                                            *standard-output*))))))))
-                (terpri))
-              ;; --- Entry display (skip if locale collapsed) ---
-              (unless skip-locale
-                (let* ((parts (split-sequence #\/ moniker))
+                  (terpri))))
+            ;; --- Entry display (skip if locale collapsed) ---
+            (unless skip-locale
+              (let* ((parts (split-sequence #\/ moniker))
                        (basename (car (last parts)))
                        (kind-key (kind-by-name kind-name))
                        (display-name
@@ -940,6 +942,47 @@
                                               (princ name *standard-output*))
                                             (princ name *standard-output*)))))))
                           (present-name display-name))
+                        ))))
+                        ;; Right side: hex ID and checkboxes in a column at right edge
+                        (let* ((pane clim-simple-echo::*echo-pane*)
+                               (pane-width (clim:bounding-rectangle-width (clim:sheet-region pane)))
+                               (right-offset (- pane-width 20))
+                               (y-pos (nth-value 1 (clim:stream-cursor-position *standard-output*))))
+                          ;; Hex ID at right
+                          (clim:stream-set-cursor-position *standard-output* right-offset y-pos)
+                          (format *standard-output* "~@[~a~]" hex-str)
+                          ;; Checkboxes below hex ID, right-aligned
+                          (clim:stream-set-cursor-position *standard-output* right-offset (+ y-pos 14))
+                          (clim:with-output-as-presentation
+                              (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                       full-path #\D)
+                                                     'build-checkbox)
+                            (if (and builds (member "Demo" builds :test 'string-equal))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                                  (princ "D" *standard-output*))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                                  (princ " " *standard-output*))))
+                          (clim:stream-set-cursor-position *standard-output* right-offset (+ y-pos 28))
+                          (clim:with-output-as-presentation
+                              (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                       full-path #\P)
+                                                     'build-checkbox)
+                            (if (and builds (member "Public" builds :test 'string-equal))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                                  (princ "P" *standard-output*))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                                  (princ " " *standard-object*))))
+                          (clim:stream-set-cursor-position *standard-output* right-offset (+ y-pos 42))
+                          (clim:with-output-as-presentation
+                              (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                                       full-path #\A)
+                                                     'build-checkbox)
+                            (if (and builds (member "AA" builds :test 'string-equal))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                                  (princ "A" *standard-output*))
+                                (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
+                                  (princ " " *standard-object*)))))
+                        (terpri)                       ; newline between entries (inside presentation)
                         ;; Locale in small gray text underneath
                         (when (and locale (member kind-key '(:script :map)))
                           (terpri *standard-output*)
@@ -948,50 +991,9 @@
                                                  (clim:make-text-style :fix :roman :normal))
                             (clim:with-text-size (*standard-output* :small)
                               (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
-                                (princ locale *standard-output*))))))
-                       ;; Right side: hex ID and checkboxes
-                       (format *standard-output* "~55t~@[~a~]  " hex-str)
-                       (clim:with-output-as-presentation
-                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                    full-path #\D)
-                                              'build-checkbox)
-                         (if (and builds (member "Demo" builds :test #'string-equal))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                               (princ "D" *standard-output*))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                               (princ " " *standard-output*))))
-                       (write-string " " *standard-output*)
-                       (clim:with-output-as-presentation
-                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                    full-path #\P)
-                                              'build-checkbox)
-                         (if (and builds (member "Public" builds :test #'string-equal))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                               (princ "P" *standard-output*))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                               (princ " " *standard-output*))))
-                       (write-string " " *standard-output*)
-                       (clim:with-output-as-presentation
-                           (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                                    full-path #\A)
-                                              'build-checkbox)
-                         (if (and builds (member "AA" builds :test #'string-equal))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                               (princ "A" *standard-output*))
-                             (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.6))
-                              (princ " " *standard-output*))))
-                       )                             ; close surrounding-output-with-border
-                      (terpri)                       ; newline between entries (inside presentation)
-                      )))))))))))
-
-(clim:define-command (com-toggle-assets-section :command-table clim-internals::global-command-table
-                                                :menu t :name t)
-    ((section 'assets-section-header :gesture :select))
-  (let ((collapsed (getf *assets-index-state* :collapsed *assets-index-collapsed*)))
-    (setf (gethash section collapsed) (not (gethash section collapsed))))
-  (let ((frame (when (boundp '*application-frame*) *application-frame*)))
-    (when frame
-      (clim:redisplay-frame-panes frame :force-p t))))
+                                (princ locale *standard-output*))))
+                          (when frame
+                            (clim:redisplay-frame-panes frame :force-p t))))))))))
 
 ;; --- Asset action menu command ---
 
@@ -1579,7 +1581,7 @@ The signal code was ~a" break-code)
 
 (defun %open-rom-budget-frame (build region)
   "Create and run a rom-budget-frame for the given BUILD and REGION."
-  (let* ((fm (find-frame-manager :port (or (find-port) (find-port :server-path :x))))
+  (let* ((fm (find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (make-application-frame 'rom-budget-frame
                                         :build build :region region
                                         :frame-manager fm

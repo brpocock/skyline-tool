@@ -139,9 +139,9 @@ gsave
 ")
   (write-ps-header-icon ps)
   (format ps "
-  /Times-Roman-ISOLatin1 findfont 10 scalefont setfont
+  /Times-Roman-ISOLatin1 findfont 18 scalefont setfont
   0.0 0.0 0.3 setrgbcolor
-  56 0 moveto (~a) show
+  612 dup (%s) stringwidth pop sub 2 div 0 moveto (%s) show
  grestore
 " (escape-ps-string title-text)))
 
