@@ -3438,31 +3438,91 @@ Creates parent directories if needed; overwrites the output file."
         (terpri incs)))
     (format *trace-output* " Done.")))
 
+(defun asset-file->moniker (asset-file)
+  "Convert a filesystem path like Source/Blobs/7800/TitleCard.xcf to
+   the Assets.index moniker format: Blobs/TitleCard (no extension,
+   no machine directory for Blobs)."
+  (let* ((dir (pathname-directory asset-file))
+         (name (pathname-name asset-file))
+         (src-pos (position "Source" dir :test #'string=)))
+    (when (null src-pos) (return-from asset-file->moniker nil))
+    (let ((parts (subseq dir (1+ src-pos))))
+      ;; Blobs path has <machine>/ after Blobs/ — strip the machine dir
+      (when (and (string-equal (first parts) "Blobs")
+                 (> (length parts) 1))
+        ;; Keep Blobs/ and the filename, discard the machine directory
+        (setf parts (list (first parts))))
+      ;; Append the filename without extension
+      (setf parts (append parts (list name)))
+      (format nil "~{~a~^/~}" parts))))
+
+(defun absent-asset-add-to-index (asset-path builds)
+  "Add an ASSET-PATH (like \"Blobs/TitleCard\") to Assets.index
+   for the given BUILDS (list of \"AA\", \"Public\", \"Demo\")."
+  (let* ((index-path #p"Source/Assets.index")
+         (lines (with-open-file (f index-path :external-format :utf-8)
+                  (loop for l = (read-line f nil nil) while l collect l)))
+         (build-str (format nil "~{~a~}" (mapcar (lambda (b) (subseq b 0 1)) builds)))
+         (new-entry (string-trim " " (format nil "~a~@[ ~a~]" asset-path
+                                              (unless (emptyp build-str) build-str))))
+         ;; Find alphabetical insertion point
+         (ins (or (loop for i from 0 below (length lines)
+                        for line = (nth i lines)
+                        when (and (> (length line) 0)
+                                  (not (char= (char line 0) #\;))
+                                  (not (every (lambda (c) (char= c #\Space)) line))
+                                  (string-greaterp line new-entry))
+                          return i)
+                  (length lines))))
+    (with-open-file (f index-path :direction :output :if-exists :supersede
+                        :external-format :utf-8)
+      ;; Lines before insertion point
+      (loop for i from 0 below ins do (write-line (nth i lines) f))
+      ;; Ensure blank line before new section
+      (when (and (> ins 0) (> (length (nth (1- ins) lines)) 0))
+        (terpri f))
+      (write-line new-entry f)
+      ;; Remaining lines
+      (loop for i from ins below (length lines) do (write-line (nth i lines) f))))
+  (format *query-io* "~&Added ~a to Assets.index~%" asset-path))
+
 (defun check-for-absent-assets ()
   "Looks into Assets.index and searches Source directories for “forgotten” files."
   (read-assets-list)
   (let ((absent nil))
-    (dolist (asset-file (loop for wild in '(#p"Source/Blobs/*/*.xcf"
-				    #p"Source/Maps/*/*.tmx"
-				    #p"Source/Scripts/*.fountain"
-				    #p"Source/Songs/*.mscz")
-			append (recursive-directory wild)))
-      (let* ((dir (pathname-directory asset-file))
-	   (moniker (format nil "~{~a~^/~}"
-			(append (subseq dir
-				      (1+ (position "Source" dir
-						:test #'string=)))
-			        (cons (pathname-name asset-file) nil)))))
-        (unless (gethash moniker *assets-list*)
-          (push (enough-namestring asset-file) absent))))
-    (when absent
-      (finish-output *error-output*)
-      (finish-output *standard-output*)
-      (format *error-output*
-	    "~3&The following assets are not found in any build in Source/Assets.index:
-~{~% ~a~}~2%"
-	    absent)
-      (finish-output *error-output*))))
+    (dolist (asset-file (loop for wild in (list (format nil "Source/Blobs/~a/*.xcf"
+                                                         (machine-directory-name))
+                                                #p"Source/Maps/*/*.tmx"
+                                                #p"Source/Scripts/*.fountain"
+                                                #p"Source/Songs/*.mscz")
+			append (recursive-directory (pathname wild))))
+      (let ((moniker (asset-file->moniker asset-file)))
+        (when (and moniker (not (gethash moniker *assets-list*)))
+          (push (list :path (enough-namestring asset-file)
+                      :moniker moniker
+                      :full-path (namestring (truename asset-file)))
+                absent))))
+    (setf absent (nreverse absent))
+    (if (null absent)
+        (format t "~&All assets are accounted for in Assets.index.~%")
+        (progn
+          (format t "~2%Click an asset below, then choose Add To to add it:~2%")
+          (dolist (a absent)
+            (let* ((moniker (getf a :moniker))
+                   (full (getf a :full-path))
+                   (slash-pos (position #\/ moniker))
+                   (dir (if slash-pos (subseq moniker 0 slash-pos) ""))
+                   (rest (if slash-pos (subseq moniker (1+ slash-pos)) moniker)))
+              (clim:with-output-as-presentation
+                  (*standard-output* (list moniker full) 'absent-asset)
+                (write-string "  " *standard-output*)
+                (clim:with-text-face (*standard-output* :bold)
+                  (princ dir *standard-output*))
+                (princ "/" *standard-output*)
+                (princ rest *standard-output*)
+                (princ "  [ ] D  [ ] P  [ ] A" *standard-output*)
+                (terpri *standard-output*))))
+          (format t "~2%Click an entry to add it to Assets.index with selected builds.~%")))))
 
 (defun assemble-with-64tass (source-name object-name error-stream)
   (let* ((machine (machine-directory-name))

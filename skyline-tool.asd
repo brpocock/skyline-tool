@@ -31,7 +31,8 @@
                :mcclim
                :midi
                :parse-number
-               :png-read
+                :png-read
+                :zpng
                :quicklisp-slime-helper
                :replic
                :serapeum               

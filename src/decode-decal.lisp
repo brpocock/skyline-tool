@@ -7,6 +7,24 @@
      ,@body
      :command-table show-decal-frame))
 
+(clim:define-command-table decal-save-as-menu
+  :menu (("As JSON..." :command com-save-decal)
+         ("As Text..." :command com-save-decal)
+         ("As PDF..." :command com-save-decal)
+         ("As PNG..." :command com-save-decal)))
+
+(clim:define-command-table decal-menu
+  :menu (("Save As" :menu decal-save-as-menu)
+         (nil :divider :line)
+         ("Print to Default Printer" :command com-discover-printers-decal)
+         (nil :divider :line)
+         ("Switch Decal..." :command com-switch-decal)
+         ("Next Palette" :command com-next-palette)
+         ("Find Animation Buffer..." :command com-find-animation-buffer)
+         ("Open Ext File..." :command com-open-ext-file)
+         (nil :divider :line)
+         ("Close Decal" :command com-close-frame)))
+
 (clim:define-application-frame show-decal-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index)
    (%dump :initform (load-dump-into-mem) :accessor decal-from-dump :initarg :dump))
@@ -15,7 +33,135 @@
           (palette-pane :application :height 400 :width 800
                                      :display-function 'display-decal-palette)
           (interactor :interactor :height 50 :width 800))
+  (:menu-bar decal-menu-bar)
+  (:icon (skyline-tool-icon :resource :decal))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
+
+(clim:define-command-table decal-menu-bar
+  :menu (("Decal" :menu decal-menu) ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+
+(define-show-decal-frame-command (com-new-decal :menu nil :name t) ()
+  (format *query-io* "~&New Decal is not yet implemented.~%"))
+(define-show-decal-frame-command (com-import-decal :menu nil :name t) ()
+  (format *query-io* "~&Import Decal is not yet implemented.~%"))
+(define-show-decal-frame-command (com-save-decal :menu nil :name t) ()
+  (let* ((frame *show-decal-frame*)
+         (dump (decal-from-dump frame))
+         (index (decal-index frame))
+         (mode (if (plusp (logand #x80 (aref dump (+ index (find-label-from-files "DecalFlags")))))
+                   :160b :160a))
+         (address (+ (* #x100 (aref dump (+ index (find-label-from-files "DecalArtH"))))
+                     (aref dump (+ index (find-label-from-files "DecalArtL")))))
+         (width (1+ (logxor #x1f (logand #x1f (aref dump (+ index (find-label-from-files "DecalPalWidth")))))))
+         (colors (coerce
+                  (loop for i from 0 below #x10
+                        collect (cond ((zerop i) (aref dump (find-label-from-files "MapBackground")))
+                                     ((<= 1 i 3) (aref dump (+ (find-label-from-files "MapPalettes")
+                                                               (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 1))))
+                                     ((= 4 i) (aref dump (find-label-from-files "VarColor1")))
+                                     ((<= 5 i 7) (aref dump (+ (find-label-from-files "MapPalettes") 3
+                                                               (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 5))))
+                                     ((= 8 i) (aref dump (find-label-from-files "VarColor2")))
+                                     ((<= 9 i 11) (aref dump (+ (find-label-from-files "MapPalettes") 6
+                                                                (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 9))))
+                                     ((= 12 i) (aref dump (find-label-from-files "VarColor3")))
+                                     ((<= 13 i 15) (aref dump (+ (find-label-from-files "MapPalettes") 9
+                                                                 (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 13))))
+                                     (t nil)))
+                  'vector)))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
+      (let ((path (prompt-save-pathname (format nil "Decal-$~x.png" index) "png")))
+        (when path
+          (let ((png (make-instance 'zpng:png :width iw :height ih
+                                             :color-type :truecolor :bpp 8
+                                             :image-data rgb)))
+            (zpng:write-png png path))
+          (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
+          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
+(define-show-decal-frame-command (com-discover-printers-decal :menu nil :name t) ()
+  (let* ((frame *show-decal-frame*)
+         (dump (decal-from-dump frame))
+         (index (decal-index frame))
+         (decal-mode (if (plusp (logand #x80 (aref dump (+ index (find-label-from-files "DecalFlags")))))
+                         :160b :160a))
+         (address (+ (* #x100 (aref dump (+ index (find-label-from-files "DecalArtH"))))
+                     (aref dump (+ index (find-label-from-files "DecalArtL")))))
+         (palette-index (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5))
+         (width (1+ (logxor #x1f (logand #x1f (aref dump (+ index (find-label-from-files "DecalPalWidth")))))))
+         (has-zone2 (plusp (logand #x40 (aref dump (+ index (find-label-from-files "DecalFlags"))))))
+         (palette (loop for i from 0 below #x10
+                        collect (cond ((zerop i) (aref dump (find-label-from-files "MapBackground")))
+                                     ((<= 1 i 3) (aref dump (+ (find-label-from-files "MapPalettes")
+                                                               (* 3 palette-index) (- i 1))))
+                                     ((= 4 i) (aref dump (find-label-from-files "VarColor1")))
+                                     ((<= 5 i 7) (aref dump (+ (find-label-from-files "MapPalettes") 3
+                                                               (* 3 palette-index) (- i 5))))
+                                     ((= 8 i) (aref dump (find-label-from-files "VarColor2")))
+                                     ((<= 9 i 11) (aref dump (+ (find-label-from-files "MapPalettes") 6
+                                                                (* 3 palette-index) (- i 9))))
+                                     ((= 12 i) (aref dump (find-label-from-files "VarColor3")))
+                                     ((<= 13 i 15) (aref dump (+ (find-label-from-files "MapPalettes") 9
+                                                                 (* 3 palette-index) (- i 13))))
+                                     (t nil))))
+         (colors (coerce palette 'vector))
+         (title (format nil "~a: Decal $~x" (title-case *game-title*) index))
+         (author (user-real-name))
+         (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
+                     (declare (ignore s))
+                     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m))))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump decal-mode address width colors)
+      (let* ((base (format nil "Decal-$~x" index))
+             (ps-path (format nil "~a.ps" base))
+             (pdf-path (format nil "~a.pdf" base))
+             (printers (and (fboundp (quote discover-printers)) (discover-printers))))
+        (with-open-file (ps ps-path :direction :output :if-exists :supersede)
+          (format ps "%!PS-Adobe-3.0~%")
+          (format ps "<< /PageSize [792 612] >> setpagedevice~%")
+          (format ps "%%Page: 1 1~%")
+          (skyline-tool::write-ps-header-bar ps title date-str author)
+          (skyline-tool::write-ps-page-footer ps 1 1 title date-str author)
+          (format ps "/Helvetica findfont 9 scalefont setfont~%")
+          (format ps "50 500 moveto (Decal: $~x  Mode: ~a  Width: ~d  Palette: ~d) show~%"
+                  index decal-mode width palette-index)
+          ;; Palette color swatches
+          (format ps "gsave~%")
+          (dotimes (i (min (length colors) 16))
+            (let* ((reg (elt colors i))
+                   (col (when (integerp reg)
+                          (elt (ecase *region*
+                                 (:ntsc +prosystem-ntsc-palette+)
+                                 (:pal +prosystem-pal-palette+)) reg))))
+              (when col
+                (destructuring-bind (r g b) col
+                  (format ps "~f ~f ~f setrgbcolor~%" (/ r 255.0) (/ g 255.0) (/ b 255.0))
+                  (format ps "~d 470 ~d 10 rectfill~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))
+                  (format ps "0 0 0 setrgbcolor~%")
+                  (format ps "~d 470 ~d 10 rectstroke~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))))))
+          (format ps "grestore~%")
+          ;; Sprite image (zone 1)
+          (skyline-tool::write-ps-image ps rgb iw ih 490 260)
+          (when has-zone2
+            (format ps "50 40 moveto (* Zone 2 present) show~%"))
+          (format ps "showpage~%"))
+        (uiop:run-program (list "ps2pdf" ps-path pdf-path)
+                          :output nil :ignore-error-status t)
+        (ignore-errors (delete-file ps-path))
+        (format *query-io* "~&Saved ~a~%" pdf-path)
+        (uiop:run-program (list "xdg-open" pdf-path) :output nil :ignore-error-status t)
+        (when printers
+          (format *query-io* "~&Select printer (1-~d):~%" (length printers))
+          (dotimes (i (length printers))
+            (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
+          (force-output *query-io*)
+          (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
+                 (printer (elt printers (1- choice))))
+            (uiop:run-program (list "lp" "-d" printer pdf-path)
+                              :output nil :ignore-error-status t)
+            (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer)))))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)
@@ -464,8 +610,9 @@
                                                :index index
                                                :dump dump)))
        (let ((*show-decal-frame* frame))
-         (setf (clim:frame-pretty-name frame)
-               (format nil "Show Decal"))
+          (setf (clim:frame-pretty-name frame)
+                (window-title "Decal"))
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
+)

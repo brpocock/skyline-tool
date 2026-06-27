@@ -492,7 +492,8 @@ OOXML structure (list or string)
 String containing all text content from the XML structure
 @end table"
     (if (consp xml)
-        (format nil "~{~a~}" (mapcar #'ooxml->string (cddr xml)))
+        (let ((children (mapcar #'ooxml->string (cddr xml))))
+          (format nil "~{~a~^ ~}" children))
         xml))
 
   (defun ooxml-cell-repeats (cell)

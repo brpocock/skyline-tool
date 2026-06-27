@@ -3,6 +3,26 @@
 ;; duplicated declaration
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 
+(clim:define-command-table buffer-save-as-menu
+  :menu (("As JSON..." :command com-save-buffer)
+         ("As Text..." :command com-save-buffer)
+         ("As PDF..." :command com-save-buffer)
+         ("As PNG..." :command com-save-buffer)))
+
+(clim:define-command-table animation-buffer-menu
+  :menu (("Save As" :menu buffer-save-as-menu)
+         (nil :divider :line)
+         ("Print to Default Printer" :command com-discover-printers-buffer)
+         (nil :divider :line)
+         ("Toggle Write Mode" :command com-toggle-mode)
+         ("Switch Palette" :command com-change-palette-for-buffer)
+         ("Next Offset" :command com-next-offset)
+         ("Find Decal..." :command com-find-decal)
+         ("Change Color..." :command com-change-color)
+         ("Switch Indirect Color..." :command com-switch-indirect-color)
+         (nil :divider :line)
+         ("Close Buffer" :command com-close-frame)))
+
 (clim:define-application-frame anim-buffer-frame ()
   ((%anim-buffer-index :initform 0 :accessor anim-buffer-index :initarg :index)
    (%mode :initform :160b :accessor anim-buffer-mode :initarg :mode)
@@ -15,7 +35,13 @@
           (palette-pane :application :height 300 :width 800
                                      :display-function 'display-anim-buffer-palette)
           (interactor :interactor :height 75 :width 800))
+  (:menu-bar anim-buffer-menu-bar)
+  (:icon (skyline-tool-icon :resource :animation-buffer))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
+
+(clim:define-command-table anim-buffer-menu-bar
+  :menu (("Animation Buffer" :menu animation-buffer-menu)
+         ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
 
 (defun set-animation-buffer-colors (frame)
   (setf (anim-buffer-colors frame)
@@ -334,8 +360,8 @@
                                                      :palette palette
                                                      :dump dump)))
              (let ((*anim-buffer-frame* frame))
-               (setf (clim:frame-pretty-name frame)
-                     (format nil "Show Animation Buffer"))
+                (setf (clim:frame-pretty-name frame)
+                      (window-title "Animation Buffer"))
                (clim:run-frame-top-level frame)))))
     (run)))
 
@@ -388,4 +414,90 @@
         ((aref buffer-info i 1)
          (format t "~&Buffer $~x is marked available but is in use by decal $~2,'0x.~40t ← BAD"
                  i (aref buffer-info i 1)))
-        (t (format t "~&Buffer $~x is free." i))))))
+         (t (format t "~&Buffer $~x is free." i))))))
+
+;; Buffer menu stubs (defined after frame so define-anim-buffer-frame-command is available)
+(define-anim-buffer-frame-command (com-new-buffer :menu nil :name t) ()
+  (format *query-io* "~&New Buffer is not yet implemented.~%"))
+(define-anim-buffer-frame-command (com-import-buffer :menu nil :name t) ()
+  (format *query-io* "~&Import Buffer is not yet implemented.~%"))
+(define-anim-buffer-frame-command (com-save-buffer :menu nil :name t) ()
+  (let* ((frame *anim-buffer-frame*)
+         (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
+         (dump (anim-buffer-from-dump frame))
+         (mode (anim-buffer-mode frame))
+         (colors (anim-buffer-colors frame))
+         (width 4))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
+      (let ((path (prompt-save-pathname
+                   (format nil "AnimBuffer-$~x.png" (anim-buffer-index frame)) "png")))
+        (when path
+          (let ((png (make-instance 'zpng:png :width iw :height ih
+                                             :color-type :truecolor :bpp 8
+                                             :image-data rgb)))
+            (zpng:write-png png path))
+          (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
+          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
+(define-anim-buffer-frame-command (com-discover-printers-buffer :menu nil :name t) ()
+  (let* ((frame *anim-buffer-frame*)
+         (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
+         (dump (anim-buffer-from-dump frame))
+         (mode (anim-buffer-mode frame))
+         (colors (anim-buffer-colors frame))
+         (width 4)
+         (title (format nil "~a: Animation Buffer $~x" (title-case *game-title*)
+                        (anim-buffer-index frame)))
+         (author (user-real-name))
+         (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
+                     (declare (ignore s))
+                     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m))))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
+      (let* ((base (format nil "AnimBuffer-$~x" (anim-buffer-index frame)))
+             (ps-path (format nil "~a.ps" base))
+             (pdf-path (format nil "~a.pdf" base))
+             (printers (and (fboundp (quote discover-printers)) (discover-printers))))
+        (with-open-file (ps ps-path :direction :output :if-exists :supersede)
+          (format ps "%!PS-Adobe-3.0~%")
+          (format ps "<< /PageSize [792 612] >> setpagedevice~%")
+          (format ps "%%Page: 1 1~%")
+          (skyline-tool::write-ps-header-bar ps title date-str author)
+          (format ps "/Helvetica-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor 50 15 moveto (Page 1 of 1) show~%")
+          (format ps "/Helvetica findfont 9 scalefont setfont~%")
+          (format ps "50 500 moveto (Buffer: $~x  Address: $~4,'0x  Mode: ~a) show~%"
+                  (anim-buffer-index frame) address mode)
+          ;; Palette color swatches
+          (format ps "gsave~%")
+          (dotimes (i (min (length colors) 16))
+            (let* ((reg (elt colors i))
+                   (col (elt (ecase *region*
+                               (:ntsc +prosystem-ntsc-palette+)
+                               (:pal +prosystem-pal-palette+)) reg)))
+              (when col
+                (destructuring-bind (r g b) col
+                  (format ps "~f ~f ~f setrgbcolor~%" (/ r 255.0) (/ g 255.0) (/ b 255.0))
+                  (format ps "~d 470 ~d 10 rectfill~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))
+                  (format ps "0 0 0 setrgbcolor~%")
+                  (format ps "~d 470 ~d 10 rectstroke~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))))))
+          (format ps "grestore~%")
+          ;; Sprite image
+          (skyline-tool::write-ps-image ps rgb iw ih 490 280)
+          (format ps "showpage~%"))
+        (uiop:run-program (list "ps2pdf" ps-path pdf-path)
+                          :output nil :ignore-error-status t)
+        (ignore-errors (delete-file ps-path))
+        (format *query-io* "~&Saved ~a~%" pdf-path)
+        (when printers
+          (format *query-io* "~&Select printer (1-~d):~%" (length printers))
+          (dotimes (i (length printers))
+            (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
+          (force-output *query-io*)
+          (let* ((choice (clim:accept 'integer :prompt "Printer :" :default 1))
+                 (printer (elt printers (1- choice))))
+            (uiop:run-program (list "lp" "-d" printer pdf-path)
+                              :output nil :ignore-error-status t)
+            (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer)))))))
+)

@@ -31,7 +31,7 @@
 
 (defun tty-xterm-p (&optional (stream *query-io*))
   "Returns a generalized true value if the terminal seems to be xterm-compatible"
-  (and (not (equal "CLIM-CLX" (symbol-package (class-name (class-of stream)))))
+  (and (not (search "CLIM" (package-name (symbol-package (class-name (class-of stream))))))
        (search "xterm" (uiop:getenv "TERM"))))
 
 (defun write-gimp-palette (name colors &optional color-names)

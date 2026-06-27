@@ -245,74 +245,254 @@ the dictionary lacks an entry."
 
 (defvar *read-script-frame* nil)
 
+(clim:define-command-table read-script-menu
+  :menu (("Run Script..." :command com-run-script)
+         ("Read Aloud..." :command com-read-script)
+         ("Edit Script..." :command com-edit-script)
+         (nil :divider :line)
+         ("Close Script" :command com-close-frame)))
+
+(clim:define-command-table read-menu-bar
+  :menu (("Script" :menu read-script-menu) ("Edit" :menu edit-menu) ("Help" :menu help-menu)))
+
 (clim:define-application-frame read-script-frame ()
   ((%decal-index :initform 0 :accessor decal-index :initarg :index))
   (:panes (script-list-pane :application :height 700 :width 750
                                          :display-function 'display-script-list)
           (interactor :interactor :height 125 :width 750))
+  (:menu-bar read-menu-bar)
+  (:icon (skyline-tool-icon :resource :script))
   (:layouts (default (clim:vertically () script-list-pane interactor))))
 
-(define-read-script-frame-command (com-read-script :menu t :name t)
+;; Commands defined after frame so define-read-script-frame-command is available
+(define-read-script-frame-command (com-read-script :menu nil :name t)
     ((script-full-name 'script-name :gesture :select))
   (read-script-out-loud script-full-name)
   (when *read-script-frame*
     (clim:frame-exit *read-script-frame*)))
 
+(define-read-script-frame-command (com-run-script :menu nil :name t)
+    ((script-full-name 'script-name :gesture :select))
+  (run-script script-full-name)
+  (when *read-script-frame*
+    (clim:frame-exit *read-script-frame*)))
+
+(define-read-script-frame-command (com-edit-script :menu nil :name t)
+    ((script-full-name 'script-name :gesture :edit))
+  (if swank::*emacs-connection*
+      (swank:ed-in-emacs (format nil "Source/~a.fountain" script-full-name))
+      (clim-sys:make-process (lambda ()
+                               (uiop:run-program
+                                (list "emacsclient" "-n"
+                                      (format nil "Source/~a.fountain" script-full-name))))
+                             :name (format nil "Editing ~a" script-full-name))))
+
 (defun read-script-out-loud (script-pathname)
+  "Non-interactive script reading — speaks straight through without pauses."
   (ecase (current-speech-system)
     (:atarivox
      (with-atarivox ()
-       (with-input-from-file (script (merge-pathnames
-                                      (make-pathname :defaults script-pathname
-                                                     :type "fountain")
-                                      (make-pathname :directory '(:relative "Source"))))
-         (loop for line = (read-line script nil nil)
-               with mode = nil
-               while line
-               do (ecase mode
-                    ((nil) (cond
-                             ((or (string= line "INT " :end1 (min (length line) 4))
-                                  (string= line "EXT " :end1 (min (length line) 4)))
-                              (format *trace-output* "~& Scene: ~a" line))
-                             ((and (not (emptyp (remove-if-not #'alpha-char-p line)))
-                                   (every #'upper-case-p (remove-if-not #'alpha-char-p line)))
-                              (destructuring-bind (char-name &rest _)
-                                  (split-sequence #\Space (string-trim " " line))
-                                (declare (ignore _))
-                                (format t "~& Speaker: ~a" char-name)
-                                (let* ((stats (cond
-                                                ((char= #\> (char char-name 0)) nil)
-                                                ((or (string-equal "NARRATOR" char-name)
-                                                     (string-equal "PLAYER" char-name))
-                                                 (list :speed 96
-                                                       :pitch 114
-                                                       :bend 88))
-                                                (t (load-actor char-name))))
-                                       (speed (getf stats :speed))
-                                       (pitch (getf stats :pitch))
-                                       (bend (getf stats :bend)))
-                                  (format t "   (Speed: ~d Pitch: ~d Bend: ~d)"
-                                          speed pitch bend)
-                                  (when speed
-                                    (write-byte 21 *atarivox-port*)
-                                    (write-byte speed *atarivox-port*))
-                                  (when pitch
-                                    (write-byte 22 *atarivox-port*)
-                                    (write-byte pitch *atarivox-port*))
-                                  (when bend
-                                    (write-byte 23 *atarivox-port*)
-                                    (write-byte bend *atarivox-port*))))
-                              (setf mode :speaker))
-                             (t nil)))
-                    (:speaker
-                     (cond ((emptyp (string-trim " " line))
-                            (setf mode nil))
-                           (t (format t "~& « ~a »" line)
-                              (speech-speak line :atarivox)))))))))
+       (%read-fountain-script script-pathname nil nil)))
     (:intellivoice
-     ;; For IntelliVoice, we would need different hardware interface
-     ;; This is a placeholder implementation
      (error "~&IntelliVoice script reading not yet implemented for: ~a" script-pathname))))
+
+(defun %read-fountain-script (script-pathname stream interactive &optional (atarivox-stream *atarivox-port*))
+  "Parse and speak a fountain SCRIPT-PATHNAME.
+   If STREAM is non-NIL, display output there.
+   If INTERACTIVE, wait for Return after each spoken line."
+  (with-input-from-file (script (merge-pathnames
+                                 (make-pathname :defaults script-pathname :type "fountain")
+                                 (make-pathname :directory '(:relative "Source"))))
+    (flet (($ (fmt &rest args)
+             (when stream (apply #'format stream fmt args))
+             (force-output stream)))
+      (loop for line = (read-line script nil nil)
+            with mode = nil
+            while line
+            do (ecase mode
+                 ((nil)
+                  (cond
+                    ((or (string= line "INT " :end1 (min (length line) 4))
+                         (string= line "EXT " :end1 (min (length line) 4)))
+                     ($ "~2%Scene: ~a" line))
+                    ((and (not (emptyp (remove-if-not #'alpha-char-p line)))
+                          (every #'upper-case-p (remove-if-not #'alpha-char-p line)))
+                     (destructuring-bind (char-name &rest _)
+                         (split-sequence #\Space (string-trim " " line))
+                       (declare (ignore _))
+                       ($ "~%~%Speaker: ~a~%" char-name)
+                       (let* ((stats (cond
+                                       ((char= #\> (char char-name 0)) nil)
+                                       ((or (string-equal "NARRATOR" char-name)
+                                            (string-equal "PLAYER" char-name))
+                                        (list :speed 96 :pitch 114 :bend 88))
+                                       (t (load-actor char-name))))
+                              (speed (getf stats :speed))
+                              (pitch (getf stats :pitch))
+                              (bend (getf stats :bend)))
+                         ($ "   (Speed: ~d Pitch: ~d Bend: ~d)" speed pitch bend)
+                         (when speed (write-byte 21 atarivox-stream) (write-byte speed atarivox-stream))
+                         (when pitch (write-byte 22 atarivox-stream) (write-byte pitch atarivox-stream))
+                         (when bend (write-byte 23 atarivox-stream) (write-byte bend atarivox-stream))))
+                     (setf mode :speaker))
+                    (t nil)))
+                 (:speaker
+                  (cond ((emptyp (string-trim " " line))
+                         (setf mode nil)
+                         ($ "~&"))
+                        (t
+                         ($ "~&  « ~a »" line)
+                         (speech-speak line :atarivox)
+                         (when interactive
+                           ($ "~%  — Press Return to continue —")
+                            (read-char stream))))))))))
+
+
+(defun %setup-voice-params (char-name)
+  "Load and apply voice parameters for CHAR-NAME to the AtariVox."
+  (let* ((stats (cond
+                  ((char= #\> (char char-name 0)) nil)
+                  ((or (string-equal "NARRATOR" char-name)
+                       (string-equal "PLAYER" char-name))
+                   (list :speed 96 :pitch 114 :bend 88))
+                  (t (load-actor char-name))))
+         (speed (getf stats :speed))
+         (pitch (getf stats :pitch))
+         (bend (getf stats :bend)))
+    (when speed (write-byte 21 *atarivox-port*) (write-byte speed *atarivox-port*))
+    (when pitch (write-byte 22 *atarivox-port*) (write-byte pitch *atarivox-port*))
+    (when bend (write-byte 23 *atarivox-port*) (write-byte bend *atarivox-port*))))
+
+(defvar *script-reader-state* nil
+  "Current state for the interactive script reader: (line mode scene-heading character-name).")
+
+(defvar *script-reader-lines* nil
+  "All parsed (type text) pairs for the current script being read.")
+
+(defvar *script-reader-index* 0
+  "Current position in *script-reader-lines*.")
+
+(clim:define-application-frame script-reader-frame ()
+  ((current-line :initform "" :accessor reader-current-line)
+   (current-speaker :initform "" :accessor reader-current-speaker)
+   (current-scene :initform "" :accessor reader-current-scene)
+   (elements :initform nil :accessor reader-elements)
+   (index :initform 0 :accessor reader-index))
+  (:panes (display-pane :application :height 500 :width 700
+                                    :display-function 'display-reader-line)
+          (interactor :interactor :height 80 :width 700))
+  (:layouts (default (clim:vertically () display-pane interactor)))
+  (:command-table (script-reader-frame)))
+
+(defun display-reader-line (frame pane)
+  (clim:window-clear pane)
+  (let ((scene (reader-current-scene frame))
+        (speaker (reader-current-speaker frame))
+        (line (reader-current-line frame)))
+    (when (plusp (length scene))
+      (clim:with-text-face (pane :bold)
+        (format pane "Scene: ~a~%~%" scene)))
+    (when (plusp (length speaker))
+      (clim:with-text-face (pane :italic)
+        (format pane "~a~%~%" speaker)))
+    (format pane "~a~%" line)
+    (format pane "~%~10t— Press Return in the input area below to advance —")))
+
+(defun reader-loop (frame)
+  "Main loop: advance through parsed elements, updating the display
+   and speaking dialogue via AtariVox."
+  (let* ((elements (reader-elements frame))
+         (idx 0)
+         (interactor (clim:find-pane-named frame 'interactor))
+         (stream (or interactor *standard-output*)))
+    (flet ((show (scene speaker line)
+             (setf (reader-current-scene frame) (or scene "")
+                   (reader-current-speaker frame) (or speaker "")
+                   (reader-current-line frame) (or line ""))
+             (clim:redisplay-frame-panes frame)))
+      (show nil nil "(Ready — press Return to begin)")
+      (loop while (< idx (length elements))
+            for elem = (nth idx elements)
+            for type = (first elem)
+            for text = (second elem)
+            do (incf idx)
+            do (case type
+                 (:scene-heading
+                  (show text nil nil))
+                 (:character
+                  (show nil text "")
+                  (%setup-voice-params text)
+                  ;; Wait for Return before showing dialogue
+                  (handler-case
+                      (progn
+                        (format stream "~&Press Return to hear ~a..." text)
+                        (force-output stream)
+                        (read-line stream))
+                    (error ())))
+                 (:parenthetical
+                  (show nil nil text))
+                 (:dialogue
+                  (show nil nil text)
+                  (handler-case
+                      (progn
+                        (speech-speak text :atarivox)
+                        (format stream "~&Press Return for next line...")
+                        (force-output stream)
+                        (read-line stream))
+                    (error ()))))
+            finally (show nil nil "(End of script)")))))
+
+(defun parse-fountain-for-reader (script-full-name)
+  "Parse a fountain file into a list of (type text) elements for the reader."
+  (let ((elements nil) (mode nil))
+    (with-input-from-file (script (merge-pathnames
+                                   (make-pathname :defaults script-full-name :type "fountain")
+                                   (make-pathname :directory '(:relative "Source"))))
+      (loop for line = (read-line script nil nil)
+            while line
+            do (cond
+                 ((or (string= line "INT " :end1 (min (length line) 4))
+                      (string= line "EXT " :end1 (min (length line) 4)))
+                  (push (list :scene-heading (string-trim " " line)) elements))
+                 ((and (not (emptyp (remove-if-not #'alpha-char-p line)))
+                       (every #'upper-case-p (remove-if-not #'alpha-char-p line)))
+                  (push (list :character (string-trim " " line)) elements)
+                  (setf mode :speaker))
+                 ((eq mode :speaker)
+                  (cond ((emptyp (string-trim " " line))
+                         (setf mode nil))
+                        ((char= (char line 0) #\()
+                         (push (list :parenthetical (string-trim " " line)) elements))
+                        (t
+                         (push (list :dialogue (string-trim " " line)) elements)))))))
+    (nreverse elements)))
+
+(defun read-script-interactive (script-full-name)
+  "Interactive script reading — shows each line in a CLIM window,
+   speaks it via AtariVox, and waits for Return to advance."
+  (ecase (current-speech-system)
+    (:atarivox
+     (let* ((elements (parse-fountain-for-reader script-full-name))
+            (fm (or (clim:find-frame-manager) (return-from read-script-interactive)))
+            (frame (clim:make-application-frame 'script-reader-frame
+                                                 :pretty-name (format nil "Read: ~a" script-full-name)
+                                                 :frame-manager fm
+                                                 :elements elements
+                                                 :width 720 :height 500)))
+       ;; Start the frame event loop and reader in parallel processes
+       (clim-sys:make-process
+        (lambda ()
+          (clim:run-frame-top-level frame))
+        :name (format nil "Script Reader Frame"))
+       ;; Short delay to let the frame start, then run the reader with AtariVox
+       (sleep 0.5)
+       (clim-sys:make-process
+        (lambda ()
+          (with-atarivox ()
+            (reader-loop frame)))
+        :name (format nil "Reader: ~a" script-full-name))))
+    (:intellivoice
+     (error "IntelliVoice interactive reading not implemented."))))
 
 (defun play-script-with-speech (&optional script-to-read)
   "Choose a script from a menu, and read it out loud using the appropriate speech system for the current platform"
@@ -328,6 +508,6 @@ the dictionary lacks an entry."
       (let* ((frame (clim:make-application-frame 'read-script-frame))
              (*read-script-frame* frame))
         (setf (clim:frame-pretty-name frame)
-              (format nil "~a: Read Script" (cl-change-case:title-case *game-title*)))
+              (window-title "Read Script"))
         (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
                                :name "Script Reader (launcher)"))))

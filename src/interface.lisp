@@ -643,7 +643,8 @@ If nothing matches, return @code{\"7800\"}.
                         (string= trim "PORT=" :end1 5))
                 do (let* ((raw (subseq trim 5 (length trim)))
                           (val (string-trim '(#\Space #\Tab #\Return #\Newline) raw)))
-                     (return-from find-default-port val)))))))
+                     (return-from find-default-port val)))))
+    "7800"))
 
 (defun project-json-value (data &rest keys)
   "Extract value from project JSON DATA (alist or hash-table) for first matching KEY in KEYS.
@@ -686,11 +687,16 @@ Example: bin/skyline-tool --port Intv ~a ?"
                              (find-default-port)
                              port-label))
          (json-name (format nil "Project.~a.json" effective-port))
-         (json-path (merge-pathnames json-name (uiop:getcwd)))
+         (cwd (uiop:getcwd))
+         (json-path (merge-pathnames json-name cwd))
          (json-path (if (probe-file json-path)
                         json-path
-                        (merge-pathnames json-name (uiop:pathname-directory-pathname
-                                                    (uiop:getcwd)))))
+                        (let* ((dir (pathname-directory cwd))
+                               (parent (if (and (car dir) (eq :absolute (car dir)))
+                                           (cons :absolute (butlast (cdr dir)))
+                                           (butlast dir))))
+                          (merge-pathnames json-name
+                            (make-pathname :directory parent)))))
          (project-data (json:decode-json-from-source json-path)))
     (setf *project.json* project-data
           *game-title* (assocdr :*game project-data)
