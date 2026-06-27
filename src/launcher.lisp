@@ -786,9 +786,22 @@
                             (lambda () (uiop:run-program
                                         (list "xdg-open" (namestring full-path))
                                         :output nil :ignore-error-status t)))
-                      (list "Edit Map Data"
+                      (list "Edit Map Data" ; TODO
                             (lambda () (format *query-io*
                                                "~&Map Data editor not yet implemented.~%")))))
+              (when (eq kind-key :script)
+                (list (list "Edit in Emacs"
+                            (lambda () (uiop:run-program
+                                        (list "emacsclient" (namestring full-path))
+                                        :output nil :ignore-error-status t)))
+                      (list "Edit in ThiefMD"
+                            (lambda () (uiop:run-program
+                                        (list "thiefmd" (namestring full-path))
+                                        :output nil :ignore-error-status t)))
+                      (list "Run in Emulator"
+                            (lambda () (FIXME)))
+                      (list "Play on AtariVox"
+                            (lambda () (FIXME)))))
               (when (probe-file full-path)
                 (list (list "Open File"
                             (lambda () (uiop:run-program
