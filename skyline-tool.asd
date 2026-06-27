@@ -92,7 +92,7 @@
                                (:file "dispatch-extras" :depends-on ("dispatch"))))
                  (:file "i18n-l10n" :depends-on ("package"))
                  (:file "interface" :depends-on ("package" "asset-allocator" "oops" "cbm-tooling"))
-                 (:file "launcher" :depends-on ("package"))
+                 (:file "launcher" :depends-on ("package" "clim-simple-echo"))
                  (:file "listings" :depends-on ("package"))
                  (:file "maps" :depends-on ("package" "prototypes"))
                  (:file "misc" :depends-on ("package"))

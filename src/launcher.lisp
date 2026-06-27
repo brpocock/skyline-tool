@@ -582,19 +582,20 @@
   "Display all assets with colored type squares, title-cased names,
    hex IDs, D/P/A checkboxes. Click name for action menu.
    Assets absent from disk appear in red."
-  (let ((*trace-output* (make-string-output-stream))
-        (all-assets (collect-all-assets))
-        (last-kind nil) (last-locale nil))
-    (terpri)
+  (let ((*trace-output* (make-string-output-stream)))
+    (let ((all-assets (collect-all-assets))
+          (last-kind nil) (last-locale nil))
+      (terpri)
     (dolist (entry all-assets)
       (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
           entry
+        (unless kind-name (return))
         (unless (string-equal kind-name last-kind)
           (setf last-kind kind-name
                 last-locale nil)
           (terpri)
           ;; Full-width color banner for section header
-          (clim:surrounding-output-with-border (*standard-output*
+          (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane*
                                                 :background (color-for-asset-kind kind-name))
             (clim:with-text-face (*standard-output* :bold)
               (clim:with-text-size (*standard-output* :larger)
@@ -602,109 +603,112 @@
           (terpri)
           (terpri))
         ;; Locale group header for Scripts and Maps
-        (let* ((parts (split-sequence #\/ moniker))
-               (this-locale (when (member kind-name '("Scripts" "Maps") :test #'string-equal)
-                              (and (> (length parts) 2)
-                                   (cl-change-case:title-case (second parts))))))
-          (when (and this-locale (not (string-equal this-locale last-locale)))
-            (setf last-locale this-locale)
-            (clim:surrounding-output-with-border (*standard-output*
-                                                  :background (color-for-asset-kind kind-name))
-              (clim:with-text-size (*standard-output* :smaller)
-                (princ (format nil "     ~a" this-locale) *standard-output*))))
-          (terpri))
-        (let* ((parts (split-sequence #\/ moniker))
-               (basename (car (last parts)))
-               (kind-key (kind-by-name kind-name))
-               (display-name
-                 (case kind-key
-                   ((:script :map)
-                    (cl-change-case:title-case
-                     (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
-                   ((:blob :song)
-                    (string-capitalize (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
-                   (t basename)))
-               (locale-parts (butlast (rest parts)))
-               (locale (when locale-parts
-                         (cl-change-case:title-case (first locale-parts)))))
-          (clim:with-output-as-presentation
-              (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                       full-path)
-                                 'unified-asset-entry)
-            (write-string "  " *standard-output*)
-            ;; Colored type square — white text on colored background
-            (clim:surrounding-output-with-border (*standard-output* :background (color-for-asset-kind kind-name))
-              (clim:with-text-face (*standard-output* :bold)
-                (write-string (format nil " ~4a " (subseq kind-name 0
-                                                          (min 4 (length kind-name))))
-                              *standard-output*)))
-            (write-string "  " *standard-output*)
-            (write-string "  " *standard-output*)
-            ;; Asset name — Times-Roman for Maps, Times-Italic for others
-            (flet ((present-name (name)
-                     (case kind-key
-                       (:map (clim:with-text-style (*standard-output*
-                                                    (clim:make-text-style :serif :roman :normal))
-                               (if present-p
-                                   (princ name *standard-output*)
-                                   (clim:with-drawing-options
-                                       (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                                     (princ name *standard-output*)))))
-                       (t (clim:with-text-style (*standard-output*
-                                                 (clim:make-text-style :serif :italic :normal))
-                            (if present-p
-                                (princ name *standard-output*)
-                                (clim:with-drawing-options
-                                    (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                                  (princ name *standard-output*))))))))
-              (present-name display-name)
-              ;; Locale in 1/2-height 50% gray underneath (for Scripts and Maps)
-              (when (and locale (member kind-key '(:script :map)))
-                (terpri *standard-output*)
-                (write-string "               " *standard-output*)
-                (clim:with-text-style (*standard-output*
-                                       (clim:make-text-style :fix :roman :normal))
-                  (clim:with-text-size (*standard-output* :small)
-                    (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
-                      (princ locale *standard-output*))))))
-            ;; Right side: hex ID and checkboxes
-            (write-string "  " *standard-output*)
-            (format *standard-output* "~10t~@[~a~]  " hex-str)
+          (let* ((parts (split-sequence #\/ moniker))
+                 (this-locale (when (member kind-name '("Scripts" "Maps") :test #'string-equal)
+                                (and (> (length parts) 2)
+                                     (cl-change-case:title-case (second parts))))))
+            (when (and this-locale (not (string-equal this-locale last-locale)))
+              (setf last-locale this-locale)
+              (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane*
+                                                    :background (color-for-asset-kind kind-name))
+                (clim:with-text-size (*standard-output* :smaller)
+                  (princ (format nil "     ~a" this-locale) *standard-output*))))
+            (terpri))
+          (let* ((parts (split-sequence #\/ moniker))
+                 (basename (car (last parts)))
+                 (kind-key (kind-by-name kind-name))
+                  (display-name
+                    (case kind-key
+                      ((:script)
+                       (format nil "~s" (cl-change-case:title-case
+                                         (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))))
+                      (:map
+                       (cl-change-case:title-case
+                        (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
+                      ((:blob :song)
+                       (format nil "~s" (string-capitalize
+                                         (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))))
+                      (t basename)))
+                 (locale-parts (butlast (rest parts)))
+                 (locale (when locale-parts
+                           (cl-change-case:title-case (first locale-parts)))))
             (clim:with-output-as-presentation
                 (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                         full-path #\D)
-                                   'build-checkbox)
-              (if (and builds (member "Demo" builds :test #'string-equal))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                    (princ "■" *standard-output*))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                    (princ "□" *standard-output*)))
-              (princ "D" *standard-output*))
-            (write-string " " *standard-output*)
-            (clim:with-output-as-presentation
-                (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                         full-path #\P)
-                                   'build-checkbox)
-              (if (and builds (member "Public" builds :test #'string-equal))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                    (princ "■" *standard-output*))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                    (princ "□" *standard-output*)))
-              (princ "P" *standard-output*))
-            (write-string " " *standard-output*)
-            (clim:with-output-as-presentation
-                (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
-                                         full-path #\A)
-                                   'build-checkbox)
-              (if (and builds (member "AA" builds :test #'string-equal))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
-                    (princ "■" *standard-output*))
-                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
-                    (princ "□" *standard-output*)))
-              (princ "A" *standard-output*))
-            (terpri)))))
-    (format *query-io* "~&Click asset name for actions; click [D] [P] [A] to toggle builds.~%")
-    (format *query-io* "~&Red names exist in Assets.index but not on disk.~%")))
+                                         full-path)
+                                   'unified-asset-entry)
+               (write-string "  " *standard-output*)
+               ;; Colored type square — white text on colored background
+               (clim:surrounding-output-with-border (clim-simple-echo::*echo-pane* :background (color-for-asset-kind kind-name))
+                 (clim:with-text-face (*standard-output* :bold)
+                   (princ kind-name *standard-output*)))
+               (write-string "  " *standard-output*)
+               (write-string "  " *standard-output*)
+               ;; Asset name — Times-Roman for Maps, Times-Italic for others
+               ;; Red if absent from disk OR not in any build
+               (let ((red (or (not present-p) (null builds))))
+                 (flet ((present-name (name)
+                          (case kind-key
+                            (:map (clim:with-text-style (*standard-output*
+                                                         (clim:make-text-style :serif :roman :normal))
+                                    (if red
+                                        (clim:with-drawing-options
+                                            (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                                          (princ name *standard-output*))
+                                        (princ name *standard-output*))))
+                            (t (clim:with-text-style (*standard-output*
+                                                      (clim:make-text-style :serif :italic :normal))
+                                 (if red
+                                     (clim:with-drawing-options
+                                         (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                                       (princ name *standard-output*))
+                                     (princ name *standard-output*)))))))
+                   (present-name display-name))
+                ;; Locale in 1/2-height 50% gray underneath (for Scripts and Maps)
+                (when (and locale (member kind-key '(:script :map)))
+                  (terpri *standard-output*)
+                  (write-string "               " *standard-output*)
+                  (clim:with-text-style (*standard-output*
+                                         (clim:make-text-style :fix :roman :normal))
+                    (clim:with-text-size (*standard-output* :small)
+                      (clim:with-drawing-options (*standard-output* :ink (clim:make-gray-color 0.5))
+                        (princ locale *standard-output*))))))
+               ;; Right side: hex ID and checkboxes
+               (format *standard-output* "~55t~@[~a~]  " hex-str)
+              (clim:with-output-as-presentation
+                  (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                           full-path #\D)
+                                     'build-checkbox)
+                (if (and builds (member "Demo" builds :test #'string-equal))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                      (princ "■" *standard-output*))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                      (princ "□" *standard-output*)))
+                (princ "D" *standard-output*))
+              (write-string " " *standard-output*)
+              (clim:with-output-as-presentation
+                  (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                           full-path #\P)
+                                     'build-checkbox)
+                (if (and builds (member "Public" builds :test #'string-equal))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                      (princ "■" *standard-output*))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                      (princ "□" *standard-output*)))
+                (princ "P" *standard-output*))
+              (write-string " " *standard-output*)
+              (clim:with-output-as-presentation
+                  (*standard-output* (list moniker builds kind-name asset-id hex-str present-p
+                                           full-path #\A)
+                                     'build-checkbox)
+                (if (and builds (member "AA" builds :test #'string-equal))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0 0.6 0))
+                      (princ "■" *standard-output*))
+                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 0.8 0 0))
+                      (princ "□" *standard-output*)))
+                (princ "A" *standard-output*))
+              (terpri)))))
+      (format *query-io* "~&Click asset name for actions; click [D] [P] [A] to toggle builds.~%")
+      (format *query-io* "~&Red names exist in Assets.index but not on disk.~%"))))
 
 ;; --- Build checkbox toggle command ---
 
@@ -973,12 +977,14 @@
 (defun show-lisp-room ()
   "Check how much room (in memory) this Lisp image is using"
   (clim-simple-echo:run-in-simple-echo (lambda ()
-                                         (format t "~&Running a full garbage collection…")
-                                         (force-output)
-                                         (sb-ext:gc :full t)
-                                         (format t "~&Ready. (ROOM) says:~%")
-                                         (room))
-                                       :process-name "Room"))
+                                          (format t "~&Running a full garbage collection…")
+                                          (force-output)
+                                          (handler-case (sb-ext:gc :full t)
+                                            (error (e) (format t "~&GC error: ~a~%" e)))
+                                          (format t "~&Ready.  Memory usage:~%")
+                                          (handler-case (room)
+                                            (error (e) (format t "~&(room) error: ~a~%" e))))
+                                        :process-name "Room"))
 
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"

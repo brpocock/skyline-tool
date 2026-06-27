@@ -162,53 +162,54 @@
                 ;; Body text
                 (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
                 (let ((y 700) (line-height 11) (bar-w 108) (bar-h 8))
+                  (declare (ignore bar-w))
                   (loop for line = (read-line s nil nil)
                         while (and line (>= y 65))
                         do (let ((bracket-pos (position #\[ line))
-                                (pct-pos (position #\% line)))
-                            (cond
-                             ;; Per-bank progress bar: contains "[...]NNN%"
-                             ((and bracket-pos pct-pos (find #\] line :start bracket-pos)
-                                   (> (length line) (+ bracket-pos 10)))
-                              (let* ((end-bracket (position #\] line :start bracket-pos))
-                                     (pct-str (string-trim " " (subseq line (1+ end-bracket))))
-                                     (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
-                                     (bar-x 350) (bar-w 108)
-                                     (pct (or pct 0)))
-                                ;; Text label (bank name) on the left
-                                (let ((label (string-trim " " (subseq line 0 bracket-pos))))
-                                  (format ps "50 ~d moveto (~a) show~%" y
-                                          (skyline-tool::escape-ps-string label)))
-                                ;; Hollow light-blue rectangle with black border
-                                (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
-                                        bar-x y bar-w bar-h)
-                                ;; Navy-blue fill for used portion
-                                (when (> pct 0)
-                                  (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
-                                    (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
-                                            bar-x y fill-w bar-h)
-                                    (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
-                             ;; Overall bar: contains "[...]NNN%" but different position pattern
-                             ((and bracket-pos pct-pos (> bracket-pos 20))
-                              (let* ((end-bracket (position #\] line :start bracket-pos))
-                                     (pct-str (string-trim " " (subseq line (1+ end-bracket))))
-                                     (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
-                                     (pct (or pct 0))
-                                     (bar-x 50) (bar-w 512) (bar-h 16))
-                                (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
-                                        bar-x y bar-w bar-h)
-                                (when (> pct 0)
-                                  (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
-                                    (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
-                                            bar-x y fill-w bar-h)
-                                    (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
-                             (t
-                              (format ps "50 ~d moveto (~a) show~%" y
-                                      (skyline-tool::escape-ps-string line))))
-                           (decf y line-height)))
-                ;; Footer: icon at lower-left, date/author/host, page number right
-                (skyline-tool::write-ps-footer ps date-str author (machine-instance) game-title (1+ page) total-pages)
-                (format ps "showpage~%")))))
+                                 (pct-pos (position #\% line)))
+                             (cond
+                               ;; Per-bank progress bar: contains "[...]NNN%"
+                               ((and bracket-pos pct-pos (find #\] line :start bracket-pos)
+                                     (> (length line) (+ bracket-pos 10)))
+                                (let* ((end-bracket (position #\] line :start bracket-pos))
+                                       (pct-str (string-trim " " (subseq line (1+ end-bracket))))
+                                       (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
+                                       (bar-x 350) (bar-w 108)
+                                       (pct (or pct 0)))
+                                  ;; Text label (bank name) on the left
+                                  (let ((label (string-trim " " (subseq line 0 bracket-pos))))
+                                    (format ps "50 ~d moveto (~a) show~%" y
+                                            (skyline-tool::escape-ps-string label)))
+                                  ;; Hollow light-blue rectangle with black border
+                                  (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
+                                          bar-x y bar-w bar-h)
+                                  ;; Navy-blue fill for used portion
+                                  (when (> pct 0)
+                                    (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
+                                      (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
+                                              bar-x y fill-w bar-h)
+                                      (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
+                               ;; Overall bar: contains "[...]NNN%" but different position pattern
+                               ((and bracket-pos pct-pos (> bracket-pos 20))
+                                (let* ((end-bracket (position #\] line :start bracket-pos))
+                                       (pct-str (string-trim " " (subseq line (1+ end-bracket))))
+                                       (pct (ignore-errors (parse-integer pct-str :junk-allowed t)))
+                                       (pct (or pct 0))
+                                       (bar-x 50) (bar-w 512) (bar-h 16))
+                                  (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
+                                          bar-x y bar-w bar-h)
+                                  (when (> pct 0)
+                                    (let ((fill-w (max 1 (round (* bar-w (/ pct 100))))))
+                                      (format ps "gsave newpath ~d ~d ~d ~d rectfill 0.0 0.0 0.4 setrgbcolor grestore~%"
+                                              bar-x y fill-w bar-h)
+                                      (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
+                               (t
+                                (format ps "50 ~d moveto (~a) show~%" y
+                                        (skyline-tool::escape-ps-string line))))
+                             (decf y line-height)))
+                  ;; Footer: icon at lower-left, date/author/host, page number right
+                  (skyline-tool::write-ps-footer ps date-str author (machine-instance) game-title (1+ page) total-pages)
+                  (format ps "showpage~%")))))
           (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
                             :output nil :ignore-error-status t)
           (ignore-errors (delete-file ps-path))
@@ -403,6 +404,7 @@
   (terpri (slot-value s 'target))
   (terpri (slot-value s 'capture)))
 
+#+ ()
 (defmethod stream-start-line-p ((s capturing-stream))
   (start-line-p (slot-value s 'target)))
 
@@ -434,6 +436,21 @@
 (defmethod stream-line-height ((stream capturing-stream) &key text-style)
   (stream-line-height (slot-value stream 'target) :text-style text-style))
 
+(defmethod clim-internals::stream-write-object ((stream capturing-stream) object)
+  (clim-internals::stream-write-object (slot-value stream 'target) object))
+
+(defmethod clim:stream-recording-p ((stream capturing-stream))
+  (clim:stream-recording-p (slot-value stream 'target)))
+
+(defmethod clim-internals::stream-write-object ((stream capturing-stream) object)
+  (clim-internals::stream-write-object (slot-value stream 'target) object))
+
+;; Expose the real target pane for code that needs direct CLIM drawing
+(defvar *echo-pane* nil
+  "Bound to the actual CLIM pane during echo-echo display functions.
+   Use this instead of *standard-output* for CLIM operations that
+   require a real pane (drawing, surrounding-output-with-border, etc.).")
+
 (defun echo-echo (frame pane)
   (clim:window-clear pane)
   (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))
@@ -442,7 +459,8 @@
                             :target pane :capture capture)))
     (let ((*standard-output* capturing-stream)
           (*trace-output* *standard-output*)
-          (*error-output* *standard-output*))
+          (*error-output* *standard-output*)
+          (*echo-pane* pane))
       (funcall (frame-pipe frame)))
     (setf (frame-captured-text frame) (get-output-stream-string capture))
     (force-output pane)))

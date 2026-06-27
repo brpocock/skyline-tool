@@ -254,6 +254,37 @@
       (with-open-file (f path :direction :output :if-exists :supersede)
         (princ (sequence-property-text seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
+(define-anim-seq-editor-frame-command (com-copy :menu nil :name t) ()
+  (let* ((frame *anim-seq-editor-frame*)
+         (seq (anim-seq-editor-sequence frame))
+         (json (sequence-to-json seq)))
+    (clime:publish-selection
+     (clim:find-pane-named frame 'interactor)
+     :clipboard json 'clipboard-json)
+    (format *query-io* "~&Copied animation sequence ~d as JSON (~d chars) to clipboard.~%"
+            (simple-animation-sequence-index seq) (length json))))
+(define-anim-seq-editor-frame-command (com-paste :menu nil :name t) ()
+  (let* ((frame *anim-seq-editor-frame*)
+         (interactor (clim:find-pane-named frame 'interactor))
+         (json (multiple-value-bind (str type)
+                   (clime:request-selection interactor :clipboard 'string)
+                 (declare (ignore type))
+                 str)))
+    (if json
+        (handler-case
+            (let ((seq (sequence-from-json json)))
+              (push seq *animation-sequences*)
+              (setf (anim-seq-editor-index *anim-seq-editor-frame*)
+                    (simple-animation-sequence-index seq)
+                    (anim-seq-editor-sequence *anim-seq-editor-frame*) seq)
+              (update-params *anim-seq-editor-frame*)
+              (save-all-animation-sequences)
+              (clim:redisplay-frame-panes *anim-seq-editor-frame*)
+              (format *query-io* "~&Pasted animation sequence ~d from clipboard.~%"
+                      (simple-animation-sequence-index seq)))
+          (error (e)
+            (format *query-io* "~&Paste error: ~a~%" e)))
+        (format *query-io* "~&Paste: clipboard empty.~%"))))
 (defun animation-sequence-pen->rgb (seq colors)
   "Return function mapping pen index → (R G B) for SEQ with palette COLORS."
   (let* ((system-palette (ecase *region*
@@ -289,7 +320,7 @@
          (fc (simple-animation-sequence-frame-count seq))
          (single (>= frame 0))
          (nf (if single 1 fc))
-         (iw (* (max 1 nf) tw)) (ih th)
+         (iw (* (max 1 nf) tw 2)) (ih th)
          (s (or scale 1))
          (colors (read-palette-for-tile-sheet
                   (simple-animation-sequence-tile-sheet seq) palette-index
@@ -319,16 +350,17 @@
              (tile-ref (aref (simple-animation-sequence-frames seq) fi))
              (addr (* bw tile-ref))
              (fp (extract-maria-pixels dump mode addr bw))
-             (xo (* f tw s)))
+             (xo (* f tw 2 s)))
         (dotimes (y th)
           (dotimes (x tw)
             (destructuring-bind (r g b) (funcall pen->rgb (aref fp x y))
-              (dotimes (sy s)
-                (dotimes (sx s)
-                  (let ((off (* (+ (* (+ (* y s) sy) iw s) (+ (* x s) sx xo)) 3)))
-                    (setf (aref pixels off) r
-                          (aref pixels (+ off 1)) g
-                          (aref pixels (+ off 2)) b)))))))))
+              (let ((bx (* 2 x s)))
+                (dotimes (sy s)
+                  (dotimes (sx (* 2 s))
+                    (let ((off (* (+ (* (+ (* y s) sy) iw s) (+ bx sx xo)) 3)))
+                      (setf (aref pixels off) r
+                            (aref pixels (+ off 1)) g
+                            (aref pixels (+ off 2)) b))))))))))
     (values pixels (* iw s) (* ih s))))
 
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-png :menu nil :name t) ()
