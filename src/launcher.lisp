@@ -22,8 +22,7 @@
           ("Help" :menu launcher-help-menu)))
 
 (clim:define-command-table edit-menu
-  :menu (("Cut" :command com-cut)
-         ("Copy" :command com-copy)
+  :menu (("Copy" :command com-copy)
          ("Paste" :command com-paste)
          (nil :divider :line)
          ("Find..." :command com-find)))
@@ -1074,17 +1073,15 @@ The signal code was ~a" break-code)
             do (return-from read-asset-bank-size (parse-integer line :start 2)))
     (error "Could not figure out size of bank $~2,'0x for ~a ~a" bank build region)))
 
-(defun make-progress-bar (fraction width)
-  "Return a string showing a progress bar using Unicode block characters.
-   FRACTION is a number 0-1, WIDTH is the total bar width in characters."
-  (let* ((filled (round (* fraction width)))
-         (empty (- width filled))
-         (bar (make-array (+ width 2) :element-type 'character :fill-pointer 0)))
-    (vector-push #\[ bar)
-    (dotimes (i filled) (vector-push #\█ bar))
-    (dotimes (i empty)  (vector-push #\░ bar))
-    (vector-push #\] bar)
-    bar))
+(defun emit-progress-bar (fraction x y width height)
+  "Draw a progress bar as two CLIM rectangles — background light blue, fill navy.
+   FRACTION 0-1 fills from left.  Drawn on *STANDARD-OUTPUT*."
+  (clim:with-room-for-graphics (*standard-output* :height height)
+    (let ((fill-w (max 1 (round (* fraction width)))))
+      (clim:draw-rectangle* *standard-output* 0 0 width height
+                            :filled t :ink (clim:make-rgb-color 0.7 0.85 1.0))
+      (clim:draw-rectangle* *standard-output* 0 0 fill-w height
+                            :filled t :ink (clim:make-rgb-color 0.0 0.0 0.5)))))
 
 (defun rom-budget (&optional (build "Public") (region :ntsc))
   "Generate a ROM budget report for BUILD and REGION, with visual usage bars.
@@ -1109,20 +1106,20 @@ The signal code was ~a" break-code)
                                           :name (format nil "Bank~(~2,'0x~).~a.~a"
                                                         bank build (string-upcase region))))
                 (base-size (ignore-errors
-                             (parse-integer
-                              (remove-if-not #'digit-char-p
-                                             (read-file-into-string size-path))))))
+                            (parse-integer
+                             (remove-if-not #'digit-char-p
+                                            (read-file-into-string size-path))))))
            (let ((size (if (= bank #x3f)
                            ;; Bank $3F: StagehandHigh .o size
                            (let ((o-path (merge-pathnames
                                           (make-pathname
                                            :directory (list :relative "Object"
-                                                           (machine-directory-name))
+                                                            (machine-directory-name))
                                            :name "StagehandHigh" :type "o")
                                           (uiop:getcwd))))
                              (if (probe-file o-path)
                                  (with-open-file (o-file o-path :direction :input
-                                                         :element-type '(unsigned-byte 8))
+                                                                :element-type '(unsigned-byte 8))
                                    (file-length o-file))
                                  (progn (format t "~%Bank $3F: StagehandHigh.o not found")
                                         #x4000)))
@@ -1132,13 +1129,14 @@ The signal code was ~a" break-code)
                                  #x4000)))))
              (incf sum size)
              (incf bank-count)
-              (let ((pct (round (/ size 163.84))))
-                (vector-push-extend size bank-sizes)
-                (vector-push-extend pct bank-pcts)
-                (format t "~%Bank $~2,'0x — $~4,'0x (~:d)~35t~a ~d%"
-                        bank size size (make-progress-bar (/ size #x4000) 20) pct)))))
+             (let ((pct (round (/ size 163.84))))
+               (vector-push-extend size bank-sizes)
+               (vector-push-extend pct bank-pcts)
+               (format t "~%Bank $~2,'0x — $~4,'0x (~:d)~35t" bank size size)
+               (emit-progress-bar (/ size #x4000) 350 0 108 8)
+               (format t " ~d%" pct)))))
         ((= bank #x3e)
-          (format t "~%Bank $3E — unavailable on 7800GD~35t[░░░░░░░░░░░░░░░░░░░░] 100%")
+         (format t "~%Bank $3E — unavailable on 7800GD~35t[░░░░░░░░░░░░░░░░░░░░] 100%")
          (incf sum #x4000)
          (incf bank-count)
          (vector-push-extend #x4000 bank-sizes)
@@ -1153,23 +1151,24 @@ The signal code was ~a" break-code)
            (let ((pct (round (/ size 163.84))))
              (vector-push-extend size bank-sizes)
              (vector-push-extend pct bank-pcts)
-              (format t "~&Bank $~2,'0x — $~4,'0x (~:d)~35t~a ~d%"
-                      bank size size (make-progress-bar (/ size #x4000) 20) pct))))))
-    (let ((total-pct (round (* 100 (/ sum (* total-banks #x4000))))))
-      (format t "~2% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)~%"
-              build (string-upcase region) sum sum (floor sum 1024)
-              (round (* 100 (/ sum (* total-banks #x4000)))))
-      ;; Overall usage bar (wider, indented)
-      (let ((bar-width 50))
-        (format t "~%~%     ~a" (make-progress-bar (/ sum (* total-banks #x4000)) bar-width))
-        (format t " ~d% (~:d / ~:d bytes)~%~%" total-pct sum (* total-banks #x4000))))))
+             (format t "~&Bank $~2,'0x — $~4,'0x (~:d)~35t~a ~d%"
+                     bank size size (make-progress-bar (/ size #x4000) 20) pct)))))
+      (let ((total-pct (round (* 100 (/ sum (* total-banks #x4000))))))
+        (format t "~2% … total for ~a ~a: $~6,'0x = ~:d = ~:d kiB (~d%)~%"
+                build (string-upcase region) sum sum (floor sum 1024)
+                (round (* 100 (/ sum (* total-banks #x4000)))))
+        ;; Overall usage bar — much larger
+        (let ((bar-width 600) (bar-height 24))
+          (format t "~%~%     ")
+          (emit-progress-bar (/ sum (* total-banks #x4000)) 0 0 bar-width bar-height)
+          (format t " ~d% (~:d / ~:d bytes)~%~%" total-pct sum (* total-banks #x4000)))))))
 
 (defun show-rom-budget ()
   "ROM Budget report (NTSC Public by default)"
   (clim-simple-echo:run-in-simple-echo (lambda ()
-                                          (rom-budget "Public" :ntsc))
-                                        :process-name "ROM Budget"
-                                        :height 700))
+                                         (rom-budget "Public" :ntsc))
+                                       :process-name "ROM Budget"
+                                       :height 700))
 
 (defun launcher ()
   "Open the Skyline Tool launcher (main menu)"
