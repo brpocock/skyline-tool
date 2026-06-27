@@ -995,7 +995,7 @@
                                   (princ " " *standard-output*)))))
                         (terpri)                       ; newline between entries (inside presentation)
                         ;; Locale in small gray text underneath
-                        (when (and locale (member kind-key '(:script :map)))
+                        (when (and *locale* (member kind-key '(:script :map)))
                           (terpri *standard-output*)
                           (write-string "               " *standard-output*)
                           (clim:with-text-style (*standard-output*

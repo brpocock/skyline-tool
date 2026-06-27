@@ -154,20 +154,50 @@
 (defclass animation-preview-pane (clim:application-pane) ()
   (:documentation "Preview pane for animation sequences. Handles timer events for animation."))
 
-(clim:define-command-table animation-sequence-menu
-  :menu (("New Animation Sequence" :command com-create-new-sequence)
-         ("Import Animation Sequence..." :command com-import-animation-seq)
-         ("Go To Animation Sequence..." :command com-switch-to-sequence)
+(clim:define-command-table set-major-kind-menu
+  :menu (("NPC" :command (com-select-major-kind :npc))
+         ("Background/Scenery" :command (com-select-major-kind :background))))
+
+(clim:define-command-table set-decal-kind-menu
+  :menu (("Player" :command (com-select-decal-kind :player))
+         ("Tranh" :command (com-select-decal-kind :tranh))
+         ("Ornass" :command (com-select-decal-kind :ornass))
+         ("Nessa" :command (com-select-decal-kind :nessa))
+         ("Nefertem" :command (com-select-decal-kind :nefertem))
+         ("Elder Tranh" :command (com-select-decal-kind :tranh-elder))
+         ("Mayor" :command (com-select-decal-kind :mayor))
+         ("Maria" :command (com-select-decal-kind :maria))
+         ("Erdack" :command (com-select-decal-kind :erdack))
+         ("Sentinel" :command (com-select-decal-kind :sentinel))
+         ("Enemy" :command (com-select-decal-kind :enemy))
          (nil :divider :line)
-         ("Next Palette" :command com-next-palette)
-         ("Switch Palette..." :command com-switch-palette)
-         ("Switch Tileset..." :command com-switch-tileset)
-         ("Next Frame Rate" :command com-switch-frame-rate-scalar)
-         (nil :divider :line)
-         ("Save Animation Sequence" :menu save-animation-sequence-menu)
-         ("Print Animation Sequence" :menu print-animation-sequence-menu)
-         (nil :divider :line)
-         ("Close Animation Sequence" :command com-close-frame)))
+         ("Switch Decal Kind" :command com-switch-decal-kind)))
+
+(clim:define-command-table set-frames-menu
+  :menu (("One Frame" :command (com-switch-frame-count 1))
+         ("Two Frames" :command (com-switch-frame-count 2))
+         ("Four Frames" :command (com-switch-frame-count 4))
+         ("Eight Frames" :command (com-switch-frame-count 8))))
+
+(clim:define-command-table set-speed-menu
+  :menu (("1 (10 fps; 2/5s)" :command (com-switch-frame-rate-scalar 1))
+         ("2 (20 fps; 1/5s)" :command (com-switch-frame-rate-scalar 2))
+         ("3 (30 fps; 3/15s)" :command (com-switch-frame-rate-scalar 3))
+         ("4 (40 fps; 2/25s)" :command (com-switch-frame-rate-scalar 4))
+         ("5 (50 fps; 1/10s)" :command (com-switch-frame-rate-scalar 5))
+         ("6 (60 fps; 1/12s)" :command (com-switch-frame-rate-scalar 6))
+         ("7 (70 fps; 7/60s)" :command (com-switch-frame-rate-scalar 7))
+         ("8 (80 fps; 1/15s)" :command (com-switch-frame-rate-scalar 8))))
+
+(clim:define-command-table set-palette-menu
+  :menu (("0" :command (com-switch-palette 0))
+         ("1" :command (com-switch-palette 1))
+         ("2" :command (com-switch-palette 2))
+         ("3" :command (com-switch-palette 3))
+         ("4" :command (com-switch-palette 4))
+         ("5" :command (com-switch-palette 5))
+         ("6" :command (com-switch-palette 6))
+         ("7" :command (com-switch-palette 7))))
 
 (clim:define-command-table save-animation-sequence-menu
   :menu (("As JSON..." :command com-save-animation-seq-as-json)
@@ -179,6 +209,23 @@
 (clim:define-command-table print-animation-sequence-menu
   :menu ())
 
+(clim:define-command-table animation-sequence-menu
+  :menu (("New Sequence" :command com-create-new-sequence)
+         ("Import Sequence JSON..." :command com-import-animation-seq)
+         ("Go To Sequence..." :command com-switch-to-sequence)
+         (nil :divider :line)
+         ("Change Label..." :command com-set-label)
+         ("Set Major Kind" :menu set-major-kind-menu)
+         ("Set Decal Kind" :menu set-decal-kind-menu)
+         ("Set Frames" :menu set-frames-menu)
+         ("Set Speed" :menu set-speed-menu)
+         ("Set Palette" :menu set-palette-menu)
+         (nil :divider :line)
+         ("Save As" :menu save-animation-sequence-menu)
+         ("Print To" :menu print-animation-sequence-menu)
+         (nil :divider :line)
+         ("Close" :command com-close-frame)))
+
 (clim:define-command-table anim-seq-help-menu
   :menu (("How to Edit Animation Sequences" :command com-help-for-window)
          ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
@@ -187,7 +234,7 @@
          ("About Skyline-Tool" :command com-about-skyline-tool)))
 
 (clim:define-command-table anim-seq-menu-bar
-  :menu (("Animation Sequence" :menu animation-sequence-menu)
+  :menu (("Sequence" :menu animation-sequence-menu)
          ("Edit" :menu edit-menu) ("Help" :menu anim-seq-help-menu)))
 (clim:define-application-frame anim-seq-editor-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
@@ -1375,11 +1422,16 @@ Called from note-sheet-grafted after the frame is connected to the display."
   "Select which frames go together to form an animation sequence"
   (clim-sys:make-process (lambda ()
                            (load-all-animation-sequences)
-                           (let ((*anim-seq-editor-frame*
+                           (let* ((*anim-seq-editor-frame*
                                    (clim:make-application-frame 'anim-seq-editor-frame
-                                                                :sequence sequence)))
-                              (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
-                                    (window-title "Animation Sequence"))
+                                                                :sequence sequence))
+                                  (seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
+                                  (label (when seq (simple-animation-sequence-label seq)))
+                                  (title (if label
+                                             (format nil "Animation Sequence ~d: ~a" sequence label)
+                                             (format nil "Animation Sequence ~d" sequence))))
+                             (setf (clim:frame-pretty-name *anim-seq-editor-frame*)
+                                   (window-title title))
                              (let ((*application-frame* *anim-seq-editor-frame*))
                                (clim:run-frame-top-level *anim-seq-editor-frame*))))
                          :name "Edit Animation Sequence"))
