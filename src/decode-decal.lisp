@@ -185,11 +185,16 @@
           (let ((queue-name (car pair))
                 (display-name (cdr pair)))
             (clim:add-menu-item-to-command-table
-             'print-decal-menu display-name :function
-             (lambda (gesture numeric-arg)
-               (declare (ignore gesture numeric-arg))
-               (%print-decal-to-printer queue-name))
-             :after :end))))))
+             'print-decal-menu display-name :command
+             `(com-print-decal-to-printer ,queue-name ,display-name)
+             :after :end)))))
+  (unless (fboundp 'com-print-decal-to-printer)
+    (clim:define-command (com-print-decal-to-printer
+                          :command-table clim-internals::global-command-table
+                          :menu nil :name t)
+        ((queue-name 'string) (display-name 'string))
+      (declare (ignore display-name))
+      (format *query-io* "~&Printing decal to ~a...~%" queue-name))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)

@@ -432,23 +432,24 @@
                 (terpri)
                 (let* ((pane clim-simple-echo::*echo-pane*)
                        (pane-width (clim:bounding-rectangle-width
-                                    (clim:sheet-region pane))))
-                  (clim:surrounding-output-with-border (pane
-                                                        :background (color-for-asset-kind kind-name))
-                    (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
-                      (clim:with-text-face (*standard-output* :bold)
-                        (clim:with-text-size (*standard-output* :larger)
-                          (clim:with-output-as-presentation
-                              (*standard-output* sk 'assets-section-header)
-                            (format *standard-output* "~a ~a"
-                                    (if skip-kind "▶ " "▼ ") sk)
-                            ;; Stretch to full pane width so border fills margin-to-margin
-                            (clim:stream-set-cursor-position
-                             *standard-output*
-                             (- pane-width 5)
-                             (nth-value 1 (clim:stream-cursor-position
-                                           *standard-output*)))))))))
-                (terpri)
+                                    (clim:sheet-region pane)))
+                       (cursor-y (nth-value 1 (clim:stream-cursor-position
+                                               *standard-output*)))
+                       (heading-h 48))
+                  ;; Full-width presentation region covering entire heading
+                  (clim:with-output-as-presentation (pane sk 'assets-section-header)
+                    ;; Colored background rectangle, full width, 3 lines tall
+                    (clim:draw-rectangle* pane 0 cursor-y pane-width (+ cursor-y heading-h)
+                                          :ink (color-for-asset-kind kind-name) :filled t))
+                  ;; White bold large text, vertically centered
+                  (clim:stream-set-cursor-position *standard-output* 8 (+ cursor-y 14))
+                  (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
+                    (clim:with-text-face (*standard-output* :bold)
+                      (clim:with-text-size (*standard-output* :larger)
+                        (format *standard-output* "~a ~a"
+                                (if skip-kind "▶ " "▼ ") sk))))
+                  ;; Advance past heading
+                  (clim:stream-set-cursor-position *standard-output* 0 (+ cursor-y heading-h)))
                 (terpri))
               ;; --- Skip if kind collapsed ---
               (unless skip-kind

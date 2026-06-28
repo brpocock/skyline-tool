@@ -1010,7 +1010,8 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
          (palette-pixels (png->palette image-data)))
     (cond
       #+mcclim
-      ((typep stream 'clim:sheet)
+      ((and (typep stream 'clim:sheet)
+            (ignore-errors (clim:stream-drawing-p stream)))
        (%print-thumbnail-clim stream path width height))
       ((and (not (typep stream 'string-stream))
             (tty-xterm-p))

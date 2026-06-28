@@ -524,11 +524,21 @@
           (let ((queue-name (car pair))
                 (display-name (cdr pair)))
             (clim:add-menu-item-to-command-table
-             'print-buffer-menu display-name :function
-             (lambda (gesture numeric-arg)
-               (declare (ignore gesture numeric-arg))
-               (%print-buffer-to-printer queue-name))
-             :after :end))))))
+             'print-buffer-menu display-name :command
+             `(com-print-buffer-to-printer ,queue-name ,display-name)
+             :after :end)))))
+  (unless (fboundp 'com-print-buffer-to-printer)
+    (clim:define-command (com-print-buffer-to-printer
+                          :command-table clim-internals::global-command-table
+                          :menu nil :name t)
+        ((queue-name 'string) (display-name 'string))
+      (declare (ignore display-name))
+      (handler-case
+          (let ((path (format nil "/tmp/animation-buffer-~d.ps"
+                              (get-universal-time))))
+            (%print-buffer-to-printer queue-name))
+        (error (e)
+          (format *query-io* "~&Print error: ~a~%" e))))))
 
 (eval-when (:load-toplevel)
   (populate-buffer-print-menu))
