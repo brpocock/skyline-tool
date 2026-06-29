@@ -15,6 +15,65 @@
   (present object 'expression :stream stream :view view
                               :acceptably acceptably :for-context-type for-context-type))
 
+;; Macro to delegate a clim-simple-echo command to the same-named
+;; command in skyline-tool, without writing package prefixes in source.
+(defmacro define-echo-delegate (name &rest args)
+  (let ((target (intern (string name) :skyline-tool)))
+    `(clim:define-command (,name :command-table clim-internals::global-command-table
+                                :menu nil :name t)
+         ,(if args
+              `(,(first (first args)) ,(second (first args)))
+              '())
+       (,target ,@(when args `(,(first (first args))))))))
+
+(define-echo-delegate com-run-repl)
+(define-echo-delegate com-show-lisp-room)
+(define-echo-delegate com-reload-skyline-tool-from-sources)
+
+(define-echo-delegate com-show-rom-budget)
+(define-echo-delegate com-anim-seq-editor)
+(define-echo-delegate com-assign-animation-sequences)
+(define-echo-delegate com-run-tiled)
+(define-echo-delegate com-open-file-manager)
+(define-echo-delegate com-push-binary-to-7800gd)
+(define-echo-delegate com-shove-binary-into-7800gd)
+
+(define-echo-delegate com-show-dll-from-dump)
+(define-echo-delegate com-show-buffer-dll)
+(define-echo-delegate com-copy-dump-as-dump2)
+(define-echo-delegate com-compare-dlls)
+(define-echo-delegate com-show-animation-buffer)
+(define-echo-delegate com-show-decal)
+(define-echo-delegate com-analyze-faults)
+(define-echo-delegate com-show-dialogue-buffers)
+(define-echo-delegate com-show-map-from-dump)
+(define-echo-delegate com-show-sound-system-info)
+(define-echo-delegate com-show-all-stacks)
+(define-echo-delegate com-show-forth-stack)
+(define-echo-delegate com-show-player-object)
+(define-echo-delegate com-show-self-object)
+(define-echo-delegate com-show-all-objects)
+(define-echo-delegate com-show-room-for-objects)
+
+(define-echo-delegate com-edit-project.json)
+(define-echo-delegate com-edit-skyline-config-prefs)
+(define-echo-delegate com-reload-assets-index)
+(define-echo-delegate com-rescan-project-folder)
+
+(define-echo-delegate com-help-for-window)
+(define-echo-delegate com-open-scripting-guide)
+
+(define-echo-delegate com-set-region-ntsc)
+(define-echo-delegate com-set-region-pal)
+(define-echo-delegate com-set-build-demo)
+(define-echo-delegate com-set-build-public)
+(define-echo-delegate com-set-build-publisher)
+(define-echo-delegate com-run-in-a7800)
+
+(define-echo-delegate com-load-dump-default)
+(define-echo-delegate com-load-dump2)
+(define-echo-delegate com-load-dump-from-file)
+
 (define-command-table echo-save-as-menu
   :menu (("Text..." :command com-save-text)
          ("PDF..." :command com-print-pdf)
@@ -66,6 +125,10 @@
 (defmethod initialize-instance :after ((frame simple-echo) &key)
   (ignore-errors (populate-echo-print-menu frame)))
 
+(define-command-table simple-echo
+  :inherit-from (clim-internals::global-command-table)
+  :menu (("Report" :menu echo-file-menu) ("Edit" :menu echo-edit-menu) ("Help" :menu echo-help-menu)))
+
 (define-command-table echo-menu-bar
   :menu (("Report" :menu echo-file-menu) ("Edit" :menu echo-edit-menu) ("Help" :menu echo-help-menu)))
 
@@ -81,19 +144,97 @@
          ("Tileset" :command com-new-tileset)))
 
 (define-command-table echo-resource-save-list-as-menu
-  :menu (("JSON" :command com-save-as-json)
+  :menu (("JSON..." :command com-save-as-json)
          ("Text..." :command com-save-text)
+         ("Spreadsheet..." :command com-save-spreadsheet)
          ("PDF..." :command com-print-pdf)))
 
+(define-command-table echo-resource-lisp-menu
+  :inherit-from (clim-internals::global-command-table)
+  :menu (("Run REPL..." :command com-run-repl)
+         ("Show Lisp Room..." :command com-show-lisp-room)
+         (nil :divider :line)
+         ("Reload Skyline-Tool from Sources..." :command com-reload-skyline-tool-from-sources)))
+
+(define-command-table echo-resource-a7800-region-menu
+  :menu (("NTSC" :command com-set-region-ntsc)
+         ("PAL" :command com-set-region-pal)))
+
+(define-command-table echo-resource-a7800-build-menu
+  :menu (("Demo" :command com-set-build-demo)
+         ("Public" :command com-set-build-public)
+         ("Publisher" :command com-set-build-publisher)))
+
+(define-command-table echo-resource-a7800-menu
+  :menu (("Region" :menu echo-resource-a7800-region-menu)
+         ("Build" :menu echo-resource-a7800-build-menu)
+         (nil :divider :line)
+         ("Run in A7800..." :command com-run-in-a7800)))
+
+(define-command-table echo-resource-tools-menu
+  :inherit-from (clim-internals::global-command-table)
+  :menu (("Show ROM Budget..." :command com-show-rom-budget)
+         ("Animation Sequence Editor..." :command com-anim-seq-editor)
+         ("Assign Animation Sequences..." :command com-assign-animation-sequences)
+         (nil :divider :line)
+         ("Run in Tiled..." :command com-run-tiled)
+         ("Open File Manager..." :command com-open-file-manager)
+         (nil :divider :line)
+         ("A7800" :menu echo-resource-a7800-menu)
+         (nil :divider :line)
+         ("Push Binary to 7800 Game Drive..." :command com-push-binary-to-7800gd)
+         ("Shove into Running 7800 Game Drive..." :command com-shove-binary-into-7800gd)))
+
+(define-command-table echo-resource-core-dump-menu
+  :menu (("Load /tmp/dump" :command com-load-dump-default)
+         ("Load /tmp/dump2" :command com-load-dump2)
+         ("Load from file..." :command com-load-dump-from-file)))
+
+(define-command-table echo-resource-debug-menu
+  :inherit-from (clim-internals::global-command-table)
+  :menu (("Core Dump" :menu echo-resource-core-dump-menu)
+         (nil :divider :line)
+         ("Show DLL from Dump..." :command com-show-dll-from-dump)
+         ("Show Back Buffer DLL..." :command com-show-buffer-dll)
+         ("Copy Dump as Dump2..." :command com-copy-dump-as-dump2)
+         ("Compare DLLs from Dumps..." :command com-compare-dlls)
+         (nil :divider :line)
+         ("Show Animation Buffer..." :command com-show-animation-buffer)
+         ("Show Decal..." :command com-show-decal)
+         (nil :divider :line)
+         ("Analyze Faults from Dump..." :command com-analyze-faults)
+         ("Show Dialogue Buffers..." :command com-show-dialogue-buffers)
+         ("Show Map..." :command com-show-map-from-dump)
+         ("Show Sound System Info..." :command com-show-sound-system-info)
+         ("Show All Stacks..." :command com-show-all-stacks)
+         ("Show Forth Stack..." :command com-show-forth-stack)
+         (nil :divider :line)
+         ("Show Player Object..." :command com-show-player-object)
+         ("Show Self Object..." :command com-show-self-object)
+         ("Show All Objects..." :command com-show-all-objects)
+         ("Show Room for Objects..." :command com-show-room-for-objects)))
+
 (define-command-table echo-resource-menu
-  :menu (("New" :menu echo-resource-new-menu)
+  :menu (("Edit Project..." :command com-edit-project.json :shortcut :ctrl-x-p)
+         ("Edit Preferences..." :command com-edit-skyline-config-prefs :shortcut :ctrl-comma)
+         (nil :divider :line)
+         ("New" :menu echo-resource-new-menu)
          ("Import JSON..." :command com-import-resource-json)
+         (nil :divider :line)
+         ("Reload Assets.index" :command com-reload-assets-index)
+         ("Rescan Project Folder" :command com-rescan-project-folder)
+         (nil :divider :line)
          ("Save List As" :menu echo-resource-save-list-as-menu)
          (nil :divider :line)
-         ("Close" :command com-close-echo)))
+         ("Close" :command com-close-echo :shortcut :ctrl-w)))
 
 (define-command-table echo-resource-menu-bar
-  :menu (("Resource" :menu echo-resource-menu) ("Edit" :menu echo-edit-menu) ("Help" :menu echo-help-menu)))
+  :menu (("Resource" :menu echo-resource-menu)
+         ("Edit" :menu echo-edit-menu)
+         ("Lisp" :menu echo-resource-lisp-menu)
+         ("Tools" :menu echo-resource-tools-menu)
+         ("Debug" :menu echo-resource-debug-menu)
+         ("Help" :menu echo-help-menu)))
 
 ;; --- New resource commands ---
 
@@ -256,6 +397,27 @@
                            :external-format :utf-8)
           (princ text f))
         (format *query-io* "~&Saved ~a (~d bytes).~%" p (length text))))))
+
+(define-simple-echo-command (com-save-spreadsheet :menu nil :name t) ()
+  "Save the asset list as a CSV spreadsheet."
+  (let* ((frame *application-frame*)
+         (text (frame-captured-text frame))
+         (frame-name (ignore-errors (clim:frame-pretty-name frame)))
+         (default-name (format nil "~a.csv" (or frame-name "output")))
+         (path (%zenity-or-clim "Save As Spreadsheet..." default-name)))
+    (when path
+      (with-open-file (f path :direction :output :if-exists :supersede
+                           :external-format :utf-8)
+        (format f "Kind,Moniker,Asset ID,Hex ID,Builds,Present,Full Path~%")
+        (let ((all-assets (collect-all-assets)))
+          (dolist (entry all-assets)
+            (destructuring-bind (moniker builds kind-name asset-id hex-str present-p full-path)
+                entry
+              (format f "~a,~a,~a,~a,~a,~a,~a~%"
+                      kind-name moniker (or asset-id "") (or hex-str "")
+                      (or (format nil "~{~a~^ ~}" builds) "") (if present-p "Yes" "No")
+                      (or full-path ""))))))
+      (format *query-io* "~&Saved spreadsheet to ~a~%" path))))
 
 (defun %zenity-or-clim (title default-name)
   "Prompt for a filename using zenity (if available) or CLIM's accept."
@@ -558,7 +720,7 @@
             (format *query-io* "~&Saved ~a (~d bytes).~%" path (length json)))))))
 
 (define-simple-echo-command (com-close-echo :menu nil :name t) ()
-  (frame-exit *application-frame*))
+  (clim:frame-exit *application-frame*))
 
 (define-simple-echo-command (com-find-in-echo :menu nil :name t) ()
   "Toggle the asset filter in the All Resources window."
@@ -676,12 +838,11 @@
              `(com-print-to-printer ,queue-name ,display-name)
              :after :end)))
         (clim:add-menu-item-to-command-table
-         command-table "Default Printer (lpr)" :function
-         (lambda (g n)
-           (declare (ignore g n))
-           (%print-echo-to-printer nil))
-                                               :after :end
-                                               :value t)))
+         command-table "Default Printer (lpr)" 
+         :command
+         `(com-print-to-printer ,queue-name ,display-name)
+         :after :end
+         :value t)))
   ;; Define the print command dynamically
   (unless (fboundp 'com-print-to-printer)
     (clim:define-command (com-print-to-printer
@@ -795,15 +956,20 @@
    require a real pane (drawing, surrounding-output-with-border, etc.).")
 
 (defun echo-echo (frame pane)
-  (clim:window-clear pane)
-  (ignore-errors (setf (clim:window-viewport-position pane) (values 0 0)))
-  (let* ((capture (make-string-output-stream))
-         (capturing-stream (make-instance 'capturing-stream
-                            :target pane :capture capture)))
-    (let ((*standard-output* capturing-stream)
-          (*trace-output* *standard-output*)
-          (*error-output* *standard-output*)
-          (*echo-pane* pane))
-      (funcall (frame-pipe frame)))
-    (setf (frame-captured-text frame) (get-output-stream-string capture))
-    (force-output pane)))
+  ;; Save scroll position before clearing
+  (let ((old-x 0) (old-y 0))
+    (multiple-value-setq (old-x old-y)
+      (ignore-errors (clim:window-viewport-position pane)))
+    (clim:window-clear pane)
+    (let* ((capture (make-string-output-stream))
+           (capturing-stream (make-instance 'capturing-stream
+                               :target pane :capture capture)))
+      (let ((*standard-output* capturing-stream)
+            (*trace-output* *standard-output*)
+            (*error-output* *standard-output*)
+            (*echo-pane* pane))
+        (funcall (frame-pipe frame)))
+      (setf (frame-captured-text frame) (get-output-stream-string capture))
+      (force-output pane)
+      ;; Restore scroll position — on first call old-x/old-y are (0,0), fine.
+      (ignore-errors (setf (clim:window-viewport-position pane) (values old-x old-y))))))

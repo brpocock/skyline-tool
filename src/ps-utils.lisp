@@ -8,12 +8,12 @@
    icon (e.g. Tools/skyline-tool-icon-ANIMATION-SEQUENCE-EDITOR-128.png),
    falling back to the generic skyline-tool icon."
   (let* ((candidates (append
-                      (when resource
-                        (list (format nil "../Tools/skyline-tool-icon-~(~a~)-128.png" resource)
-                              (format nil "../Tools/skyline-tool-icon-~(~a~)-64.png" resource)))
-                      (list "../Tools/skyline-tool-icon-128.png"
-                            "../Tools/skyline-tool-icon-64.png")))
-         (existing (find-if (lambda (n) (probe-file (asdf:system-relative-pathname :skyline-tool n))) candidates)))
+                       (when resource
+                         (list (format nil "../Tools/skyline-tool-icon-~(~a~)-128.png" resource)
+                               (format nil "../Tools/skyline-tool-icon-~(~a~)-64.png" resource)))
+                       (list "../Tools/skyline-tool-icon-128.png"
+                             "../Tools/skyline-tool-icon-64.png")))
+          (existing (find-if (lambda (n) (probe-file (asdf:system-relative-pathname :skyline-tool n))) candidates)))
     (when existing
       (clim:make-pattern-from-bitmap-file
        (asdf:system-relative-pathname :skyline-tool existing)))))
@@ -35,36 +35,39 @@
                                                (dotimes (i (length pixels))
                                                  (format s "~2,'0x" (aref pixels i))))))
                                    hex)))))
-              (or (funcall try-load svg-path)
-                  (funcall try-load logo-path)
-                  (make-string (* 48 48 3 2) :initial-element #\9))))))
-
+               (or (funcall try-load svg-path)
+                   (funcall try-load logo-path)
+                   (make-string (* 48 48 3 2) :initial-element #\9))))))
 
 ;; PostScript/PDF generation functions
 (defun write-ps-header-icon (ps)
   "Write PostScript code to draw the Skyline-Tool icon as a 48×48 RGB bitmap.
-   Falls back to a dark gray rectangle if icon hex data is empty or invalid."
-  (let* ((hex (icon-hex-data))
-         (bpr (* 48 3))
-         (expected (* 48 48 3 2)))
-    (if (and hex (>= (length hex) expected))
-        (progn
-          (format ps "
-gsave
-  /DeviceRGB setcolorspace
-  ~D ~D 8
-  [~D 0 0 ~D 0 0]
-  { currentfile ~D string readhexstring pop } image
-"
-                  48 48 48 -48 bpr)
-          (loop for i from 0 below (length hex) by 72
-                do (format ps "~a~%" (subseq hex i (min (+ i 72) (length hex)))))
-          (format ps "grestore~%"))
-        (progn
-          (format ps "gsave
-  0.3 0.3 0.3 setrgbcolor
-  0 0 48 48 rectfill
-  grestore~%")))))
+   Falls back to a dark gray rectangle if icon data is empty or invalid."
+  (let ((icon-path (asdf:system-relative-pathname :skyline-tool "../Tools/skyline-tool-icon-64.png")))
+    (if (probe-file icon-path)
+        (ignore-errors
+          (let* ((png (png-read:read-png-file (namestring icon-path)))
+                 (w (png-read:width png)) (h (png-read:height png))
+                 (data (png-read:image-data png))
+                 (dims (array-dimensions data))
+                 (rgb (make-array (list w h 3) :element-type '(unsigned-byte 8))))
+            (dotimes (y h)
+              (dotimes (x w)
+                (if (= (length dims) 3)
+                    (setf (aref rgb x y 0) (aref data x y 0)
+                          (aref rgb x y 1) (aref data x y 1)
+                          (aref rgb x y 2) (aref data x y 2))
+                    (let ((idx (aref data x y)))
+                      (when idx
+                        (setf (aref rgb x y 0) idx
+                              (aref rgb x y 1) idx
+                              (aref rgb x y 2) idx))))))
+            (write-ps-image ps rgb w h 48 48)
+            t))
+        (format ps "gsave
+   0.3 0.3 0.3 setrgbcolor
+   0 0 48 48 rectfill
+   grestore~%"))))
 
 (defun write-ps-docinfo (ps title creator author)
   "Write PDF Document Info (DSC comments + pdfmark) for ps2pdf."
@@ -82,49 +85,57 @@ gsave
    Header is positioned 3/4\" (54pt) from page top. No page number."
   (declare (ignore date-str author page-num total-pages game-title))
   (format ps "gsave
-  56 738 translate
-")
+   56 738 translate
+ ")
   (write-ps-header-icon ps)
   (format ps "
-  /Times-Roman-ISOLatin1 findfont 18 scalefont setfont
-  0.0 0.0 0.3 setrgbcolor
-  (~a) dup stringwidth pop 250 exch sub 0 moveto show
-  grestore
-" (escape-ps-string title-text)))
+   /Times-Roman-ISOLatin1 findfont 18 scalefont setfont
+   0.0 0.0 0.3 setrgbcolor
+   (~a) dup stringwidth pop 250 exch sub 0 moveto show
+   grestore
+ " (escape-ps-string title-text)))
 
 (defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
-  "Write PDF footer: icon at lower-left, 'Skyline-Tool for *game-title*',
-   date — author (on hostname), page number right. All 75% black.
-   Footer is positioned 3/4\" (54pt) from page bottom."
-(let ((site (ignore-errors (short-site-name))))
-      (format ps "gsave 56 54 translate~%")
-      (write-ps-header-icon ps)
-      (format ps "grestore~%")
-      ;; Branding line + date/author on one block
-      (format ps "gsave
-  56 58 translate
-  /Times-Roman-ISOLatin1 findfont 8 scalefont setfont
-  0.25 0.25 0.25 setrgbcolor
-  0 0 moveto (Skyline-Tool for ~a) show
-  0 -12 moveto
-  (~a) show
-  currentpoint pop 4 add 0 moveto
-  gsave currentpoint 2 add moveto 12 0 rlineto stroke grestore
-  currentpoint pop 4 add 0 moveto
-  (~a) show
-  currentpoint pop 3 add 0 moveto
-  (\\(on ~a~[ at ~a~]\\)) show
-  grestore
-/Times-Roman-ISOLatin1 findfont 8 scalefont setfont
-  0.25 0.25 0.25 setrgbcolor
-  460 55 moveto (Page ~d of ~d) show
-"
-            (escape-ps-string game-title)
+  "Write PDF footer with two-row tabular layout:
+   Row 1 (top): Icon (spans both rows) | 'Skyline-Tool' (Royal Blue) 'for' (black) 'GameTitle' (Navy Blue, Italic)
+   Row 2 (bottom, 75% row1 height): Icon continued | date --- author on host [at site] (75% gray) | Page N of M (75% gray, right-aligned)
+   All positioned 3/4\" (54pt) from page bottom. Icon height = both rows combined (48pt)."
+  (let ((site (ignore-errors (short-site-name))))
+    ;; Draw icon spanning both rows (48pt tall at y=54..102)
+    (format ps "gsave 56 54 translate~%")
+    (write-ps-header-icon ps)
+    (format ps "grestore~%")
+    ;; Row 1: Branding text at y=94 baseline (10pt font, row top at y=102)
+    (format ps "gsave~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+    (format ps "0.0 0.2 0.6 setrgbcolor~%")           ; Royal Blue
+    (format ps "112 94 moveto~%")
+    (format ps "(Skyline-Tool) show~%")
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "0.0 0.0 0.0 setrgbcolor~%")           ; Black
+    (format ps "(for ) show~%")
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")           ; Navy Blue
+    (if (string= game-title "Phantasia")
+        (format ps "/Dublin-ISOLatin1 findfont 10 scalefont setfont~%")
+        (format ps "/Times-Italic-ISOLatin1 findfont 10 scalefont setfont~%"))
+    (format ps "(~a) show~%" (escape-ps-string game-title))
+    (format ps "grestore~%")
+    ;; Row 2: Date/author/host/site at y=67.57 baseline (7.5pt font, row top at y=74.57)
+    (format ps "gsave~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 7.5 scalefont setfont~%")
+    (format ps "0.25 0.25 0.25 setrgbcolor~%")        ; 75% gray
+    (format ps "112 67.57 moveto~%")
+    (format ps "(~a --- ~a on ~a~:[~; at ~a~]) show~%"
             (escape-ps-string date-str)
             (escape-ps-string author)
             (escape-ps-string hostname)
-            (if site (escape-ps-string site) "")
-            page-num total-pages)))
+            site (escape-ps-string site))
+    ;; Page number right-aligned at x=556 (56pt from right edge of 612pt page)
+    (format ps "556 67.57 moveto~%")
+    (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
+            page-num total-pages)
+    (format ps "grestore~%")))
 
 (defun write-ps-font-encodings (ps)
   "Write PostScript font re-encoding prologue for ISOLatin1 support (© ® etc)."
@@ -170,17 +181,17 @@ gsave
           do (cond
                ((member c '(#\( #\) #\\) :test 'char=)
                 (princ "\\" out) (princ c out))
-               ((char= c (code-char #x2014)) (princ "---" out))  ; em dash → --- (not in Latin-1)
-               ((char= c (code-char #x2013)) (princ "–" out))  ; en dash
-               ((char= c (code-char #x2018)) (princ "'" out))   ; left single quote
-               ((char= c (code-char #x2019)) (princ "'" out))   ; right single quote
-               ((char= c (code-char #x201C)) (princ '"'" out))  ; left double quote
-               ((char= c (code-char #x201D)) (princ '"'" out))  ; right double quote
-               ((char= c (code-char #x2022)) (princ "*" out))   ; bullet
-               ((char= c (code-char #x2026)) (princ "..." out)) ; ellipsis
-               ((char= c (code-char #x203A)) (princ ">" out))   ; single right angle quote
-               ((char= c (code-char #x2039)) (princ "<" out))   ; single left angle quote
-               ((char= c (code-char #x00A0)) (princ " " out))   ; non-breaking space
+               ((char= c (code-char #x2014)) (princ "---" out))  ; em dash → ---
+               ((char= c (code-char #x2013)) (princ "–" out))    ; en dash
+               ((char= c (code-char #x2018)) (princ "'" out))    ; left single quote
+               ((char= c (code-char #x2019)) (princ "'" out))    ; right single quote
+               ((char= c (code-char #x201C)) (princ "\\(" out))   ; left double quote
+               ((char= c (code-char #x201D)) (princ "\\)" out))   ; right double quote
+               ((char= c (code-char #x2022)) (princ "*" out))     ; bullet
+               ((char= c (code-char #x2026)) (princ "..." out))   ; ellipsis
+               ((char= c (code-char #x203A)) (princ ">" out))     ; single right angle quote
+               ((char= c (code-char #x2039)) (princ "<" out))     ; single left angle quote
+               ((char= c (code-char #x00A0)) (princ " " out))     ; non-breaking space
                ;; ©, ® are in Latin-1 — let PS font handle via octal escape
                ;; ™ is outside Latin-1 — keep as "TM"
                ((< code 128)
@@ -189,7 +200,7 @@ gsave
                 ;; Latin-1 range: output as octal escape (needs ISOLatin1Encoding)
                 (format out "\\~3,'0o" code))
                (t
-                 (princ "\\077" out))))))
+                (princ "\\077" out))))))
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).
@@ -219,22 +230,21 @@ gsave
     (values (* tw 2) th rgb)))
 
 (defun write-ps-image (ps rgb-array img-width img-height max-width max-height)
-  "Write PostScript code to display an RGB image, scaled to fit within MAX-WIDTH x MAX-HEIGHT points."
+  "Write PostScript code to display an RGB image, scaled to fit within MAX-WIDTH x MAX-HEIGHT points.
+   Does NOT emit gsave/grestore; caller must manage graphics state."
   (let* ((scale (min (/ max-width (max 1 img-width))
-                     (/ max-height (max 1 img-height))))
+                      (/ max-height (max 1 img-height))))
          (bpr (* img-width 3))
          (hex (with-output-to-string (s)
                 (dotimes (i (length rgb-array))
                   (format s "~2,'0x" (aref rgb-array i))
                   (when (and (plusp i) (zerop (mod i 72))) (terpri s))))))
     (format ps "/DeviceRGB setcolorspace~%")
-    (format ps "gsave~%")
     (format ps "~f ~f scale~%" (* img-width scale) (* img-height scale))
     (format ps "~d ~d 8~%" img-width img-height)
     (format ps "[~d 0 0 ~d 0 0]~%" img-width (- img-height))
     (format ps "{ currentfile ~d string readhexstring pop } image~%" bpr)
-    (format ps "~a~%" hex)
-    (format ps "grestore~%")))
+    (format ps "~a~%" hex)))
 
 ;; Printer discovery functions
 (defvar *printer-cache* nil
@@ -249,15 +259,15 @@ gsave
   (let ((now (get-universal-time)))
     (unless (and *printer-cache* (> (- now *printer-cache-time*) 30))
       (setf *printer-cache* nil
-            *printer-cache-time* 0)))
-  (when (or force (not *printer-cache*))
-    (setf *printer-cache*
-          (sort (delete "" (mapcar (lambda (s) (string-trim '(#\Space #\Tab) s))
-                                   (ignore-errors
-                                     (uiop:run-program '("lpstat" "-e") :output :lines))))
-                #'string-lessp)
-          *printer-cache-time* (get-universal-time)))
-  *printer-cache*)
+            *printer-cache-time* 0))
+    (when (or force (not *printer-cache*))
+      (setf *printer-cache*
+            (sort (delete "" (mapcar (lambda (s) (string-trim '(#\Space #\Tab) s))
+                                     (ignore-errors
+                                       (uiop:run-program '("lpstat" "-e") :output :lines))))
+                  #'string-lessp)
+            *printer-cache-time* (get-universal-time)))
+    *printer-cache*))
 
 (defun discover-printers-with-names ()
   "Return a list of (queue-name . display-name) for CUPS printers.
@@ -274,10 +284,9 @@ gsave
                           (list "curl" "-s" "--connect-timeout" "2" url)
                           :output :string :ignore-error-status t)))
               (when html
-                ;; Look for "printer-info" or "printer-make-and-model" in IPP attrs
                 (let ((m (ppcre:scan-to-strings
-                          "printer-make-and-model[^>]*>([^<]+)"
-                          html)))
+                           "printer-make-and-model[^>]*>([^<]+)"
+                           html)))
                   (when (and m (aref m 0) (> (length (aref m 0)) 0))
                     (setf display (trim (aref m 0))))))))
           ;; Fallback: lpstat description
@@ -291,44 +300,46 @@ gsave
                     (let ((desc (trim (subseq detail start end))))
                       (when (> (length desc) 0) (setf display desc))))))))
           (push (cons q display) result)))
-      (sort result #'string-lessp :key #'cdr)))
+      (sort result #'string-lessp :key #'cdr))))
 
 (defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
-  "Write PDF footer: icon at lower-left, 'Skyline-Tool for GAME',
-   date—author (on host), page number right."
-  (format ps "gsave 56 54 translate~%")
-  (write-ps-header-icon ps)
-  (format ps "grestore~%")
-  (format ps "gsave
- 56 62 translate
- /Times-Roman-ISOLatin1 findfont 8 scalefont setfont
- 0 0 moveto
- 0.0 0.2 0.6 setrgbcolor
- (Skyline-Tool) show
- currentpoint pop 3 add 0 moveto
- 0.0 0.0 0.0 setrgbcolor
- (for ) show
- currentpoint pop 2 add 0 moveto
- /Times-Italic-ISOLatin1 findfont 8 scalefont setfont
- 0.0 0.0 0.5 setrgbcolor
- (~a) show
- grestore
-" (escape-ps-string title-text))
-  (format ps "gsave
- 56 44 translate
- /Times-Roman-ISOLatin1 findfont 7 scalefont setfont
- 0.25 0.25 0.25 setrgbcolor
- 0 0 moveto
- (~a) show
- currentpoint pop 3 add 0 moveto
- gsave currentpoint 2 add moveto 0 2 rlineto stroke grestore
- currentpoint pop 3 add 0 moveto
- (~a~@[ on ~a~]) show
- 466 0 moveto
- (Page ~d of ~d) show
- grestore
-"
-    (escape-ps-string date-str)
-    (escape-ps-string author)
-    (and hostname (escape-ps-string hostname))
-    page-num total-pages)))
+  "Write PDF page footer with two-row tabular layout:
+   Row 1 (top): Icon (spans both rows) | 'Skyline-Tool' (Royal Blue) 'for' (black) 'GameTitle' (Navy Blue, Italic)
+   Row 2 (bottom, 75% row1 height): Icon continued | date --- author on host [at site] (75% gray) | Page N of M (75% gray, right-aligned)
+   All positioned 3/4\" (54pt) from page bottom. Icon height = both rows combined (48pt)."
+  (let ((site (ignore-errors (short-site-name))))
+    ;; Draw icon spanning both rows (48pt tall at y=54..102)
+    (format ps "gsave 56 54 translate~%")
+    (write-ps-header-icon ps)
+    (format ps "grestore~%")
+    ;; Row 1: Branding text at y=94 baseline (10pt font, row top at y=102)
+    (format ps "gsave~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+    (format ps "0.0 0.2 0.6 setrgbcolor~%")           ; Royal Blue
+    (format ps "112 94 moveto~%")
+    (format ps "(Skyline-Tool) show~%")
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "0.0 0.0 0.0 setrgbcolor~%")           ; Black
+    (format ps "(for ) show~%")
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")           ; Navy Blue
+    (if (string= title-text "Phantasia")
+        (format ps "/Dublin-ISOLatin1 findfont 10 scalefont setfont~%")
+        (format ps "/Times-Italic-ISOLatin1 findfont 10 scalefont setfont~%"))
+    (format ps "(~a) show~%" (escape-ps-string title-text))
+    (format ps "grestore~%")
+    ;; Row 2: Date/author/host/site at y=67.57 baseline (7.5pt font, row top at y=74.57)
+    (format ps "gsave~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 7.5 scalefont setfont~%")
+    (format ps "0.25 0.25 0.25 setrgbcolor~%")        ; 75% gray
+    (format ps "112 67.57 moveto~%")
+    (format ps "(~a --- ~a~@[ on ~a~]~:[~; at ~a~]) show~%"
+            (escape-ps-string date-str)
+            (escape-ps-string author)
+            hostname
+            site (escape-ps-string site))
+    ;; Page number right-aligned at x=556 (56pt from right edge of 612pt page)
+    (format ps "556 67.57 moveto~%")
+    (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
+            page-num total-pages)
+    (format ps "grestore~%")))

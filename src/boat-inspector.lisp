@@ -3,13 +3,13 @@
 (defvar +boat-classes+ '("catamaran" "sloop" "rowboat" "galleon" "longship" "raft" "canoe" "skiff")
   "Known boat classes for the enum dropdown.")
 
-(defun load-boats (&optional (path "Source/Tables/Boats.ods"))
+(defun %load-boats-list (&optional (path "Source/Tables/Boats.ods"))
   "Load boat data from an ODS spreadsheet. Returns a list of (name class notes)."
   (let* ((full (merge-pathnames path (uiop:getcwd)))
          (pages (ignore-errors (read-ods-into-lists full)))
          (rows (and pages (ss->lol (first pages)))))
     (loop for row in rows
-          collect (list (getf row :name)
+          collect (list (getf row :boat)
                         (getf row :class)
                         (getf row :notes)))))
 
@@ -68,7 +68,7 @@
 
 (defun run-boat-inspector (&optional (path "../Source/Tables/Boats.ods"))
   "Open the boat editor window."
-  (let* ((boats (or (load-boats path)
+  (let* ((boats (or (%load-boats-list path)
                     (list (list "Galileo" "rowboat" "Sample boat"))))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame

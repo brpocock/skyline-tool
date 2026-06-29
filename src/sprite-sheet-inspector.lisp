@@ -42,7 +42,7 @@
            :height h))))))
 
 (defun parse-dimensions (str)
-  "Parse a dimension string like "8×16" into (values W H)."
+  "Parse a dimension string like \"8×16\" into (values W H)."
   (let ((pos (or (position (code-char #x00D7) str)
                  (position-if (lambda (c) (char-equal c #\x)) str))))
     (when pos

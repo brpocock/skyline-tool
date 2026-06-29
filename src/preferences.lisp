@@ -16,7 +16,7 @@
                   '("work/" "Work/" "Documents/"))
             (merge-pathnames "Work/" home)))))
 
-(defun prompt-save-pathname (default-name &optional (type "txt") &key prefs-key)
+(defun prompt-save-pathname (default-name &key prefs-key)
   "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
    DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
    PREFS-KEY is a keyword used to persist the chosen directory in preferences.
@@ -25,20 +25,20 @@
          (default (merge-pathnames default-name dir)))
     ;; Try zenity for native Gnome dialog
     (or (ignore-errors
-          (let* ((out (string-trim '(#\Newline #\Space)
-                        (uiop:run-program
-                         (list "zenity" "--file-selection" "--save"
-                               (format nil "--filename=~a" (namestring default))
-                               "--title=Save As...")
-                         :output :string :ignore-error-status t)))
-                 (path (when (and out (> (length out) 0)) (pathname out))))
-            (when path
-              (let ((dir (make-pathname :name nil :type nil :defaults path)))
-                (setf *last-save-directory* dir)
-                (when prefs-key
-                  (set-pref prefs-key (namestring dir))
-                  (set-pref :last-save-directory (namestring dir)))
-                path))))
+         (let* ((out (string-trim '(#\Newline #\Space)
+                                  (uiop:run-program
+                                   (list "zenity" "--file-selection" "--save"
+                                         (format nil "--filename=~a" (namestring default))
+                                         "--title=Save As...")
+                                   :output :string :ignore-error-status t)))
+                (path (when (and out (> (length out) 0)) (pathname out))))
+           (when path
+             (let ((dir (make-pathname :name nil :type nil :defaults path)))
+               (setf *last-save-directory* dir)
+               (when prefs-key
+                 (set-pref prefs-key (namestring dir))
+                 (set-pref :last-save-directory (namestring dir)))
+               path))))
         ;; Fallback to CLIM pathname prompter
         (let ((path (clim:accept 'pathname :prompt "Save As" :default default)))
           (when path

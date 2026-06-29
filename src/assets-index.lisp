@@ -656,7 +656,7 @@
                         (mapcar (lambda (item)
                                   (if (null item)
                                       '(nil :divider :line)
-                                      (list (first item) (first item))))
+                                      (cons (first item) (first item))))
                                 items)
                         :label label)))
           (when choice

@@ -616,7 +616,7 @@ See COPYING for details
 
 (defun run-gui ()
   (clim-debugger:with-debugger ()
-    (launcher)))
+    (show-all-resources)))
 
 (defun find-default-port ()
   "Return default port label when @code{--port} is omitted.
