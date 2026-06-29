@@ -17,7 +17,7 @@
          ("PDF..." :command com-save-about-pdf)))
 
 (clim:define-command-table about-print-to-menu
-  :menu (("Choose Printer..." :command com-print-about-to-printer)))
+  :menu ())
 
 (clim:define-command-table about-menu-bar
   :menu (("About Skyline-Tool" :menu about-file-menu)))
@@ -75,29 +75,48 @@
                           :ignore-error-status t)
         (format *query-io* "~&Sent to printer ~a~%" printer-name)))))
 
-;; Populate the Print To menu with available printers
-(defun populate-about-print-to-menu ()
-  (let ((ct (clim:find-command-table 'about-print-to-menu)))
-    (when ct
-      ;; Add printer items directly
-      (dolist (printer (discover-printers-with-names))
-        (let ((queue (car printer))
-              (display (cdr printer)))
-          (clim:add-menu-item-to-command-table ct display
+;; Populate any Print To menu with available printers
+;; If no printers are found, adds "Default Printer (lpr)" as fallback
+(defun populate-print-menu (command-table)
+  "Populate the given command table with printer items.
+   If CUPS printers are discovered, add each one.
+   Otherwise, add 'Default Printer (lpr)' as fallback."
+  (when command-table
+    ;; Clear existing printer items
+    (let ((items (clim:command-table-items command-table)))
+      (dolist (item items)
+        (when (consp item)
+          (clim:delete-menu-item-from-command-table command-table (car item)))))
+    
+    ;; Add discovered printers
+    (let ((printers (discover-printers-with-names)))
+      (if printers
+          (dolist (printer printers)
+            (let ((queue (car printer))
+                  (display (cdr printer)))
+              (clim:add-menu-item-to-command-table command-table display
+                :command 'com-print-about-to-printer
+                :arguments (list queue)
+                :after :end)))
+          ;; Fallback to default printer if none found
+          (clim:add-menu-item-to-command-table command-table "Default Printer (lpr)"
             :command 'com-print-about-to-printer
-            :arguments (list queue)
+            :arguments (list "")
             :after :end)))))
+
+;; Populate the Print To menu in the About dialog
+(defun populate-about-print-to-menu ()
+  (populate-print-menu (clim:find-command-table 'about-print-to-menu)))
 
 ;; --- About dialog frame and display ---
 
-(clim:define-application-frame about-skyline-tool-frame ()
-  ()
-  (:panes (about-pane :application :height 500 :width 600
-                                          :display-function 'display-about-skyline-tool))
-  (:menu-bar about-menu-bar)
-  (:icon (skyline-tool-icon))
-  (:layouts (default about-pane))
-  (:pdf-function '%about-pdf))
+(clim:define-application-frame about-skyline-tool-frame (clim-simple-echo::simple-echo)
+   ()
+   (:panes (about-pane :application :height 500 :width 600
+                                           :display-function 'display-about-skyline-tool))
+   (:menu-bar about-menu-bar)
+   (:icon (skyline-tool-icon))
+   (:layouts (default about-pane)))
 
 (defun display-about-skyline-tool (frame pane)
   (declare (ignore frame))
@@ -155,5 +174,6 @@
      :name "About Skyline-Tool")))
 
 ;; Export the command for global access
+;; Export the command for global access
 (clim:define-command (com-about-skyline-tool :command-table clim-internals::global-command-table) ()
-  (show-about-skyline-tool)))
+  (show-about-skyline-tool))

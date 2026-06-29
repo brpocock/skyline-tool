@@ -10,41 +10,42 @@
   :licence "MIT"
   :long-name "The Skyline tools for building ARPG's for various machines"
 
-  :depends-on (
-               :alexandria
-               :bordeaux-threads
-               :cl-base64
-               :cl-change-case
-               :cl-json
-               :cl-ppcre
-               :clim-debugger
-               :clim-listener
-               :climacs
-               :clods-export
-               :clouseau
-               :cserial-port
-               :dufy
-               :fiveam
-               :ironclad
-               :local-time
-               :lparallel
-               :mcclim
-               :midi
-               :parse-number
-               :png-read
-               :zpng
-               :quicklisp-slime-helper
-               :replic
-               :serapeum
-               :swank
-               :trivial-backtrace
-               :trivial-gray-streams
-               :xmls
-               :yacc
-               :zip
-               
-               :eightbol
-               )
+:depends-on (
+                :alexandria
+                :bordeaux-threads
+                :cl-base64
+                :cl-change-case
+                :cl-json
+                :cl-ppcre
+                :clim-debugger
+                :clim-listener
+                :climacs
+                :clods-export
+                :clouseau
+                :cserial-port
+                :drakma
+                :dufy
+                :fiveam
+                :ironclad
+                :local-time
+                :lparallel
+                :mcclim
+                :midi
+                :parse-number
+                :png-read
+                :zpng
+                :quicklisp-slime-helper
+                :replic
+                :serapeum
+                :swank
+                :trivial-backtrace
+                :trivial-gray-streams
+                :xmls
+                :yacc
+                :zip
+                
+                :eightbol
+                )
   :encoding :utf-8
   :components
   ((:module "src"
@@ -95,7 +96,8 @@
                  (:file "i18n-l10n" :depends-on ("package"))
                  (:file "interface" :depends-on ("package" "asset-allocator" "oops" "cbm-tooling" "launcher"))
                    (:file "preferences" :depends-on ("package"))
-(:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils" "printer-utils" "clim-simple-echo"))
+(:file "game-resource" :depends-on ("package"))
+(:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils" "printer-utils" "clim-simple-echo" "game-resource"))
                   (:file "launcher" :depends-on ("package" "preferences" "all-resources" "clim-simple-echo" "ps-utils" "printer-utils"))
                   (:file "gui/help-about-dialog" :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils"))
                  (:file "map-inspector" :depends-on ("package" "maps" "launcher" "clim-simple-echo"))

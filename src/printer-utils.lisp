@@ -7,20 +7,26 @@
 
 (defun discover-printers (&optional force)
   "Return a list of CUPS printer queue names (strings).
-   Calls lpstat -e to enumerate available printers.
+   Uses Drakma to fetch printer list from CUPS web interface.
    Results are cached for 30 seconds unless FORCE is true."
   (let ((now (get-universal-time)))
     (unless (and *printer-cache* (> (- now *printer-cache-time*) 30))
       (setf *printer-cache* nil
             *printer-cache-time* 0)))
   (when (or force (not *printer-cache*))
-    (setf *printer-cache*
-          (sort (delete "" (mapcar (lambda (s) (string-trim '(#\Space #\Tab) s))
-                                   (ignore-errors
-                                     (uiop:run-program '("lpstat" "-e") :output :lines)))
-                         :test #'string=)
-                #'string-lessp)
-          *printer-cache-time* (get-universal-time)))
+    (let ((html (ignore-errors
+                   (drakma:http-request "http://localhost:631/printers/"
+                                        :method :get
+                                        :ignore-ssl-errors t
+                                        :timeout 5))))
+      (when html
+        (setf *printer-cache*
+              (sort (delete ""
+                            (mapcar (lambda (s) (string-trim '(#\Space #\Tab)))
+                                    (ppcre:split "\\s+" html))
+                            :test #'string=)
+                    #'string-lessp))
+       *printer-cache-time* (get-universal-time)))
   *printer-cache*)
 
 (defun discover-printers-with-names ()
