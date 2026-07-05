@@ -823,4 +823,19 @@ Executes the requested command, may exit the process
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))
 
-#+mcclim (assert (fboundp 'clim-debugger:debugger))
+(defun build-target (target-pathname)
+  "Submit a build task via the global thread pool and optionally wait for completion.
+   Uses the thread-pool module for proper worker management and queueing."
+  (let ((output-path (enough-namestring (truename target-pathname))))
+    (submit-task
+     (lambda ()
+       (uiop:run-program
+        (list "ptyxis" "-s" "-x" "make" output-path))))
+    ;; Optionally wait for completion if needed by caller
+    (wait-for-build-completion output-path)))
+
+(defun wait-for-build-completion (path)
+  "Wait until the build output file appears.
+   Simple polling implementation to avoid missing uiop file-watcher support."
+  (loop until (probe-file path) do (sleep 0.5)))
+

@@ -34,7 +34,7 @@
 
 (clim:define-presentation-type char-cmd () :inherit-from 'symbol :description "Character inspector command")
 
-(clim:define-application-frame character-inspector-frame ()
+(clim:define-application-frame character-inspector-frame (resource-inspector-mixin)
   ((%npc :initarg :npc :accessor frame-npc)
    (%prototype :initarg :prototype :accessor frame-prototype)
    (%all-items :initarg :all-items :accessor frame-all-items)
@@ -76,9 +76,9 @@
   :menu (("Test on AtariVox..." :command com-char-test-atarivox :keystroke (#\t :control))))
 
 (clim:define-command-table char-inspector-help-menu
-  :menu (("How to Edit Characters" :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+  :menu (("How to Edit Characters..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line) ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
 (clim:define-command-table char-inspector-menu-bar
@@ -86,10 +86,10 @@
          ("Voice" :menu char-inspector-voice-menu) ("Help" :menu char-inspector-help-menu)))
 
 (defmacro with-char-data ((npc proto all-items all-keys) &body body)
-  `(let* ((,npc (frame-npc *application-frame*))
-          (,proto (frame-prototype *application-frame*))
-          (,all-items (or (frame-all-items *application-frame*) (load-item-list)))
-          (,all-keys (or (frame-all-keys *application-frame*) (load-key-list))))
+  `(let* ((,npc (frame-npc clim:*application-frame*))
+          (,proto (frame-prototype clim:*application-frame*))
+          (,all-items (or (frame-all-items clim:*application-frame*) (load-item-list)))
+          (,all-keys (or (frame-all-keys clim:*application-frame*) (load-key-list))))
      ,@body))
 
 (defun npc-val (npc key &optional default) (or (getf npc key) default))
@@ -102,6 +102,10 @@
                 (and (search "Equip" s :test #'char-equal) 5)
                 (and (search "Shield" s :test #'char-equal) 6) 0)))
     (subseq s p)))
+
+(defmethod display-inspector-content ((frame character-inspector-frame) pane)
+  (display-left frame pane)
+  (display-right frame pane))
 
 (defun display-left (frame pane)
   (clim:window-clear pane)
@@ -215,7 +219,7 @@
 
 (clim:define-command (com-char-equip-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((slot 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
     (unless npc (return-from com-char-equip-click))
     (ecase slot
       (:equip (let ((c (clim:accept `(clim:member-alist ,(loop for (l . v) in +equipment-names+ collect (list l v)) :value-type string) :prompt "Weapon")))
@@ -229,14 +233,14 @@
 
 (clim:define-command (com-char-kind-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((slot 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (proto (frame-prototype frame)))
+  (let* ((frame clim:*application-frame*) (proto (frame-prototype frame)))
     (unless (frame-npc frame) (return-from com-char-kind-click))
     (let ((c (clim:accept `(clim:member-alist ,(loop for (l . v) in +decal-kind-names+ collect (list l v)) :value-type string) :prompt "Kind")))
       (when c (when proto (setf (getf proto :|CharacterDecalKind|) c)) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-color-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((which 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (npc (frame-npc frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)))
     (unless npc (return-from com-char-color-click))
     (let* ((cur (ecase which (:skin (%strip-prefix (getf npc :skin-color "White"))) (:hair (%strip-prefix (getf npc :hair-color "Brown"))) (:clothes (%strip-prefix (getf npc :clothes-color "Blue")))))
            (c (clim:accept `(clim:member-alist ,(loop for c in +palette-color-non-variable+ collect (list c c)) :value-type string)
@@ -246,7 +250,7 @@
 
 (clim:define-command (com-char-speech-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((slot 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
     (unless npc (return-from com-char-speech-click))
     (flet ((col-name (s) (%col-name-string s)))
       (let* ((ntsc-names (mapcar #'col-name +atari-ntsc-color-names+))
@@ -258,7 +262,7 @@
 
 (clim:define-command (com-char-voice-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((which 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (npc (frame-npc frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)))
     (unless npc (return-from com-char-voice-click))
     (let* ((cur (ecase which (:pitch (getf npc :pitch 96)) (:speed (getf npc :speed 114)) (:bend (getf npc :bend 5))))
            (new (clim:accept 'integer :prompt (ecase which (:pitch "Pitch 0-255") (:speed "Speed 0-255") (:bend "Bend 0-255")) :default cur)))
@@ -266,13 +270,13 @@
 
 (clim:define-command (com-char-test-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((cmd 'char-cmd :gesture :select))
-  (let* ((frame *application-frame*) (npc (frame-npc frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)))
     (unless npc (return-from com-char-test-click))
     (%test-atarivox (getf npc :pitch 96) (getf npc :speed 114) (getf npc :bend 5) (frame-test-phrase frame))))
 
 (clim:define-command (com-char-inv-click :command-table clim-internals::global-command-table :menu nil :name t)
     ((idx 'integer :gesture :select))
-  (let* ((frame *application-frame*) (proto (frame-prototype frame)) (items (or (frame-all-items frame) (load-item-list))))
+  (let* ((frame clim:*application-frame*) (proto (frame-prototype frame)) (items (or (frame-all-items frame) (load-item-list))))
     (unless proto (format *query-io* "~&No prototype — use File > Save Prototype first.~%") (return-from com-char-inv-click))
     (let* ((bytes (getf proto :|CharacterInventory| '(0 0 0 0 0 0 0 0)))
            (owned (bitset->indices (coerce bytes 'list))) (is-set (find idx owned))
@@ -281,46 +285,46 @@
       (format *query-io* "~&~a ~a~%" name (if is-set "removed from bag" "added to bag")) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-hp :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-hp))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-hp))
     (let ((new (clim:accept 'integer :prompt "HP" :default (getf npc :hp 0)))) (setf (getf npc :hp) (max 0 new)) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-crowns :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-crowns))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-crowns))
     (let ((new (clim:accept 'integer :prompt "Crowns" :default (getf npc :crowns 0)))) (setf (getf npc :crowns) (abs new)) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-arrows :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-arrows))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-arrows))
     (let ((new (clim:accept 'integer :prompt "Arrows" :default (getf npc :arrows 0)))) (setf (getf npc :arrows) (abs new)) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-potions :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-potions))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-potions))
     (let ((new (clim:accept 'integer :prompt "Potions" :default (getf npc :potions 0)))) (setf (getf npc :potions) (abs new)) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-kind :menu t :name t) ()
-  (let* ((frame *application-frame*) (proto (frame-prototype frame))) (unless proto (format *query-io* "~&No prototype.~%") (return-from com-char-edit-kind))
+  (let* ((frame clim:*application-frame*) (proto (frame-prototype frame))) (unless proto (format *query-io* "~&No prototype.~%") (return-from com-char-edit-kind))
     (let ((c (clim:accept `(clim:member-alist ,(loop for (l . v) in +decal-kind-names+ collect (list l v)) :value-type string) :prompt "Kind")))
       (when c (setf (getf proto :|CharacterDecalKind|) c) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-skin :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-skin))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-skin))
     (let ((c (clim:accept `(clim:member-alist ,(loop for c in +palette-color-non-variable+ collect (list c c)) :value-type string)
                           :prompt "Skin" :default (%strip-prefix (getf npc :skin-color "White")))))
       (when c (setf (getf npc :skin-color) c) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-hair :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-hair))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-hair))
     (let ((c (clim:accept `(clim:member-alist ,(loop for c in +palette-color-non-variable+ collect (list c c)) :value-type string)
                           :prompt "Hair" :default (%strip-prefix (getf npc :hair-color "Brown")))))
       (when c (setf (getf npc :hair-color) c) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-clothes :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-clothes))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-clothes))
     (let ((c (clim:accept `(clim:member-alist ,(loop for c in +palette-color-non-variable+ collect (list c c)) :value-type string)
                           :prompt "Clothes" :default (%strip-prefix (getf npc :clothes-color "Blue")))))
       (when c (setf (getf npc :clothes-color) c) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-speech-color :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-speech-color))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-speech-color))
     (flet ((col-name (s) (%col-name-string s)))
       (let* ((ntsc (mapcar #'col-name +atari-ntsc-color-names+)) (pal (mapcar #'col-name +atari-pal-color-names+))
              (all (remove-duplicates (append ntsc pal) :test #'string-equal))
@@ -328,40 +332,40 @@
         (when c (setf (getf npc :speech-color) c) (when (frame-prototype frame) (setf (getf (frame-prototype frame) :|CharacterSpeechColor|) c)) (clim:redisplay-frame-panes frame))))))
 
 (clim:define-command (com-char-edit-pitch :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-pitch))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-pitch))
     (let ((n (clim:accept 'integer :prompt "Pitch 0-255" :default (getf npc :pitch 96)))) (setf (getf npc :pitch) (max 0 (min 255 n))) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-speed :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-speed))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-speed))
     (let ((n (clim:accept 'integer :prompt "Speed 0-255" :default (getf npc :speed 114)))) (setf (getf npc :speed) (max 0 (min 255 n))) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-bend :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-bend))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (return-from com-char-edit-bend))
     (let ((n (clim:accept 'integer :prompt "Bend 0-255" :default (getf npc :bend 5)))) (setf (getf npc :bend) (max 0 (min 255 n))) (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-char-edit-weapon :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))) (unless npc (return-from com-char-edit-weapon))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))) (unless npc (return-from com-char-edit-weapon))
     (let ((c (clim:accept `(clim:member-alist ,(loop for (l . v) in +equipment-names+ collect (list l v)) :value-type string) :prompt "Weapon")))
       (when c (setf (getf npc :equipment) c) (when proto (setf (getf proto :|CharacterEquipment|) c)) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-shield :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))) (unless npc (return-from com-char-edit-shield))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))) (unless npc (return-from com-char-edit-shield))
     (let ((c (clim:accept `(clim:member-alist ,(loop for (l . v) in +shield-names+ collect (list l v)) :value-type string) :prompt "Shield")))
       (when c (setf (getf npc :shield) c) (when proto (setf (getf proto :|CharacterShield|) c)) (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-edit-armor :menu t :name t) ()
-  (let* ((frame *application-frame*) (names (or (frame-all-items frame) (load-item-list))))
+  (let* ((frame clim:*application-frame*) (names (or (frame-all-items frame) (load-item-list))))
     (let ((c (clim:accept `(clim:member-alist ,(loop for n in names collect (list n n)) :value-type string) :prompt "Armor")))
       (when c (format *query-io* "~&Armor: ~a~%" c)))))
 
 (clim:define-command (com-char-test-atarivox :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame))) (unless npc (format *query-io* "~&No character.~%") (return-from com-char-test-atarivox))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame))) (unless npc (format *query-io* "~&No character.~%") (return-from com-char-test-atarivox))
     (let ((pitch (getf npc :pitch 96)) (speed (getf npc :speed 114)) (bend (getf npc :bend 5))
           (phrase (clim:accept 'string :prompt "Test phrase" :default (frame-test-phrase frame))))
       (setf (frame-test-phrase frame) phrase) (%test-atarivox pitch speed bend phrase))))
 
 (clim:define-command (com-char-save :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame)))
     (unless proto
       (setf proto (list :|Class| "NPC" :|CharacterName| (getf npc :name "Unknown")
                         :|CharacterCharacterID| (getf npc :character-id 0)
@@ -383,12 +387,12 @@
       (format *query-io* "~&Saved ~a~%" file))))
 
 (clim:define-command (com-char-new :menu t :name t) ()
-  (let* ((frame *application-frame*) (name (clim:accept 'string :prompt "Character name")))
+  (let* ((frame clim:*application-frame*) (name (clim:accept 'string :prompt "Character name")))
     (setf (frame-npc frame) (list :name name :character-id 0 :hp 10 :ac 0) (frame-prototype frame) nil)
     (setf (frame-pretty-name frame) (format nil "Character Inspector — ~a" name)) (clim:redisplay-frame-panes frame)))
 
 (clim:define-command (com-char-import-json :menu t :name t) ()
-  (let* ((frame *application-frame*) (path (clim:accept 'pathname :prompt "JSON" :default #p"Source/Objects/*.json")))
+  (let* ((frame clim:*application-frame*) (path (clim:accept 'pathname :prompt "JSON" :default #p"Source/Objects/*.json")))
     (when (and path (probe-file path))
       (let* ((data (load-prototype-file path)) (plist (loop for (key . val) in data append (list key val)))
              (name (or (getf plist :|CharacterName|) (pathname-name path))))
@@ -398,14 +402,14 @@
         (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-char-duplicate :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))
          (new-name (format nil "~a Copy" (or (and npc (getf npc :name)) (and proto (getf proto :|CharacterName|)) "Unknown"))))
     (setf (frame-npc frame) (list :name new-name :character-id 0 :hp (and npc (getf npc :hp 10)) :ac (and npc (getf npc :ac 0))))
     (when proto (let ((new (copy-list proto))) (setf (getf new :|CharacterName|) new-name (getf new :|CharacterCharacterID|) 0) (setf (frame-prototype frame) new)))
     (setf (frame-pretty-name frame) (format nil "Character Inspector — ~a" new-name)) (clim:redisplay-frame-panes frame)))
 
 (clim:define-command (com-char-save-text :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (proto (frame-prototype frame))
          (name (or (and npc (getf npc :name)) (and proto (getf proto :|CharacterName|)) "Character"))
          (path (prompt-save-pathname (format nil "~a.txt" name) :type "txt")))
     (when path
@@ -418,7 +422,7 @@
       (format *query-io* "~&Saved ~a~%" path))))
 
 (clim:define-command (com-char-save-pdf :menu t :name t) ()
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (name (or (and npc (getf npc :name)) "Character"))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (name (or (and npc (getf npc :name)) "Character"))
          (path (prompt-save-pathname (format nil "~a.pdf" name) :type "pdf")))
     (when path
       (let ((ps-path (make-pathname :type "ps" :defaults path)))
@@ -436,29 +440,64 @@
         (ignore-errors (delete-file ps-path)) (format *query-io* "~&Saved ~a~%" path)))))
 
 (clim:define-command (com-char-close :menu t :name t) ()
-  (let ((frame *application-frame*)) (when (typep frame 'character-inspector-frame) (clim:frame-exit frame))))
+  (let ((frame clim:*application-frame*)) (when (typep frame 'character-inspector-frame) (clim:frame-exit frame))))
 
 (defun populate-char-print-menu (&optional frame)
+  (declare (ignore frame))
   (let ((ct 'char-inspector-print-to-menu))
     (ignore-errors (clim:remove-menu-item-from-command-table ct "No printers found")
      (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
     (let ((printers (ignore-errors (discover-printers-with-names))))
-      (if printers (dolist (pair printers)
-                    (let ((queue (car pair)) (display (cdr pair)))
-                      (clim:add-menu-item-to-command-table ct display :command `(com-char-print-to ,queue ,display) :after :end)))
-          (clim:add-menu-item-to-command-table ct "Default Printer (lpr)" :function (lambda (g n) (declare (ignore g n)) (%char-print-to-printer nil)) :after :end :value t))))
+      (if printers 
+          (dolist (pair printers)
+            (let ((queue (car pair)) (display (cdr pair)))
+              (clim:add-menu-item-to-command-table ct display 
+                :command `(com-char-print-to ,queue ,display) :after :end)))
+        (clim:add-menu-item-to-command-table ct "Default Printer (lpr)" 
+          :command 'com-char-print-to-default :after :end))))
   (unless (fboundp 'com-char-print-to)
     (clim:define-command (com-char-print-to :command-table clim-internals::global-command-table :menu nil :name t)
         ((queue-name 'string) (display-name 'string))
-      (declare (ignore display-name)) (%char-print-to-printer queue-name))))
+      (declare (ignore display-name)) (%char-print-to-printer queue-name)))
+  (unless (fboundp 'com-char-print-to-default)
+    (clim:define-command (com-char-print-to-default :command-table clim-internals::global-command-table :menu nil :name t)
+        ()
+      (%char-print-to-printer nil))))
 
 (defun %char-print-to-printer (queue-name)
-  (let* ((frame *application-frame*) (npc (frame-npc frame)) (name (or (and npc (getf npc :name)) "Character")))
+  (let* ((frame clim:*application-frame*) (npc (frame-npc frame)) (name (or (and npc (getf npc :name)) "Character")))
     (com-char-save-pdf)
     (let ((pdf (format nil "/tmp/char-~a.pdf" name)))
       (when (probe-file pdf)
         (uiop:run-program (if queue-name (list "lp" "-d" queue-name pdf) (list "lp" pdf)) :output nil :ignore-error-status t)
         (format *query-io* "~&Printed ~a~%" name)))))
+
+(defun %find-char-in-ods (name)
+  "Locate a character in NPCStats.ods by NAME (with or without \"Characters/\" prefix)."
+  (ignore-errors
+    (load-npc-stats)
+    (let* ((clean (if (search "Characters/" (string name))
+                      (subseq (string name) (length "Characters/"))
+                      (string name)))
+           (row (find clean *npc-stats* :test
+                      (lambda (n r)
+                        (or (string-equal n (getf r :name))
+                            (member n (getf r :nicks) :test #'string-equal))))))
+      (when row (load-actor (getf row :name))))))
+
+(defun %find-prototype-for-char-id (char-id)
+  "Find a JSON prototype plist by character ID."
+  (dolist (file (list-object-prototype-json-files))
+    (when (probe-file file)
+      (ignore-errors
+        (let* ((*package* (find-package :keyword))
+               (data (json:decode-json-from-string
+                      (alexandria:read-file-into-string file)))
+               (cid (cdr (assoc :|CharacterCharacterID| data))))
+          (when (and cid (= cid char-id))
+            (return-from %find-prototype-for-char-id
+              (loop for (key . val) in data
+                    append (list key val)))))))))
 
 (defun open-character-inspector (character-name)
   "Open the Character Inspector for a CHARACTER-NAME string (matching NPCStats.ods)."
@@ -466,7 +505,11 @@
          (char-id (and npc (getf npc :character-id)))
          (proto (and char-id (%find-prototype-for-char-id char-id)))
          (all-items (load-item-list)) (all-keys (load-key-list))
+         (resource (make-instance 'game-resource-character
+                                  :moniker character-name
+                                  :kind "Character"))
          (frame (clim:make-application-frame 'character-inspector-frame
+                 :resource resource
                  :pretty-name (format nil "Character Inspector — ~a" character-name)
                  :npc npc :prototype proto :all-items all-items :all-keys all-keys
                  :width 800 :height 800)))

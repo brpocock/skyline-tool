@@ -185,7 +185,7 @@
          ("Text..." :command com-save-animation-seq-as-text)
          ("PDF..." :command com-save-animation-seq-as-pdf)
          ("PNG..." :command com-save-animation-seq-as-png)
-         ("GIF" :command com-save-animation-seq-as-gif)))
+         ("GIF..." :command com-save-animation-seq-as-gif)))
 
 (clim:define-command-table print-animation-sequence-menu
   :menu ())
@@ -213,9 +213,15 @@
          (nil :divider :line)
          ("About Skyline-Tool" :command com-about-skyline-tool)))
 
+(clim:define-command-table edit-menu
+  :menu (("Cut" :command com-cut)
+         ("Copy" :command com-copy)
+         ("Paste" :command com-paste)))
+
 (clim:define-command-table anim-seq-menu-bar
-  :menu (("Sequences" :menu animation-sequence-menu)
+  :menu (("Sequence" :menu animation-sequence-menu)
          ("Edit" :menu edit-menu) ("Help" :menu anim-seq-help-menu)))
+
 (clim:define-application-frame anim-seq-editor-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-editor-index :initarg :sequence)
    (%sequence :accessor anim-seq-editor-sequence)
@@ -233,16 +239,16 @@
                                              :max-height 300
                                              :display-function 'display-anim-seq-properties)
           (anim-seq-preview-pane animation-preview-pane :height 300 :width 700
-                                                       :max-height 300
-                                                       :display-function 'display-anim-preview))
+                                                        :max-height 300
+                                                        :display-function 'display-anim-preview))
   (:menu-bar anim-seq-menu-bar)
   (:icon (skyline-tool-icon :resource :animation-sequence))
   (:layouts (default (clim:vertically ()
-                        anim-seq-filmstrip-pane
-                        (clim:horizontally ()
-                          interactor
-                          anim-seq-detail-pane
-                          anim-seq-preview-pane)))))
+                       anim-seq-filmstrip-pane
+                       (clim:horizontally ()
+                         interactor
+                         anim-seq-detail-pane
+                         anim-seq-preview-pane)))))
 
 (define-anim-seq-editor-frame-command (com-import-animation-seq :menu nil :name t) ()
   (let ((path (clim:accept 'pathname :prompt "Path to JSON file" :default "Sequence-*.json")))
@@ -261,31 +267,33 @@
           (clim:redisplay-frame-panes *anim-seq-editor-frame*)
           (format *query-io* "~&Imported animation sequence ~d~%"
                   (simple-animation-sequence-index seq)))))))
+
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-json :menu nil :name t) ()
   (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
          (path (prompt-save-pathname
                 (format nil "Sequence-~d.json"
-                        (simple-animation-sequence-index seq))
-                "json")))
+                        (simple-animation-sequence-index seq)))))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede)
         (skyline-tool::write-json-pretty (skyline-tool::sequence-alist seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
+
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-text :menu nil :name t) ()
   (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
          (path (prompt-save-pathname
                 (format nil "Sequence-~d.txt"
-                        (simple-animation-sequence-index seq))
-                "txt")))
+                        (simple-animation-sequence-index seq)))))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede)
         (princ (sequence-property-text seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
+
 (define-anim-seq-editor-frame-command (com-copy :menu nil :name t) ()
   (let* ((frame *anim-seq-editor-frame*)
          (seq (anim-seq-editor-sequence frame)))
     (ignore-errors
-      (format *query-io* "~&Copied sequence ~d to clipboard.~%" (simple-animation-sequence-index seq)))))
+     (format *query-io* "~&Copied sequence ~d to clipboard.~%" (simple-animation-sequence-index seq)))))
+
 (define-anim-seq-editor-frame-command (com-paste :menu nil :name t) ()
   (let* ((frame *anim-seq-editor-frame*)
          (interactor (clim:find-pane-named frame 'interactor))
@@ -299,37 +307,21 @@
                          (declare (ignore type))
                          str))
                  (error () nil))))
-  (if json
-      (handler-case
-          (let ((seq (sequence-from-json json)))
-            (push seq *animation-sequences*)
-            (setf (anim-seq-editor-index *anim-seq-editor-frame*)
-                  (simple-animation-sequence-index seq)
-                  (anim-seq-editor-sequence *anim-seq-editor-frame*) seq)
-            (update-params *anim-seq-editor-frame*)
-            (save-all-animation-sequences)
-            (clim:redisplay-frame-panes *anim-seq-editor-frame*)
-            (format *query-io* "~&Pasted animation sequence ~d from clipboard.~%"
-                    (simple-animation-sequence-index seq)))
-        (error (e)
-          (format *query-io* "~&Paste error: ~a~%" e)))
-      (format *query-io* "~&Paste: clipboard empty.~%"))))
-(defun animation-sequence-pen->rgb (seq colors)
-  "Return function mapping pen index → (R G B) for SEQ with palette COLORS."
-  (let* ((system-palette (ecase *region*
-                           (:ntsc +prosystem-ntsc-palette+)
-                           (:pal +prosystem-pal-palette+)))
-         (cache (make-hash-table)))
-    (lambda (pen)
-      (or (gethash pen cache)
-          (let* ((register (elt colors pen))
-                 (rgb (if (and (integerp register)
-                               (<= 0 register 255)
-                               (nth register system-palette))
-                          (nth register system-palette)
-                          '(0 0 0))))
-            (setf (gethash pen cache) rgb)
-            rgb)))))
+    (if json
+        (handler-case
+            (let ((seq (sequence-from-json json)))
+              (push seq *animation-sequences*)
+              (setf (anim-seq-editor-index *anim-seq-editor-frame*)
+                    (simple-animation-sequence-index seq)
+                    (anim-seq-editor-sequence *anim-seq-editor-frame*) seq)
+              (update-params *anim-seq-editor-frame*)
+              (save-all-animation-sequences)
+              (clim:redisplay-frame-panes *anim-seq-editor-frame*)
+              (format *query-io* "~&Pasted animation sequence ~d from clipboard.~%"
+                      (simple-animation-sequence-index seq)))
+          (error (e)
+            (format *query-io* "~&Paste error: ~a~%" e)))
+        (format *query-io* "~&Paste: clipboard empty.~%"))))
 
 (defun render-filmstrip-pixels (seq &key (palette-index 0) var-colors scale (frame -1))
   "Render all frames (or one frame) of SEQ as a flat RGB byte vector.
@@ -373,7 +365,7 @@
                            (setf (gethash pen cache) rgb)
                            rgb))))
          (pixels (make-array (* iw ih 3 s s) :element-type '(unsigned-byte 8)
-                              :initial-element 0)))
+                                             :initial-element 0)))
     (dotimes (f nf)
       (let* ((fi (if single frame f))
              (tile-ref (aref (simple-animation-sequence-frames seq) fi))
@@ -398,15 +390,14 @@
          (pal (anim-seq-editor-palette frame))
          (path (prompt-save-pathname
                 (format nil "AnimationSequence-~d.png"
-                        (simple-animation-sequence-index seq))
-                "png")))
+                        (simple-animation-sequence-index seq)))))
     (when path
       (multiple-value-bind (pixels w h) (render-filmstrip-pixels seq
-                                           :palette-index pal)
+                                                                 :palette-index pal)
         (let ((png (make-instance 'zpng:png :width w :height h
-                                           :color-type :truecolor :bpp 8
-                                           :image-data pixels)))
-           (zpng:write-png png path))
+                                            :color-type :truecolor :bpp 8
+                                            :image-data pixels)))
+          (zpng:write-png png path))
         (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) w h)
         (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
 
@@ -418,8 +409,7 @@
          (pal (anim-seq-editor-palette frame))
          (path (prompt-save-pathname
                 (format nil "AnimationSequence-~d.gif"
-                        (simple-animation-sequence-index seq))
-                "gif")))
+                        (simple-animation-sequence-index seq)))))
     (when path
       (let* ((tmpdir (ensure-directories-exist
                       (merge-pathnames #p".tmp-anim-gif/" (uiop:getcwd))))
@@ -432,14 +422,14 @@
                (dotimes (f fc)
                  (multiple-value-bind (pixels w h)
                      (render-filmstrip-pixels seq :palette-index pal :scale 4
-                                              :frame f)
+                                                  :frame f)
                    (let ((png-path (merge-pathnames
                                     (format nil "frame-~4,'0d.png" f) tmpdir)))
                      (push png-path png-files)
                      (zpng:write-png
                       (make-instance 'zpng:png :width w :height h
-                                     :color-type :truecolor :bpp 8
-                                     :image-data pixels)
+                                               :color-type :truecolor :bpp 8
+                                               :image-data pixels)
                       png-path))))
                (setf png-files (nreverse png-files))
                (format *query-io* "~&Assembling GIF with ImageMagick...~%")
@@ -448,76 +438,72 @@
                                    (mapcar #'namestring png-files)
                                    (list (namestring path)))))
                  (uiop:run-program args :output nil :ignore-error-status t))
-                (when (probe-file path)
-                  (format *query-io* "~&Saved ~a (~d frames)~%"
-                          (namestring path) fc)
-                  (uiop:run-program (list "xdg-open" (namestring path))
-                                    :output nil :ignore-error-status t)))
+               (uiop:run-program (list "xdg-open" (namestring path))
+                                 :output nil :ignore-error-status t))
           ;; Cleanup temp PNGs
           (dolist (png png-files)
             (ignore-errors (delete-file png))))))))
 
 (defun write-animation-sequence-pdf (seq pdf-pathname &optional (stream *query-io*))
   "Generate a PDF document for animation sequence SEQ at PDF-PATHNAME."
-  (let* ((base (pathname-name pdf-pathname))
-         (ps-path (make-pathname :type "ps" :defaults pdf-pathname))
+  (let* ((ps-path (make-pathname :type "ps" :defaults pdf-pathname))
          (author (user-real-name))
          (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
                      (declare (ignore s))
                      (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m)))
-          (title (format nil "Animation Sequence ~d: ~a"
-                         (simple-animation-sequence-index seq)
-                         (or (simple-animation-sequence-label seq) "untitled"))))
-     (with-open-file (ps ps-path :direction :output :if-exists :supersede)
-          (format ps "%!PS-Adobe-3.0~%")
-          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
-          (format ps "%%Page: 1 1~%")
-         (format ps "<< /PageSize [792 612] >> setpagedevice~%")
-         (skyline-tool::write-ps-font-encodings ps)
-        ;; Header bar with icon
-        (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
-        (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont~%")
-        (flet ((attr (y label value)
-                 (format ps "50 ~d moveto (~a:) show 200 ~d moveto (~a) show~%" y label y value)))
-          (attr 500 "Index" (princ-to-string (simple-animation-sequence-index seq)))
-          (attr 485 "Label" (or (simple-animation-sequence-label seq) "(none)"))
-          (attr 470 "Kind" (string-downcase (simple-animation-sequence-major-kind seq)))
-          (attr 455 "Decal" (string-downcase (simple-animation-sequence-decal-kind seq)))
-          (attr 440 "Body" (princ-to-string (simple-animation-sequence-decal-body seq)))
-          (attr 425 "Tileset" (simple-animation-sequence-tile-sheet seq))
-          (attr 410 "Write Mode" (string-downcase (simple-animation-sequence-write-mode seq)))
-          (attr 395 "Frames" (format nil "~d" (simple-animation-sequence-frame-count seq)))
-          (attr 380 "Rate" (princ-to-string (simple-animation-sequence-frame-rate-scalar seq))))
-         (skyline-tool::write-ps-footer ps date-str author (machine-instance) (title-case *game-title*) 1 1)
-         (let* ((fc (simple-animation-sequence-frame-count seq))
-                (cols (min 4 fc))
-                (rows (ceiling fc cols))
-                (page-w 792) (page-h 612)
-                (margin 50)
-                (avail (- page-w (* 2 margin)))
-                (cell-w (/ avail cols))
-                (cell-h cell-w)
-                (start-y (- page-h margin cell-h (max 0 (- rows 1) cell-h))))
-           (format ps "/DeviceRGB setcolorspace~%")
-           (dotimes (fi fc)
-             (let* ((col (mod fi cols))
-                    (row (floor fi cols))
-                    (x (+ margin (* col cell-w)))
-                    (y (- start-y (* row cell-h))))
-               (multiple-value-bind (fp fw fh) (render-filmstrip-pixels seq :frame fi)
-                 (let ((rw (* fw 3)))
-                   (format ps "gsave~%")
-                   (format ps "~d ~d translate~%" x y)
-                   (format ps "~f ~f scale~%" cell-w cell-h)
-                   (format ps "~d ~d 8~%" fw fh)
-                   (format ps "[~d 0 0 ~d 0 0]~%" fw (- fh))
-                   (format ps "{ currentfile ~d string readhexstring pop } image~%" rw)
-                   (dotimes (i (length fp))
-                     (format ps "~2,'0x" (aref fp i))
-                     (when (and (plusp i) (zerop (mod i 72))) (terpri ps)))
-                   (terpri ps)
-                   (format ps "grestore~%")))))
-         (format ps "showpage~%"))
+         (title (format nil "Animation Sequence ~d: ~a"
+                        (simple-animation-sequence-index seq)
+                        (or (simple-animation-sequence-label seq) "untitled"))))
+    (with-open-file (ps ps-path :direction :output :if-exists :supersede)
+      (format ps "%!PS-Adobe-3.0~%")
+      (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+      (format ps "%%Page: 1 1~%")
+      (format ps "<< /PageSize [792 612] >> setpagedevice~%")
+      (skyline-tool::write-ps-font-encodings ps)
+      ;; Header bar with icon
+      (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
+      (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont~%")
+      (flet ((attr (y label value)
+               (format ps "50 ~d moveto (~a:) show 200 ~d moveto (~a) show~%" y label y value)))
+        (attr 500 "Index" (princ-to-string (simple-animation-sequence-index seq)))
+        (attr 485 "Label" (or (simple-animation-sequence-label seq) "(none)"))
+        (attr 470 "Kind" (string-downcase (simple-animation-sequence-major-kind seq)))
+        (attr 455 "Decal" (string-downcase (simple-animation-sequence-decal-kind seq)))
+        (attr 440 "Body" (princ-to-string (simple-animation-sequence-decal-body seq)))
+        (attr 425 "Tileset" (simple-animation-sequence-tile-sheet seq))
+        (attr 410 "Write Mode" (string-downcase (simple-animation-sequence-write-mode seq)))
+        (attr 395 "Frames" (format nil "~d" (simple-animation-sequence-frame-count seq)))
+        (attr 380 "Rate" (princ-to-string (simple-animation-sequence-frame-rate-scalar seq))))
+      (skyline-tool::write-ps-footer ps date-str author (machine-instance) (title-case *game-title*) 1 1)
+      (let* ((fc (simple-animation-sequence-frame-count seq))
+             (cols (min 4 fc))
+             (rows (ceiling fc cols))
+             (page-w 792) (page-h 612)
+             (margin 50)
+             (avail (- page-w (* 2 margin)))
+             (cell-w (/ avail cols))
+             (cell-h cell-w)
+             (start-y (- page-h margin cell-h (max 0 (- rows 1) cell-h))))
+        (format ps "/DeviceRGB setcolorspace~%")
+        (dotimes (fi fc)
+          (let* ((col (mod fi cols))
+                 (row (floor fi cols))
+                 (x (+ margin (* col cell-w)))
+                 (y (- start-y (* row cell-h))))
+            (multiple-value-bind (fp fw fh) (render-filmstrip-pixels seq :frame fi)
+              (let ((rw (* fw 3)))
+                (format ps "gsave~%")
+                (format ps "~d ~d translate~%" x y)
+                (format ps "~f ~f scale~%" cell-w cell-h)
+                (format ps "~d ~d 8~%" fw fh)
+                (format ps "[~d 0 0 ~d 0 0]~%" fw (- fh))
+                (format ps "{ currentfile ~d string readhexstring pop } image~%" rw)
+                (dotimes (i (length fp))
+                  (format ps "~2,'0x" (aref fp i))
+                  (when (and (plusp i) (zerop (mod i 72))) (terpri ps)))
+                (terpri ps)
+                (format ps "grestore~%")))))
+        (format ps "showpage~%"))
       (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-pathname))
                         :output nil :ignore-error-status t)
       (ignore-errors (delete-file ps-path))
@@ -539,16 +525,16 @@
 
 (defun populate-anim-seq-print-menu ()
   (ignore-errors
-    (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu "No printers found")
-    (dolist (p (discover-printers))
-      (ignore-errors
-        (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu p))))
+   (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu "No printers found")
+   (dolist (p (discover-printers))
+     (ignore-errors
+      (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu p))))
   (let* ((printers (discover-printers-with-names)))
     (if (null printers)
         (clim:add-menu-item-to-command-table
          'print-animation-sequence-menu "Default Printer (lpr)" :command
          '(com-print-anim-seq-to-printer nil "Default Printer")
-         :after :end)
+                                                                :after :end)
         (dolist (pair printers)
           (let ((queue-name (car pair))
                 (display-name (cdr pair)))
@@ -566,13 +552,13 @@
 
 (defun populate-palette-menu ()
   (let ((palettes (ecase (simple-animation-sequence-write-mode
-                         (anim-seq-editor-sequence *anim-seq-editor-frame*))
+                          (anim-seq-editor-sequence *anim-seq-editor-frame*))
                     (:160a '(0 1 2 3 4 5 6 7))
                     (:160b '(0 4)))))
     (dolist (name '("0" "1" "2" "3" "4" "5" "6" "7"
                     "✓ 0" "✓ 1" "✓ 2" "✓ 3" "✓ 4" "✓ 5" "✓ 6" "✓ 7"))
       (ignore-errors
-        (clim:remove-menu-item-from-command-table 'set-palette-menu name)))
+       (clim:remove-menu-item-from-command-table 'set-palette-menu name)))
     (let ((current (anim-seq-editor-palette *anim-seq-editor-frame*)))
       (dolist (p palettes)
         (let ((label (if (= p current)
@@ -583,24 +569,27 @@
 
 (defun populate-frames-menu ()
   (dolist (name '("One Frame" "Two Frames" "Four Frames" "Eight Frames"
-                  "✓ One Frame" "✓ Two Frames" "✓ Four Frames" "✓ Eight Frames"))
+                  "☑ One Frame" "☑ Two Frames" "☑ Four Frames" "☑ Eight Frames"))
     (ignore-errors
-      (clim:remove-menu-item-from-command-table 'set-frames-menu name)))
+     (clim:remove-menu-item-from-command-table 'set-frames-menu name)))
   (let ((current (simple-animation-sequence-frame-count
                   (anim-seq-editor-sequence *anim-seq-editor-frame*))))
-    (dolist (pair '((1 "One Frame") (2 "Two Frames") (4 "Four Frames") (8 "Eight Frames")))
-      (let ((count (first pair))
-            (label (second pair)))
-        (clim:add-menu-item-to-command-table
-         'set-frames-menu
-         (if (= count current) (format nil "✓ ~a" label) label)
-         :command `(com-set-frame-count ,count))))))
+    (dolist (pair (loop for i from 1 upto 4
+                        collecting (cons i (format nil "~:(~r~) Frame~:p" i))))
+      (destructuring-bind (count . label) pair
+        (ignore-errors
+         (clim:add-menu-item-to-command-table
+          'set-frames-menu
+          (if (= count current)
+              (format nil "☑ ~a" label)
+              label)
+          :command `(com-set-frame-count ,count)))))))
 
 (defun populate-speed-menu ()
   (dolist (name '("1 (60 fps)" "1/2 (120 fps)" "1/4 (240 fps)" "1/8 (480 fps)"
                   "✓ 1 (60 fps)" "✓ 1/2 (120 fps)" "✓ 1/4 (240 fps)" "✓ 1/8 (480 fps)"))
     (ignore-errors
-      (clim:remove-menu-item-from-command-table 'set-speed-menu name)))
+     (clim:remove-menu-item-from-command-table 'set-speed-menu name)))
   (let ((current (simple-animation-sequence-frame-rate-scalar
                   (anim-seq-editor-sequence *anim-seq-editor-frame*))))
     (dolist (scalar '(1 1/2 1/4 1/8))
@@ -614,8 +603,7 @@
   (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
          (path (prompt-save-pathname
                 (format nil "AnimationSequence-~d.pdf"
-                        (simple-animation-sequence-index seq))
-                "pdf")))
+                        (simple-animation-sequence-index seq)))))
     (when path
       (write-animation-sequence-pdf seq path *query-io*))))
 (define-anim-seq-editor-frame-command (com-discover-printers-anim-seq :menu nil :name t) ()
@@ -735,45 +723,56 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (clim:redisplay-frame-panes frame))
 
 (defun load-tile-sheet-object-by-name (name artp)
-  (let ((mem (make-array 4096 :element-type '(unsigned-byte 8))))
-    (with-input-from-file
-        (bin (if artp
-                 (cond
-                   ((string= "Sentinels" name)
-                    (make-pathname
-                     :directory (list :relative "Object" "7800" "Assets")
-                     :name "Art.SandyIslandEnemies" :type "o"))
-                   ((string= "Sailors" name)
-                    (make-pathname
-                     :directory (list :relative "Object" "7800" "Assets")
-                     :name "Art.Sailors" :type "o"))
-                   ((string= "Nefertem" name)
-                    (make-pathname
-                     :directory (list :relative "Object" "7800" "Assets")
-                     :name "Art.CharacterEffectsTiles" :type "o"))
-                   (t (make-pathname
-                       :directory (list :relative "Object" "7800" "Assets")
-                       :name (format nil "Art.~a" name)
-                       :type "o")))
-                 (make-pathname
-                  :directory (list :relative "Object" "7800" "Assets")
-                  :name (format nil "Tileset.~a" name)
-                  :type "o"))
-             :element-type '(unsigned-byte 8))
-      (loop for byte = (read-byte bin nil nil)
-            for i from 0 below #x10000
-            while byte
-            do (setf (aref mem i) byte)))
-    mem))
+  (let* ((obj-file (if artp
+                       (cond
+                         ((string= "Sentinels" name)
+                          (make-pathname
+                           :directory (list :relative "Object" "7800" "Assets")
+                           :name "Art.SandyIslandEnemies" :type "o"))
+                         ((string= "Sailors" name)
+                          (make-pathname
+                           :directory (list :relative "Object" "7800" "Assets")
+                           :name "Art.Sailors" :type "o"))
+                         ((string= "Nefertem" name)
+                          (make-pathname
+                           :directory (list :relative "Object" "7800" "Assets")
+                           :name "Art.CharacterEffectsTiles" :type "o"))
+                         (t (make-pathname
+                             :directory (list :relative "Object" "7800" "Assets")
+                             :name (format nil "Art.~a" name)
+                             :type "o")))
+                       (make-pathname
+                        :directory (list :relative "Object" "7800" "Assets")
+                        :name (format nil "Tileset.~a" name)
+                        :type "o")))
+         (mem (make-array 4096 :element-type '(unsigned-byte 8))))
+(unless (probe-file obj-file)
+      ;; Build the object file by running make in thread pool
+      (format t "~&Building ~a...~%" (enough-namestring obj-file))
+      (force-output)
+(lparallel:submit-task
+        (lambda ()
+          (uiop:run-program (list "make" "-j4" (namestring obj-file))
+                            :output :interactive
+                            :error-output :interactive
+                            :ignore-error-status t)))
+      (block
+           fixme-this-needs-to-be-asynchronous
+         (with-input-from-file
+             (bin obj-file
+                  :element-type '(unsigned-byte 8))
+           (loop for byte = (read-byte bin nil nil)
+                 for i from 0 below #x10000
+                 while byte
+                 do (setf (aref mem i) byte))))
+      mem)))
 
 (defun read-palette-for-tile-sheet (tile-sheet-name palette-index &key write-mode)
   (let ((tileset-pathname (make-pathname :directory (list :relative "Source" "Maps" "Tiles")
                                          :name tile-sheet-name
                                          :type "tsx")))
     (unless (probe-file tileset-pathname)
-      (setf tileset-pathname (make-pathname :directory (list :relative "Source" "Maps" "Tiles")
-                                            :name "SandyIslandTiles"
-                                            :type "tsx")))
+      (error "Missing tileset: ~a" (enough-namestring tileset-pathname)))
     (let* ((tileset (load-tileset tileset-pathname))
            (palettes (extract-palettes (tileset-image tileset)))
            (colors-count (ecase write-mode
@@ -1157,7 +1156,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
       (display-anim-seq-palette-strip window pane pal))))
 
 (defmethod display-anim-seq-palette-strip ((window anim-seq-editor-frame) pane
-                                            &optional (palette-index (anim-seq-editor-palette window)))
+                                           &optional (palette-index (anim-seq-editor-palette window)))
   "Display palette register color swatches with VarColor highlighting for the current animation sequence.
    For 160B mode, registers 4,8,12 are VarColors – show their RGB values as well."
   (let* ((seq (anim-seq-editor-sequence window))
@@ -1186,7 +1185,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
               (clim:with-text-face (pane :bold)
                 (format pane "  VarColor ~a" (format nil "#~2,'0x~2,'0x~2,'0x"
                                                      (first rgb) (second rgb) (third rgb)))))))))
-))
+    ))
 
 (defmethod display-anim-seq-properties ((frame anim-seq-editor-frame) pane)
   (clim:window-clear pane)
@@ -1522,8 +1521,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (clim-sys:make-process (lambda ()
                            (load-all-animation-sequences)
                            (let* ((*anim-seq-editor-frame*
-                                   (clim:make-application-frame 'anim-seq-editor-frame
-                                                                :sequence sequence))
+                                    (clim:make-application-frame 'anim-seq-editor-frame
+                                                                 :sequence sequence))
                                   (seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
                                   (label (when seq (simple-animation-sequence-label seq)))
                                   (title (if label
@@ -1534,7 +1533,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
                              (populate-palette-menu)
                              (populate-frames-menu)
                              (populate-speed-menu)
-                             (let ((*application-frame* *anim-seq-editor-frame*))
+                             (let ((clim:*application-frame* *anim-seq-editor-frame*))
                                (clim:run-frame-top-level *anim-seq-editor-frame*))))
                          :name "Edit Animation Sequence"))
 
@@ -1557,15 +1556,16 @@ Called from note-sheet-grafted after the frame is connected to the display."
   :menu (("Find..." :command com-find)))
 
 (clim:define-command-table assign-help-menu
-  :menu (("How to Assign Animations" :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+  :inherit-from (clim-internals::global-command-table)
+  :menu (("How to Assign Animations..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line)
-         ("About Skyline-Tool" :command com-about-skyline-tool)))
+         ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
 (clim:define-command-table anim-assign-menu-bar
   :menu (("Assignment" :menu animation-assignment-menu)
-          ("Edit" :menu assignment-edit-menu) ("Help" :menu assign-help-menu)))
+         ("Edit" :menu assignment-edit-menu) ("Help" :menu assign-help-menu)))
 (clim:define-application-frame anim-seq-assign-frame ()
   ((%seq-index :initform 0 :accessor anim-seq-assign-index :initarg :sequence)
    (%sequence :accessor anim-seq-assign-sequence)
@@ -1583,8 +1583,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (:menu-bar anim-assign-menu-bar)
   (:icon (skyline-tool-icon :resource :animation-assignment))
   (:layouts (default (clim:vertically ()
-                        anim-seq-detail-pane
-                        interactor))))
+                       anim-seq-detail-pane
+                       interactor))))
 
 (define-anim-seq-assign-frame-command (com-new-animation-assignment :menu nil :name t) ()
   (format *query-io* "~&Create new assignment: specify decal kind, body, action, facing.~%")
@@ -1607,46 +1607,46 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (format *query-io* "~&Saved all animation sequences.~%"))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-pdf :menu nil :name t) ()
-  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+  (let* ((frame (or (and (boundp 'clim:*application-frame*) clim:*application-frame*) *anim-seq-assign-frame*))
          (default-name (format nil "Animation~@[-~a~].pdf"
                                (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
-                (uiop:run-program
-                 (list "zenity" "--file-selection" "--save"
-                       (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
-                       "--title=Save Assignment As PDF...")
-                 :output :string :ignore-error-status t))))
+                            (uiop:run-program
+                             (list "zenity" "--file-selection" "--save"
+                                   (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
+                                   "--title=Save Assignment As PDF...")
+                             :output :string :ignore-error-status t))))
     (if (and path (> (length path) 0))
         (format *query-io* "~&PDF export not yet implemented for assignments.~%")
         (format *query-io* "~&Cancelled.~%"))))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-text :menu nil :name t) ()
-  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+  (let* ((frame (or (and (boundp 'clim:*application-frame*) clim:*application-frame*) *anim-seq-assign-frame*))
          (default-name (format nil "Animation~@[-~a~].txt"
                                (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
-                (uiop:run-program
-                 (list "zenity" "--file-selection" "--save"
-                       (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
-                       "--title=Save Assignment As Text...")
-                 :output :string :ignore-error-status t))))
+                            (uiop:run-program
+                             (list "zenity" "--file-selection" "--save"
+                                   (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
+                                   "--title=Save Assignment As Text...")
+                             :output :string :ignore-error-status t))))
     (if (and path (> (length path) 0))
         (format *query-io* "~&Text export not yet implemented for assignments.~%")
         (format *query-io* "~&Cancelled.~%"))))
 
 (define-anim-seq-assign-frame-command (com-save-assignment-as-json :menu nil :name t) ()
-  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*) *anim-seq-assign-frame*))
+  (let* ((frame (or (and (boundp 'clim:*application-frame*) clim:*application-frame*) *anim-seq-assign-frame*))
          (default-name (format nil "Animation~@[-~a~].json"
                                (if frame (anim-seq-assign-decal-kind frame) "unknown")))
          (dir (merge-pathnames #p"Work/" (user-homedir-pathname)))
          (path (string-trim '(#\Newline #\Space)
-                (uiop:run-program
-                 (list "zenity" "--file-selection" "--save"
-                       (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
-                       "--title=Save Assignment As JSON...")
-                 :output :string :ignore-error-status t))))
+                            (uiop:run-program
+                             (list "zenity" "--file-selection" "--save"
+                                   (format nil "--filename=~a" (namestring (merge-pathnames default-name dir)))
+                                   "--title=Save Assignment As JSON...")
+                             :output :string :ignore-error-status t))))
     (if (and path (> (length path) 0))
         (format *query-io* "~&JSON export not yet implemented for assignments.~%")
         (format *query-io* "~&Cancelled.~%"))))
@@ -1866,7 +1866,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
                                       :parent parent)))
                                (setf (clim:frame-pretty-name *anim-seq-assign-frame*)
                                      (window-title "Animation Assignment"))
-                               (let ((*application-frame* *anim-seq-assign-frame*))
+                               (let ((clim:*application-frame* *anim-seq-assign-frame*))
                                  (clim:run-frame-top-level *anim-seq-assign-frame*))))
                            :name "Assign Animation Sequence")))
 
@@ -1885,18 +1885,18 @@ Called from note-sheet-grafted after the frame is connected to the display."
          ("Print To" :menu print-assignments-menu)
          ("Discover Printers…" :command com-discover-printers-assigns)
          (nil :divider :line)
-         ("Close Assignments" :command com-close-frame)))
+         ("Close" :command com-close-frame)))
 
 (clim:define-command-table assigns-help-menu
-  :menu (("How to Manage Assignments" :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+  :menu (("How to Manage Assignments..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line)
-         ("About Skyline-Tool" :command com-about-skyline-tool)))
+         ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
 (clim:define-command-table anim-assigns-menu-bar
   :menu (("Assignments" :menu animation-assignments-menu)
-          ("Edit" :menu assignment-edit-menu) ("Help" :menu assigns-help-menu)))
+         ("Edit" :menu assignment-edit-menu) ("Help" :menu assigns-help-menu)))
 (clim:define-application-frame anim-seq-assigns-frame ()
   ()
   (:panes (anim-seq-assignments-pane :application :height 600 :width 1600
@@ -1906,8 +1906,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (:menu-bar anim-assigns-menu-bar)
   (:icon (skyline-tool-icon :resource :animation-assignments))
   (:layouts (default (clim:vertically ()
-                        anim-seq-assignments-pane
-                        interactor))))
+                       anim-seq-assignments-pane
+                       interactor))))
 
 (define-anim-seq-assigns-frame-command (com-new-animation-assignments :menu nil :name t) ()
   (format *query-io* "~&New Animation Assignments is not yet implemented.~%"))
@@ -1921,28 +1921,27 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (define-anim-seq-assigns-frame-command (com-save-assignments-as-json :menu nil :name t) ()
   (let* ((default-name (format nil "AnimationAssignments.json"))
-         (path (prompt-save-pathname default-name :type "json"
+         (path (prompt-save-pathname default-name
                                      :prefs-key :save-assignments-json-dir)))
     (when path
-      (let ((alist
-              (loop for key being the hash-keys of *animation-assignments*
-                      using (hash-value seq)
-                    collect (cons (format nil "~(~a~)-~d-~(~a~)-~(~a~)"
-                                          (first key) (second key)
-                                          (third key) (fourth key))
-                                  (skyline-tool::sequence-alist seq)))))
-        (with-open-file (f path :direction :output :if-exists :supersede
-                           :external-format :utf-8)
-          (skyline-tool::write-json-pretty alist f))
-        (format *query-io* "~&Saved ~a~%" (namestring path))))))
+      (with-open-file (f path :direction :output :if-exists :supersede
+                              :external-format :utf-8)
+        (skyline-tool::write-json-pretty
+         (loop for key being the hash-keys of *animation-assignments*
+                 using (hash-value seq)
+               collect (cons (format nil "~(~a~)-~d-~(~a~)-~(~a~)"
+                                     (first key) (second key)
+                                     (third key) (fourth key))
+                             (skyline-tool::sequence-alist seq)))
+         f)))))
 
 (define-anim-seq-assigns-frame-command (com-save-assignments-as-text :menu nil :name t) ()
   (let* ((default-name (format nil "AnimationAssignments.txt"))
-         (path (prompt-save-pathname default-name :type "txt"
+         (path (prompt-save-pathname default-name
                                      :prefs-key :save-assignments-text-dir)))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede
-                         :external-format :utf-8)
+                              :external-format :utf-8)
         (format f "Animation Sequence Assignments~%")
         (format f "============================~2%")
         (loop for key being the hash-keys of *animation-assignments*
@@ -1960,7 +1959,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (define-anim-seq-assigns-frame-command (com-save-assignments-as-pdf :menu nil :name t) ()
   (let* ((default-name (format nil "AnimationAssignments.pdf"))
-         (path (prompt-save-pathname default-name :type "pdf"
+         (path (prompt-save-pathname default-name
                                      :prefs-key :save-assignments-pdf-dir)))
     (if (and path (probe-file path))
         (format *query-io* "~&PDF export not yet fully implemented for assignments.~%")
@@ -1968,8 +1967,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 ;; --- Print To printer list for assignments frame ---
 (defun %print-assignments-to-printer (printer-queue-name)
-  (let* ((pdf-path "/tmp/AnimationAssignments-print.pdf")
-         (table-path (make-pathname :name "Animation" :type "ods"
+  (let* ((table-path (make-pathname :name "Animation" :type "ods"
                                     :directory (list :relative "Source" "Tables"))))
     (save-all-animation-sequences)
     (format *query-io* "~&Printing to ~a...~%" printer-queue-name)
@@ -1980,11 +1978,11 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (defun populate-assignments-print-menu ()
   (ignore-errors
-    (clim:remove-menu-item-from-command-table 'print-assignments-menu "No printers found")
-    (clim:remove-menu-item-from-command-table 'print-assignments-menu "Default Printer (lpr)")
-    (dolist (p (discover-printers))
-      (ignore-errors
-        (clim:remove-menu-item-from-command-table 'print-assignments-menu p))))
+   (clim:remove-menu-item-from-command-table 'print-assignments-menu "No printers found")
+   (clim:remove-menu-item-from-command-table 'print-assignments-menu "Default Printer (lpr)")
+   (dolist (p (discover-printers))
+     (ignore-errors
+      (clim:remove-menu-item-from-command-table 'print-assignments-menu p))))
   (let* ((printers (discover-printers-with-names)))
     (if (null printers)
         (clim:add-menu-item-to-command-table
@@ -2118,14 +2116,14 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (defun assign-animation-sequences ()
   "Select which animation sequence applies to which action(s)"
   (clim-sys:make-process (lambda ()
-                  (load-all-animation-sequences)
-                  (let ((*anim-seq-assigns-frame*
-                          (clim:make-application-frame 'anim-seq-assigns-frame)))
-                    (setf (clim:frame-pretty-name *anim-seq-assigns-frame*)
-                          (window-title "Animation Assignments"))
-                    (let ((*application-frame* *anim-seq-assigns-frame*))
-                      (clim:run-frame-top-level *anim-seq-assigns-frame*))))
-                :name "Assign Animation Sequences"))
+                           (load-all-animation-sequences)
+                           (let ((*anim-seq-assigns-frame*
+                                   (clim:make-application-frame 'anim-seq-assigns-frame)))
+                             (setf (clim:frame-pretty-name *anim-seq-assigns-frame*)
+                                   (window-title "Animation Assignments"))
+                             (let ((clim:*application-frame* *anim-seq-assigns-frame*))
+                               (clim:run-frame-top-level *anim-seq-assigns-frame*))))
+                         :name "Assign Animation Sequences"))
 
 (define-anim-seq-assigns-frame-command (com-edit-assignment :name t)
     ((decal-kind 'simple-animation-sequence-decal-kind)
@@ -2211,8 +2209,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (:menu-bar tileset-menu-bar)
   (:icon (skyline-tool-icon :resource :tileset))
   (:layouts (default (clim:vertically ()
-                        tileset-pane
-                        interactor))))
+                       tileset-pane
+                       interactor))))
 
 (defmethod display-tileset ((frame show-tileset-frame) pane)
   (clim:window-clear pane)
@@ -2252,19 +2250,19 @@ Called from note-sheet-grafted after the frame is connected to the display."
 (defun choose-tile-from-set (&key tileset callback artp write-mode palette)
   "Choose a tile from a set"
   (clim-sys:make-process (lambda ()
-                  (load-all-animation-sequences)
-                  (let ((*show-tileset-frame*
-                          (clim:make-application-frame 'show-tileset-frame
-                                                       :tileset tileset
-                                                       :callback callback
-                                                       :artp artp
-                                                       :write-mode write-mode
-                                                       :palette palette)))
-                     (setf (clim:frame-pretty-name *show-tileset-frame*)
-                           (window-title (format nil "Tileset ~a" (title-case tileset))))
-                    (let ((*application-frame* *show-tileset-frame*))
-                      (clim:run-frame-top-level *show-tileset-frame*))))
-                :name "Show Tileset"))
+                           (load-all-animation-sequences)
+                           (let ((*show-tileset-frame*
+                                   (clim:make-application-frame 'show-tileset-frame
+                                                                :tileset tileset
+                                                                :callback callback
+                                                                :artp artp
+                                                                :write-mode write-mode
+                                                                :palette palette)))
+                             (setf (clim:frame-pretty-name *show-tileset-frame*)
+                                   (window-title (format nil "Tileset ~a" (title-case tileset))))
+                             (let ((clim:*application-frame* *show-tileset-frame*))
+                               (clim:run-frame-top-level *show-tileset-frame*))))
+                         :name "Show Tileset"))
 
 (define-show-tileset-frame-command (com-choose-tile :name t)
     ((index 'integer))
@@ -2280,29 +2278,29 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (list object))
 
 (clim:define-command-table sequence-menu
-   :menu (("New..." :command com-create-sequence)
-          ("Import..." :command com-import-sequence)
-          ("Go To..." :command com-go-to-sequence)
-          (nil :divider :line)
-          ("Save As" :menu save-sequence-menu)
-          (nil :divider :line)
-          ("Close" :command com-close-frame)))
+  :menu (("New..." :command com-create-sequence)
+         ("Import..." :command com-import-sequence)
+         ("Go To..." :command com-go-to-sequence)
+         (nil :divider :line)
+         ("Save As" :menu save-sequence-menu)
+         (nil :divider :line)
+         ("Close" :command com-close-frame)))
 
 (clim:define-command-table save-sequence-menu
-   :menu (("JSON..." :command com-save-sequence-as-json)
-          ("Text..." :command com-save-sequence-as-text)
-          ("PDF..." :command com-save-sequence-as-pdf)
-          ("PNG..." :command com-save-sequence-as-png)))
+  :menu (("JSON..." :command com-save-sequence-as-json)
+         ("Text..." :command com-save-sequence-as-text)
+         ("PDF..." :command com-save-sequence-as-pdf)
+         ("PNG..." :command com-save-sequence-as-png)))
 
 (clim:define-command-table seq-help-menu
-   :menu (("How to Choose Sequences" :command com-help-for-window)
-          ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-          ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
-          (nil :divider :line)
-          ("About Skyline-Tool" :command com-about-skyline-tool)))
+  :menu (("How to Choose Sequences" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
 
 (clim:define-command-table seq-menu-bar
-   :menu (("Sequence" :menu sequence-menu) ("Edit" :menu edit-menu) ("Help" :menu seq-help-menu)))
+  :menu (("Sequence" :menu sequence-menu) ("Edit" :menu edit-menu) ("Help" :menu seq-help-menu)))
 (clim:define-application-frame choose-sequence-frame ()
   ((%major-kind :accessor choose-sequence-major-kind :initarg :major-kind)
    (%decal-kind :accessor choose-sequence-decal-kind :initarg :decal-kind)
@@ -2316,15 +2314,13 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (:menu-bar seq-menu-bar)
   (:icon (skyline-tool-icon :resource :sequence))
   (:layouts (default (clim:vertically ()
-                        list-pane
-                        interactor))))
+                       list-pane
+                       interactor))))
 
 (define-choose-sequence-frame-command (com-import-sequence :menu nil :name t) ()
-  (format *query-io* "~&Import Sequence is not yet implemented.~%"))
+  (error "~&Import Sequence is not yet implemented.~%"))
 (define-choose-sequence-frame-command (com-go-to-sequence :menu nil :name t) ()
-  (format *query-io* "~&Go To Sequence is not yet implemented.~%"))
-(define-choose-sequence-frame-command (com-save-sequence :menu nil :name t) ()
-  (format *query-io* "~&Save Sequence is not yet implemented.~%"))
+  (error "~&Go To Sequence is not yet implemented.~%"))
 
 (defun find-sequences-matching (&key major-kind decal-kind body)
   (ecase major-kind
@@ -2411,8 +2407,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
         (draw-item pane nil 'simple-animation-sequence-index none-selected
                    (lambda (p)
                      (clim:with-text-face (p (if none-selected
-                                               (list :italic :bold)
-                                               :italic))
+                                                 (list :italic :bold)
+                                                 :italic))
                        (format p "(No explicit assignment)")))))
       (draw-item pane nil 'new-animation-sequence nil
                  (lambda (p)
@@ -2475,9 +2471,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
     (setf *choose-sequence-frame* frame
           (clim:frame-pretty-name frame) name)
     (clim-sys:make-process (lambda ()
-                              (let ((*application-frame* frame))
-                                (clim:run-frame-top-level frame)))
-                 :name name)))
+                             (let ((clim:*application-frame* frame))
+                               (clim:run-frame-top-level frame)))
+                           :name name)))
 
 (define-anim-seq-assigns-frame-command (com-save-all-animations :name t :menu t) ()
   (save-all-animation-sequences))
@@ -2514,20 +2510,20 @@ Called from note-sheet-grafted after the frame is connected to the display."
                (major-kind (simple-animation-sequence-major-kind seq))
                ;; Load tileset from cache or disk
                (tile-dump
-                (if (and (anim-seq-editor-cached-tile-dump window)
-                         (equal (anim-seq-editor-cached-tile-sheet-name window)
-                                tile-sheet-name))
-                    ;; Use cached tileset
-                    (anim-seq-editor-cached-tile-dump window)
-                    ;; Load and cache new tileset
-                    (let ((dump (load-tile-sheet-object-by-name
-                                 tile-sheet-name
-                                 (ecase major-kind
-                                   ((:background :scenery) nil)
-                                   (:npc t)))))
-                      (setf (anim-seq-editor-cached-tile-dump window) dump
-                            (anim-seq-editor-cached-tile-sheet-name window) tile-sheet-name)
-                      dump)))
+                 (if (and (anim-seq-editor-cached-tile-dump window)
+                          (equal (anim-seq-editor-cached-tile-sheet-name window)
+                                 tile-sheet-name))
+                     ;; Use cached tileset
+                     (anim-seq-editor-cached-tile-dump window)
+                     ;; Load and cache new tileset
+                     (let ((dump (load-tile-sheet-object-by-name
+                                  tile-sheet-name
+                                  (ecase major-kind
+                                    ((:background :scenery) nil)
+                                    (:npc t)))))
+                       (setf (anim-seq-editor-cached-tile-dump window) dump
+                             (anim-seq-editor-cached-tile-sheet-name window) tile-sheet-name)
+                       dump)))
                ;; Calculate appropriate scale to fit in preview pane while maintaining aspect ratio
                (bytes-width (simple-animation-sequence-bytes-width seq))
                (mode (simple-animation-sequence-write-mode seq))
@@ -2549,16 +2545,16 @@ Called from note-sheet-grafted after the frame is connected to the display."
               (progn
                 (terpri pane)
                 (display-maria-art pane
-                                  :dump tile-dump
-                                  :mode mode
-                                  :address (* bytes-width frame-ref)
-                                  :colors (read-palette-for-tile-sheet
-                                           tile-sheet-name
-                                           (anim-seq-editor-palette window)
-                                           :write-mode mode)
-                                  :var-colors #(#x48 #x88 #xc8)
-                                  :width bytes-width
-                                  :unit unit))
+                                   :dump tile-dump
+                                   :mode mode
+                                   :address (* bytes-width frame-ref)
+                                   :colors (read-palette-for-tile-sheet
+                                            tile-sheet-name
+                                            (anim-seq-editor-palette window)
+                                            :write-mode mode)
+                                   :var-colors #(#x48 #x88 #xc8)
+                                   :width bytes-width
+                                   :unit unit))
             (error (e)
               ;; If there's an error loading the graphic, show a simple message
               (format pane "~%[Error: ~a]" e))))
@@ -2599,7 +2595,8 @@ Called from note-sheet-grafted after the frame is connected to the display."
 
 (defun compile-animation-sequences ()
   (format *trace-output* "~&Compiling animation sequence data …")
-  (let ((source-name (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
+  (let ((source-name (make-pathname :directory (list :relative "Source" "Generated"
+                                                     (machine-directory-name))
                                     :name "AnimationTable" :type "s")))
     (ensure-directories-exist source-name)
     (load-all-animation-sequences)

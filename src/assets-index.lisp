@@ -7,9 +7,6 @@
 ;; All resources view — replaces "Check for Absent Assets"
 ;; and "Show Assets Index".
 
-(clim:define-presentation-type unified-asset-entry ())
-(clim:define-presentation-type build-checkbox ())
-
 (defun asset-index->filesystem-path (moniker)
   "Convert an Assets.index MONIKER (e.g. 'Blobs/TitleCard') to the
    full filesystem path, or NIL if the file doesn't exist."
@@ -80,7 +77,7 @@
                      results)))))))
     ;; Sort: Scripts, Songs, Maps, Blobs; alphabetically within each group;
     ;; for Scripts and Maps, sort by locale directory first.
-    (let ((order '("Scripts" "Songs" "Maps" "Characters" "Blobs")))
+    (let ((order '("Scripts" "Songs" "Maps" "Characters" "Boats" "Instruments" "Items" "Keys" "Blobs" "Classes" "Flags" "Object Prototypes" "Phonetic Dictionary" "Routines" "Sprite Sheets" "Tilesets" "Translations")))
       (sort results (lambda (a b)
                       (let* ((ka (position (third a) order :test #'string-equal))
                              (kb (position (third b) order :test #'string-equal))
@@ -100,23 +97,137 @@
                                      (and (string= locale-a locale-b)
                                           (string-lessp (first a) (first b)))))))))))
 
-(defun color-rgb-for-kind (kind-name)
-  "Return PostScript setrgbcolor values for a KIND-NAME background."
-  (cond ((string-equal kind-name "Scripts") "0.0 0.0 0.502 setrgbcolor")
-        ((string-equal kind-name "Songs") "0.502 0.0 0.0 setrgbcolor")
-        ((string-equal kind-name "Maps") "0.302 0.149 0.0 setrgbcolor")
-        ((string-equal kind-name "Blobs") "0.0 0.302 0.0 setrgbcolor")
-        ((string-equal kind-name "Characters") "0.502 0.0 0.502 setrgbcolor")
-        (t "0.3 0.3 0.3 setrgbcolor")))
+(defgeneric resource-color-postscript (kind-name)
+  (:documentation
+   "Return PostScript setrgbcolor values for a KIND-NAME.
+    NIL or special resources get white (\"1.0 1.0 1.0 setrgbcolor\")."))
 
-(defun color-for-asset-kind (kind-name)
-  "Return a CLIM color for the KIND-NAME."
-  (cond ((string-equal kind-name "Scripts") (clim:make-rgb-color 0 0 0.502))
-        ((string-equal kind-name "Songs") (clim:make-rgb-color 0.502 0 0))
-        ((string-equal kind-name "Maps") (clim:make-rgb-color 0.302 0.149 0))
-        ((string-equal kind-name "Blobs") (clim:make-rgb-color 0 0.302 0))
-        ((string-equal kind-name "Characters") (clim:make-rgb-color 0.502 0 0.502))
-        (t (clim:make-rgb-color 0.3 0.3 0.3))))
+(defmethod resource-color-postscript ((kind-name null))
+  "1.0 1.0 1.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Scripts")))
+  "0.0 0.0 0.502 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Songs")))
+  "0.502 0.0 0.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Maps")))
+  "0.302 0.149 0.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Blobs")))
+  "0.0 0.302 0.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Boats")))
+  "0.0 0.2 0.5 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Characters")))
+  "0.502 0.0 0.502 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Tilesets")))
+  "0.8 0.4 0.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Sprite Sheets")))
+  "0.0 0.4 0.4 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Object Prototypes")))
+  "0.4 0.0 0.6 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Classes")))
+  "0.2 0.3 0.6 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Routines")))
+  "0.3 0.4 0.1 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Instruments")))
+  "0.6 0.2 0.8 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Items")))
+  "0.8 0.6 0.0 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Flags")))
+  "0.9 0.3 0.3 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Keys")))
+  "0.3 0.7 0.7 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Dictionary")))
+  "0.5 0.5 0.9 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Phonetic Dictionary")))
+  "0.5 0.5 0.9 setrgbcolor")
+
+(defmethod resource-color-postscript ((kind-name (eql "Translations")))
+  "0.5 0.5 0.9 setrgbcolor")
+
+(defmethod resource-color-postscript (kind-name)
+  "0.3 0.3 0.3 setrgbcolor")
+
+(defmethod resource-color-postscript (kind-name)
+   "0.3 0.3 0.3 setrgbcolor")
+
+(defgeneric resource-color (resource)
+  (:documentation
+   "Return CLIM color object for a Game-Resource."))
+
+(defmethod resource-color ((kind-name null))
+  (clim:make-rgb-color 1 1 1))
+
+(defmethod resource-color ((kind-name (eql "Scripts")))
+  (clim:make-rgb-color 0 0 0.502))
+
+(defmethod resource-color ((kind-name (eql "Songs")))
+  (clim:make-rgb-color 0.502 0 0))
+
+(defmethod resource-color ((kind-name (eql "Maps")))
+  (clim:make-rgb-color 0.302 0.149 0))
+
+(defmethod resource-color ((kind-name (eql "Blobs")))
+  (clim:make-rgb-color 0 0.302 0))
+
+(defmethod resource-color ((kind-name (eql "Boats")))
+  (clim:make-rgb-color 0 0.2 0.5))
+
+(defmethod resource-color ((kind-name (eql "Characters")))
+  (clim:make-rgb-color 0.502 0 0.502))
+
+(defmethod resource-color ((kind-name (eql "Tilesets")))
+  (clim:make-rgb-color 0.8 0.4 0))
+
+(defmethod resource-color ((kind-name (eql "Sprite Sheets")))
+  (clim:make-rgb-color 0 0.4 0.4))
+
+(defmethod resource-color ((kind-name (eql "Object Prototypes")))
+  (clim:make-rgb-color 0.4 0 0.6))
+
+(defmethod resource-color ((kind-name (eql "Classes")))
+  (clim:make-rgb-color 0.2 0.3 0.6))
+
+(defmethod resource-color ((kind-name (eql "Routines")))
+  (clim:make-rgb-color 0.3 0.4 0.1))
+
+(defmethod resource-color ((kind-name (eql "Instruments")))
+  (clim:make-rgb-color 0.6 0.2 0.8))
+
+(defmethod resource-color ((kind-name (eql "Items")))
+  (clim:make-rgb-color 0.8 0.6 0))
+
+(defmethod resource-color ((kind-name (eql "Flags")))
+  (clim:make-rgb-color 0.9 0.3 0.3))
+
+(defmethod resource-color ((kind-name (eql "Keys")))
+  (clim:make-rgb-color 0.3 0.7 0.7))
+
+(defmethod resource-color ((kind-name (eql "Dictionary")))
+  (clim:make-rgb-color 0.5 0.5 0.9))
+
+(defmethod resource-color ((kind-name (eql "Phonetic Dictionary")))
+  (clim:make-rgb-color 0.5 0.5 0.9))
+
+(defmethod resource-color ((kind-name (eql "Translations")))
+  (clim:make-rgb-color 0.5 0.5 0.9))
+
+(defmethod resource-color (kind-name)
+  (clim:make-rgb-color 0.3 0.3 0.3))
 
 (defun write-assets-index-ps (path)
   "Generate a PostScript document at PATH with the full Assets Index.
@@ -425,9 +536,9 @@
                                                "--title=Save Script As PDF..."))))
                   (when (and path (> (length path) 0))
                     (handler-case
-                        (progn (fountain->pdf moniker path)
-                               (format *query-io* "~&Saved ~a~%" path))
-                      (error (e) (format *query-io* "~&PDF error: ~a~%" e))))))
+(progn (fountain->pdf moniker path)
+                           (format *query-io* "~&Saved ~a~%" path))
+                      (error (e) (error "PDF error: ~a" e))))))
              ($ "Print"
                 (let* ((pdf (format nil "/tmp/st-~a.pdf" (substitute #\_ #\/ moniker)))
                        (printers (ignore-errors (discover-printers))))
@@ -649,7 +760,7 @@
              ($ "Save Assets Index" (write-sorted-assets-index))
              (---)
              ($ "Redisplay"
-                (clim:redisplay-frame-panes *application-frame* :force-p t)))
+                (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
         ;; Show the menu
         (setf items (nreverse items))
         (let ((choice (clim:menu-choose
@@ -699,7 +810,7 @@
                         new-line l) f)))
     (format *query-io* "~&Toggled ~a for ~a: ~:[(none)~;~a~]~%"
             flag-char moniker (not (emptyp new-builds)) new-build-str)
-    (ignore-errors (clim:redisplay-frame-panes *application-frame* :force-p t))))
+    (ignore-errors (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))
 
 ;; --- Save Assets Index (sorted, blank lines between directories) ---
 
@@ -740,7 +851,7 @@
     (format *query-io* "~&Assets.index rewritten in sorted order with blank lines between directories.~%")
     ;; Redisplay
     (ignore-errors
-      (clim:redisplay-frame-panes *application-frame* :force-p t))))
+      (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))
 
 ;; --- Launcher wrappers ---
 

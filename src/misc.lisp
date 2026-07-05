@@ -946,8 +946,8 @@ inventory_end = *
 
 
 
-(defun machine-short-name ()
-  (ecase *machine*
+(defun machine-short-name (&optional (machine *machine*))
+  (ecase machine
     (1 "Oric-1")
     (2 "Apple ][")
     (8 "NES")
@@ -994,8 +994,8 @@ inventory_end = *
     (9918 "ColecoVision")
     (2416 "Commander X-16")))
 
-(defun machine-long-name ()
-  (ecase *machine*
+(defun machine-long-name (&optional (machine *machine*))
+  (ecase machine
     (1 "Oric-1")
     (2 "Apple ][ (][plus, //c, //e)")
     (3 "Apple ///")
@@ -1046,15 +1046,14 @@ inventory_end = *
     (9918 "ColecoVision")
     (otherwise "no particular system at all")))
 
-(defun machine-valid-p (&optional (machine *machine* machine-provided-p))
+(defun machine-valid-p (&optional (machine *machine*))
   "Check if MACHINE is a valid machine type.
 
 Returns T if the machine is supported, NIL otherwise."
   (handler-case
-      (let ((*machine* (if machine-provided-p machine *machine*)))
-        (and (machine-short-name)
-             (machine-long-name)
-             t))
+      (and (machine-short-name)
+           (machine-long-name)
+           t)
     (error () nil)))
 
 (defun check-machine-valid (&optional (machine *machine*))

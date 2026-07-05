@@ -1,0 +1,73 @@
+;;; Skyline-Tool src/gui/gui-atari-vox-dictionary.lisp
+;;;; Copyright © 2026 Interworldly Adventuring, LLC
+
+(in-package :skyline-tool)
+
+(clim:define-presentation-type game-resource-atari-vox-dictionary-reference ()
+  :inherit-from 'game-resource-atari-vox-dictionary)
+
+(defmethod present-reference ((resource game-resource-atari-vox-dictionary) stream)
+  (clim:with-output-as-presentation
+      (stream resource 'game-resource-atari-vox-dictionary-reference)
+    (clim:formatting-table (stream)
+      (clim:formatting-row (stream)
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
+          (format stream "~3%"))
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
+          (game-resource-present-icon resource stream))
+        ;; Title
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
+          (clim:with-text-face (stream :bold)
+            (game-resource-present-title resource stream))
+          ;; Subheading on next line in small, possibly gray text
+          (format stream "~%~5t")
+          (clim:with-text-size (stream :smaller)
+            (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
+              (game-resource-present-subheading resource stream))))
+        (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
+          (game-resource-present-right-margin resource stream))))))
+
+(defun open-atari-vox-dictionary-inspector (resource)
+  (open-resource-inspector (or resource (make-instance 'game-resource-atari-vox-dictionary)) :editing))
+
+(defmethod present-reading ((resource game-resource) stream)
+  (let ((display-name (game-resource-title resource))
+        (kind (game-resource-kind resource))
+        (full-path (if (typep resource 'game-resource-from-file)
+                       (game-resource-full-path resource)
+                       nil))
+        (asset-id (if (typep resource 'game-resource-asset)
+                      (game-resource-asset-id resource)
+                      nil))
+        (builds (if (typep resource 'game-resource-asset)
+                    (game-resource-builds resource)
+                    nil))
+        ;; FIXME: only one of these methods is defined and only for some classes
+        (vc-status (vc-file-status (or (game-resource-full-path resource)
+                                       (game-resource-collective-path resource))))
+        (moniker (game-resource-moniker resource)))
+    (clim:formatting-table (stream)
+      (clim:formatting-row (stream)
+        (clim:formatting-cell (stream :align-x :right)
+          (format stream "Title: "))
+        (clim:formatting-cell (stream :align-x :left)
+          (format stream "~a" (game-resource-title resource)))))
+    (error "not implemented fully")))
+
+(defgeneric present-editing (resource stream))
+
+(defmethod present-editing ((resource game-resource-atari-vox-dictionary) stream)
+  (let ((display-name (game-resource-title resource))
+        (kind (game-resource-kind resource))
+        (vc-status (vc-file-status (or (game-resource-full-path resource)
+                                       (game-resource-collective-path resource))))
+        (moniker (game-resource-moniker resource)))
+    (clim:formatting-table (stream)
+      ;; Name (editable)
+      (clim:formatting-row (stream)
+        (clim:formatting-cell (stream :align-x :right)
+          (format stream "Name: "))
+        (clim:formatting-cell (stream :align-x :left)
+          (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))
+      )
+    (error "Not Implemented")))

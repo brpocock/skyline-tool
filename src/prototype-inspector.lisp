@@ -13,7 +13,7 @@
                       :external-format :utf-8)
     (write-json-pretty data f)))
 
-(clim:define-application-frame prototype-inspector-frame ()
+(clim:define-application-frame prototype-inspector-frame (resource-inspector-mixin)
   ((path :initarg :path :accessor frame-path)
    (data :initarg :data :accessor frame-data))
   (:menu-bar prototype-inspector-menu-bar)
@@ -37,6 +37,9 @@
          ("Edit" :menu (("Edit Field..." :command com-proto-edit)))
          ("Help" :menu prototype-inspector-help-menu)))
 
+(defmethod display-inspector-content ((frame prototype-inspector-frame) pane)
+  (display-prototype frame pane))
+
 (defun display-prototype (frame pane)
   (clim:window-clear pane)
   (let ((data (frame-data frame)))
@@ -52,7 +55,7 @@
 (clim:define-command (com-proto-edit :command-table clim-internals::global-command-table
                                       :menu nil :name t)
     ((index 'integer :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (data (and frame (frame-data frame)))
          (path (and frame (frame-path frame))))
     (when (and data path (<= 0 index (1- (length data))))
@@ -69,7 +72,7 @@
             (clim:redisplay-frame-panes frame)))))))
 
 (clim:define-command (com-proto-save :menu t :name t) ()
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (data (and frame (frame-data frame)))
          (path (and frame (frame-path frame))))
     (when (and data path)
@@ -77,15 +80,20 @@
       (format *query-io* "~&Saved.~%"))))
 
 (clim:define-command (com-proto-close :menu t :name t) ()
-  (let ((frame (and (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame (clim:frame-exit frame))))
 
 (defun open-prototype-inspector (path)
   "Open a prototype JSON file in the inspector."
   (let* ((data (load-prototype-file path))
+         (resource (make-instance 'game-resource-object-prototype
+                                  :moniker (pathname-name path)
+                                  :kind "Object Prototype"
+                                  :full-path (truename path)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame
-                 'prototype-inspector-frame
-                 :pretty-name (format nil "Prototype: ~a" (pathname-name path))
-                 :path path :data data :frame-manager fm)))
+                  'prototype-inspector-frame
+                  :resource resource
+                  :pretty-name (format nil "Prototype: ~a" (pathname-name path))
+                  :path path :data data :frame-manager fm)))
     (clim:run-frame-top-level frame)))

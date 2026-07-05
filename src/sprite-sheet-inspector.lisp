@@ -77,7 +77,7 @@
 
 ;; --- Frame ---
 
-(clim:define-application-frame sprite-sheet-inspector-frame ()
+(clim:define-application-frame sprite-sheet-inspector-frame (resource-inspector-mixin)
   ((path :initarg :path :accessor frame-path)
    (sprites :initform nil :accessor frame-sprites)
    (dirty :initform nil :accessor frame-dirty))
@@ -193,6 +193,9 @@
 
 ;; --- Display ---
 
+(defmethod display-inspector-content ((frame sprite-sheet-inspector-frame) pane)
+  (display-sprite-sheet frame pane))
+
 (defun display-sprite-sheet (frame pane)
   "Display all sprites with thumbnails, mode badges, dimensions, byte progress, and budget summary."
   (clim:window-clear pane)
@@ -267,7 +270,7 @@
 ;; --- Commands ---
 
 (clim:define-command (com-save-sprite-sheet :menu t :name t) ()
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (path (and frame (frame-path frame)))
          (sprites (and frame (frame-sprites frame))))
     (when (and path sprites)
@@ -276,7 +279,7 @@
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
 
 (clim:define-command (com-close-sprite-sheet-inspector :menu t :name t) ()
-  (let ((frame (and (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame
       (when (frame-dirty frame)
         (unless (clim:accept 'boolean :prompt "Unsaved changes. Close anyway?" :default nil)
@@ -284,7 +287,7 @@
       (clim:frame-exit frame))))
 
 (clim:define-command (com-add-sprite :menu t :name t) ()
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (sprites (and frame (frame-sprites frame))))
     (when frame
       (let* ((filename (clim:accept 'string :prompt "Filename (e.g. Sprite.png)"
@@ -305,7 +308,7 @@
 
 (clim:define-command (com-delete-sprite :menu t :name t)
     ((sprite 'sprite-entry-presentation :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (sprites (and frame (frame-sprites frame))))
     (when (and frame sprites)
       (setf (frame-sprites frame) (remove sprite sprites :test #'equalp)
@@ -315,7 +318,7 @@
 (clim:define-command (com-edit-sprite :command-table clim-internals::global-command-table
                                       :menu nil :name t)
     ((sprite 'sprite-entry-presentation :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (sprites (and frame (frame-sprites frame)))
          (pos (and sprites (position sprite sprites :test #'equalp))))
     (when pos
@@ -343,7 +346,7 @@
 (clim:define-command (com-open-sprite-in-gimp :command-table clim-internals::global-command-table
                                                :menu nil :name t)
     ((sprite-name 'sprite-thumbnail-presentation :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (path (and frame (frame-path frame)))
          (xcf (and path (xcf-path-from-sprite path
                                               (make-sprite-entry :name sprite-name))))
@@ -369,14 +372,19 @@
 
 (defun open-sprite-sheet-inspector (path)
   (let* ((sprites (load-art-file path))
+         (resource (make-instance 'game-resource-sprite-sheet
+                                  :moniker (pathname-name path)
+                                  :kind "Sprite Sheet"
+                                  :full-path (truename path)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame
-                 'sprite-sheet-inspector-frame
-                 :path path
-                 :sprites sprites
-                 :frame-manager fm
-                 :pretty-name (format nil "Sprite Sheet: ~a" (pathname-name path))
-                 :width 800 :height 700)))
+                  'sprite-sheet-inspector-frame
+                  :resource resource
+                  :path path
+                  :sprites sprites
+                  :frame-manager fm
+                  :pretty-name (format nil "Sprite Sheet: ~a" (pathname-name path))
+                  :width 800 :height 700)))
     (clim-sys:make-process
      (lambda () (clim:run-frame-top-level frame))
      :name (format nil "Sprite Sheet Inspector: ~a" (pathname-name path)))))

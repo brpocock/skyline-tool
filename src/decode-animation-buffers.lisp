@@ -372,7 +372,7 @@
              (let ((*anim-buffer-frame* frame))
                 (setf (clim:frame-pretty-name frame)
                       (window-title "Animation Buffer"))
-               (let ((*application-frame* frame))
+               (let ((clim:*application-frame* frame))
                  (clim:run-frame-top-level frame))))))
     (run)))
 

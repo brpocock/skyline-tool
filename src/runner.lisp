@@ -1,5 +1,5 @@
 (in-package :skyline-tool)
-(cl:defvar *application-frame*)
+(cl:defvar clim:*application-frame*)
 
 (defun load-dump-into-mem (&optional (dump-file #p"/tmp/dump"))
   (let ((mem (make-array (expt 2 16) :element-type '(unsigned-byte 8))))
@@ -63,14 +63,15 @@
                             script-name)))))
 
 (clim:define-presentation-method clim:present
-    (script-full-name (type script-name) stream view &key)
+  ((script-full-name string) (type script-name) stream view &key acceptably for-context-type)
+  (declare (ignore view acceptably for-context-type))
   (clim:with-text-face (stream (if (or (search "Global/" script-full-name)
-                                       (search "Testing" script-full-name))
+                                       (search "Testing/" script-full-name))
                                    :bold
                                    :roman))
     (destructuring-bind (area name)
         (split-sequence #\/ (subseq script-full-name (1+ (position #\/ script-full-name))))
-      (format stream "~4t~a: “~a”"
+      (format stream "~4t~a: ~a"
               (cl-change-case:title-case area)
               (cl-ppcre:regex-replace "\\bDont\\b"
                                       (cl-change-case:title-case name)
@@ -105,7 +106,7 @@
                                                                 (cl-change-case:title-case
                                                                  (subseq sn (1+ (position #\/ sn))))
                                                                 "Don't"))))))
-         (path (prompt-save-pathname "ScriptList.txt" "txt")))
+         (path (prompt-save-pathname "ScriptList.txt")))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede
                               :external-format :utf-8)
@@ -127,7 +128,7 @@
                                      (cl-change-case:title-case
                                       (subseq sn (1+ (position #\/ sn))))
                                      "Don't"))))))
-         (path (prompt-save-pathname "ScriptList.pdf" "pdf")))
+         (path (prompt-save-pathname "ScriptList.pdf")))
     (when path
       (let* ((ps-path (make-pathname :type "ps" :defaults path))
              (lines (count #\Newline text))
@@ -168,7 +169,7 @@
                                                                 (subseq sn (1+ (position #\/ sn))))
                                                                "Don't")))))))
     (when (> (length text) 0)
-      (clime:publish-selection (clim:find-pane-named *application-frame* 'interactor)
+      (clime:publish-selection (clim:find-pane-named clim:*application-frame* 'interactor)
                                :clipboard text 'string)
       (format *query-io* "~&Copied ~d characters to clipboard.~%" (length text)))))
 
@@ -357,14 +358,14 @@
            (declare (ignore g n))
            (%print-text-to-lp "lpr"
                               (or (ignore-errors
-                                   (when (boundp '*application-frame*)
-                                     (typecase *application-frame*
+                                   (when (boundp 'clim:*application-frame*)
+                                     (typecase clim:*application-frame*
                                        (clim-simple-echo::simple-echo
-                                        (clim-simple-echo::frame-captured-text *application-frame*))
+                                        (clim-simple-echo::frame-captured-text clim:*application-frame*))
                                        (run-script-frame
                                         (format nil "Script: ~a"
                                                 (ignore-errors
-                                                 (clim:frame-pretty-name *application-frame*)))))))
+                                                 (clim:frame-pretty-name clim:*application-frame*)))))))
                                   (format nil "Skyline-Tool print at ~a~%" (get-universal-time))))))
         (dolist (pair printers)
           (let ((queue-name (car pair))
@@ -375,39 +376,53 @@
                (declare (ignore gesture numeric-arg))
                (%print-text-to-lp queue-name
                                   (or (ignore-errors
-                                       (when (boundp '*application-frame*)
-                                         (typecase *application-frame*
+                                       (when (boundp 'clim:*application-frame*)
+                                         (typecase clim:*application-frame*
                                            (clim-simple-echo::simple-echo
-                                            (clim-simple-echo::frame-captured-text *application-frame*))
+                                            (clim-simple-echo::frame-captured-text clim:*application-frame*))
                                            (run-script-frame
                                             (format nil "Script: ~a"
                                                     (ignore-errors
-                                                     (clim:frame-pretty-name *application-frame*)))))))
+                                                     (clim:frame-pretty-name clim:*application-frame*)))))))
                                       (format nil "Skyline-Tool print at ~a~%" (get-universal-time)))))
              :after :end))))))
+
+
+
+(defun group-scripts-by-locale ()
+  "Group script names by their locale directory for presentation.
+   Returns an alist of (locale . scripts) pairs sorted by locale."
+  (let ((groups (make-hash-table :test 'equal)))
+    (dolist (script (all-script-names))
+      (let* ((parts (split-sequence #\/ script))
+             (locale (if (> (length parts) 2)
+                         (string-capitalize (second parts))
+                         "Global")))
+        (push script (gethash locale groups))))
+    (let (result)
+      (maphash (lambda (locale scripts)
+                 (push `(:locale ,locale :scripts ,(nreverse scripts)) result))
+               groups)
+      (sort result #'string-lessp :key (lambda (x) (getf x :locale))))))
 
 (defmethod display-script-list (frame (pane clim:pane))
   (clim:with-text-face (pane :bold)
     (format pane "Click a script to run it in playtest — right-click for context menu~2%"))
-  (let ((last-area nil))
-    (dolist (script-name (all-script-names :reloadp t))
-      (terpri pane)
-      (let ((area (let ((parts (split-sequence #\/ script-name)))
-                    (elt parts (- (length parts) 2)))))
-        (unless (string-equal area last-area)
-          (clim:with-text-face (pane :bold)
-            (clim:with-text-size (pane :large)
-              (format pane "~%~a~%" (cl-change-case:title-case area))))
-          (setf last-area area)))
-      (clim:present script-name 'script-name :stream pane))
-    (format pane "~2%")))
+  (clim:with-room-for-graphics (pane)
+    (dolist (locale-group (group-scripts-by-locale))
+      (clim:with-text-face (pane :bold)
+        (format pane "~&~a~%" (getf locale-group :locale)))
+      (dolist (script (getf locale-group :scripts))
+        (clim:present script 'script-name :stream pane)
+        (terpri pane))
+      (terpri pane))))
 
 (defun run-script (&optional SCRIPT-TO-RUN)
   "Choose SCRIPT-TO-RUN from a menu and launch playtest.
 
 @table @asis
 @item SCRIPT-TO-RUN
-Optional script full name (e.g. @code{\"Scripts/Global/Welcome\"}).
+Optional script full name (e.g. @code{"Scripts/Global/Welcome"}).
 When omitted or NIL, opens a CLIM frame for interactive selection.
 @item Side Effects
 Launches an emulator playtest session for the specified script.
@@ -426,7 +441,7 @@ Launches an emulator playtest session for the specified script.
           (setf (clim:frame-pretty-name frame)
                 (window-title "Script Runner"))
           (clim-sys:make-process (lambda ()
-                                   (let ((*application-frame* frame))
+                                   (let ((clim:*application-frame* frame))
                                      (clim:run-frame-top-level frame)))
                                  :name "Script Runner (launcher)")))))
 

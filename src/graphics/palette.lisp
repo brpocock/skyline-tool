@@ -475,10 +475,10 @@ List of RGB color triples for the machine's palette
       (:secam (copy-list +vcs-secam-palette+))))
   (:method ((machine (eql 2609)) region) (declare (ignore region))
     (copy-list +intv-palette+))
-  (:method ((machine (eql 7800)) region)
-    (ecase region
-      (:ntsc (copy-list +prosystem-ntsc-palette+))
-      (:pal (copy-list +prosystem-pal-palette+))))
+  (:method ((machine (eql 7800)) (region (eql :ntsc)))
+    (copy-list +prosystem-ntsc-palette+))
+  (:method ((machine (eql 7800)) (region (eql :pal)))
+    (copy-list +prosystem-pal-palette+))
   (:method ((machine (eql 5200)) region)
     (ecase region
       (:ntsc (copy-list +prosystem-ntsc-palette+))
@@ -514,7 +514,6 @@ List of RGB color triples for the machine's palette
   (:documentation
    "Get color names for a target machine and region.
 Returns a list of color name strings corresponding to palette indices.")
-
   (:method ((machine (eql 20)) region) (declare (ignore region))
     (subseq +c64-names+ 0 7))
   (:method ((machine (eql 64)) region) (declare (ignore region))
@@ -556,13 +555,7 @@ Returns a list of color name strings corresponding to palette indices.")
   (:method ((machine (eql 7850)) (region (eql :ntsc)))
     (prosystem-ntsc-color-names))
   (:method ((machine (eql 7850)) (region (eql :pal)))
-    (prosystem-pal-color-names))
-  (:method ((machine (eql 2)) region) (declare (ignore region))
-    (loop repeat 16 collect "Apple Monitor Color"))
-  (:method ((machine (eql 264)) region) (declare (ignore region))
-    (copy-list +ted-color-names+))
-  (:method ((machine (eql 16)) region) (declare (ignore region))
-    (copy-list +tg16-color-names+)))
+    (prosystem-pal-color-names)))
 
 (defun machine-colors ()
   "Get the color names for the current target machine.

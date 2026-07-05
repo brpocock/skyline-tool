@@ -1,68 +1,18 @@
 (in-package :skyline-tool)
 
-(defvar *last-save-directory* nil
-  "Last directory used by prompt-save-pathname for Save As dialogs.")
-
-(defun find-save-directory ()
-  "Return the best default directory for Save As dialogs.
-   Checks *last-save-directory*, then saved preferences,
-   then ~/work/, ~/Work/, ~/Documents/."
-  (or *last-save-directory*
-      (let ((saved (get-pref :last-save-directory)))
-        (and saved (probe-file (pathname saved)) (pathname saved)))
-      (let ((home (user-homedir-pathname)))
-        (or (some (lambda (d) (let ((p (merge-pathnames d home)))
-                               (when (probe-file p) p)))
-                  '("work/" "Work/" "Documents/"))
-            (merge-pathnames "Work/" home)))))
-
-(defun prompt-save-pathname (default-name &key prefs-key)
-  "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
-   DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
-   PREFS-KEY is a keyword used to persist the chosen directory in preferences.
-   Returns the chosen pathname, or NIL if cancelled."
-  (let* ((dir (find-save-directory))
-         (default (merge-pathnames default-name dir)))
-    ;; Try zenity for native Gnome dialog
-    (or (ignore-errors
-         (let* ((out (string-trim '(#\Newline #\Space)
-                                  (uiop:run-program
-                                   (list "zenity" "--file-selection" "--save"
-                                         (format nil "--filename=~a" (namestring default))
-                                         "--title=Save As...")
-                                   :output :string :ignore-error-status t)))
-                (path (when (and out (> (length out) 0)) (pathname out))))
-           (when path
-             (let ((dir (make-pathname :name nil :type nil :defaults path)))
-               (setf *last-save-directory* dir)
-               (when prefs-key
-                 (set-pref prefs-key (namestring dir))
-                 (set-pref :last-save-directory (namestring dir)))
-               path))))
-        ;; Fallback to CLIM pathname prompter
-        (let ((path (clim:accept 'pathname :prompt "Save As" :default default)))
-          (when path
-            (let ((dir (make-pathname :name nil :type nil :defaults path)))
-              (setf *last-save-directory* dir)
-              (when prefs-key
-                (set-pref prefs-key (namestring dir))
-                (set-pref :last-save-directory (namestring dir)))
-              path))))))
-
 (defvar *prefs-cache* nil
   "Cached preference plist loaded from the prefs file, or NIL if not yet loaded.")
 
 (defun prefs-pathname ()
   "Return the pathname for the preferences file.
-   Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.prefs.json
-   using *game-title* (capitalized) and machine-directory-name."
-  (let ((game (string-capitalize (if (boundp '*game-title*) *game-title* "Game")))
-        (port (ignore-errors (machine-directory-name))))
-    (merge-pathnames
-     (make-pathname :directory (list :relative ".config" "Skyline-Tool" game)
-                    :name port
-                    :type "prefs.json")
-     (user-homedir-pathname))))
+   Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
+   using *game-title* (Header-Case) and machine-directory-name."
+  (make-pathname
+   :directory (append (pathname-directory (user-homedir-pathname))
+                      '(".config" "Skyline-Tool")
+                      (list (header-case (if (boundp '*game-title*) *game-title* "Game"))))
+   :name (machine-directory-name)
+   :type "lisp"))
 
 (defun load-prefs ()
   "Read the preferences JSON file and return a plist.
@@ -116,8 +66,8 @@
     (with-open-file (s path :direction :output :if-exists :supersede
                        :external-format :utf-8)
       (write-json-pretty (loop for (key value) on plist by #'cddr
-                               collect (cons (string-downcase (symbol-name key)) value))
-                          s))))
+                                collect (cons (string-downcase (symbol-name key)) value))
+                           s))))
 
 (defun get-pref (key &optional default)
   "Read a preference value from the cached prefs.
@@ -135,3 +85,74 @@
   (setf (getf *prefs-cache* key) value)
   (save-prefs *prefs-cache*)
   value)
+
+(defvar *last-save-directory* nil
+  "Last directory used by prompt-save-pathname for Save As dialogs.")
+
+(defparameter *paper-sizes*
+  '(("US-Letter" :width 612 :height 792 :units :points)
+    ("A4" :width 595 :height 842 :units :points)
+    ("Legal" :width 612 :height 1008 :units :points)
+    ("Tabloid" :width 792 :height 1008 :units :points))
+  "Supported paper sizes for PostScript output.")
+
+(defun get-paper-size-prefs ()
+  "Get paper size preferences, defaulting to US-Letter."
+  (or (get-pref :paper-size "US-Letter")
+      "US-Letter"))
+
+(defun get-paper-dimensions (&optional (paper-name (get-paper-size-prefs)))
+  "Return (width height) in points for PAPER-NAME."
+  (let ((size (assoc (string-downcase paper-name) *paper-sizes* :test #'string-equal)))
+    (if size
+        (list (getf size :width) (getf size :height))
+        (list 612 792)))) ; Default to US-Letter
+
+(defun set-paper-size (paper-name)
+  "Set the paper size preference."
+  (set-pref :paper-size paper-name))
+
+(defun find-save-directory ()
+  "Return the best default directory for Save As dialogs.
+   Checks *last-save-directory*, then saved preferences,
+   then ~/work/, ~/Work/, ~/Documents/."
+  (or *last-save-directory*
+      (let ((saved (get-pref :last-save-directory)))
+        (and saved (probe-file (pathname saved)) (pathname saved)))
+      (let ((home (user-homedir-pathname)))
+        (or (some (lambda (d) (let ((p (merge-pathnames d home)))
+                                (when (probe-file p) p)))
+                  '("work/" "Work/" "Documents/" "./"))))))
+
+(defun prompt-save-pathname (default-name &key prefs-key)
+  "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
+   DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
+   PREFS-KEY is a keyword used to persist the chosen directory in preferences.
+   Returns the chosen pathname, or NIL if cancelled."
+  (let* ((dir (find-save-directory))
+         (default (merge-pathnames default-name dir)))
+    ;; Try zenity for native Gnome dialog
+    (or (ignore-errors
+         (let* ((out (string-trim '(#\Newline #\Space)
+                                  (uiop:run-program
+                                   (list "zenity" "--file-selection" "--save"
+                                         (format nil "--filename=~a" (namestring default))
+                                         "--title=Save As...")
+                                   :output :string :ignore-error-status t)))
+                (path (when (and out (> (length out) 0)) (pathname out))))
+           (when path
+             (let ((dir (make-pathname :name nil :type nil :defaults path)))
+               (setf *last-save-directory* dir)
+               (when prefs-key
+                 (set-pref prefs-key (namestring dir))
+                 (set-pref :last-save-directory (namestring dir)))
+               path))))
+        ;; Fallback to CLIM pathname prompter
+        (let ((path (clim:accept 'pathname :prompt "Save As" :default default)))
+          (when path
+            (let ((dir (make-pathname :name nil :type nil :defaults path)))
+              (setf *last-save-directory* dir)
+              (when prefs-key
+                (set-pref prefs-key (namestring dir))
+                (set-pref :last-save-directory (namestring dir)))
+              path))))))

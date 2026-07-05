@@ -118,7 +118,8 @@
 
 (test machine-colors-basic
   "Test machine-colors returns color information"
-  (let ((skyline-tool::*machine* 2600))
+  (let ((skyline-tool::*machine* 2600)
+        (skyline-tool::*region* :ntsc))
     (let ((colors (skyline-tool::machine-colors)))
       (is (listp colors) "Should return a list"))))
 
@@ -141,7 +142,8 @@
 
 (test palette-rgb-conversion
   "Test palette->rgb and rgb->palette conversions"
-  (let ((skyline-tool::*machine* 2600))
+  (let ((skyline-tool::*machine* 2600)
+        (skyline-tool::*region* :ntsc))
     ;; Test round-trip conversion
     (let* ((original-rgb '(255 128 64))
            (palette-index (skyline-tool::rgb->palette (first original-rgb)
@@ -309,7 +311,8 @@
 
 (test atari-colu-string-basic
   "Test atari-colu-string formats COLU value"
-  (is (stringp (skyline-tool::atari-colu-string #x1a)) "Should return formatted string"))
+  (let ((skyline-tool::*region* :ntsc))
+    (is (stringp (skyline-tool::atari-colu-string #x1a)) "Should return formatted string")))
 
 ;; Test reverse functions
 #+()
@@ -499,12 +502,15 @@
 (test atari-colu-run-existence
   "Test atari-colu-run function exists"
   (is-true (fboundp 'skyline-tool::atari-colu-run) "atari-colu-run should be defined")
-  (finishes (skyline-tool::atari-colu-run) "Should handle no arguments"))
+  (let ((skyline-tool::*region* :ntsc))
+    (finishes (skyline-tool::atari-colu-run) "Should handle no arguments")))
 
 ;; Test find-nearest-palette-color function
 (test find-nearest-palette-color-existence
   "Test find-nearest-palette-color function exists"
   (is-true (fboundp 'skyline-tool::find-nearest-palette-color)
            "find-nearest-palette-color should be defined")
-  (finishes (skyline-tool::find-nearest-palette-color '(255 0 0))
-    "Should handle basic RGB input"))
+  (let ((skyline-tool::*machine* 2600)
+        (skyline-tool::*region* :ntsc))
+    (finishes (skyline-tool::find-nearest-palette-color '(255 0 0))
+      "Should handle basic RGB input")))

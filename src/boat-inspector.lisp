@@ -26,13 +26,13 @@
                                            :notes (third b))))))
     (format *query-io* "~&Saved ~a~%" (namestring json-path))))
 
-(clim:define-application-frame boat-inspector-frame ()
+(clim:define-application-frame boat-inspector-frame (resource-inspector-mixin)
   ((boats :initarg :boats :accessor frame-boats)
    (path :initarg :path :accessor frame-path))
   (:menu-bar boat-inspector-menu-bar)
   (:panes
    (editor-pane :application :display-function 'display-boats
-                :height 600 :width 600 :scroll-bars :vertical)
+                             :height 600 :width 600 :scroll-bars :vertical)
    (interactor :interactor :height 80 :width 600))
   (:layouts
    (default (clim:vertically () editor-pane interactor))))
@@ -46,9 +46,9 @@
   :menu (("Edit Boat..." :command com-boats-edit)))
 
 (clim:define-command-table boat-inspector-help-menu
-  :menu (("How to Edit Boats" :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+  :menu (("How to Edit Boats..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line)
          ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
@@ -56,6 +56,9 @@
   :menu (("File" :menu boat-inspector-file-menu)
          ("Edit" :menu boat-inspector-edit-menu)
          ("Help" :menu boat-inspector-help-menu)))
+
+(defmethod display-inspector-content ((frame boat-inspector-frame) pane)
+  (display-boats frame pane))
 
 (defun display-boats (frame pane)
   (clim:window-clear pane)
@@ -66,13 +69,17 @@
         do (destructuring-bind (name class notes) boat
              (format pane "~&~3d  ~-30a  ~-20a  ~a~%" i name class notes))))
 
-(defun run-boat-inspector (&optional (path "../Source/Tables/Boats.ods"))
+(defun run-boat-inspector (boat &optional (path #p"Source/Tables/Boats.ods"))
   "Open the boat editor window."
   (let* ((boats (or (%load-boats-list path)
-                    (list (list "Galileo" "rowboat" "Sample boat"))))
+                    (error "Can't load ~a" (enough-namestring path))))
+         (resource (make-instance 'game-resource-boat
+                                  :moniker (or boat "unknown")
+                                  :kind "Boat"))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame
                  'boat-inspector-frame
+                 :resource resource
                  :pretty-name "Boat Editor"
                  :boats boats :path path
                  :frame-manager fm)))
@@ -81,7 +88,7 @@
 (clim:define-command (com-boats-edit :command-table clim-internals::global-command-table
                                       :menu nil :name t)
     ((index 'integer :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (boats (and frame (frame-boats frame))))
     (when (and frame boats (<= 0 index (1- (length boats))))
       (let* ((old (elt boats index))
@@ -95,17 +102,18 @@
         (clim:redisplay-frame-panes frame)))))
 
 (clim:define-command (com-boats-save :menu t :name t) ()
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (boats (and frame (frame-boats frame)))
          (path (and frame (frame-path frame))))
     (when (and boats path)
       (save-boats boats path))))
 
 (clim:define-command (com-boats-close :menu t :name t) ()
-  (let ((frame (and (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame (clim:frame-exit frame))))
 
-(defun open-boat-inspector ()
+(defun open-boat-inspector (boat &key kind)
   "Launcher entry point for the Boat Editor."
-  (run-boat-inspector))
+  (declare (ignore kind))
+  (run-boat-inspector boat))
 

@@ -66,8 +66,8 @@
                 (clim:make-pane :text-field :value ""
                                 :value-changed-callback
                                 (lambda (&key value &allow-other-keys)
-                                  (setf (frame-filter *application-frame*) value)
-                                  (clim:redisplay-frame-panes *application-frame*)))
+                                  (setf (frame-filter clim:*application-frame*) value)
+                                  (clim:redisplay-frame-panes clim:*application-frame*)))
                 right-pane)
               interactor))))
 
@@ -108,7 +108,7 @@
 (clim:define-command (com-item-click :command-table clim-internals::global-command-table
                                      :menu nil :name t)
     ((item 'item-name :gesture :select))
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (eq (frame-equipped-item frame))
          (es (frame-equipped-shield frame))
          (wa (frame-wearing-armor frame))

@@ -113,6 +113,24 @@ Signals an error for unknown asset types.
     ((or (equal kind$ "Special Resources")
          (equal kind$ "Special Resource"))
      :special-resource)
+    ((or (equal kind$ "Instruments")
+         (equal kind$ "Instrument"))
+     :instruments)
+    ((or (equal kind$ "Items")
+         (equal kind$ "Item"))
+     :items)
+    ((or (equal kind$ "Flags")
+         (equal kind$ "Flag"))
+     :flags)
+((or (equal kind$ "Keys")
+          (equal kind$ "Key"))
+      :keys)
+    ((or (equal kind$ "Translations")
+          (equal kind$ "Translation"))
+      :translations)
+    ((or (equal kind$ "Phonetic Dictionary")
+          (equal kind$ "AtariVox Dictionary"))
+      :phonetic-dictionary)
     ((or (null kind$)
          (emptyp kind$))
      nil)
@@ -176,27 +194,30 @@ Hash table for asset index data (optional).
 @end table
 
 Returns the parsed asset information or NIL if line is empty/invalid."
-  (tagbody top
-     (destructuring-bind (asset builds) (parse-assets-line line)
-       (when asset
-         (destructuring-bind (kind$ name) (asset-kind/name asset)
-           (let* ((kind (kind-by-name kind$))
-                  (id (get-asset-id kind name)))
-             (assert id (id)
-                     "Could not find the asset ID for ~(~a~) “~a”"
-                     kind name)
-             (if-let (existing (gethash id (gethash kind seen-ids)))
-	     (restart-case
-                   (error "Two ~(~a~)s (at least) have the same ID: “~a” and “~a”~:[ (both nil)~;~:* (both $~x)~]"
-                          kind existing name id)
-                 (reload-assets ()
-                   :report "Reload the assets to check for changed IDs"
-                   (setf *maps-ids* nil
-                         *assets-list* nil
-                         *asset-ids-seen* nil)
-                   (go top)))
-               (setf (gethash id (gethash kind seen-ids)) name)))))
-       (setf (gethash asset index-hash) builds))))
+  (when (and line (not (or (string= line "")
+                           (char= (char line 0) #\;)
+                           (char= (char line 0) #\#))))
+    (tagbody top
+       (destructuring-bind (asset builds) (parse-assets-line line)
+         (when asset
+           (destructuring-bind (kind$ name) (asset-kind/name asset)
+             (let* ((kind (kind-by-name kind$))
+                    (id (get-asset-id kind name)))
+               (assert id (id)
+                       "Could not find the asset ID for ~(~a~) \"~a\""
+                       kind name)
+               (if-let (existing (gethash id (gethash kind seen-ids)))
+                  (restart-case
+                          (error "Two ~(~a~)s (at least) have the same ID: \"~a\" and \"~a\"~:[ (both nil)~;~:* (both $~x)~]"
+                                kind existing name id)
+                         (reload-assets ()
+                           :report "Reload the assets to check for changed IDs"
+                           (setf *maps-ids* nil
+                                 *assets-list* nil
+                                 *asset-ids-seen* nil)
+                           (go top)))
+                  (setf (gethash id (gethash kind seen-ids)) name)))))
+         (setf (gethash asset index-hash) builds)))))
 
 (defun read-assets-list (&optional (index-file #p"Source/Assets.index"))
   "Read Assets.index from INDEX-FILE (using *ASSETS-LIST* cache).
@@ -3172,6 +3193,18 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
     (format *trace-output* "~&//* Blob “~a” has ID $~2,'0x" asset-name id)
     id))
 
+(defmethod get-asset-id ((kind (eql :tileset)) asset-name)
+  "Find the asset-id of a tileset from its name"
+  (let ((id (logand #xff (sxhash asset-name))))
+    (format *trace-output* "~&//* Tileset “~a” has ID $~2,'0x" asset-name id)
+    id))
+
+(defmethod get-asset-id ((kind (eql :sprite-sheet)) asset-name)
+  "Find the asset-id of a sprite sheet from its name"
+  (let ((id (logand #xff (sxhash asset-name))))
+    (format *trace-output* "~&//* Sprite sheet “~a” has ID $~2,'0x" asset-name id)
+    id))
+
 (defmethod get-asset-id ((kind (eql :song)) asset-name)
   "Find the asset ID for a song (based on its workNumber or name ASSET-NAME)"
   (let ((pathname (make-pathname :directory '(:relative "Source" "Songs")
@@ -3488,7 +3521,7 @@ Creates parent directories if needed; overwrites the output file."
                   (loop for l = (read-line f nil nil) while l collect l)))
          (build-str (format nil "~{~a~}" (mapcar (lambda (b) (subseq b 0 1)) builds)))
          (new-entry (string-trim " " (format nil "~a~@[ ~a~]" asset-path
-                                              (unless (emptyp build-str) build-str))))
+                                             (unless (emptyp build-str) build-str))))
          ;; Find alphabetical insertion point
          (ins (or (loop for i from 0 below (length lines)
                         for line = (nth i lines)
@@ -3499,7 +3532,7 @@ Creates parent directories if needed; overwrites the output file."
                           return i)
                   (length lines))))
     (with-open-file (f index-path :direction :output :if-exists :supersede
-                        :external-format :utf-8)
+                                  :external-format :utf-8)
       ;; Lines before insertion point
       (loop for i from 0 below ins do (write-line (nth i lines) f))
       ;; Ensure blank line before new section
@@ -3515,7 +3548,7 @@ Creates parent directories if needed; overwrites the output file."
   (read-assets-list)
   (let ((absent nil))
     (dolist (asset-file (loop for wild in (list (format nil "Source/Blobs/~a/*.xcf"
-                                                         (machine-directory-name))
+                                                        (machine-directory-name))
                                                 #p"Source/Maps/*/*.tmx"
                                                 #p"Source/Scripts/*.fountain"
                                                 #p"Source/Songs/*.mscz")
@@ -3682,3 +3715,22 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
 (defun prepend-fundamental-mode (&rest args)
   "Stub function for prepend-fundamental-mode command"
   (format *standard-output* "prepend-fundamental-mode called with args: ~A~%" args))
+
+
+(define-constant +all-machines+
+    '(1 2 3 8 9 15 16 20 22 23 64 81 88 128 200 222 223 264 400 800 810 837 920
+      1000 1080 1200 1601 1624
+      2068 2110 2416 2600 2609
+      3000 3010 3296
+      4386 4800
+      5200
+      6122 6800
+      7600 7800 7850 7801
+      8011
+      9001 9918)
+  :test 'equalp)
+
+;; Helper: get machine list from asset-allocator
+(defun skyline-tool.version-control::get-all-machines ()
+  "Return alist of (display-name . machine-id) for all supported machines"
+  (map 'list (lambda (id) (cons (machine-long-name id) id)) +all-machines+))

@@ -794,78 +794,80 @@ INPUT & OUTPUT pathnames can be given."
                   (title-case (getf row :instrument))))
         (format out "~2%;;; End of Orchestration~2%")))))
 
+(defun read-equipment-stats ()
+  (remove-if-not (lambda (record)
+                   (loop for (key value) on record
+                         by #'cddr
+                         unless (str:blankp value)
+                           return t
+                         finally (return nil)))
+                 (ss->lol (first (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))))
+
 (defun write-equipment-index (&optional
                                 (pathname (format nil "Source/Generated/~a/EquipmentIndex.s"
                                                   (machine-directory-name))))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
   (format *trace-output* "~&Reading equipment attributes from Source/Tables/EquipmentIndex.ods…")
   (finish-output *trace-output*)
-  (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
-    (let* ((equipment-stats (remove-if-not (lambda (record)
-                                             (loop for (key value) on record
-                                                   by #'cddr
-                                                   unless (str:blankp value)
-                                                     return t
-                                                   finally (return nil)))
-                                           (ss->lol (first sheet)))))
-      (ensure-directories-exist pathname)
-      (with-output-to-file (output pathname :if-exists :supersede)
-        (format *trace-output* "writing ~a …" (enough-namestring pathname))
-        (finish-output *trace-output*)
-        (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
-        (flet ((always (format value)
-                 (declare (ignore value))
-                 format)
-               (here? (format s)
-                 (if (str:blankp s) ".byte 0" format))
-               (dec (format s)
-                 (if (str:blankp s)
-                     ".byte $ff"
-                     format))
-               (hex (format s)
-                 (if (str:blankp s)
-                     ".byte $ff"
-                     format))
-               (drawing-mode-filter (format s)
-                 (declare (ignore format))
-                 (if (string-equal "160B" (string-trim #(#\Space) s))
-                     ".byte Decal160B"
-                     ".byte 0")))
-          (loop for (format validator field-info)
-                  on
-                  (list ".byte $~2,'0x" #'hex :index
-                        ".byte $~2,'0x" #'hex :decal-bank
-                        ".byte ~aClass" #'here? '(:entity-class :entity)
-                        ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
-                        ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
-                        "" #'drawing-mode-filter :drawing-mode
-                        ".byte ~aClass" #'here? '(:course-class :course)
-                        ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
-                        ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
-                        ".byte Song_~a_ID" #'here? :sound
-                        ".byte $~2,'0x" #'hex :up
-                        ".byte $~2,'0x" #'hex :down
-                        ".byte $~2,'0x" #'hex :left
-                        ".byte $~2,'0x" #'hex :right
-                        ".byte ~d << PaletteShift" #'dec :palette
-                        ".byte ~d" #'dec :displace-up
-                        ".byte ~d" #'dec :displace-down
-                        ".byte ~d" #'dec :displace-left
-                        ".byte ~d" #'dec :displace-right
-                        ".byte >~a" #'here? :decal-sheet)
-                by #'cdddr
+  (let* ((equipment-stats (read-equipment-stats)))
+    (ensure-directories-exist pathname)
+    (with-output-to-file (output pathname :if-exists :supersede)
+      (format *trace-output* "writing ~a …" (enough-namestring pathname))
+      (finish-output *trace-output*)
+      (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
+      (flet ((always (format value)
+               (declare (ignore value))
+               format)
+             (here? (format s)
+               (if (str:blankp s) ".byte 0" format))
+             (dec (format s)
+               (if (str:blankp s)
+                   ".byte $ff"
+                   format))
+             (hex (format s)
+               (if (str:blankp s)
+                   ".byte $ff"
+                   format))
+             (drawing-mode-filter (format s)
+               (declare (ignore format))
+               (if (string-equal "160B" (string-trim #(#\Space) s))
+                   ".byte Decal160B"
+                   ".byte 0")))
+        (loop for (format validator field-info)
+                on
+                (list ".byte $~2,'0x" #'hex :index
+                      ".byte $~2,'0x" #'hex :decal-bank
+                      ".byte ~aClass" #'here? '(:entity-class :entity)
+                      ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
+                      ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
+                      "" #'drawing-mode-filter :drawing-mode
+                      ".byte ~aClass" #'here? '(:course-class :course)
+                      ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
+                      ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
+                      ".byte Song_~a_ID" #'here? :sound
+                      ".byte $~2,'0x" #'hex :up
+                      ".byte $~2,'0x" #'hex :down
+                      ".byte $~2,'0x" #'hex :left
+                      ".byte $~2,'0x" #'hex :right
+                      ".byte ~d << PaletteShift" #'dec :palette
+                      ".byte ~d" #'dec :displace-up
+                      ".byte ~d" #'dec :displace-down
+                      ".byte ~d" #'dec :displace-left
+                      ".byte ~d" #'dec :displace-right
+                      ".byte >~a" #'here? :decal-sheet)
+              by #'cdddr
 
-                for field-name = (if (listp field-info)
-                                     (first field-info)
-                                     field-info)
-                for field-asm-name = (if (listp field-info)
-                                         (second field-info)
-                                         field-info)
-                do (format output "~2%~a:" (pascal-case (string field-asm-name)))
-                do (dolist (item equipment-stats)
-                     (let ((value (getf item field-name)))
-                       (format output "~%~10t~?~40t; ~a"
-                               (funcall validator format value)
-                               (cons value nil)
-                               (title-case (getf item :item-name)))))))
-        (format output "~2%~10t.bend~%")))))
+              for field-name = (if (listp field-info)
+                                   (first field-info)
+                                   field-info)
+              for field-asm-name = (if (listp field-info)
+                                       (second field-info)
+                                       field-info)
+              do (format output "~2%~a:" (pascal-case (string field-asm-name)))
+              do (dolist (item equipment-stats)
+                   (let ((value (getf item field-name)))
+                     (format output "~%~10t~?~40t; ~a"
+                             (funcall validator format value)
+                             (cons value nil)
+                             (title-case (getf item :item-name)))))))
+      (format output "~2%~10t.bend~%"))))

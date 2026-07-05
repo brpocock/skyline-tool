@@ -3087,31 +3087,22 @@ List of byte lists, one per column
 
 
 Parses a 7800 art index file, converts the referenced PNG assets into
-
 interleaved 7800-format bytes (bitplanes for Maria), and writes the
-
 resulting binary file.
-
-
 
 @table @asis
 
 @item INDEX-OUT
-
 Output path for the compiled binary
 
 @item INDEX-IN
-
 Input path for the 7800 art index file
 
 @end table
 
-
-
 @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
-
+  
   (let ((*machine* 7800))
-
     (write-7800-binary index-out
 
                        (interleave-7800-bytes

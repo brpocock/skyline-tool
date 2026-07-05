@@ -65,29 +65,53 @@
          (width (1+ (logxor #x1f (logand #x1f (aref dump (+ index (find-label-from-files "DecalPalWidth")))))))
          (colors (coerce
                   (loop for i from 0 below #x10
-                        collect (cond ((zerop i) (aref dump (find-label-from-files "MapBackground")))
-                                     ((<= 1 i 3) (aref dump (+ (find-label-from-files "MapPalettes")
-                                                               (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 1))))
-                                     ((= 4 i) (aref dump (find-label-from-files "VarColor1")))
-                                     ((<= 5 i 7) (aref dump (+ (find-label-from-files "MapPalettes") 3
-                                                               (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 5))))
-                                     ((= 8 i) (aref dump (find-label-from-files "VarColor2")))
-                                     ((<= 9 i 11) (aref dump (+ (find-label-from-files "MapPalettes") 6
-                                                                (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 9))))
-                                     ((= 12 i) (aref dump (find-label-from-files "VarColor3")))
-                                     ((<= 13 i 15) (aref dump (+ (find-label-from-files "MapPalettes") 9
-                                                                 (* 3 (ash (logand #xe0 (aref dump (+ index (find-label-from-files "DecalPalWidth")))) -5)) (- i 13))))
-                                     (t nil)))
+                        collect
+                        (cond ((zerop i) (aref dump (find-label-from-files "MapBackground")))
+                              ((<= 1 i 3)
+                               (aref dump (+ (find-label-from-files "MapPalettes")
+                                             (* 3 (ash (logand #xe0
+                                                               (aref dump (+ index
+                                                                             (find-label-from-files "DecalPalWidth"))))
+                                                       -5))
+                                             (1- i))))
+                              ((= 4 i)
+                               (aref dump (find-label-from-files "VarColor1")))
+                              ((<= 5 i 7)
+                               (aref dump (+ (find-label-from-files "MapPalettes") 3
+                                             (* 3 (ash (logand #xe0
+                                                               (aref dump (+ index
+                                                                             (find-label-from-files "DecalPalWidth"))))
+                                                       -5))
+                                             (- i 5))))
+                              ((= 8 i)
+                               (aref dump (find-label-from-files "VarColor2")))
+                              ((<= 9 i 11)
+                               (aref dump (+ (find-label-from-files "MapPalettes") 6
+                                             (* 3 (ash (logand #xe0
+                                                               (aref dump (+ index
+                                                                             (find-label-from-files "DecalPalWidth"))))
+                                                       -5))
+                                             (- i 9))))
+                              ((= 12 i)
+                               (aref dump (find-label-from-files "VarColor3")))
+                              ((<= 13 i 15)
+                               (aref dump (+ (find-label-from-files "MapPalettes") 9
+                                             (* 3 (ash (logand #xe0
+                                                               (aref dump (+ index
+                                                                             (find-label-from-files "DecalPalWidth"))))
+                                                       -5))
+                                             (- i 13))))
+                              (t nil)))
                   'vector)))
     (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
-      (let ((path (prompt-save-pathname (format nil "Decal-$~x.png" index) "png")))
+      (let ((path (prompt-save-pathname (format nil "Decal-$~x.png" index) :type "png")))
         (when path
           (let ((png (make-instance 'zpng:png :width iw :height ih
-                                             :color-type :truecolor :bpp 8
-                                             :image-data rgb)))
+                                              :color-type :truecolor :bpp 8
+                                              :image-data rgb)))
             (zpng:write-png png path))
           (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
-          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
+          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t))))))
 (define-show-decal-frame-command (com-discover-printers-decal :menu nil :name t) ()
   (populate-decal-print-menu))
 
@@ -170,10 +194,10 @@
 
 (defun populate-decal-print-menu ()
   (ignore-errors
-    (clim:remove-menu-item-from-command-table 'print-decal-menu "No printers found")
-    (dolist (p (discover-printers))
-      (ignore-errors
-        (clim:remove-menu-item-from-command-table 'print-decal-menu p))))
+   (clim:remove-menu-item-from-command-table 'print-decal-menu "No printers found")
+   (dolist (p (discover-printers))
+     (ignore-errors
+      (clim:remove-menu-item-from-command-table 'print-decal-menu p))))
   (let* ((printers (discover-printers-with-names)))
     (if (null printers)
         (clim:add-menu-item-to-command-table
@@ -205,9 +229,9 @@
 
 (clim:define-presentation-to-command-translator click-to-switch-to-decal
     (decal-index-value com-switch-decal show-decal-frame
-                       :gesture :select :menu nil
-                       :documentation "Switch to viewing this decal")
-  (object)
+     :gesture :select :menu nil
+     :documentation "Switch to viewing this decal")
+    (object)
   (list object))
 
 (define-show-decal-frame-command (com-next-palette :name t :menu t) ()
@@ -223,7 +247,7 @@
                                                 (+ (decal-index *show-decal-frame*)
                                                    (find-label-from-files "DecalFlags")))))
                            #| 160b |# (if (zerop old-palette) 4 0)
-                                      #| 160a |# (mod (1+ old-palette) 8))
+                           #| 160a |# (mod (1+ old-palette) 8))
                        5)))
     (clim:redisplay-frame-panes *show-decal-frame*)))
 
@@ -469,24 +493,24 @@
                                   (+ (decal-index frame)
                                      (find-label-from-files "DecalFlags")))))
         (clim:formatting-table (stream :x-spacing 0 :y-spacing 0)
-                               (clim:formatting-row (stream)
-                                                    (clim:formatting-cell (stream)
-                                                                          (display-maria-art stream
-                                                                                             :dump (decal-from-dump frame)
-                                                                                             :mode decal-mode
-                                                                                             :address address
-                                                                                             :colors palette
-                                                                                             :width width
-                                                                                             :unit 8)))
-                               (clim:formatting-row (stream)
-                                                    (clim:formatting-cell (stream)
-                                                                          (display-maria-art stream
-                                                                                             :dump (decal-from-dump frame)
-                                                                                             :mode decal-mode
-                                                                                             :address (+ #x10 address)
-                                                                                             :colors palette
-                                                                                             :width width
-                                                                                             :unit 8))))
+          (clim:formatting-row (stream)
+            (clim:formatting-cell (stream)
+              (display-maria-art stream
+                                 :dump (decal-from-dump frame)
+                                 :mode decal-mode
+                                 :address address
+                                 :colors palette
+                                 :width width
+                                 :unit 8)))
+          (clim:formatting-row (stream)
+            (clim:formatting-cell (stream)
+              (display-maria-art stream
+                                 :dump (decal-from-dump frame)
+                                 :mode decal-mode
+                                 :address (+ #x10 address)
+                                 :colors palette
+                                 :width width
+                                 :unit 8))))
         (display-maria-art stream
                            :dump (decal-from-dump frame)
                            :mode decal-mode
@@ -630,9 +654,9 @@
 
 (clim:define-presentation-to-command-translator click-for-ext-file
     (ext-file-link com-open-ext-file show-decal-frame
-                   :gesture :edit :menu nil
-                   :documentation "Open spreadsheet file for editing")
-  (pathname)
+     :gesture :edit :menu nil
+     :documentation "Open spreadsheet file for editing")
+    (pathname)
   (list pathname))
 
 (defun show-decal (index &key (dump (load-dump-into-mem)))
@@ -643,11 +667,11 @@
                                                :index index
                                                :dump dump)))
        (let ((*show-decal-frame* frame))
-          (setf (clim:frame-pretty-name frame)
-                (window-title "Decal"))
+         (setf (clim:frame-pretty-name frame)
+               (window-title "Decal"))
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
 (eval-when (:load-toplevel)
   (populate-decal-print-menu))
-)
+

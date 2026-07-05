@@ -6,46 +6,12 @@
 ;;; Exported variables for use across the toolchain
 (defvar *launcher-frame* nil "Reference to the launcher frame.")
 
-;; --- Command Tables (defined first, just store symbol references) ---
-
-(clim:define-command-table launcher-tool-menu
-  :menu (("Edit Project..." :command com-edit-project.json :shortcut :ctrl-x-p)
-         ("Edit Preferences..." :command com-edit-skyline-config-prefs :shortcut :ctrl-comma)
-         (nil :divider :line)
-         ("All Resources..." :command com-show-all-resources :shortcut :ctrl-o)
-         ("Run in Emulator" :command com-about-skyline-tool :shortcut :ctrl-p)
-         (nil :divider :line)
-         ("Quit" :command com-quit-skyline-tool :shortcut :ctrl-x-c)))
-
-(clim:define-command-table launcher-help-menu
-  :menu (("How to Use the Launcher..." :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
-         (nil :divider :line)
-         ("About Skyline-Tool..." :command com-about-skyline-tool)))
-
-(clim:define-command-table launcher-menu-bar
-  :menu (("Skyline-Tool" :menu launcher-tool-menu)
-         ("Help" :menu launcher-help-menu)))
-
-(clim:define-command-table edit-menu
-  :menu (("Copy" :command com-copy)
-         ("Paste" :command com-paste)
-         (nil :divider :line)
-         ("Find..." :command com-find)))
-
-(clim:define-command-table help-menu
-  :menu (("How To Do Things In This Window..." :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
-         (nil :divider :line)
-         ("About Skyline-Tool..." :command com-about-skyline-tool)))
+;; --- Launcher command definitions ---
 
 ;; --- Launcher Frame ---
 
 (clim:define-application-frame launcher-frame ()
-  ((%decal-index :initform 0 :accessor decal-index :initarg :index)
-   (%saved-scroll-y :initform nil :accessor launcher-saved-scroll-y))
+  ((%saved-scroll-y :initform nil :accessor launcher-saved-scroll-y))
   (:panes (menu-list-pane :application :height 700 :width 450
                                        :display-function 'display-launcher-menu)
           (interactor :interactor :height 125 :width 450
@@ -89,12 +55,12 @@
 
 
 (clim:define-command (com-cut :command-table clim-internals::global-command-table) ()
-  (if (not (boundp '*application-frame*))
+  (if (not (boundp 'clim:*application-frame*))
       (error  "~&Nothing to cut.~%")
       (error  "~&Cut is not yet implemented. Use Copy then delete manually.~%")))
 (clim:define-command (com-copy :command-table clim-internals::global-command-table) ()
   "Copy: publish selection via the resource-specific clipboard system."
-  (let* ((frame (or (and (boundp '*application-frame*) *application-frame*)
+  (let* ((frame (or (and (boundp 'clim:*application-frame*) clim:*application-frame*)
                     (let ((found nil))
                       (ignore-errors
                        (clim:map-over-frames (lambda (f)
@@ -102,7 +68,7 @@
                                                  (setf found f)))
                                              :port (clim:find-port)))
                       found)))
-         (*application-frame* frame))
+         (clim:*application-frame* frame))
     (if frame
         (handler-case (publish-current-resource)
           (error (e)
@@ -110,10 +76,10 @@
         (error  "~&Nothing to copy.~%"))))
 (clim:define-command (com-paste :command-table clim-internals::global-command-table) ()
   "Paste: request :clipboard as 'string."
-  (if (not (boundp '*application-frame*))
+  (if (not (boundp 'clim:*application-frame*))
       (error  "~&No active frame to paste into.~%")
       (handler-case
-          (let* ((frame *application-frame*)
+          (let* ((frame clim:*application-frame*)
                  (interactor (or (clim:find-pane-named frame 'interactor)
                                  *standard-input*)))
             (multiple-value-bind (string type)
@@ -142,10 +108,14 @@
   (defparameter +compile-site-name+ (ignore-errors (short-site-name)))
   (defparameter +compile-long-site-name+ (ignore-errors (long-site-name))))
 
+(clim:define-command (com-about-skyline-tool :command-table clim-internals::global-command-table) ()
+  "Display the Skyline-Tool About dialog."
+  (show-about-skyline-tool))
+
 (clim:define-command (com-open-dev-guide :command-table clim-internals::global-command-table) ()
   (let ((html-index (asdf:system-relative-pathname
-                     :skyline-tool
-                     #p"../Dist/7800/PhantasiaDevGuide-html/index.html")))
+                      :skyline-tool
+                      #p"../Dist/7800/PhantasiaDevGuide-html/index.html")))
     (if (probe-file html-index)
         (uiop:run-program (list "xdg-open" (namestring html-index)) :output nil)
         (progn
@@ -183,8 +153,8 @@
 
 (clim:define-command (com-help-for-window :command-table clim-internals::global-command-table) ()
   "Open the Developer Guide section relevant to the current window."
-  (if (boundp '*application-frame*)
-      (let ((frame *application-frame*))
+  (if (boundp 'clim:*application-frame*)
+      (let ((frame clim:*application-frame*))
         (devguide-html-page
          (typecase frame
            (launcher-frame "Tools-GUI-Launcher")
@@ -218,7 +188,7 @@
                           (tz-h (floor total-offset 3600))
                           (tz-m (round (/ (mod total-offset 3600) 60))))
                      (format nil "UTC~:[+~;-~]~2,'0d:~2,'0d"
-                             (minusp tz) tz-h tz-m))))
+                             (not (minusp tz)) tz-h tz-m))))
          (version (or (ignore-errors (asdf:component-version (asdf:find-system :skyline-tool))) "0.9.1"))
          (compiled (format nil "Compiled ~a by ~a on ~a~@[ at ~a~]"
                            (or (ignore-errors +compile-date+) (format nil "~A" (get-universal-time)))
@@ -232,10 +202,12 @@
                   (nth-value 5 (get-decoded-time)) (nth-value 4 (get-decoded-time))
                   (nth-value 3 (get-decoded-time)) (nth-value 2 (get-decoded-time))
                   (nth-value 1 (get-decoded-time)) tz-str)
-          :user (user-real-name) :machine (machine-instance)
-          :cpu (format nil "~a — ~a" (machine-type) (machine-version)) :os (format nil "~a ~a" (software-type) (software-version))
+          :user (user-real-name)
+          :machine (machine-instance)
+          :cpu (format nil "~a — ~a" (machine-type) (machine-version))
+          :os (format nil "~a ~a" (software-type) (software-version))
           :lisp (format nil "~a ~a" (lisp-implementation-type) (lisp-implementation-version))
-          :site (or (ignore-errors +compile-long-site-name+) "Unknown"))))
+          :site (or (long-site-name) (short-site-name) "Unknown"))))
 
 (defun %about-pdf (ps-path)
   "Write PostScript for the About dialog to PS-PATH."
@@ -353,7 +325,7 @@
        :name (format nil "Editing ~a" path)))))
 
 (clim:define-command (com-close-frame :command-table clim-internals::global-command-table) ()
-  (let ((frame (when (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (when (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (unless frame
       ;; Fallback: try to find the frame from the port
       (ignore-errors
@@ -370,8 +342,8 @@
 (clim:define-command (com-save-default :command-table clim-internals::global-command-table
                                        ) ()
   "Save in default format (JSON for resource frames)."
-  (if (boundp '*application-frame*)
-      (let ((frame *application-frame*))
+  (if (boundp 'clim:*application-frame*)
+      (let ((frame clim:*application-frame*))
         (typecase frame
           (anim-seq-editor-frame
            (com-save-animation-seq-as-json))
@@ -388,8 +360,8 @@
 (clim:define-command (com-print-default :command-table clim-internals::global-command-table
                                         ) ()
   "Print/save as PDF for the current frame."
-  (if (boundp '*application-frame*)
-      (let ((frame *application-frame*))
+  (if (boundp 'clim:*application-frame*)
+      (let ((frame clim:*application-frame*))
         (if (and (find-package :clim-simple-echo)
                  (typep frame (find-class 'clim-simple-echo::simple-echo nil)))
             (clim-simple-echo::com-print-pdf)
@@ -405,8 +377,8 @@
 (clim:define-command (com-open-go-to :command-table clim-internals::global-command-table
                                      ) ()
   "Open or go to a specific resource."
-  (if (boundp '*application-frame*)
-      (let ((frame *application-frame*))
+  (if (boundp 'clim:*application-frame*)
+      (let ((frame clim:*application-frame*))
         (typecase frame
           (anim-seq-editor-frame
            (com-switch-to-sequence))
@@ -422,8 +394,8 @@
 
 (clim:define-command (com-create-new-resource :command-table clim-internals::global-command-table) ()
   "Create a new resource appropriate for the current window."
-  (if (boundp '*application-frame*)
-      (let ((frame *application-frame*))
+  (if (boundp 'clim:*application-frame*)
+      (let ((frame clim:*application-frame*))
         (typecase frame
           (anim-seq-editor-frame
            (com-create-new-sequence))
@@ -535,11 +507,11 @@
 
 (define-launcher-frame-command (com-run-nullary-function :menu nil :name t)
     ((function-name 'nullary-function-name :gesture :select))
-  (when (boundp '*application-frame*)
-    (let* ((pane (clim:find-pane-named *application-frame* 'menu-list-pane))
+  (when (boundp 'clim:*application-frame*)
+    (let* ((pane (clim:find-pane-named clim:*application-frame* 'menu-list-pane))
            (scroll-y (and pane (nth-value 1 (ignore-errors (clim:window-viewport-position pane))))))
       (when scroll-y
-        (setf (launcher-saved-scroll-y *application-frame*) scroll-y))))
+        (setf (launcher-saved-scroll-y clim:*application-frame*) scroll-y))))
   (clim-sys:make-process (lambda () (funcall function-name))
                          :name (title-case (string function-name))))
 
@@ -584,10 +556,10 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
   "Return a menu separator placeholder."
   nil)
 
-(defgeneric context-menu-items-for-type (type-key moniker builds file-path dir-path basename moniker-full)
+(defgeneric game-resource-action-menu (resource)
   (:documentation "Return a list of menu items (with NIL separators) for the given asset TYPE-KEY."))
 
-(defmethod context-menu-items-for-type ((type-key (eql :script)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-script))
   (declare (ignore builds file-path dir-path basename))
   (list
    (make-menu-item "Play in A7800..." (lambda () (run-script moniker-full)))
@@ -623,19 +595,22 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                                     (error  "~&Saved ~a~%" path))
                            (error (e) (error  "~&PDF error: ~a~%" e)))))))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :blob)) moniker builds file-path dir-path basename moniker-full)
-  (declare (ignore builds dir-path basename moniker-full))
-  (list (make-menu-item "Open in Gimp..." (lambda () (uiop:run-program (list "gimp" (or file-path moniker))
-                                                                       :output nil :ignore-error-status t)))))
+(defmethod game-resource-action-menu ((resource game-resource-blob))
+  (list
+   (make-menu-item "Inspect..." (lambda () (open-blob-inspector resource)))
+   (make-menu-item "Open in Gimp..."
+                   (lambda ()
+                     (uiop:run-program
+                      (list "gimp" (truename (first (game-resource-pathnames resource))))
+                      :output nil :ignore-error-status t)))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :map)) moniker builds file-path dir-path basename moniker-full)
-  (declare (ignore builds dir-path basename moniker-full))
+(defmethod game-resource-action-menu ((resource game-resource-map))
   (list
    (make-menu-item "Inspect..." (lambda () (open-map-inspector (or file-path moniker))))
    (make-menu-item "Open in Tiled..." (lambda () (uiop:run-program (list "tiled" (or file-path moniker))
                                                                    :output nil :ignore-error-status t)))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :song)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-song))
   (declare (ignore builds dir-path basename moniker-full))
   (list
    (make-menu-item "Open in MuseScore" (lambda () (uiop:run-program (list "musescore" (or file-path moniker))
@@ -665,8 +640,7 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                        (uiop:run-program (list "musescore" src "-o" flac) :output nil :ignore-error-status t)
                        (uiop:run-program (list "xdg-open" flac) :output nil :ignore-error-status t))))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :tileset)) moniker builds file-path dir-path basename moniker-full)
-  (declare (ignore builds dir-path basename moniker-full))
+(defmethod game-resource-action-menu ((resource game-resource-tileset))
   (list
    (make-menu-item "Inspect..."
                    (lambda ()
@@ -677,7 +651,7 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
    (make-menu-item "Open in Tiled..." (lambda () (uiop:run-program (list "tiled" (or file-path moniker))
                                                                    :output nil :ignore-error-status t)))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :sprite-sheet)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-sprite-sheet))
   (declare (ignore builds dir-path basename moniker-full))
   (list
    (make-menu-item "Inspect..."
@@ -687,7 +661,7 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
    (make-menu-item "Open in Gimp" (lambda () (uiop:run-program (list "gimp" (or file-path moniker))
                                                                :output nil :ignore-error-status t)))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :object-prototype)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-object-prototype))
   (declare (ignore builds dir-path basename moniker-full))
   (list
    (make-menu-item "Inspect..."
@@ -697,7 +671,7 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                          (error  "~&edit-object-prototypes not available.~%"))))
    (make-menu-item "Open in Emacs..." (lambda () (open-in-emacs (or file-path moniker))))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :class)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-class))
   (declare (ignore builds file-path dir-path moniker-full))
   (list
    (make-menu-item "Inspect..." (lambda () (oops-class-inspector)))
@@ -709,11 +683,11 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                        (when (probe-file p)
                          (open-in-emacs p)))))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :routine)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-routine))
   (declare (ignore builds dir-path basename moniker-full))
   (list (make-menu-item "Open in Emacs..." (lambda () (open-in-emacs (or file-path moniker))))))
 
-(defmethod context-menu-items-for-type ((type-key (eql :character)) moniker builds file-path dir-path basename moniker-full)
+(defmethod game-resource-action-menu ((resource game-resource-character))
   (declare (ignore builds file-path dir-path moniker-full))
   (list
    (make-menu-item "Open Character Inspector" (lambda () (open-character-inspector (string-capitalize basename))))
@@ -725,85 +699,13 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                        (when (probe-file p)
                          (open-in-emacs p)))))))
 
-(defmethod context-menu-items-for-type (type-key moniker builds file-path dir-path basename moniker-full)
-  (declare (ignore type-key moniker builds file-path dir-path basename moniker-full))
+(defmethod game-resource-action-menu ((x t))
+  (declare (ignore x))
   nil)
 
-(defmethod context-menu-items-for-type ((type-key (eql :boat)) moniker builds file-path dir-path basename moniker-full)
-  (declare (ignore builds file-path dir-path moniker-full))
+(defmethod game-resource-action-menu ((resource game-resource-boat))
   (list
-   (make-menu-item "Inspect..."
-                   (lambda ()
-                     (let ((path (prompt-save-pathname
-                                  (format nil "~a.txt" basename) :type "txt")))
-                       (when path
-                         (with-open-file (s path :direction :output :if-exists :supersede)
-                           (load-boats)  ; populate *boat-ids* and *boat-classes*
-                           (when (boundp '*boat-ids*)
-                             (maphash (lambda (name _)
-                                        (declare (ignore _))
-                                        (format s "~a: ~a~%" name
-                                                (gethash name *boat-classes* "?")))
-                                      *boat-ids*)))))))))
-
-(defun %show-asset-context-menu (moniker builds kind-name
-                                 asset-id hex-str present-p full-path)
-  (let* ((parts (split-sequence #\/ moniker))
-         (basename (car (last parts)))
-         (type-key (ignore-errors (kind-by-name kind-name)))
-         (file-path (or full-path (asset-index->filesystem-path moniker)))
-         (dir-path (when file-path
-                     (namestring (make-pathname :defaults file-path :name nil :type nil))))
-         (moniker-full (if (search "Scripts/" moniker) moniker
-                           (format nil "Scripts/~a" moniker)))
-         (label (format nil "~a ~a~@[  $~a~]"
-                        kind-name
-                        (cl-change-case:title-case
-                         (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))
-                        hex-str))
-         (items nil))
-    ;; Type-specific editor items
-    (dolist (item (context-menu-items-for-type type-key moniker builds file-path dir-path basename moniker-full))
-      (push item items))
-    ;; Toggle build flags
-    (push nil items)
-    (push (make-menu-item "Toggle Demo" (lambda () (%toggle-build-flag moniker builds #\D))) items)
-    (push (make-menu-item "Toggle Public" (lambda () (%toggle-build-flag moniker builds #\P))) items)
-    (push (make-menu-item "Toggle AtariAge" (lambda () (%toggle-build-flag moniker builds #\A))) items)
-    (push nil items)
-    (push (make-menu-item "Open Containing Folder"
-                          (lambda ()
-                            (uiop:run-program (list "xdg-open" (or dir-path "."))
-                                              :output nil :ignore-error-status t)))
-          items)
-    (push nil items)
-    (push (make-menu-item "Copy List"
-                          (lambda ()
-                            (let ((text (%script-list-text)))
-                              (clim:with-application-frame (frame)
-                                (setf (clim-simple-echo::frame-captured-text frame) text))
-                              (unless (clim-simple-echo::%clipboard-copy text)
-                                (error  "~&Clipboard copy requires wl-copy or xclip.~%")))))
-          items)
-    (push nil items)
-    (push (make-menu-item "Save Assets Index" (lambda () (write-sorted-all-resources))) items)
-    (push nil items)
-    (push (make-menu-item "Redisplay"
-                          (lambda ()
-                            (clim:redisplay-frame-panes *application-frame* :force-p t)))
-          items)
-    ;; Show the menu
-    (setf items (nreverse items))
-    (let ((choice (clim:menu-choose
-                   (mapcar (lambda (item)
-                             (if (null item)
-                                  '(nil :divider :line)
-                                  (cons (first item) (first item))))
-                           items)
-                   :label label)))
-      (when choice
-        (let ((fn (second (find choice items :key #'first :test #'equal))))
-          (when fn (funcall fn)))))))
+   (make-menu-item "Inspect..." (lambda () (open-boat-inspector resource)))))
 
 (defun %script-list-text ()
   "Return a plain-text listing of all script names grouped by area."
@@ -838,10 +740,8 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                                                :external-format :utf-8)
       (dolist (l lines)
         (write-line (if (string= (string-trim " " l) (string-trim " " old-line))
-                        new-line l) f)))
-    (error  "~&Toggled ~a for ~a: ~:[(none)~;~a~]~%"
-            flag-char moniker (not (emptyp new-builds)) new-build-str))
-  (ignore-errors (clim:redisplay-frame-panes *application-frame* :force-p t)))
+                        new-line l) f))))
+  (ignore-errors (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 ;; --- Save Assets Index (sorted, blank lines between directories) ---
 
@@ -881,26 +781,20 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                  (terpri f))))
     ;; Redisplay
     (ignore-errors
-     (clim:redisplay-frame-panes *application-frame* :force-p t))))
+     (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))
 
 ;; --- Launcher wrappers ---
+
+(defun show-all-resources ()
+  "Open the unified All Resources browser."
+  (let ((frame (clim:make-application-frame 'all-resources-frame)))
+    (clim:run-frame-top-level frame)))
 
 (defun edit-all-resources ()
   "Open the unified Assets Index in a simple-echo window."
   (clim-simple-echo:run-in-simple-echo #'show-all-resources
                                        :process-name "Assets Index"
                                        :width 450 :height 700))
-
-(defun show-all-resources ()
-  "Open the unified All Resources browser."
-  (let* ((machine (or (ignore-errors (machine-directory-name)) "7800"))
-         (title (format nil "Skyline-Tool for ~a (~a): All Resources"
-                        (string-capitalize *game-title*) machine)))
-    (clim-simple-echo:run-in-simple-echo #'show-all-resources-internal
-                                         :process-name "All Resources"
-                                         :window-title title
-                                         :width 600 :height 845
-                                         :menu-bar 'clim-simple-echo::echo-resource-menu-bar)))
 
 (defun check-for-absent-assets-in-project-folder ()
   "Open the unified Assets Index (includes absent-asset detection)."
@@ -1076,13 +970,19 @@ The signal code was ~a" break-code)
          (progn (format t "~%Bank $~2,'0x size file not found" bank) #x4000)))))
 
 (defun ensure-size-files (build region)
-  "Ensure size files exist by running allocation for BUILD/REGION."
-  (format t "~&(generating size files for ~a ~a…" build (string-upcase region))
+  "Ensure size files exist by running make first, then running allocation for BUILD/REGION."
+  (format t "~&(building project for ~a ~a…" build (string-upcase region))
+  (force-output)
+  ;; First run make to generate all object files - FIXME this is REQUIRED to run in a terminal
+  ;; and must run through the thread pool. THIS IS INCORRECT. FIXME.
+  (uiop:run-program (list "make" "-j4" "Source/Generated/Makefile")
+                    :output :interactive
+                    :error-output :interactive
+                    :ignore-error-status t)
+  (format t "~&generating size files for ~a ~a…" build (string-upcase region))
   (force-output)
   (allocate-assets build)
   (write-master-makefile)
-  (uiop:run-program (list "make" "-j4" "-s" "Source/Generated/Makefile")
-                    :output :string :ignore-error-status t)
   (format t " done)~%"))
 
 (defun rom-budget-data (build region)
@@ -1145,7 +1045,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
   :menu (("Copy" :command com-copy-rom-budget)))
 
 (clim:define-command-table rom-budget-help-menu
-  :menu (("How to Use ROM Budget" :command com-help-for-window)
+  :menu (("How to Manage ROM Budget" :command com-help-for-window)
          ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
          ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line)
@@ -1172,28 +1072,28 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 (defun populate-rom-budget-print-to-menu ()
   (let ((ct (clim:find-command-table 'rom-budget-print-to-menu)))
     (when ct
+      ;; Remove existing "Default Printer (lpr)" if present to avoid COMMAND-ALREADY-PRESENT
+      (ignore-errors (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
       ;; Always add "Default Printer (lpr)" as the first item
       (clim:add-menu-item-to-command-table ct "Default Printer (lpr)"
-        :command 'com-print-rom-budget-to-printer
-        :arguments (list nil)
+        :command '(com-print-rom-budget-to-printer nil)
         :after :end)
       ;; Add CUPS printers
       (dolist (printer (discover-printers-with-names))
         (let ((queue (car printer))
               (display (cdr printer)))
           (clim:add-menu-item-to-command-table ct display
-            :command 'com-print-rom-budget-to-printer
-            :arguments (list queue)
+            :command `(com-print-rom-budget-to-printer ,queue)
             :after :end))))))
   
   ;; --- ROM Budget commands ---
 
 
 (clim:define-command (com-close-rom-budget :menu nil :name t) ()
-  (clim:frame-exit *application-frame*))
+  (clim:frame-exit clim:*application-frame*))
 
 (clim:define-command (com-save-rom-budget-text :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when (and frame (clim-simple-echo::frame-captured-text frame))
       (let ((filename (format nil "ROM-Budget-~a-~a.txt"
                               (rb-build frame) (rb-region frame))))
@@ -1202,7 +1102,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (format *query-io* "~&Saved to ~a~%" filename)))))
 
 (clim:define-command (com-save-rom-budget-json :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when (and frame (clim-simple-echo::frame-captured-text frame))
       (let* ((bank-data (rb-bank-data frame))
              (filename (format nil "ROM-Budget-~a-~a.json"
@@ -1227,30 +1127,28 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (format *query-io* "~&Saved to ~a~%" filename)))))
 
 (clim:define-command (com-save-rom-budget-pdf :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when (and frame (frame-pdf-function frame))
       (funcall (frame-pdf-function frame)
                (format nil "ROM-Budget-~a-~a.pdf"
                        (rb-build frame) (string-downcase (rb-region frame)))))))
 
 (clim:define-command (com-print-rom-budget-to-printer :menu nil :name t) ((printer-name string))
-  (let ((frame *application-frame*))
-    (when (and frame nil #+ () (frame-pdf-function frame))
-      (let ((temp-ps (format nil "/tmp/rom-budget-~a.ps" (get-universal-time))))
-        (funcall (frame-pdf-function frame) temp-ps)
-        (uiop:run-program (list "lp" "-d" printer-name temp-ps)
-                          :ignore-error-status t)
-        (format *query-io* "~&Sent to printer ~a~%" printer-name)))))
+  (let ((temp-ps (format nil "/tmp/rom-budget-~a.ps" (get-universal-time))))
+    (funcall (frame-pdf-function clim:*application-frame*) temp-ps)
+    (uiop:run-program (list "lp" "-d" printer-name temp-ps)
+                      :ignore-error-status t)
+    (format *query-io* "~&Sent to printer ~a~%" printer-name)))
 
 (clim:define-command (com-copy-rom-budget :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when (and frame (clim-simple-echo::frame-captured-text frame))
       (let ((text (clim-simple-echo::frame-captured-text frame)))
         (clim-simple-echo::%clipboard-copy text)
         (format *query-io* "~&ROM Budget copied to clipboard (~d bytes)~%" (length text))))))
 
 (clim:define-command (com-rb-set-region-ntsc :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when frame
       (setf (rb-region frame) :ntsc)
       (multiple-value-bind (bd ts tb tp) (rom-budget-data (rb-build frame) :ntsc)
@@ -1261,7 +1159,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (clim:redisplay-frame-panes frame :force-p t)))))
 
 (clim:define-command (com-rb-set-region-pal :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when frame
       (setf (rb-region frame) :pal)
       (multiple-value-bind (bd ts tb tp) (rom-budget-data (rb-build frame) :pal)
@@ -1272,7 +1170,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (clim:redisplay-frame-panes frame :force-p t)))))
 
 (clim:define-command (com-rb-set-build-demo :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when frame
       (setf (rb-build frame) "Demo")
       (multiple-value-bind (bd ts tb tp) (rom-budget-data "Demo" (rb-region frame))
@@ -1283,7 +1181,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (clim:redisplay-frame-panes frame :force-p t)))))
 
 (clim:define-command (com-rb-set-build-public :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when frame
       (setf (rb-build frame) "Public")
       (multiple-value-bind (bd ts tb tp) (rom-budget-data "Public" (rb-region frame))
@@ -1294,7 +1192,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
         (clim:redisplay-frame-panes frame :force-p t)))))
 
 (clim:define-command (com-rb-set-build-publisher :menu nil :name t) ()
-  (let ((frame *application-frame*))
+  (let ((frame clim:*application-frame*))
     (when frame
       (setf (rb-build frame) "Publisher")
       (multiple-value-bind (bd ts tb tp) (rom-budget-data "Publisher" (rb-region frame))
@@ -1318,7 +1216,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
     (populate-rom-budget-print-to-menu)
     (clim-sys:make-process
      (lambda ()
-       (let ((*application-frame* frame))
+       (let ((clim:*application-frame* frame))
          (multiple-value-bind (bd ts tb tp) (rom-budget-data build region)
            (setf (rb-bank-data frame) bd
                  (rb-total-sum frame) ts
@@ -1619,7 +1517,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 (defun publish-current-resource ()
   "Publish the currently-edited resource to :clipboard with type
    animation-sequence-clipboard-data (or appropriate type)."
-  (let ((frame (and (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (unless frame
       (return-from publish-current-resource
         (error  "~&No active frame to copy from.~%")))
@@ -1738,8 +1636,8 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 
 (clim:define-command (com-redisplay :command-table clim-internals::global-command-table) ()
   "Clear and redisplay the current window's panes."
-  (when (boundp '*application-frame*)
-    (clim:redisplay-frame-panes *application-frame* :force-p t)))
+  (when (boundp 'clim:*application-frame*)
+    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 (clim:define-command (com-duplicate :command-table clim-internals::global-command-table) ()
   "Duplicate the current resource (not yet implemented)."
@@ -1748,6 +1646,12 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 (clim:define-command (com-undo :command-table clim-internals::global-command-table) ()
   "Undo last action (not yet implemented)."
   (error  "~&Undo is not yet implemented.~%"))
+
+;; --- Resource all-resources-frame command tables (after commands defined) ---
+
+
+
+
 
 (defmethod initialize-instance :after ((frame launcher-frame) &key)
   "Bind keyboard shortcuts when the launcher frame is created."

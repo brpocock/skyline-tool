@@ -25,13 +25,13 @@
       (dolist (name names)
         (format f "~a~%" name)))))
 
-(clim:define-application-frame item-list-inspector-frame ()
+(clim:define-application-frame item-list-inspector-frame (resource-inspector-mixin)
   ((path :initarg :path :accessor frame-path)
    (names :initarg :names :accessor frame-names)
    (gadgets :initform nil :accessor frame-gadgets))
   (:menu-bar item-list-inspector-menu-bar)
   (:panes
-   (editor-pane :application :display-function 'display-editor
+   (editor-pane :application :display-function 'display-resource-inspector
                 :height 600 :width 450
                 :scroll-bars :vertical)
    (interactor :interactor :height 80 :width 450))
@@ -56,6 +56,9 @@
          ("Edit" :menu item-list-inspector-edit-menu)
          ("Help" :menu item-list-inspector-help-menu)))
 
+(defmethod display-inspector-content ((frame item-list-inspector-frame) pane)
+  (display-editor frame pane))
+
 (defun display-editor (frame pane)
   (clim:window-clear pane)
   (format pane "~&  #   Name~%")
@@ -67,7 +70,7 @@
 (clim:define-command (com-item-list-inspector-click :command-table clim-internals::global-command-table
                                             :menu nil :name t)
     ((index 'integer :gesture :select))
-  (let* ((frame (and (boundp '*application-frame*) *application-frame*))
+  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (names (and frame (frame-names frame)))
          (path (and frame (frame-path frame))))
     (when (and frame names path (<= 0 index (1- (length names))))
@@ -79,5 +82,20 @@
           (clim:redisplay-frame-panes frame))))))
 
 (clim:define-command (com-close-editor :menu t :name t) ()
-  (let ((frame (and (boundp '*application-frame*) *application-frame*)))
+  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame (clim:frame-exit frame))))
+
+(defun open-items-index (&optional (path "../Source/Tables/Items.txt"))
+  "Open the Items List Inspector."
+  (let* ((full (merge-pathnames path (uiop:getcwd)))
+         (names (load-name-list full))
+         (resource (make-instance 'game-resource-from-file
+                                  :moniker "Items Index"
+                                  :kind "Items"
+                                  :full-path (truename full)))
+         (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
+         (frame (clim:make-application-frame 'item-list-inspector-frame
+                 :resource resource
+                 :path full :names names
+                 :frame-manager fm)))
+    (clim:run-frame-top-level frame)))

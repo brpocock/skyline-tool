@@ -8,12 +8,14 @@
    icon (e.g. Tools/skyline-tool-icon-ANIMATION-SEQUENCE-EDITOR-128.png),
    falling back to the generic skyline-tool icon."
   (let* ((candidates (append
-                       (when resource
-                         (list (format nil "../Tools/skyline-tool-icon-~(~a~)-128.png" resource)
-                               (format nil "../Tools/skyline-tool-icon-~(~a~)-64.png" resource)))
-                       (list "../Tools/skyline-tool-icon-128.png"
-                             "../Tools/skyline-tool-icon-64.png")))
-          (existing (find-if (lambda (n) (probe-file (asdf:system-relative-pathname :skyline-tool n))) candidates)))
+                      (when resource
+                        (list (format nil "../Tools/skyline-tool-icon-~(~a~)-128.png" resource)
+                              (format nil "../Tools/skyline-tool-icon-~(~a~)-64.png" resource)))
+                      (list #p"../Tools/skyline-tool-icon-256.png"
+                            #p"../Tools/skyline-tool-icon-128.png"
+                            #p"../Tools/skyline-tool-icon-64.png")))
+         (existing (find-if (lambda (n) (probe-file (asdf:system-relative-pathname :skyline-tool n)))
+                            candidates)))
     (when existing
       (clim:make-pattern-from-bitmap-file
        (asdf:system-relative-pathname :skyline-tool existing)))))
@@ -22,22 +24,27 @@
   "Cached hex-encoded RGB pixel data for the Skyline-Tool icon.")
 
 (defun icon-hex-data ()
-  "Return hex-encoded 48x48 RGB data for the Skyline-Tool icon.
-   Caches the result; falls back to a simple grey block if ImageMagick is unavailable."
+  "Return hex-encoded 48x48 RGB data for the Skyline-Tool icon."
   (or *icon-hex-cache*
       (setf *icon-hex-cache*
-            (let* ((svg-path (namestring (asdf:system-relative-pathname :skyline-tool "../Tools/Icons/Skyline-Tool-Folder.svg")))
-                   (logo-path (namestring (asdf:system-relative-pathname :skyline-tool "../Tools/skyline-tool-icon-64.png")))
+            (let* ((svg-path (namestring (asdf:system-relative-pathname
+                                          :skyline-tool #p"../Tools/Icons/Skyline-Tool-Folder.svg")))
+                   (logo-path (namestring (asdf:system-relative-pathname
+                                           :skyline-tool #p"../Tools/skyline-tool-icon-64.png")))
                    (try-load (lambda (path)
                                (ignore-errors
-                                 (let* ((pixels (uiop:run-program (list "magick" "convert" path "-alpha" "deactivate" "-resize" "48x48" "-depth" "8" "rgb:-") :output :vector))
-                                        (hex (with-output-to-string (s)
-                                               (dotimes (i (length pixels))
-                                                 (format s "~2,'0x" (aref pixels i))))))
-                                   hex)))))
-               (or (funcall try-load svg-path)
-                   (funcall try-load logo-path)
-                   (make-string (* 48 48 3 2) :initial-element #\9))))))
+                                ;; FIXME: move this internally ... don't call out to `magick`
+                                (let* ((pixels (uiop:run-program (list "magick" "convert" path
+                                                                       "-alpha" "deactivate" "-resize"
+                                                                       "48x48" "-depth" "8" "rgb:-")
+                                                                 :output :vector))
+                                       (hex (with-output-to-string (s)
+                                              (dotimes (i (length pixels))
+                                                (format s "~2,'0x" (aref pixels i))))))
+                                  hex)))))
+              (or (funcall try-load svg-path)
+                  (funcall try-load logo-path)
+                  (make-string (* 48 48 3 2) :initial-element #\9))))))
 
 ;; PostScript/PDF generation functions
 (defun write-ps-header-icon (ps)
@@ -126,11 +133,12 @@
     (format ps "/Times-Roman-ISOLatin1 findfont 7.5 scalefont setfont~%")
     (format ps "0.25 0.25 0.25 setrgbcolor~%")        ; 75% gray
     (format ps "112 67.57 moveto~%")
-    (format ps "(~a --- ~a on ~a~:[~; at ~a~]) show~%"
-            (escape-ps-string date-str)
-            (escape-ps-string author)
-            (escape-ps-string hostname)
-            site (escape-ps-string site))
+    (let ((site-str (if site (format nil " at ~a" (escape-ps-string site)) "")))
+      (format ps "(~a --- ~a on ~a~a) show~%"
+              (escape-ps-string date-str)
+              (escape-ps-string author)
+              (escape-ps-string hostname)
+              site-str))
     ;; Page number right-aligned at x=556 (56pt from right edge of 612pt page)
     (format ps "556 67.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
@@ -172,35 +180,28 @@
 "))
 
 (defun escape-ps-string (string)
-  "Escape special PostScript characters in STRING for use in show operators.
-   Latin-1 characters (© ® etc.) are output as octal escapes for ISOLatin1 font;
-   Unicode outside Latin-1 (— '' \"\" … ™) are replaced with ASCII equivalents."
-  (with-output-to-string (out)
-    (loop for c across string
-          for code = (char-code c)
-          do (cond
-               ((member c '(#\( #\) #\\) :test 'char=)
-                (princ "\\" out) (princ c out))
-               ((char= c (code-char #x2014)) (princ "---" out))  ; em dash → ---
-               ((char= c (code-char #x2013)) (princ "–" out))    ; en dash
-               ((char= c (code-char #x2018)) (princ "'" out))    ; left single quote
-               ((char= c (code-char #x2019)) (princ "'" out))    ; right single quote
-               ((char= c (code-char #x201C)) (princ "\\(" out))   ; left double quote
-               ((char= c (code-char #x201D)) (princ "\\)" out))   ; right double quote
-               ((char= c (code-char #x2022)) (princ "*" out))     ; bullet
-               ((char= c (code-char #x2026)) (princ "..." out))   ; ellipsis
-               ((char= c (code-char #x203A)) (princ ">" out))     ; single right angle quote
-               ((char= c (code-char #x2039)) (princ "<" out))     ; single left angle quote
-               ((char= c (code-char #x00A0)) (princ " " out))     ; non-breaking space
-               ;; ©, ® are in Latin-1 — let PS font handle via octal escape
-               ;; ™ is outside Latin-1 — keep as "TM"
-               ((< code 128)
-                (princ c out))
-               ((< code 256)
-                ;; Latin-1 range: output as octal escape (needs ISOLatin1Encoding)
-                (format out "\\~3,'0o" code))
-               (t
-                (princ "\\077" out))))))
+  "Escape PostScript string with proper Unicode to octal conversion.
+   Latin-1 chars use \\ooo octal escapes, Unicode chars beyond Latin-1 are replaced."
+  (when string
+    (with-output-to-string (out)
+      (loop for c across string
+            for code = (char-code c)
+            do (cond
+                 ((member c '(#\( #\) #\\) :test 'char=)
+                  (princ "\\" out) (princ c out))
+                 ((char= c #\—) (format out "\\~8,3,'0r" #x2014)) ;; em dash → ---
+                 ((char= c #\–) (format out "\\~8,3,'0r" #x2013)) ;; en dash → --
+                 ((char= c #\apostrophe) (format out "\\~8,3,'0r" #x2019)) ;; right quote
+                 ((char= c #\left_double_quotation_mark) (format out "\\~8,3,'0r" #x201C)) ;; left double
+                 ((char= c #\right_double_quotation_mark) (format out "\\~8,3,'0r" #x201D)) ;; right double
+                 ((char= c #\•) (format out "\\042")) ;; bullet
+                 ((char= c #\…) (format out "\\263")) ;; ellipsis
+                 ((char= c #\>) (format out "\\047")) ;; right angle
+                 ((char= c #\<) (format out "\\046")) ;; left angle
+                 ((char= c #\non-breaking_space) (princ " " out)) ;; NBSP → space ERROR FIXME
+                 ((< code 128) (princ c out))
+                 ((< code 256) (format out "\\~8,3,'0r" code)) ;; Latin-1 octal
+                 (t (princ "\\?" out))))))) ;; Unicode fallback FIXME this is not acceptable
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).
@@ -303,43 +304,63 @@
       (sort result #'string-lessp :key #'cdr))))
 
 (defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
-  "Write PDF page footer with two-row tabular layout:
-   Row 1 (top): Icon (spans both rows) | 'Skyline-Tool' (Royal Blue) 'for' (black) 'GameTitle' (Navy Blue, Italic)
-   Row 2 (bottom, 75% row1 height): Icon continued | date --- author on host [at site] (75% gray) | Page N of M (75% gray, right-aligned)
-   All positioned 3/4\" (54pt) from page bottom. Icon height = both rows combined (48pt)."
-  (let ((site (ignore-errors (short-site-name))))
-    ;; Draw icon spanning both rows (48pt tall at y=54..102)
-    (format ps "gsave 56 54 translate~%")
-    (write-ps-header-icon ps)
-    (format ps "grestore~%")
-    ;; Row 1: Branding text at y=94 baseline (10pt font, row top at y=102)
-    (format ps "gsave~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
-    (format ps "0.0 0.2 0.6 setrgbcolor~%")           ; Royal Blue
-    (format ps "112 94 moveto~%")
+  "Write PDF page footer with proper formatting.
+   Layout:
+     | < Icon >  | Skyline-Tool for _Phantasia_ 7800                                                              |              |
+     | < ^^^^ >  | 2026-06-30 13:41 --- Bruce-Robert Pocock on Hermes at Star-Hope                                | Page 1 of 19 |
+   Icon = two lines tall graphics, _Phantasia_ = italics navy blue, 7800 = machine-directory-name
+   Skyline-Tool in Royal Blue, 'for' '7800' in black
+   Date - time - user on host at short-site name and page n of m --- all in 75% black (dark gray) and 8pt"
+(let* ((site (ignore-errors (short-site-name)))
+          (machine (or (ignore-errors (machine-directory-name)) ""))
+          (date-part (escape-ps-string date-str))
+          (author-part (escape-ps-string author))
+          (host-part (when hostname (escape-ps-string hostname)))
+          (site-part (escape-ps-string (or site "")))
+          (game-title (escape-ps-string title-text))
+          (machine-dir (escape-ps-string machine))
+          (icon-path (asdf:system-relative-pathname :skyline-tool "../Tools/skyline-tool-icon-64.png"))
+          (icon-pattern (and (probe-file icon-path)
+                             (ignore-errors (clim:make-pattern-from-bitmap-file icon-path)))))
+     ;; Draw icon spanning both rows (icon is 64x64, drawn at 64x64 points)
+     (when icon-pattern
+       (format ps "gsave~%")
+       (format ps "/PatternType 1 /PaintType 2 /TilingType 1~%")
+       (format ps "[64 0 0 64 0 0] /PatternType 1 /PaintType 2 /TilingType 1~%")
+       (format ps "~a setpattern~%" icon-pattern)
+       (format ps "0 42 64 64 rectfill~%")
+       (format ps "grestore~%"))
+     ;; Row 1: Icon + Branding (at y=106 baseline)
+     (format ps "gsave~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
+    (format ps "0.0 0.2 0.6 setrgbcolor~%")
+    (format ps "112 106 moveto~%")
     (format ps "(Skyline-Tool) show~%")
     (format ps "currentpoint pop 2 add 0 moveto~%")
-    (format ps "0.0 0.0 0.0 setrgbcolor~%")           ; Black
+    (format ps "0.0 0.0 0.0 setrgbcolor~%")
     (format ps "(for ) show~%")
     (format ps "currentpoint pop 2 add 0 moveto~%")
-    (format ps "0.0 0.0 0.5 setrgbcolor~%")           ; Navy Blue
-    (if (string= title-text "Phantasia")
-        (format ps "/Dublin-ISOLatin1 findfont 10 scalefont setfont~%")
-        (format ps "/Times-Italic-ISOLatin1 findfont 10 scalefont setfont~%"))
-    (format ps "(~a) show~%" (escape-ps-string title-text))
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")
+    (format ps "/Times-Italic-ISOLatin1 findfont 8 scalefont setfont~%")
+    (format ps "(~a) show~%" game-title)
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
+    (format ps "0.25 0.25 0.25 setrgbcolor~%")
+    (format ps "(~a) show~%" machine-dir)
     (format ps "grestore~%")
-    ;; Row 2: Date/author/host/site at y=67.57 baseline (7.5pt font, row top at y=74.57)
+    ;; Row 2: Date/author on host at site + page number (dark gray, 8pt)
     (format ps "gsave~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 7.5 scalefont setfont~%")
-    (format ps "0.25 0.25 0.25 setrgbcolor~%")        ; 75% gray
-    (format ps "112 67.57 moveto~%")
-    (format ps "(~a --- ~a~@[ on ~a~]~:[~; at ~a~]) show~%"
-            (escape-ps-string date-str)
-            (escape-ps-string author)
-            hostname
-            site (escape-ps-string site))
-    ;; Page number right-aligned at x=556 (56pt from right edge of 612pt page)
-    (format ps "556 67.57 moveto~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
+    (format ps "0.25 0.25 0.25 setrgbcolor~%")
+    (format ps "112 79.57 moveto~%")
+    ;; Format: date --- author [on host] [at site]
+    (format ps "(~a~@[ --- ~a~]~@[ on ~a~]~@[ at ~a~]) show~%"
+            date-part
+            author-part
+            host-part
+            site-part)
+    ;; Page number right-aligned
+    (format ps "556 79.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
             page-num total-pages)
     (format ps "grestore~%")))

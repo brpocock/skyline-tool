@@ -215,17 +215,17 @@
 
 ;; --- Frame Definition ---
 
-(clim:define-application-frame map-inspector-frame ()
+(clim:define-application-frame map-inspector-frame (resource-inspector-mixin)
   ((%data :initform nil :accessor map-inspector-frame-data)
    (%original-tmx-path :initarg :tmx-path :accessor map-editor-original-tmx-path)
    (%new-suffix :initform nil :accessor map-inspector-new-suffix))
   (:panes
-   (display-pane :application :scroll-bars t :height 700 :width 600
-                 :display-function 'display-map-inspector)
+   (content :application :scroll-bars t :height 700 :width 600
+            :display-function 'display-resource-inspector)
    (interactor :interactor :height 100 :width 600 :max-height 100))
   (:menu-bar map-inspector-menu-bar)
   (:icon (skyline-tool-icon))
-  (:layouts (default (clim:vertically () display-pane interactor))))
+  (:layouts (default (clim:vertically () content interactor))))
 
 ;; --- Command Tables ---
 
@@ -259,11 +259,11 @@
   :menu (("Copy As" :menu map-inspector-copy-as-menu)))
 
 (clim:define-command-table map-inspector-help-menu
-  :menu (("How to Edit Maps" :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+  :menu (("How to Edit Maps..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line)
-         ("About Skyline-Tool" :command com-about-skyline-tool)))
+         ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
 (clim:define-command-table map-inspector-menu-bar
   :menu (("Map" :menu map-inspector-file-menu)
@@ -336,6 +336,9 @@
         (thiefmd (uiop:run-program (list "thiefmd" path)
                                    :output nil :ignore-error-status t))
         (pdf (format *query-io* "~&Export Script as PDF: not yet implemented.~%"))))))
+
+(defmethod display-inspector-content ((frame map-inspector-frame) pane)
+  (display-map-inspector frame pane))
 
 (defun display-map-inspector (frame pane)
   (let* ((data (map-inspector-frame-data frame))
@@ -435,7 +438,7 @@
 ;; --- Commands ---
 
 (define-map-inspector-frame-command (com-map-inspector-save :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame))
          (old-tmx-path (map-editor-original-tmx-path frame))
          (new-suffix (map-inspector-new-suffix frame)))
@@ -495,10 +498,10 @@
        :name (format nil "Scan scripts for ~a" old-stem)))))
 
 (define-map-inspector-frame-command (com-map-inspector-close :menu t :name t) ()
-  (clim:frame-exit *application-frame*))
+  (clim:frame-exit clim:*application-frame*))
 
 (define-map-inspector-frame-command (com-map-inspector-copy-json :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (unless data
       (format *query-io* "~&No map data.")
@@ -545,7 +548,7 @@
        :width 600 :height 400))))
 
 (define-map-inspector-frame-command (com-map-inspector-copy-text :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (unless data
       (format *query-io* "~&No map data.")
@@ -606,7 +609,7 @@
 ;; --- Change suffix command (interactive) ---
 
 (define-map-inspector-frame-command (com-map-inspector-change-suffix :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (let* ((current (or (map-inspector-new-suffix frame)
                         (map-inspector-data-numeric-suffix data) ""))
@@ -711,7 +714,7 @@
           (format *query-io* "~&Map ~a not found on disk.~%" choice)))))
 
 (define-map-inspector-frame-command (com-map-inspector-save-text :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (unless data
       (format *query-io* "~&No map data loaded.")
@@ -774,7 +777,7 @@
         (format *query-io* "~&Saved ~a (~d bytes).~%" (namestring path) (length text))))))
 
 (define-map-inspector-frame-command (com-map-inspector-save-json :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (unless data
       (format *query-io* "~&No map data loaded.")
@@ -825,7 +828,7 @@
         (format *query-io* "~&Saved ~a (~d bytes).~%" (namestring path) (length json-str))))))
 
 (define-map-inspector-frame-command (com-map-inspector-save-pdf :menu t :name t) ()
-  (let* ((frame *application-frame*)
+  (let* ((frame clim:*application-frame*)
          (data (map-inspector-frame-data frame)))
     (unless data
       (format *query-io* "~&No map data loaded.")
@@ -964,16 +967,22 @@
 (define-map-inspector-frame-command (com-map-inspector-copy-png :menu t :name t) ()
   (error "Not Yet Implemented"))
 
-(defun open-map-inspector (tmx-path)
+(defun open-map-inspector (tmx-path &key locale)
   (let* ((fm (clim:find-frame-manager :port (or (clim:find-port)
-                                                 (clim:find-port :server-path :x))))
+                                                  (clim:find-port :server-path :x))))
+         (resource (make-instance 'game-resource-map
+                                  :moniker (pathname-name tmx-path)
+                                  :kind "Map"
+                                  :locale (or locale :en)
+                                  :full-path (truename tmx-path)))
          (frame (clim:make-application-frame 'map-inspector-frame
-                                             :tmx-path tmx-path
-                                             :frame-manager fm
-                                             :width 620 :height 820)))
+                                              :resource resource
+                                              :tmx-path tmx-path
+                                              :frame-manager fm
+                                              :width 620 :height 820)))
     (clim-sys:make-process
      (lambda ()
-       (let ((*application-frame* frame))
+       (let ((clim:*application-frame* frame))
          (handler-case
              (let ((data (parse-tmx-file tmx-path)))
                (setf (map-inspector-frame-data frame) data)
