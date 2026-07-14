@@ -3,7 +3,7 @@
 
 (in-package :skyline-tool)
 
-(clim:define-application-frame game-resource-map-inspector (gui-inspector-frame)
+(clim:define-application-frame game-resource-map-inspector (gui-inspector-frame clim:standard-application-frame)
   ((resource :initarg :resource :reader frame-resource))
   (:menu-bar inspector-map-menu-bar)
   (:icon (skyline-tool-icon :resource :inspector))
@@ -13,7 +13,10 @@
 ;; Inspector open helper
 ;; ------------------------------------------------------------------------
 (defun open-map-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-map)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-map
+                                  :kind "Map"
+                                  :moniker "Maps/new-map.tmx")) :editing))
 
 ;; Specialize open-resource-inspector for map resources
 (defmethod open-resource-inspector ((resource game-resource-map) &optional (mode :editing))
@@ -38,9 +41,17 @@
          (nil :divider :line)
          ("Close"          :command com-close-frame)))
 
+(clim:define-command-table map-inspector-edit-menu
+  :menu (("Copy As" :menu map-inspector-copy-as-menu)
+         ("Change Subdirectory..." :command com-change-subdirectory)))
+
+(clim:define-command (com-change-subdirectory :command-table clim-internals::global-command-table
+                                              :menu t :name t) ()
+  "Change the subdirectory path for this map resource with validation."
+  (error "Change subdirectory not implemented."))
 (clim:define-command-table inspector-map-menu-bar
   :menu (("File"     :menu inspector-map-file-menu)
-         ("Edit"     :menu inspector-edit-menu)
+         ("Edit"     :menu map-inspector-edit-menu)
          ("View"     :menu inspector-view-menu)
          ("Run"      :menu inspector-map-run-menu)
          ("Help"     :menu inspector-help-menu)))
@@ -65,20 +76,19 @@
                                       :menu t :name t)
   ((resource 'game-resource-map :gesture :select))
   "Compile the MAP using Skyline-Tool's internal map compiler."
-  (clim-simple-echo:run-in-simple-echo
-   (format nil "compile-map ~a" (game-resource-moniker resource))))
+  (error "Map compilation not implemented yet."))
 
 (clim:define-command (com-new-map :command-table clim-internals::global-command-table
-                                 :menu t :name t)
+                                  :menu t :name t)
   ()
   "Create a new map resource."
-  (clim-simple-echo:run-in-simple-echo "New map not implemented."))
+  (open-map-inspector nil))
 
 (clim:define-command (com-open-map :command-table clim-internals::global-command-table
                                    :menu t :name t)
   ()
   "Open a map from file."
-  (clim-simple-echo:run-in-simple-echo "Open map not implemented."))
+  (error "Open map not implemented."))
 
 (clim:define-command (com-save-map :command-table clim-internals::global-command-table
                                    :menu t :name t)

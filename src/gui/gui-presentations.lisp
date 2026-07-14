@@ -23,9 +23,6 @@
 (defgeneric open-resource-preview (resource)
   (:documentation "Open a read-only preview window for RESOURCE."))
 
-(defgeneric open-resource-inspector (resource &optional mode)
-  (:documentation "Open an inspector window for RESOURCE. MODE can be :editing, :reading, or :reference."))
-
 ;; ============================================================================
 ;; JSON Export/Import Infrastructure
 ;; ============================================================================
@@ -69,7 +66,7 @@
 ;; Inspector/Preview Window Infrastructure
 ;; ============================================================================
 
-(clim:define-application-frame resource-preview (gui-inspector-frame)
+(clim:define-application-frame resource-preview (gui-inspector-frame clim:standard-application-frame)
   ()
   (:panes
    (content :application
@@ -117,7 +114,7 @@
       (let ((*standard-output* pane))
         (format pane " ~a | ~a | View: ~a"
                 (game-resource-kind resource)
-                (game-resource-moniker resource)
+                (game-resource-title resource)
                 (string-downcase (symbol-name (frame-view-mode frame))))))))
 
 (clim:define-command (com-preview-close :command-table resource-preview-menu-bar
@@ -135,14 +132,11 @@
   (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
 (clim:define-command (com-preview-export-pdf :command-table resource-preview-menu-bar
-                                              :menu t :name t) ()
+                                             :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
          (resource (inspector-resource frame)))
     (when resource
-      (let ((filepath (clim:accept 'pathname :prompt "Save PDF as:"
-                                    :default (merge-pathnames
-                                               (format nil "~a.ps" (game-resource-title resource))
-                                               (uiop:getcwd)))))
+      (let ((filepath (error "Gnome Save As dialog must be used here")))
         (when filepath
           (export-resource-to-ps-file resource filepath
                                       :title (game-resource-title resource)
@@ -150,14 +144,11 @@
           (format t "~&Exported to ~a~%" filepath))))))
 
 (clim:define-command (com-preview-export-text :command-table resource-preview-menu-bar
-                                               :menu t :name t) ()
+                                              :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
          (resource (inspector-resource frame)))
     (when resource
-      (let ((filepath (clim:accept 'pathname :prompt "Save Text as:"
-                                    :default (merge-pathnames
-                                               (format nil "~a.txt" (game-resource-title resource))
-                                               (uiop:getcwd)))))
+      (let ((filepath (error "Gnome Save as window must be used here")))
         (when filepath
           (export-resource-to-text-file resource filepath)
           (format t "~&Exported to ~a~%" filepath))))))
@@ -191,13 +182,8 @@
                                 :resource resource
                                 :view-mode :reading)))
 
-(defmethod open-resource-inspector ((resource game-resource) &optional (mode :editing))
-  "Open an inspector window for RESOURCE."
-  (clim:run-frame-top-level
-   (clim:make-application-frame 'gui-inspector-frame
-                                :resource resource
-                                :view-mode mode)))
-
+;; ============================================================================
+;; JSON Export/Import Infrastructure
 ;; ============================================================================
 ;; Common PostScript Content Generation
 ;; ============================================================================
@@ -233,7 +219,6 @@
   "Write common resource fields to PS stream."
   (let ((title (game-resource-title resource))
         (kind (game-resource-kind resource))
-        (moniker (game-resource-moniker resource))
         (vc-status (vc-file-status (or (game-resource-full-path resource)
                                        (game-resource-collective-path resource)))))
     (format ps "/Times-Roman-ISOLatin1 findfont 14 scalefont setfont~%")
@@ -242,8 +227,6 @@
     (format ps "(~a) show~%" (escape-ps-string title))
     (format ps "56 580 moveto~%")
     (format ps "(Kind: ~a) show~%" (escape-ps-string kind))
-    (format ps "56 560 moveto~%")
-    (format ps "(Moniker: ~a) show~%" (escape-ps-string moniker))
     (when vc-status
       (format ps "56 540 moveto~%")
       (format ps "(VC Status: ~a) show~%" (escape-ps-string vc-status)))))
@@ -252,9 +235,350 @@
   "Write common resource fields to text stream."
   (format stream "Title: ~a~%" (game-resource-title resource))
   (format stream "Kind: ~a~%" (game-resource-kind resource))
-  (format stream "Moniker: ~a~%" (game-resource-moniker resource))
   (let ((vc-status (vc-file-status (or (game-resource-full-path resource)
                                        (game-resource-collective-path resource)))))
     (when vc-status
       (format stream "VC Status: ~a~%" vc-status))))
+
+;; ============================================================================
+;; resource-to-json methods for all concrete resource classes
+;; ============================================================================
+
+(defmethod resource-to-json ((resource game-resource))
+  (let ((obj (make-hash-table :test 'equal)))
+    (setf (gethash "name" obj) (game-resource-title resource))
+    (setf (gethash "kind" obj) (game-resource-kind resource))
+    (when (typep resource 'game-resource-asset)
+      (setf (gethash "moniker" obj) (game-asset-moniker resource)))
+    (when (typep resource 'game-resource-from-file)
+      (setf (gethash "path" obj) (game-resource-full-path resource)))
+    (when (typep resource 'game-resource-asset)
+      (setf (gethash "assetId" obj) (game-resource-asset-id resource))
+      (setf (gethash "builds" obj) (game-resource-builds resource)))
+    obj))
+
+(defmethod resource-to-json ((resource game-resource-map))
+  (let ((obj (call-next-method)))
+    (setf (gethash "locale" obj) (game-resource-locale resource))
+    obj))
+
+(defmethod resource-to-json ((resource game-resource-script))
+  (let ((obj (call-next-method)))
+    (setf (gethash "locale" obj) (game-resource-locale resource))
+    obj))
+
+(defmethod resource-to-json ((resource game-resource-song))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-blob))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-boat))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-instrument))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-item))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-flag))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-key))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-object-prototype))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-character))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-translation))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-atari-vox-dictionary))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-intellivoice-dictionary))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-phrasebook))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-class))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-tileset))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-sprite-sheet))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-routine))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-routine-forth-library))
+  (call-next-method))
+
+(defmethod resource-to-json ((resource game-resource-routine-run-commands))
+  (call-next-method))
+
+;; ============================================================================
+;; resource-from-json methods for all concrete resource classes
+;; ============================================================================
+
+(defmethod resource-from-json (json (class (eql 'game-resource-map)))
+  (make-instance 'game-resource-map
+                 :moniker (gethash "moniker" json)
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-script)))
+  (make-instance 'game-resource-script
+                 :moniker (gethash "moniker" json)
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-song)))
+  (make-instance 'game-resource-song
+                 :moniker (gethash "moniker" json)
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-blob)))
+  (make-instance 'game-resource-blob
+                 :moniker (gethash "moniker" json)
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-boat)))
+  (make-instance 'game-resource-boat
+                 :kind (gethash "kind" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-instrument)))
+  (make-instance 'game-resource-instrument
+                 :kind (gethash "kind" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-item)))
+  (make-instance 'game-resource-item
+                 :kind (gethash "kind" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-flag)))
+  (make-instance 'game-resource-flag
+                 :kind (gethash "kind" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-key)))
+  (make-instance 'game-resource-key
+                 :kind (gethash "kind" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-object-prototype)))
+  (make-instance 'game-resource-object-prototype
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-character)))
+  (make-instance 'game-resource-character
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-translation)))
+  (make-instance 'game-resource-translation
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-atari-vox-dictionary)))
+  (make-instance 'game-resource-atari-vox-dictionary
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-intellivoice-dictionary)))
+  (make-instance 'game-resource-intellivoice-dictionary
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-phrasebook)))
+  (make-instance 'game-resource-phrasebook
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-class)))
+  (make-instance 'game-resource-class
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-tileset)))
+  (make-instance 'game-resource-tileset
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-sprite-sheet)))
+  (make-instance 'game-resource-sprite-sheet
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-routine)))
+  (make-instance 'game-resource-routine
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-routine-forth-library)))
+  (make-instance 'game-resource-routine-forth-library
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+(defmethod resource-from-json (json (class (eql 'game-resource-routine-run-commands)))
+  (make-instance 'game-resource-routine-run-commands
+                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                           (gethash "kind" json))
+                 :full-path (gethash "path" json)))
+
+;; ============================================================================
+;; write-resource-ps-content methods for all concrete resource classes
+;; ============================================================================
+
+(defmethod write-resource-ps-content ((resource game-resource-map) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Moniker: ~a) show~%" (escape-ps-string (game-asset-moniker resource)))
+  (format ps "56 545 moveto~%")
+  (format ps "(Locale: ~a) show~%" (escape-ps-string (or (game-resource-locale resource) "N/A"))))
+
+(defmethod write-resource-ps-content ((resource game-resource-script) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Moniker: ~a) show~%" (escape-ps-string (game-asset-moniker resource)))
+  (format ps "56 545 moveto~%")
+  (format ps "(Locale: ~a) show~%" (escape-ps-string (or (game-resource-locale resource) "N/A"))))
+
+(defmethod write-resource-ps-content ((resource game-resource-song) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Moniker: ~a) show~%" (escape-ps-string (game-asset-moniker resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-blob) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Moniker: ~a) show~%" (escape-ps-string (game-asset-moniker resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-boat) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-instrument) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-item) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-flag) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-key) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-object-prototype) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-character) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-translation) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-atari-vox-dictionary) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-intellivoice-dictionary) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-phrasebook) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-class) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-tileset) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-sprite-sheet) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-routine) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-routine-forth-library) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
+
+(defmethod write-resource-ps-content ((resource game-resource-routine-run-commands) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
+  (format ps "56 560 moveto~%")
+  (format ps "(Locator: ~a) show~%" (escape-ps-string (game-resource-locator resource))))
 

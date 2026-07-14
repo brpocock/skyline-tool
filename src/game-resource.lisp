@@ -1,60 +1,178 @@
 (in-package :skyline-tool)
 
-(defun generate-default-moniker (class)
-  "Generate a default moniker from the class name."
-  (let ((class-name (symbol-name class)))
-    (substitute #\_ #\- (string-downcase class-name))))
+#|
+
+Every  (most-specific subclass)  resource  class  should specialize  the
+necessary methods for at a minimum:
+
+- A Start-RESOURCE-Scavenger function which  both finds  resources from
+the  filesystem and  any files  necessary (e.g.  spreadsheets or  list
+files)  and sents  eventbus notifications  about their  existence, but
+also sets up inotify waits to signal eventbus if they change;
+
+- An Open-RESOURCE-Inspector  function which opens the  inspector window
+in  editing mode  by  default  for the  specific  RESOURCE kind,  i.e.
+with  the required  specific  menu items  and  presentations for  that
+RESOURCE class;  if passed a NIL  or no argument, opens  editing a new
+resource that will be created if the user selects RESOURCE > Save from
+the menu
+
+- Specializations on the icon, title, subheading, locator, as needed;
+
+- Full documentation in the manual  of the Inspector window, all fields,
+and cross-references to the canonical explanations of the object being
+edited in  the game systems.  This should be on  a new node  with page
+breaks, and should explain the functioning of each menu item, shortcut
+keys,  editing  gadgets,  validations or  restrictions  upon  editing,
+requirements and &c &c
+
+- Any attempt  to reference a "moniker"  on something other than  a game
+asset is an error and such code will always be rejected.
+
+|#
 
 (defclass game-resource ()
-  ((moniker :initarg :moniker :reader game-resource-moniker :initform nil)
-   (kind :initarg :kind :reader game-resource-kind)))
+  ()
+  (:documentation "Base class for all game resources. Kind is determined by class."))
 
-(defmethod initialize-instance :after ((resource game-resource) &key)
-  (when (null (slot-boundp resource 'moniker))
-    (setf (slot-value resource 'moniker)
-          (generate-default-moniker (class-of resource)))))
+;; game-resource-moniker is ONLY for game-resource-asset subclasses.
+;; Use game-resource-locator for identification of all resource types.
 
 ;; Resources that are stored in their own individual files
 (defclass game-resource-from-file (game-resource)
-  ((full-path :initarg :full-path :reader game-resource-full-path)))
+  ((full-path :initarg :full-path :reader game-resource-full-path :initform nil)))
 
 ;; Resources that are stored as records in a collective file (e.g. Tables)
 (defclass game-resource-from-collective-file (game-resource)
-  ((collective-path :initarg :collective-path :reader game-resource-collective-path)
-   (offset :initarg :offset :reader game-resource-offset)))
+  ((collective-path :initarg :collective-path :reader game-resource-collective-path :initform nil)
+   (offset :initarg :offset :reader game-resource-offset :initform nil)))
 
 ;; Assets are a subset of from-file resources
 (defclass game-resource-asset (game-resource-from-file)
-  ((asset-id :initarg :asset-id :reader game-resource-asset-id)
+  ((moniker :initarg :moniker :reader game-asset-moniker :initform nil)
+   (asset-id :initarg :asset-id :reader game-resource-asset-id :initform nil)
    (builds :initarg :builds :reader game-resource-builds :initform nil)))
+
+(defmethod game-resource-builds ((resource game-resource))
+  nil)
+
+(defmethod game-resource-full-path ((resource game-resource))
+  nil)
 
 ;; Asset Sub-hierarchy
 (defclass game-resource-map (game-resource-asset)
-  ((locale :initarg :locale :reader game-resource-locale)))
+  ((locale :initarg :locale :accessor game-resource-locale)
+   (note :initarg :note :accessor game-resource-notes)
+   (full-name :initarg :full-name :accessor game-resource-name)))
 
 (defclass game-resource-script (game-resource-asset)
   ((locale :initarg :locale :reader game-resource-locale)))
 
-(defclass game-resource-song (game-resource-asset) ())
+(defclass game-resource-song (game-resource-asset)
+  ((mscz-title :initarg :mscz-title :accessor game-resource-song-mscz-title :initform nil)
+   (mscz-subtitle :initarg :mscz-subtitle :accessor game-resource-song-mscz-subtitle :initform nil)
+   (mscz-composer :initarg :mscz-composer :accessor game-resource-song-mscz-composer :initform nil)
+   (mscz-copyright :initarg :mscz-copyright :accessor game-resource-song-mscz-copyright :initform nil)
+   (mscz-lyrics :initarg :mscz-lyrics :accessor game-resource-song-mscz-lyrics :initform nil)))
 
 (defclass game-resource-blob (game-resource-asset) ())
 
 ;; Example of other resource types using the new structural classes
-(defclass game-resource-boat (game-resource-from-collective-file) ())
-(defclass game-resource-instrument (game-resource-from-collective-file) ())
-(defclass game-resource-item (game-resource-from-collective-file) ())
-(defclass game-resource-flag (game-resource-from-collective-file) ())
-(defclass game-resource-key (game-resource-from-collective-file) ())
+(defclass game-resource-boat (game-resource-from-collective-file)
+  ((boat-id :initarg :id :accessor game-resource-boat-id)
+   (boat-name :initarg :name :accessor game-resource-boat-name)
+   (boat-class :initarg :boat-class :accessor game-resource-boat-class)
+   (boat-notes :initarg :notes :accessor game-resource-notes)))
+
+(defclass game-resource-instrument (game-resource-from-collective-file)
+  ((instrument-id :initarg :instrument-id :reader game-resource-instrument-id)
+   (instrument-name :initarg :instrument :accessor game-resource-instrument-name)
+   (distortion :initarg :distortion :accessor game-resource-instrument-distortion)
+   (attack-addend :initarg :attack-addend :accessor game-resource-instrument-attack-addend)
+   (decay-subtrahend :initarg :decay-subtrahend :accessor game-resource-instrument-decay-subtrahend)
+   (decay-duration :initarg :decay-duration :accessor game-resource-instrument-decay-duration)
+   (release-subtrahend :initarg :release-subtrahend :accessor game-resource-instrument-release-subtrahend)
+   (tia-distortion :initarg :tia-distortion :accessor game-resource-instrument-tia-distortion)
+   (vibrato :initarg :vibrato :accessor game-resource-instrument-vibrato)
+   (tremolo :initarg :tremolo :accessor game-resource-instrument-tremolo)
+   (psg-tone :initarg :psg-tone :accessor game-resource-instrument-psg-tone)))
+
+(defclass game-resource-item (game-resource-from-collective-file)
+  (   (item-id :initarg :item-id :reader game-resource-item-id)
+   (name :initarg :name :accessor game-resource-item-name :initform nil)
+   (equippable-p :initarg :equippable-p :accessor game-resource-item-equippable-p :initform nil)
+   (equipment-slot :initarg :slot :accessor game-resource-item-equipment-slot :initform nil)
+   (sound :initarg :sound :accessor game-resource-item-sound :initform nil)
+   (entity-class :initarg :entity-class :accessor game-resource-item-entity-class :initform nil)
+   (entity-prototype :initarg :entity-prototype :accessor game-resource-item-entity-prototype :initform nil)
+   (course-class :initarg :course-class :accessor game-resource-course-class :initform nil)
+   (course-prototype :initarg :course-prototype :accessor game-resource-course-protoype :initform nil)
+   (decal-bank :initarg :decal-bank :accessor game-resource-decal-bank :initform nil)
+   (decal-sheet :initarg :decal-sheet :accessor game-resource-decal-sheet :initform nil)
+   (decal-up :initarg :decal-up :accessor game-resource-decal-up :initform nil)
+   (decal-down :initarg :decal-down :accessor game-resource-decal-down :initform nil)
+   (decal-right :initarg :decal-right :accessor game-resource-decal-right :initform nil)
+   (decal-left :initarg :decal-left :accessor game-resource-decal-left :initform nil)
+   (drawing-mode :initarg :drawing-mode :accessor game-resource-item-drawing-mode :initform nil)
+   (palette :initarg :palette :accessor game-resource-item-palette :initform nil)
+   (displacement-up :initarg :displacement-up :accessor game-resource-item-displacement-up :initform nil)
+   (displacement-down :initarg :displacement-down :accessor game-resource-item-displacement-down :initform nil)
+   (displacement-right :initarg :displacement-right :accessor game-resource-item-displacement-right :initform nil)
+   (displacement-left :initarg :displacement-left :accessor game-resource-item-displacement-left :initform nil)))
+
+(defclass game-resource-flag (game-resource-from-collective-file)
+  ((flag-id :initarg :flag-id :reader game-resource-flag-id)
+   (name :initarg :name :accessor game-resource-flag-name)))
+
+(defclass game-resource-key (game-resource-from-collective-file)
+  ((key-id :initarg :key-id :reader game-resource-key-id :initform nil)
+   (name :initarg :name :accessor game-resource-key-name :initform nil)))
 
 (defclass game-resource-object-prototype (game-resource-from-file) ())
 
-(defclass game-resource-character (game-resource-from-file) ())
+(defclass game-resource-character (game-resource-from-file)
+  ((character-name :initarg :name :accessor game-resource-character-name)
+   (character-id :initarg :character-id :reader game-resource-character-id)
+   (decal :initarg :decal :accessor game-resource-character-decal)
+   (gender :initarg :gender :accessor game-resource-character-gender)
+   (hp :initarg :hp :accessor game-resource-character-hp)
+   (max-hp :initarg :max-hp :accessor game-resource-character-max-hp)
+   (ac :initarg :ac :accessor game-resource-character-ac)
+   (hair-color :initarg :hair-color :accessor game-resource-character-hair-color)
+   (skin-color :initarg :skin-color :accessor game-resource-character-skin-color)
+   (clothes-color :initarg :clothes-color :accessor game-resource-character-clothes-color)
+   (head :initarg :head :accessor game-resource-character-head)
+   (body :initarg :body :accessor game-resource-character-body)
+   (speech-pitch :initarg :speech-pitch :accessor game-resource-character-speech-pitch)
+   (speech-speed :initarg :speech-speed :accessor game-resource-character-speech-speed)
+   (speech-bend :initarg :speech-bend :accessor game-resource-character-speech-bend)
+   (speech-color :initarg :speech-color :accessor game-resource-character-speech-color)
+   (nicks :initarg :nicks :accessor game-resource-character-nicks)
+   (memo :initarg :memo :accessor game-resource-character-memo :initform nil)
+   (equipment :initarg :equipment :accessor game-resource-character-equipment)
+   (shield :initarg :shield :accessor game-resource-character-shield)
+   (crowns :initarg :crowns :accessor game-resource-character-crowns)
+   (arrows :initarg :arrows :accessor game-resource-character-arrows)
+   (potions :initarg :potions :accessor game-resource-character-potions)
+   (chalice :initarg :chalice :accessor game-resource-character-chalice)))
 
 (defclass game-resource-translation (game-resource-from-file) ())
-(defclass game-resource-phonetic-dictionary (game-resource-translation) ())
+(defclass game-resource-phonetic-dictionary (game-resource-translation)
+  ((word :initarg :word :accessor game-translation-word)
+   (phonetics :initarg :phonetics :accessor game-translation-phonetics)
+   (language :initarg :language :accessor game-translation-language)
+   (dialect :initarg :dialect :accessor game-translation-dialect)
+   (comment-before :initarg :comment-before :accessor game-translation-comments)))
+
 (defclass game-resource-atari-vox-dictionary (game-resource-phonetic-dictionary) ())
 (defclass game-resource-intellivoice-dictionary (game-resource-phonetic-dictionary) ())
-(defclass game-resource-phrasebook (game-resource-translation) ())
+(defclass game-resource-magic-desk-dictionary (game-resource-phonetic-dictionary) ())
+(defclass game-resource-phrasebook (game-resource-translation)
+  ((english-key :initarg :english-key :accessor game-translation-english-key)
+   (translation :initarg :translation :accessor game-translation-translation)
+   (language :initarg :language :accessor game-translation-language)
+   (dialect :initarg :dialect :accessor game-translation-dialect)
+   (comment-before :initarg :comment-before :accessor game-translation-comments)))
 
 (defclass game-resource-class (game-resource-from-file) ())
 
@@ -126,7 +244,26 @@
   (format nil "$~4,'0x" (game-resource-asset-id resource)))
 
 (defmethod game-resource-locator ((resource game-resource-tileset))
-  (format nil "$~2,'0x:~4,'0x" :fixme :fixme))
+  (let* ((name (when (typep resource 'game-resource-from-file)
+                  (pathname-name (game-resource-full-path resource))))
+         (name-string (and name (if (symbolp name) (symbol-name name) name)))
+         (lower (and name-string (string-downcase name-string))))
+    (cond
+      ((and lower (search "common decals" lower))
+       "$a800")
+      (t
+       (let* ((tileset-alist (and (boundp '*project.json*)
+                                  (assocdr :tilesets *project.json*)))
+              (key (and name (intern (string-upcase name) :keyword)))
+              (bank (and key tileset-alist
+                         (cdr (assoc key tileset-alist))))
+              (address (cond
+                         ((and lower (search "decal" lower))
+                          #xa000)
+                         ((and lower (search "tileset" lower))
+                          #x8000)
+                         (t #x8000))))
+         (format nil "$~2,'0x:~4,'0x" (or bank 0) address))))))
 
 (defgeneric present-reference (resource stream)
   (:documentation "Present resource in reference context (icon, title, info, id, build checks).")
@@ -166,6 +303,7 @@
   (:method ((resource game-resource) stream)
     (let ((display-name (game-resource-title resource))
           (kind (game-resource-kind resource))
+          (locator (game-resource-locator resource))
           (full-path (if (typep resource 'game-resource-from-file)
                          (game-resource-full-path resource)
                          nil))
@@ -176,8 +314,7 @@
                       (game-resource-builds resource)
                       nil))
           (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                         (game-resource-collective-path resource))))
-          (moniker (game-resource-moniker resource)))
+                                         (game-resource-collective-path resource)))))
       (clim:formatting-table (stream)
         (clim:formatting-row (stream)
           (clim:formatting-cell (stream :align-x :right)
@@ -189,6 +326,12 @@
             (format stream "Kind: "))
           (clim:formatting-cell (stream :align-x :left)
             (princ kind stream)))
+        (when (and locator (not (string= locator "")))
+          (clim:formatting-row (stream)
+            (clim:formatting-cell (stream :align-x :right)
+              (format stream "Locator: "))
+            (clim:formatting-cell (stream :align-x :left)
+              (princ locator stream))))
         (when full-path
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream :align-x :right)
@@ -212,22 +355,16 @@
             (clim:formatting-cell (stream :align-x :right)
               (format stream "VC Status: "))
             (clim:formatting-cell (stream :align-x :left)
-              (princ vc-status stream))))
-        ;; ERROR: ONLY for Assets, not other Resources.
-        (clim:formatting-row (stream)
-          (clim:formatting-cell (stream :align-x :right)
-            (format stream "Moniker: "))
-          (clim:formatting-cell (stream :align-x :left)
-            (princ moniker stream)))))))
+              (princ vc-status stream))))))))
 
 (defgeneric present-editing (resource stream)
   (:documentation "Present resource in editing context with tabular layout: labels on left, editing gadgets on right.")
   (:method ((resource game-resource) stream)
     (let ((display-name (game-resource-title resource))
           (kind (game-resource-kind resource))
+          (locator (game-resource-locator resource))
           (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                         (game-resource-collective-path resource))))
-          (moniker (game-resource-moniker resource)))
+                                         (game-resource-collective-path resource)))))
       (clim:formatting-table (stream)
         ;; Name (editable)
         (clim:formatting-row (stream)
@@ -241,6 +378,12 @@
             (format stream "Kind: "))
           (clim:formatting-cell (stream :align-x :left)
             (format stream "~a (read-only)" kind)))
+        (when (and locator (not (string= locator "")))
+          (clim:formatting-row (stream)
+            (clim:formatting-cell (stream :align-x :right)
+              (format stream "Locator: "))
+            (clim:formatting-cell (stream :align-x :left)
+              (princ locator stream))))
         (clim:formatting-row (stream)
           (clim:formatting-cell (stream :align-x :right)
             (format stream "Path~p: " (length (game-resource-pathnames resource))))
@@ -266,12 +409,7 @@
             (clim:formatting-cell (stream :align-x :right)
               (format stream "VC Status: "))
             (clim:formatting-cell (stream :align-x :left)
-              (princ vc-status stream))))
-        (clim:formatting-row (stream)
-          (clim:formatting-cell (stream :align-x :right)
-            (format stream "Moniker: "))
-          (clim:formatting-cell (stream :align-x :left)
-            (princ moniker stream)))))))
+              (princ vc-status stream))))))))
 
 (defun game-resource-to-json (resource)
   "Convert resource to JSON for detail view."
@@ -385,7 +523,7 @@ resource view mode (reference/reading/editing).")
       (let ((*standard-output* pane))
         (format pane " ~a | ~a | View: ~a"
                 (game-resource-kind resource)
-                (game-resource-moniker resource)
+                (game-resource-title resource)
                 (string-downcase (symbol-name (frame-view-mode frame))))))))
 
 ;; Inspector commands
@@ -399,7 +537,7 @@ resource view mode (reference/reading/editing).")
          (resource (and frame (inspector-resource frame))))
     (when resource
       (save-resource resource)
-      (format t "~&Saved ~a~%" (game-resource-moniker resource))
+      (format t "~&Saved ~a~%" (game-resource-title resource))
       (clim:redisplay-frame-panes frame))))
 
 (clim:define-command (com-inspector-save-as :command-table resource-inspector-menu-bar
@@ -410,7 +548,7 @@ resource view mode (reference/reading/editing).")
       (let ((new-path (clim:accept 'pathname :prompt "Save as:" :default (game-resource-full-path resource))))
         (when new-path
           (save-resource-as resource new-path)
-          (format t "~&Saved ~a as ~a~%" (game-resource-moniker resource) new-path)
+          (format t "~&Saved ~a as ~a~%" (game-resource-title resource) new-path)
           (clim:redisplay-frame-panes frame))))))
 
 (clim:define-command (com-inspector-undo :command-table resource-inspector-menu-bar
@@ -450,6 +588,134 @@ resource view mode (reference/reading/editing).")
   (:method ((resource game-resource) new-path)
     (format t "~&Saving ~a as ~a... (default implementation - no-op)" (type-of resource) new-path)))
 
+;;; --- save-resource specializations for all concrete resource classes ---
+
+(defmethod save-resource ((resource game-resource-map))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-script))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-song))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-blob))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-object-prototype))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-character))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-class))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-tileset))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-sprite-sheet))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-translation))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-atari-vox-dictionary))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-intellivoice-dictionary))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-phrasebook))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-routine))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-routine-forth-library))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-routine-run-commands))
+  (format t "~&Saving ~a to ~a...~%"
+          (game-resource-title resource)
+          (game-resource-full-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-boat))
+  (format t "~&Saving ~a (collective file: ~a)...~%"
+          (game-resource-title resource)
+          (game-resource-collective-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-instrument))
+  (format t "~&Saving ~a (collective file: ~a)...~%"
+          (game-resource-title resource)
+          (game-resource-collective-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-item))
+  (format t "~&Saving ~a (collective file: ~a)...~%"
+          (game-resource-title resource)
+          (game-resource-collective-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-flag))
+  (format t "~&Saving ~a (collective file: ~a)...~%"
+          (game-resource-title resource)
+          (game-resource-collective-path resource))
+  (publish-resource-changed resource))
+
+(defmethod save-resource ((resource game-resource-key))
+  (format t "~&Saving ~a (collective file: ~a)...~%"
+          (game-resource-title resource)
+          (game-resource-collective-path resource))
+  (publish-resource-changed resource))
+
 (defun kind->resource-class (kind-name)
   "Map a kind-name string to the appropriate game-resource class."
   (let ((key (ignore-errors (kind-by-name kind-name))))
@@ -472,38 +738,40 @@ resource view mode (reference/reading/editing).")
       ((eql key :translation) 'game-resource-translation)
       ((eql key :atari-vox-dictionary) 'game-resource-atari-vox-dictionary)
       ((eql key :intellivoice-dictionary) 'game-resource-intellivoice-dictionary)
+      ((eql key :magic-desk-dictionary) 'game-resource-magic-desk-dictionary)
+      ((eql key :phrasebook) 'game-resource-phrasebook)
       (t 'game-resource))))
 
 (defun make-game-resource (moniker builds kind-name
                            asset-id hex-str present-p full-path)
   "Create a game-resource object from collected asset data."
-  (let* ((class (kind->resource-class kind-name))
-         (initargs (list :moniker moniker :kind kind-name)))
+  (let* ((class (kind->resource-class kind-name)))
     (cond
       ((subtypep class 'game-resource-asset)
-       (let ((extra-args '()))
-         (when (eql class 'game-resource-map)
-           (let ((parts (split-sequence #\/ moniker)))
-             (when (> (length parts) 2)
-               (setf extra-args (list :locale (second parts))))))
-         (when (eql class 'game-resource-script)
-           (let ((parts (split-sequence #\/ moniker)))
-             (when (> (length parts) 2)
-               (setf extra-args (list :locale (second parts))))))
+       (let ((initargs (list :moniker moniker))
+             (extra-args '()))
+        (when (eql class 'game-resource-map)
+          (let ((parts (split-sequence #\/ moniker)))
+            (when (> (length parts) 2)
+              (setf extra-args (list :locale (second parts))))))
+        (when (eql class 'game-resource-script)
+          (let ((parts (split-sequence #\/ moniker)))
+            (when (> (length parts) 2)
+              (setf extra-args (list :locale (second parts))))))
          (when (eql class 'game-resource-blob)
-           (setf extra-args (list :machine (machine-directory-name))))
-         (let ((base-args (list :full-path full-path
+           (setf extra-args nil))
+        (let ((base-args (list :full-path full-path
                                 :asset-id asset-id
                                 :hex-str hex-str
                                 :builds builds)))
-           (apply #'make-instance class
-                  (append initargs base-args extra-args)))))
+          (apply #'make-instance class
+                 (append initargs base-args extra-args)))))
       ((subtypep class 'game-resource-from-file)
-       (make-instance class :moniker moniker :kind kind-name :full-path full-path))
+       (make-instance class :full-path full-path))
       ((subtypep class 'game-resource-from-collective-file)
-        (make-instance class :moniker moniker :kind kind-name :collective-path full-path))
+       (make-instance class :collective-path full-path))
       (t
-        (make-instance 'game-resource :moniker moniker :kind kind-name)))))
+       (make-instance class)))))
 
 (defun fixme-interactive-editing-gadget-with-validation (stream resource slot)
   "Fallback: display the slot value as text since interactive editing isn't available."
@@ -513,11 +781,14 @@ resource view mode (reference/reading/editing).")
   (:documentation "Return a list of filesystem paths for RESOURCE based on its type."))
 
 (defmethod game-resource-pathnames ((resource game-resource))
-  "Default: treat as JSON file."
-  (list (format nil "Source/~a.json" (game-resource-moniker resource))))
+  "Default: return the full-path if available."
+  (when (typep resource 'game-resource-from-file)
+    (let ((path (game-resource-full-path resource)))
+      (when path
+        (list path)))))
 
 (defmethod game-resource-pathnames ((resource game-resource-script))
-  (let* ((moniker (game-resource-moniker resource))
+  (let* ((moniker (game-asset-moniker resource))
          (parts (split-sequence #\/ moniker))
          (region (if (< 1 (length parts))
                      (string-capitalize (second parts))
@@ -527,12 +798,12 @@ resource view mode (reference/reading/editing).")
                   (last parts)))))
 
 (defmethod game-resource-pathnames ((resource game-resource-song))
-  (let ((moniker (game-resource-moniker resource))
-        (parts (split-sequence #\/ (game-resource-moniker resource))))
+  (let* ((moniker (game-asset-moniker resource))
+         (parts (split-sequence #\/ moniker)))
     (list (format nil "Source/Songs/~a.mscz" (last parts)))))
 
 (defmethod game-resource-pathnames ((resource game-resource-map))
-  (let* ((moniker (game-resource-moniker resource))
+  (let* ((moniker (game-asset-moniker resource))
          (parts (split-sequence #\/ moniker))
          (region (if (< 2 (length parts))
                      (string-capitalize (second parts))
@@ -541,68 +812,171 @@ resource view mode (reference/reading/editing).")
           "Source/Tables/MapsIndex.ods")))
 
 (defmethod game-resource-pathnames ((resource game-resource-tileset))
-  (let* ((moniker (game-resource-moniker resource))
-         (parts (split-sequence #\/ moniker))
-         (name (last parts)))
-    (list (format nil "Source/Maps/Tiles/~a.tsx" name)
-          (format nil "Source/Maps/Tiles/~a/~a.xcf"
-                  (machine-directory-name)
-                  name))))
+  (let ((full-path (game-resource-full-path resource)))
+    (if full-path
+        (list full-path)
+        nil)))
 
 (defmethod game-resource-pathnames ((resource game-resource-blob))
-  (let ((moniker (game-resource-moniker resource))
-        (parts (split-sequence #\/ (game-resource-moniker resource))))
+  (let* ((moniker (game-asset-moniker resource))
+         (parts (split-sequence #\/ moniker)))
     (list (format nil "Source/Blobs/~a/~a.xcf"
                   (machine-directory-name)
                   (last parts)))))
 
 (defmethod game-resource-pathnames ((resource game-resource-sprite-sheet))
-  (let ((moniker (game-resource-moniker resource))
-        (parts (split-sequence #\/ (game-resource-moniker resource))))
-    (list (format nil "Source/Art/~a.art" (last parts)))))
+  (list (game-resource-full-path resource)))
 
 (defmethod game-resource-pathnames ((resource game-resource-character))
   (list "Source/Tables/NPCStats.ods"))
 
 (defmethod game-resource-pathnames ((resource game-resource-object-prototype))
-  (let ((moniker (game-resource-moniker resource))
-        (parts (split-sequence #\/ (game-resource-moniker resource))))
-    (list (format nil "Source/Objects/~a.json" (last parts)))))
+  (list (game-resource-full-path resource)))
 
 (defmethod game-resource-pathnames ((resource game-resource-class))
-  (let ((moniker (game-resource-moniker resource))
-        (parts (split-sequence #\/ (game-resource-moniker resource))))
-    (list (format nil "Source/Classes/~a.cob" (last parts)))))
+  (list (game-resource-full-path resource)))
 
 (defmethod game-resource-pathnames ((resource game-resource-routine))
-  (let* ((moniker (game-resource-moniker resource))
-         (parts (split-sequence #\/ moniker))
-         (name (last parts)))
-    (list (format nil "Source/Routines/~a.bas" name)
-          (format nil "Source/Routines/~a.pas" name)
-          (format nil "Source/Routines/~a.cob" name))))
+  (list (game-resource-full-path resource)))
 
 ;; Items/Equipment/Flags/Keys all come from the same ODS file
 (defmethod game-resource-pathnames ((resource game-resource-item))
-  (list "Source/Tables/EquipmentIndex.ods"))
+  (list (game-resource-collective-path resource)))
 (defmethod game-resource-pathnames ((resource game-resource-flag))
-  (list "Source/Tables/EquipmentIndex.ods"))
+  (list (game-resource-collective-path resource)))
 (defmethod game-resource-pathnames ((resource game-resource-key))
-  (list "Source/Tables/EquipmentIndex.ods"))
+  (list (game-resource-collective-path resource)))
 (defmethod game-resource-pathnames ((resource game-resource-boat))
-  (list (format nil "Source/SpecialResources/~a" (game-resource-moniker resource))))
+  (list (game-resource-collective-path resource)))
 
 (defmethod game-resource-pathnames ((resource game-resource-instrument))
-  (list (format nil "Source/SpecialResources/~a" (game-resource-moniker resource))))
+  (list (game-resource-collective-path resource)))
 
 (defmethod game-resource-title ((resource game-resource-class))
-  (format nil "Class: ~a" (game-resource-moniker resource)))
+  (format nil "Class: ~a" (game-resource-locator resource)))
 
 (defmethod game-resource-subheading ((resource game-resource-class))
   "COBOL Class Definition")
 
 (defmethod game-resource-collective-path ((resource game-resource-class))
   "Source/Classes")
+
+;; Base fallback methods for game-resource
+(defmethod game-resource-title ((resource game-resource))
+  (title-case (pathname-name (first (game-resource-pathnames resource)))))
+
+(defmethod game-resource-subheading ((resource game-resource))
+  "")
+
+;; --- game-resource-locator methods for non-asset types ---
+
+(defmethod game-resource-locator ((resource game-resource-item))
+  (let ((item-id (game-resource-item-id resource)))
+    (if item-id (format nil "$~2,'0x" item-id) "$00")))
+
+(defmethod game-resource-locator ((resource game-resource-boat))
+  (let ((boat-id (game-resource-boat-id resource)))
+    (if boat-id (format nil "$~2,'0x" boat-id) "$00")))
+
+(defmethod game-resource-locator ((resource game-resource-instrument))
+  (let ((inst-id (game-resource-instrument-id resource)))
+    (if inst-id (format nil "$~2,'0x" inst-id) "$00")))
+
+(defmethod game-resource-locator ((resource game-resource-flag))
+  (let ((flag-id (game-resource-flag-id resource)))
+    (if flag-id (format nil "$~2,'0x" flag-id) "$00")))
+
+(defmethod game-resource-locator ((resource game-resource-key))
+  (let ((key-id (game-resource-key-id resource)))
+    (if key-id (format nil "$~2,'0x" key-id) "$00")))
+
+(defmethod game-resource-locator ((resource game-resource-character))
+  (let ((char-id (game-resource-character-id resource)))
+    (if char-id (format nil "$~2,'0x" char-id) "$00")))
+
+;; --- Asset title methods (use game-asset-moniker) ---
+
+(defmethod game-resource-subheading ((resource game-resource-map))
+  (game-resource-map-notes resource))
+
+(defmethod game-resource-subheading ((resource game-resource-song))
+  (format nil "~a ~a ~@[(~a)~]"
+          (game-resource-song-mscz-title resource)
+          (game-resource-song-mscz-subtitle resource)
+          (game-resource-song-mscz-composer resource)))
+
+(defmethod game-resource-title ((resource game-resource-boat))
+  (game-resource-boat-name resource))
+
+(defmethod game-resource-subheading ((resource game-resource-boat))
+  (game-resource-boat-class resource))
+
+(defmethod game-resource-title ((resource game-resource-instrument))
+  (game-resource-instrument-name resource))
+
+(defmethod game-resource-title ((resource game-resource-item))
+  (game-resource-item-name resource))
+
+(defmethod game-resource-subheading ((resource game-resource-item))
+  (let ((proto (game-resource-item-entity-prototype resource)))
+    (when proto (format nil "~a" proto))))
+
+(defmethod game-resource-title ((resource game-resource-flag))
+  (game-resource-flag-name resource))
+
+(defmethod (setf game-resource-title) (value (resource game-resource-flag))
+  (setf (game-resource-flag-name resource) value))
+
+(defmethod game-resource-title ((resource game-resource-key))
+  (game-resource-key-name resource))
+
+(defmethod (setf game-resource-title) (value (resource game-resource-key))
+  (setf (game-resource-key-name resource) value))
+
+(defmethod game-resource-title ((resource game-resource-object-prototype))
+  (format nil "Object Prototype: ~a" (game-resource-locator resource)))
+
+(defmethod game-resource-subheading ((resource game-resource-object-prototype))
+  "Object Prototype Definition")
+
+(defmethod game-resource-title ((resource game-resource-character))
+  (game-resource-character-name resource))
+
+(defmethod game-resource-subheading ((resource game-resource-character))
+  (game-resource-character-memo resource))
+
+;; Translation resources
+
+(defmethod game-resource-title ((resource game-resource-atari-vox-dictionary))
+  "SpeakJet.dic")
+
+(defmethod game-resource-subheading ((resource game-resource-atari-vox-dictionary))
+  "U.S. English")
+
+(defmethod game-resource-title ((resource game-resource-intellivoice-dictionary))
+  "IntelliVoice.doc")
+
+(defmethod game-resource-subheading ((resource game-resource-intellivoice-dictionary))
+  "U.S. English")
+
+(defmethod game-resource-title ((resource game-resource-phrasebook))
+  (game-translation-english-key resource))
+
+(defmethod game-resource-subheading ((resource game-resource-phrasebook))
+  (game-translation-language resource))
+
+;; Routine resources
+(defmethod game-resource-subheading ((resource game-resource-routine-forth-library))
+  "Forth Library")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-cobol))
+  "COBOL Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-basic))
+  "BASIC Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-pascal))
+  "Pascal Run-Commands Routine")
 
 (defgeneric game-resource-title (resource))
 (defgeneric game-resource-subheading (resource))
@@ -612,7 +986,35 @@ resource view mode (reference/reading/editing).")
                  (game-resource-title resource)
                  " "
                  (game-resource-subheading resource))))
-(defgeneric game-resource-last-updated (resource))
+
+(defmethod file-name-and-contents ((resource game-resource-from-file))
+  (concatenate 'string
+               (game-resource-title resource)
+               " "
+               (read-file-into-string (first (game-resource-pathnames resource)))))
+
+(defmethod game-resource-full-text ((resource game-resource-script))
+  (file-name-and-contents resource))
+
+(defmethod game-resource-full-text ((resource game-resource-routine))
+  (file-name-and-contents resource))
+
+(defmethod game-resource-full-text ((resource game-resource-song))
+  (let ((parts (list (game-resource-title resource)
+                     (game-resource-subheading resource))))
+    (when (game-resource-song-mscz-composer resource)
+      (push (game-resource-song-mscz-composer resource) parts))
+    (when (game-resource-song-mscz-copyright resource)
+      (push (game-resource-song-mscz-copyright resource) parts))
+    (when (game-resource-song-mscz-lyrics resource)
+      (push (game-resource-song-mscz-lyrics resource) parts))
+    (format nil "~{~a~^ ~}" (nreverse parts))))
+
+(defgeneric game-resource-last-updated (resource)
+  (:method ((resource game-resource-from-file))
+    (file-write-date (first (game-resource-pathnames resource))))
+  (:method ((resource game-resource-from-collective-file))
+    (file-write-date (first (game-resource-pathnames resource)))))
 (defgeneric game-resource-version-control-status (resource))
 (defgeneric game-resource-locator (resource))
 (defgeneric game-resource-asset-p (resource)
@@ -622,10 +1024,27 @@ resource view mode (reference/reading/editing).")
 (defgeneric game-resource-present-reference (resource stream))
 (defgeneric game-resource-present-editing (resource stream))
 (defgeneric game-resource-kind (resource)
-  (:method ((resource game-resource))
-    (format nil "~{~:(~a~^ ~)~}" (subseq (split-sequence #\- (string (class-name (class-of resource)))) 2))))
+  (:method ((resource game-resource-blob)) :blob)
+  (:method ((resource game-resource-map)) :map)
+  (:method ((resource game-resource-script)) :script)
+  (:method ((resource game-resource-song)) :song)
+  (:method ((resource game-resource-tileset)) :tileset)
+  (:method ((resource game-resource-sprite-sheet)) :sprite-sheet)
+  (:method ((resource game-resource-character)) :character)
+  (:method ((resource game-resource-object-prototype)) :object-prototype)
+  (:method ((resource game-resource-class)) :class)
+  (:method ((resource game-resource-routine)) :routine)
+  (:method ((resource game-resource-routine-forth-library)) :routine)
+  (:method ((resource game-resource-routine-run-commands)) :routine)
+  (:method ((resource game-resource-boat)) :boat)
+  (:method ((resource game-resource-instrument)) :instrument)
+  (:method ((resource game-resource-item)) :item)
+  (:method ((resource game-resource-flag)) :flag)
+  (:method ((resource game-resource-key)) :key)
+  (:method ((resource game-resource-atari-vox-dictionary)) :phonetic-dictionary)
+  (:method ((resource game-resource-intellivoice-dictionary)) :phonetic-dictionary)
+  (:method ((resource game-resource-phrasebook)) :translation))
 (defgeneric game-resource-depends-upon-resources (resource))
-
 
 (defvar *resource-scavenger-thread* nil)
 
@@ -663,30 +1082,33 @@ a method on this generic function. This provides the list of all scavengers to b
                           nil))
            (kind (when kind-name
                    (kind-by-name kind-name)))
+           (asset-type-p (member kind '(:map :script :song :blob)))
            (resource (when kind
-                       (make-instance
-                        (ecase kind
-                          (:atari-vox-dictionary 'game-resource-atari-vox-dictionary)
-                          (:blob 'game-resource-blob)
-                          (:boat 'game-resource-boat)
-                          (:character 'game-resource-character)
-                          (:class 'game-resource-class)
-                          (:flags 'game-resource-flag)
-                          (:instruments 'game-resource-instrument)
-                          (:items 'game-resource-item)
-                          (:keys 'game-resource-key)
-                          (:map 'game-resource-map)
-                          (:object-prototype 'game-resource-object-prototype)
-                          (:phrasebook 'game-resource-phrasebook)
-                          (:routine 'game-resource-routine)
-                          (:song 'game-resource-song)
-                          (:sprite-sheet 'game-resource-sprite-sheet)
-                          (:tileset 'game-resource-tileset)
-                          (:script 'game-resource-script))
-                        :moniker moniker
-                        :kind kind
-                        :asset-id (ignore-errors (get-asset-id kind (second (asset-kind/name moniker))))
-                        :builds builds))))
+                       (apply #'make-instance
+                              (ecase kind
+                                (:atari-vox-dictionary 'game-resource-atari-vox-dictionary)
+                                (:blob 'game-resource-blob)
+                                (:boat 'game-resource-boat)
+                                (:character 'game-resource-character)
+                                (:class 'game-resource-class)
+                                (:flags 'game-resource-flag)
+                                (:instruments 'game-resource-instrument)
+                                (:items 'game-resource-item)
+                                (:keys 'game-resource-key)
+                                (:map 'game-resource-map)
+                                (:object-prototype 'game-resource-object-prototype)
+                                (:phrasebook 'game-resource-phrasebook)
+                                (:routine 'game-resource-routine)
+                                (:script 'game-resource-script)
+                                (:song 'game-resource-song)
+                                (:sprite-sheet 'game-resource-sprite-sheet)
+                                (:tileset 'game-resource-tileset))
+                              (append
+                               (list :kind kind
+                                     :asset-id (ignore-errors (get-asset-id kind (second (asset-kind/name moniker))))
+                                     :builds builds)
+                               (when asset-type-p
+                                 (list :moniker moniker)))))))
       (when resource
         (cache-add-resource kind resource)
         (publish-resource-added resource)))))
@@ -694,4 +1116,22 @@ a method on this generic function. This provides the list of all scavengers to b
 ;; Add asset-index-scavenger to the scavenger list via :around method.
 (defmethod resource-scavenger-functions :around ()
   (cons #'asset-index-scavenger (call-next-method)))
+
+(defmethod open-resource-inspector ((resource game-resource-routine) &optional (mode :editing))
+  (clim:run-frame-top-level
+   (clim:make-application-frame 'gui-inspector-frame
+                                 :resource (or resource (make-instance 'game-resource-routine))
+                                :view-mode mode)))
+
+(defmethod open-resource-inspector ((resource game-resource-routine-forth-library) &optional (mode :editing))
+  (clim:run-frame-top-level
+   (clim:make-application-frame 'gui-inspector-frame
+                                 :resource (or resource (make-instance 'game-resource-routine-forth-library))
+                                :view-mode mode)))
+
+(defmethod open-resource-inspector ((resource game-resource-routine-run-commands) &optional (mode :editing))
+  (clim:run-frame-top-level
+   (clim:make-application-frame 'gui-inspector-frame
+                                 :resource (or resource (make-instance 'game-resource-routine-run-commands))
+                                :view-mode mode)))
 

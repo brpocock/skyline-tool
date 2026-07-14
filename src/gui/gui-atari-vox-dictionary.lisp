@@ -3,71 +3,122 @@
 
 (in-package :skyline-tool)
 
+#|
+
+Source/Tables/SpeakJet.dic - AtariVox Phonetic Dictionary
+
+Word
+-----
+New...
+Go to...
+---
+Save
+Save Dictionary as > HTML...
+Word Processing...
+Spreadsheet...
+PDF...
+Text...
+JSON...
+SpeakJet format...
+Version > [] Tracked
+[] Staged
+Send to > { p2p recipient list }
+Print to > { printer list }
+---
+Close
+
+Edit
+-----
+Cut
+Copy
+Paste
+
+
+View
+-----
+[] Editable
+---
+[] Project Bar
+
+Help
+-----
+How to Edit AtariVox Words...
+SpeakJet Phoneme Documentation...
+Skyline-Tool Developers' Guide...
+Skyline-Tool Scripting Guide...
+
+### Three panes (plus optional Project Bar pane below)
+### Top pane is the word being edited
+### Middle/Bottom pane is used to send the phonetics to AtariVox device
+### AtariVox preferences persist, and volume & serial port sync between
+### word inspectors as well as the character inspectors.
+
+Word: _______________                           # in Unicode
+
+Phonetic Spelling: ___________________          # in specific phonetic sequences only
+
+================================================= pane
+
+Pitch: <--------|--------> ____
+Bend:  <--------|--------> ____
+Speed: <--------|--------> ____
+
+Volume:<--------|--------> ____
+AtariVox on [ ttyUSB0 - ]              (Speak...)
+              $(all serial ports on USB)
+
+$(all phonetic sequences in a grid as a reminder)
+|#
+
+
 (clim:define-presentation-type game-resource-atari-vox-dictionary-reference ()
   :inherit-from 'game-resource-atari-vox-dictionary)
 
-(defmethod present-reference ((resource game-resource-atari-vox-dictionary) stream)
-  (clim:with-output-as-presentation
-      (stream resource 'game-resource-atari-vox-dictionary-reference)
-    (clim:formatting-table (stream)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
-          (format stream "~3%"))
-        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
-          (game-resource-present-icon resource stream))
-        ;; Title
-        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
-          (clim:with-text-face (stream :bold)
-            (game-resource-present-title resource stream))
-          ;; Subheading on next line in small, possibly gray text
-          (format stream "~%~5t")
-          (clim:with-text-size (stream :smaller)
-            (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
-              (game-resource-present-subheading resource stream))))
-        (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
-          (game-resource-present-right-margin resource stream))))))
-
 (defun open-atari-vox-dictionary-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-atari-vox-dictionary)) :editing))
+  (open-resource-inspector (or resource (make-instance 'game-resource-atari-vox-dictionary
+                                                       :kind "AtariVox Dictionary"
+                                                       :moniker "AtariVox Dictionary/SpeakJet.dic")) :editing))
 
-(defmethod present-reading ((resource game-resource) stream)
-  (let ((display-name (game-resource-title resource))
-        (kind (game-resource-kind resource))
-        (full-path (if (typep resource 'game-resource-from-file)
-                       (game-resource-full-path resource)
-                       nil))
-        (asset-id (if (typep resource 'game-resource-asset)
-                      (game-resource-asset-id resource)
-                      nil))
-        (builds (if (typep resource 'game-resource-asset)
-                    (game-resource-builds resource)
-                    nil))
-        ;; FIXME: only one of these methods is defined and only for some classes
-        (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                       (game-resource-collective-path resource))))
-        (moniker (game-resource-moniker resource)))
-    (clim:formatting-table (stream)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right)
-          (format stream "Title: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (format stream "~a" (game-resource-title resource)))))
-    (error "not implemented fully")))
+(defmethod open-resource-inspector ((resource game-resource-atari-vox-dictionary) &optional (mode :editing))
+  (open-atari-vox-dictionary-inspector resource))
 
-(defgeneric present-editing (resource stream))
+(defmethod present-reading ((resource game-resource-atari-vox-dictionary) stream)
+  (clim:formatting-table (stream)
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Word: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (format stream "~a" (game-resource-title resource))))
+    ;; Show the raw file content for reading
+    (when (typep resource 'game-resource-from-file)
+      (let ((path (game-resource-full-path resource)))
+        (when (and path (probe-file path))
+          (clim:formatting-row (stream)
+            (clim:formatting-cell (stream :align-x :right)
+              (format stream "Path: "))
+            (clim:formatting-cell (stream :align-x :left)
+              (format stream "~a" path))))))))
 
 (defmethod present-editing ((resource game-resource-atari-vox-dictionary) stream)
-  (let ((display-name (game-resource-title resource))
-        (kind (game-resource-kind resource))
-        (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                       (game-resource-collective-path resource))))
-        (moniker (game-resource-moniker resource)))
-    (clim:formatting-table (stream)
-      ;; Name (editable)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right)
-          (format stream "Name: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))
-      )
-    (error "Not Implemented")))
+  (clim:formatting-table (stream)
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Name: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Kind: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (format stream "~a (read-only)" (game-resource-kind resource))))
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Word: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (insert-gadget stream
+                       :label nil
+                       :variable (game-resource-title resource)
+                       :activation-callback
+                       (lambda (gadget)
+                         (declare (ignore gadget))
+                         (format t "~&AtariVox dictionary editing not yet saving to file~%")))))))

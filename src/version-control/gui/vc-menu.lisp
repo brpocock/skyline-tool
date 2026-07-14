@@ -106,14 +106,13 @@
 
 (defun show-vc-commit-dialog (file-path)
   "Show dialog to commit staged changes with a message"
-  (clim:accepting-values (stream)
-    (with-output-to-string (s)
-      (format s "Commit message for ~a:~%" file-path))
-    (let ((message (clim:accept 'string :prompt "Message" :default "Update")))
-      (when message
-        (let ((git (make-git-backend)))
-          (vc-add git (list file-path))
-          (vc-commit git message))))))
+  (let ((message (run-text-input-dialog (format nil "Commit message for ~a:" file-path)
+                                         :initial-value "Update"
+                                         :title "Commit")))
+    (when message
+      (let ((git (make-git-backend)))
+        (vc-add git (list file-path))
+        (vc-commit git message)))))
 
 ;;
 ;; Helper Functions
@@ -149,13 +148,12 @@
 
 (defun confirm-dialog (message confirm-fn &key default-action danger-action)
   "Show a confirmation dialog with default and danger actions"
-  (clim:accepting-values (stream)
-    (format stream "~a~%" message)
-    (let ((choice (clim:accept 'symbol :prompt "Action" 
-                               :default default-action
-                               :possibilities (list default-action danger-action))))
-      (when (eq choice danger-action)
-        (funcall confirm-fn)))))
+  (let ((confirmed (run-confirm-dialog message
+                                       :default-action default-action
+                                       :danger-action danger-action
+                                       :title "Confirm")))
+    (when confirmed
+      (funcall confirm-fn))))
 
 ;; Placeholder dialog classes
 (defclass vc-revert-dialog (clim:application-frame)

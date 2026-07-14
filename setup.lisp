@@ -66,16 +66,15 @@ invoking CONTINUE restart~%"
                                (type-of c))
                        (finish-output *error-output*)
                        (invoke-restart r)))))
-                (uiop/lisp-build:compile-file-error
-                  (lambda (c)
-                    (format *error-output*
-                            "~&Warning: compilation error in dependent system (~a), continuing...~%"
-                            c)
-                    (finish-output *error-output*)))))
-  (unless (ql:quickload :skyline-tool :silent t)
-    (format *error-output* "~&Fatal: skyline-tool failed to load.~%")
-    (finish-output *error-output*)
-    (uiop:quit 1))
+               (uiop/lisp-build:compile-file-error
+                 (lambda (c)
+                   (format *error-output*
+                           "~&Warning: compilation error in dependent system (~a), continuing...~%"
+                           c)
+                   (finish-output *error-output*)))))
+(unless (ql:quickload :skyline-tool :silent t)
+  (format *error-output* "~&Fatal: skyline-tool failed to load.~%")
+  (uiop:quit 1 t))
 
 (format t "… done.~2%")
 (finish-output)

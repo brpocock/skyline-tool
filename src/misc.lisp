@@ -1132,7 +1132,7 @@ then use $f9 (512kiB) banking."
     (let ((make-qp (uiop:run-program '("make" "-qp") :output :string
                                                      :ignore-error-status 1))
           (vars (make-hash-table :test 'equal)))
-      (loop for line in (split-string make-qp :separator #(#\newline))
+      (loop for line in (uiop:split-string make-qp :separator #(#\newline))
             when (and
                   (plusp (length line))
                   (char/= #\# (char line 0))
@@ -1173,7 +1173,7 @@ then use $f9 (512kiB) banking."
                (concatenate
                 'string
                 (subseq value 0 (search "$(shell" value))
-                (run-program
+                (uiop:run-program
                  (string-trim
                   #(#\space #\tab)
                   (subseq value
@@ -1192,12 +1192,12 @@ then use $f9 (512kiB) banking."
 
 (defun ensure-bin/64tass-exists ()
   (unless (probe-file "bin/64tass")
-    (run-program '("make" "bin/64tass"))))
+    (uiop:run-program '("make" "bin/64tass"))))
 
 (defun error-output-from-compiling (temp-name)
   (second
    (multiple-value-list
-    (run-program
+    (uiop:run-program
      (concatenate 'string
                   "bin/64tass "
                   (make-var-actual-value "AS2600" (get-make-vars))

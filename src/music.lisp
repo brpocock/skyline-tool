@@ -1158,7 +1158,7 @@ Gathered text:~{~% • ~a~}"
               (char= #\; (first-elt (string-trim #(#\Space #\Tab) line))))
       (return-from import-music-for-playlist nil))
     (destructuring-bind (symbol-name$ midi-file-name$)
-        (split-string line :separator "=")
+        (uiop:split-string line :separator "=")
       (let ((symbol-name (make-keyword (string-trim " " symbol-name$)))
             (midi-file-name (string-trim " " midi-file-name$)))
         (format *trace-output* "~&Converting MIDI file ~a to ~a format for ~a…"
@@ -2520,7 +2520,7 @@ SECAM uses the NTSC crystal (3.579545 MHz) with 50 fps."
 (defmethod write-song-data-to-binary (notes object (machine (eql 2609)) (sound-chip (eql :ay-3-8910)))
   "Write AY-3-8910 binary data for Intellivision"
   (with-output-to-file (out object :element-type '(unsigned-byte 8)
-                           :if-exists :supersede :if-does-not-exist :create)
+                                   :if-exists :supersede :if-does-not-exist :create)
     ;; Write header (number of notes)
     (let ((num-notes (array-dimension notes 0)))
       (write-byte (logand num-notes #xff) out)
@@ -2540,9 +2540,9 @@ SECAM uses the NTSC crystal (3.579545 MHz) with 50 fps."
                (write-byte volume out)
                (write-byte duration out)))))
 
-;;; ---------------------------------------------------------------------------
+;;; 
 ;;; Atari Lynx — Mikey audio
-;;; ---------------------------------------------------------------------------
+;;; 
 
 (defconstant +lynx-clock-hz+ 4000000
   "Atari Lynx Mikey audio system clock (4 MHz standard).")
@@ -2668,20 +2668,26 @@ Format: 2-byte note count header + 6 bytes per note."
 (defmethod score->song (score (format (eql :mikey)) frame-rate)
   "Build Mikey note array for Atari Lynx @code{compile-midi} / @code{midi-compile}."
   (nth-value 0 (midi->mikey-sequences (list (mapcar #'score-item-to-ay-note-event score))
-                                       (make-keyword (string-upcase frame-rate)))))
+                                      (make-keyword (string-upcase frame-rate)))))
 
 
-;;; --- compile-music wrappers ---
+;;;  compile-music wrappers  
 
 (defun compile-music-lynx (source-out-name in-file-name
-                            &optional (sound-chip "Mikey") (output-coding "NTSC"))
+                           &optional (sound-chip "Mikey") (output-coding "NTSC"))
   "Compile music for Atari Lynx (machine 200) — emits assembly with Mikey register equates.
 
 SOUND-CHIP defaults to Mikey; OUTPUT-CODING defaults to NTSC.
 The Lynx is a single-region portable, so only NTSC timing is needed."
   (declare (ignore sound-chip output-coding))
-  (let ((*machine* 200)
-        (*region* :ntsc)
+  )
+
+(defmethod compile-music-for-machine ((machine (eql 200)) sound-chip source-out-name in-file-name output-coding)
+  "Compile Mikey audio for Atari Lynx — emits assembly with register and song data.
+The Lynx is portable / single-region, so NTSC framing is always used."
+  (declare (ignore sound-chip output-coding))
+  (let ((*region* :ntsc)
+        (*machine* 200)
         (catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
     (with-output-to-file (source-out source-out-name :if-exists :supersede :if-does-not-exist :create)
@@ -2698,7 +2704,7 @@ AUD0_CONTROL   EQU $FD25
 AUD0_COUNT     EQU $FD26
 AUD0_OTHER     EQU $FD27
 "
-               (pathname-name in-file-name))
+              (pathname-name in-file-name))
       (import-song-to-catalog
        :song-file-name in-file-name
        :output-coding :NTSC
@@ -2710,13 +2716,6 @@ AUD0_OTHER     EQU $FD27
             do (write-song-data-to-mikey notes source-out)))
     (format *trace-output* "~&… done.~%")
     (finish-output)))
-
-(defmethod compile-music-for-machine ((machine (eql 200)) sound-chip source-out-name in-file-name output-coding)
-  "Compile Mikey audio for Atari Lynx — emits assembly with register and song data.
-The Lynx is portable / single-region, so NTSC framing is always used."
-  (declare (ignore sound-chip output-coding))
-  (let ((*region* :ntsc))
-    (compile-music-lynx source-out-name in-file-name)))
 
 (defun compile-midi (argv0 input format frame-rate
                       &optional (output (make-pathname

@@ -1,5 +1,12 @@
 (in-package :skyline-tool)
 
+;; Macro for defining frame-specific commands for anim-buffer-frame
+(defmacro define-anim-buffer-frame-command ((name &rest options) args &body body)
+  "Define a CLIM command for the anim-buffer-frame command table."
+  `(clim:define-command (,name :command-table anim-buffer-frame ,@options)
+     ,args
+     ,@body))
+
 ;; duplicated declaration
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 

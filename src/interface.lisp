@@ -8,6 +8,7 @@
   "Current machine identifier.")
 (defvar *region* nil
   "Target region")
+(defvar *region-list* (list :ntsc :pal :secam))
 (defvar *sound* nil
   "Sound configuration")
 (defvar *common-palette* nil
@@ -615,7 +616,7 @@ See COPYING for details
 "))
 
 (defun run-gui ()
-  (clim-debugger:with-debugger ()
+  (with-happy-restarts
     (show-all-resources)))
 
 (defun find-default-port ()
@@ -705,7 +706,7 @@ Example: bin/skyline-tool --port Intv ~a ?"
            label label))
   label)
 
-(defun load-project.json (&optional (port-label (find-default-port)) thunk)
+(defun load-project.json (thunk &optional (port-label (find-default-port)))
   "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
    Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
@@ -722,33 +723,33 @@ Example: bin/skyline-tool --port Intv ~a ?"
                                            (cons :absolute (butlast (cdr dir)))
                                            (butlast dir))))
                           (merge-pathnames json-name
-                            (make-pathname :directory parent)))))
-         (project-data (json:decode-json-from-source json-path)))
-    (setf *project.json* project-data
-          *game-title* (assocdr :*game project-data)
-          *part-number* (assocdr :*part-number project-data)
-          *studio* (assocdr :*studio project-data)
-          *publisher* (assocdr :*publisher project-data)
-          *machine* (or (assocdr :*machine project-data)
+                                           (make-pathname :directory parent)))))
+         (project-data (json:decode-json-from-source json-path))
+         (*project.json* project-data)
+         (*game-title* (assocdr :*game project-data))
+         (*part-number* (assocdr :*part-number project-data))
+         (*studio* (assocdr :*studio project-data))
+         (*publisher* (assocdr :*publisher project-data))
+         (*machine* (or (assocdr :*machine project-data)
                         (ignore-errors
-                         (machine-number-by-tag (make-keyword (string-upcase effective-port)))))
-          *sound* (assocdr :*sound project-data)
-          *common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) nil))
-          *default-skin-color* (assocdr :*default-skin-color project-data)
-          *default-hair-color* (assocdr :*default-hair-color project-data)
-          *default-clothes-color* (assocdr :*default-clothes-color project-data)
-          *region* (intern (string-upcase (string (or (assocdr :*region project-data) "ntsc")))
-                           :keyword))
-    (when thunk (funcall thunk))))
+                         (machine-number-by-tag (make-keyword (string-upcase effective-port))))))
+         (*sound* (assocdr :*sound project-data))
+         (*common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) nil)))
+         (*default-skin-color* (assocdr :*default-skin-color project-data))
+         (*default-hair-color* (assocdr :*default-hair-color project-data))
+         (*default-clothes-color* (assocdr :*default-clothes-color project-data))
+         (*region-list* (or (ensure-list (assocdr :*region project-data))
+                            (list (all-regions-for-machine)))))
+    (funcall thunk)))
 
 (defun run-for-port (port-label &rest subcommand)
-  (load-project.json port-label
-                     (lambda ()
+  (load-project.json (lambda ()
                        (format *trace-output* "~&Running for port: ~a" port-label)
                        (destructuring-bind (verb &rest args) subcommand
                          (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
                            (apply fun args)
-                           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))))
+                           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))
+                     port-label))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)
   "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."
@@ -784,58 +785,71 @@ Executes the requested command, may exit the process
                 when (or (string= token "--port") (string= token "-p"))
                   do (return (cadr args))
                 finally (return nil))))
-    ;; Parse an explicit --port/-p argument before loading Project.<port>.json.
-    ;; The previous eager load used find-default-port on the top-level Makefile,
-    ;; which can capture trailing text from generated variable assignments.
-    (unless (and (boundp '*machine*) *machine* *game-title*)
-      (if explicit-port
-          (load-project.json (ensure-valid-port-label explicit-port))
-          (load-project.json)))
-    (unless (< 1 (length argv))
-      (restart-case
-          (error "Ask for help if you need it, argument required")
-        (help () :report "Explain how this tool works"
-          (print-useful-help)
-          (bye))))
-    (destructuring-bind (self verb &rest invocation) argv
-      (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-        (flet ((runner ()
-                 (unless (char= #\- (char verb 0))
-                   (format *trace-output* "~&Running for game ‘~a’ for ~a" 
-                           *game-title* (machine-long-name))
-                   (finish-output *trace-output*))
-                 (apply fun (remove-if (curry #'string= self)
-                                       (flatten invocation)))
-                 (fresh-line)))
-          (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
-              #+mcclim
-              (clim-simple-echo:run-in-simple-echo
-               #'runner
-               :process-name
-               (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                       (substitute #\Space #\- verb)
-                       invocation))
-              #-mcclim nil
-              (funcall #'runner)))
-        (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
-      (fresh-line))))
+(unless (and (boundp '*machine*) *machine*)
+       (if explicit-port
+           (machine-for-port-string explicit-port)
+           (progn
+             ;; Try to detect PORT from Makefile symlink
+             (handler-case
+                 (let* ((makefile-path (make-pathname :name "Makefile" :defaults *default-pathname-defaults*))
+                        (makefile-pathname (when (probe-file makefile-path) (truename makefile-path)))
+                        (port-string (when makefile-pathname (pathname-name makefile-pathname))))
+                   (when port-string
+                     (machine-for-port-string port-string)))
+               (error (e)
+                 (declare (ignore e))
+                 (error "Machine type not detected ... should check Makefile for link here, but that code is regressed and broken ... needs repair URGENTLY"))))))
+    (load-project.json
+     (lambda ()
+       (unless (< 1 (length argv))
+         (restart-case
+             (error "Ask for help if you need it, argument required")
+           (help () :report "Explain how this tool works"
+             (print-useful-help)
+             (bye))))
+       (destructuring-bind (self verb &rest invocation) argv
+         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+           (flet ((runner ()
+                    (unless (char= #\- (char verb 0))
+                      (format *trace-output* "~&Running for game ‘~a’ for ~a" 
+                              *game-title* (machine-long-name))
+                      (finish-output *trace-output*))
+                    (apply fun (remove-if (curry #'string= self)
+                                          (flatten invocation)))
+                    (fresh-line)))
+             (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
+                 #+mcclim
+                 (clim-simple-echo:run-in-simple-echo
+                  #'runner
+                  :process-name
+                  (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                          (substitute #\Space #\- verb)
+                          invocation))
+                 #-mcclim nil
+                 (funcall #'runner)))
+           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
+         (fresh-line))))))
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))
 
-(defun build-target (target-pathname)
+(defun build-target (target-pathname &key (phonyp nil))
   "Submit a build task via the global thread pool and optionally wait for completion.
    Uses the thread-pool module for proper worker management and queueing."
   (let ((output-path (enough-namestring (truename target-pathname))))
-    (submit-task
-     (lambda ()
-       (uiop:run-program
-        (list "ptyxis" "-s" "-x" "make" output-path))))
-    ;; Optionally wait for completion if needed by caller
-    (wait-for-build-completion output-path)))
+    (if-let (builder (skyline-tool-writes-p target-pathname))
+      (clim-simple-echo:run-in-simple-echo builder
+                                           :process-name (format nil "Build ~a" output-path))
+      (submit-task
+       (lambda ()
+         (run-command-in-terminal-echo (list "make" output-path)
+                                       :title (format nil "Build ~a" output-path)))))
+    (unless phonyp
+      (wait-for-build-completion output-path))))
 
 (defun wait-for-build-completion (path)
   "Wait until the build output file appears.
    Simple polling implementation to avoid missing uiop file-watcher support."
-  (loop until (probe-file path) do (sleep 0.5)))
+  (inotify:with-inotify (inot (list (list path inotify:in-close-write)))
+    (bt:thread-yield)))
 

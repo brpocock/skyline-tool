@@ -282,7 +282,7 @@
   (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame
       (when (frame-dirty frame)
-        (unless (clim:accept 'boolean :prompt "Unsaved changes. Close anyway?" :default nil)
+        (unless (run-confirm-dialog "Unsaved changes. Close anyway?" :title "Confirm Close")
           (return-from com-close-sprite-sheet-inspector)))
       (clim:frame-exit frame))))
 
@@ -290,21 +290,26 @@
   (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (sprites (and frame (frame-sprites frame))))
     (when frame
-      (let* ((filename (clim:accept 'string :prompt "Filename (e.g. Sprite.png)"
-                                    :default (format nil "NewSprite.png")))
-             (mode (clim:accept 'string :prompt "Mode (160A or 160B)" :default "160B"))
-             (width (clim:accept 'integer :prompt "Width" :default 8))
-             (height (clim:accept 'integer :prompt "Height" :default 16)))
-        (push (make-sprite-entry
-               :filename filename
-               :name (pathname-name filename)
-               :mode mode
-               :width width
-               :height height)
-              sprites)
-        (setf (frame-sprites frame) (sort sprites #'string-lessp :key #'sprite-entry-name)
-              (frame-dirty frame) t)
-        (clim:redisplay-frame-panes frame :force-p t)))))
+      (let* ((fields `((:name :filename :label "Filename: " :value "NewSprite.png" :type string)
+                      (:name :mode :label "Mode: " :value "160B" :type string)
+                      (:name :width :label "Width: " :value 8 :type integer)
+                      (:name :height :label "Height: " :value 16 :type integer)))
+             (result (run-multi-field-input-dialog "Add new sprite:" fields :title "Add Sprite")))
+        (when result
+          (let ((filename (cdr (assoc :filename result)))
+                (mode (cdr (assoc :mode result)))
+                (width (cdr (assoc :width result)))
+                (height (cdr (assoc :height result))))
+            (push (make-sprite-entry
+                   :filename filename
+                   :name (pathname-name filename)
+                   :mode mode
+                   :width width
+                   :height height)
+                  sprites)
+            (setf (frame-sprites frame) (sort sprites #'string-lessp :key #'sprite-entry-name)
+                  (frame-dirty frame) t)
+            (clim:redisplay-frame-panes frame :force-p t)))))))
 
 (clim:define-command (com-delete-sprite :menu t :name t)
     ((sprite 'sprite-entry-presentation :gesture :select))
@@ -323,23 +328,25 @@
          (pos (and sprites (position sprite sprites :test #'equalp))))
     (when pos
       (let* ((old (elt sprites pos))
-             (filename (clim:accept 'string :prompt "Filename"
-                                    :default (sprite-entry-filename old)))
-             (mode (clim:accept 'string :prompt "Mode (160A/160B)"
-                                :default (sprite-entry-mode old)))
-             (width (clim:accept 'integer :prompt "Width"
-                                 :default (sprite-entry-width old)))
-             (height (clim:accept 'integer :prompt "Height"
-                                  :default (sprite-entry-height old))))
-        (setf (elt (frame-sprites frame) pos)
-              (make-sprite-entry
-               :filename filename
-               :name (pathname-name filename)
-               :mode mode
-               :width width
-               :height height))
-        (setf (frame-dirty frame) t)
-        (clim:redisplay-frame-panes frame :force-p t)))))
+             (fields `((:name :filename :label "Filename: " :value ,(sprite-entry-filename old) :type string)
+                       (:name :mode :label "Mode: " :value ,(sprite-entry-mode old) :type string)
+                       (:name :width :label "Width: " :value ,(sprite-entry-width old) :type integer)
+                       (:name :height :label "Height: " :value ,(sprite-entry-height old) :type integer)))
+             (result (run-multi-field-input-dialog "Edit sprite:" fields :title "Edit Sprite")))
+        (when result
+          (let ((filename (cdr (assoc :filename result)))
+                (mode (cdr (assoc :mode result)))
+                (width (cdr (assoc :width result)))
+                (height (cdr (assoc :height result))))
+            (setf (elt (frame-sprites frame) pos)
+                  (make-sprite-entry
+                   :filename filename
+                   :name (pathname-name filename)
+                   :mode mode
+                   :width width
+                   :height height))
+            (setf (frame-dirty frame) t)
+            (clim:redisplay-frame-panes frame :force-p t)))))))
 
 ;; --- Open sprite in GIMP ---
 

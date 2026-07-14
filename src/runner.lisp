@@ -55,8 +55,7 @@
 
 (clim:define-presentation-type script-name () :inherit-from 'string)
 
-(clim:define-presentation-method clim:accept
-    ((type script-name) stream view &key)
+(clim:define-presentation-method clim:accept ((type script-name) stream view &key)
   (values (clim:completing-from-suggestions (stream)
             (dolist (script-name (all-script-names))
               (clim:suggest (subseq script-name (1+ (position #\/ script-name)))
@@ -281,29 +280,10 @@
 
 (define-run-script-frame-command (com-print-script :name t)
     ((script-full-name 'script-name :gesture :select :menu nil))
-  (let* ((pdf-path (format nil "/tmp/skyline-tool-print-~a.pdf"
-                           (substitute #\_ #\/ script-full-name)))
-         (printers (and (fboundp 'discover-printers) (discover-printers))))
-    (unless printers
-      (format *query-io* "~&No printers discovered.~%")
-      (return-from com-print-script))
-    (handler-case
-        (fountain->pdf script-full-name pdf-path)
-      (error (e)
-        (format *query-io* "~&PDF generation error: ~a~%" e)
-        (return-from com-print-script)))
-    (format *query-io* "~&Select printer (1-~d):~%" (length printers))
-    (dotimes (i (length printers))
-      (format *query-io* "  ~d. ~a~%" (1+ i) (elt printers i)))
-    (force-output *query-io*)
-    (let* ((choice (clim:accept 'integer :prompt "Printer number :" :default 1))
-           (printer (elt printers (1- choice))))
-      (format *query-io* "~&Printing to ~a...~%" printer)
-      (force-output)
-      (uiop:run-program (list "lp" "-d" printer pdf-path)
-                        :output nil :ignore-error-status t)
-      (ignore-errors (delete-file pdf-path))
-      (format *query-io* "~&Sent to printer.~%"))))
+  (let* ((pdf-path (format nil "/tmp/skyline-tool-print-~a.pdf" ; FIXME proper stemp pathname
+                           (substitute #\_ #\/ script-full-name))))
+    (fountain->pdf script-full-name pdf-path))
+  (error "TODO: implement sending to printer"))
 
 ;; Print submenu populated at menu-display time
 (defun %print-text-to-lp (printer-name text)
@@ -417,7 +397,7 @@
         (terpri pane))
       (terpri pane))))
 
-(defun run-script (&optional SCRIPT-TO-RUN)
+(defun run-script (&optional script-to-run)
   "Choose SCRIPT-TO-RUN from a menu and launch playtest.
 
 @table @asis
@@ -445,9 +425,9 @@ Launches an emulator playtest session for the specified script.
                                      (clim:run-frame-top-level frame)))
                                  :name "Script Runner (launcher)")))))
 
-;;; ============================================================
+;;; 
 ;;; Hollywood-format screenplay PDF generation (Fountain → PDF)
-;;; ============================================================
+;;; 
 
 (defun %fountain-script-path (script-full-name)
   "Return the absolute pathname for a script name like \"Scripts/Global/Welcome\"."
@@ -460,18 +440,13 @@ Launches an emulator playtest session for the specified script.
   (with-open-file (f pathname :external-format :utf-8)
     (loop for line = (read-line f nil nil) while line collect line)))
 
-(defparameter +uppercase-letters+
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
 (defun %fountain-element-type (line in-notes prev-type)
   "Classify a Fountain LINE. Returns (values type stripped-text in-notes)."
-  (flet ((all-caps-p (s)
-           (and (> (length s) 1)
-                (every (lambda (c) (or (char= c #\Space) (find c +uppercase-letters+)))
-                       (string-trim '(#\Space #\Tab) s))))
-         (scene-p (s)
-           (and (>= (length s) 3)
-                (member (subseq s 0 3) '("INT" "EXT") :test #'string-equal))))
+  (labels ((all-caps-p (s)
+             (string= s (string-upcase s)))
+           (scene-p (s)
+             (and (>= (length s) 3)
+                  (member (subseq s 0 3) '("INT" "EXT") :test #'string-equal))))
     (cond (in-notes
            (if (search "]]" line)
                (values :action (subseq line 0 (search "]]" line)) nil)

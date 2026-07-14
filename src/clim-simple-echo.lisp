@@ -3,8 +3,7 @@
   (:export #:run-in-simple-echo
            #:capturing-stream
            #:capturing-target
-           #:frame-captured-text
-           #:fixme-interactive-editing-gadget-with-validation))
+           #:frame-captured-text))
 
 (in-package :clim-simple-echo)
 
@@ -23,27 +22,28 @@
 Used when more sophisticated presentation methods are not available."
   (format stream "~a" (slot-value resource slot)))
 
-
-
 (define-command-table echo-save-as-menu
   :menu (("Text..." :command com-save-text)
          ("PDF..." :command com-print-pdf)))
 
+(define-command-table echo-send-to-menu
+  :menu ()) ; FIXME populate with p2p recipients
+
 (define-command-table echo-print-to-menu
-  :menu ())
+  :menu ()) ; FIXME populate with printers
 
 (define-command-table echo-edit-menu
   :menu (("Copy" :command com-copy-clipboard)
          ("Find..." :command com-find-in-echo)))
 
 (define-command-table echo-file-menu
-  :menu (("Save As" :menu echo-save-as-menu)
-         ("Print To" :menu echo-print-to-menu)
+  :menu (("Regenerate" :command com-regenerate)
          (nil :divider :line)
-         ("Regenerate" :command com-regenerate)
+         ("Save as" :menu echo-save-as-menu)
+         ("Send to" :menu echo-send-to-menu)
+         ("Print to" :menu echo-print-to-menu)
          (nil :divider :line)
          ("Close" :command com-close-echo)))
-
 
 (define-command-table echo-help-menu
   :menu (("How to Use this Report..." :command com-help-for-window)
@@ -73,8 +73,7 @@ Used when more sophisticated presentation methods are not available."
 (define-command-table echo-menu-bar
   :menu (("Report" :menu echo-file-menu) ("Edit" :menu echo-edit-menu) ("Help" :menu echo-help-menu)))
 
-
-;; --- Helper: default save directory ---
+;;  Helper: default save directory 
 
 (defvar *last-export-directory* nil
   "Most recently used export directory (pathname or NIL).")
@@ -96,49 +95,25 @@ Used when more sophisticated presentation methods are not available."
          (safe (remove-if (lambda (c) (find c "\\/:*?\"<>|" :test #'char=)) title)))
     (format nil "~a.~a" safe extension)))
 
-;; --- Commands for simple-echo ---
+;;  Commands for simple-echo 
 
 (define-simple-echo-command (com-save-text :menu nil :name t) ()
   (let* ((text (frame-captured-text clim:*application-frame*))
          (frame clim:*application-frame*)
-         (save-dir (default-save-directory))
-         (default-name (namestring
-                        (merge-pathnames
-                         (window-title->filename frame "txt")
-                         save-dir)))
-         (path (%zenity-or-clim "Save As..." default-name)))
-    (when (and path (plusp (length path)))
-      (let ((p (string-trim '(#\Newline #\Space #\Tab) path)))
-        (setf *last-export-directory*
-              (make-pathname :defaults p :name nil :type nil))
-        (with-open-file (f p :direction :output :if-exists :supersede
-                             :external-format :utf-8)
-          (princ text f))))))
-
-
-
-
-(defun %zenity-or-clim (title default-name)
-  "Prompt for a filename using zenity (if available) or CLIM's accept."
-  (let ((zenity-out (ignore-errors
-                     (string-trim '(#\Newline #\Space)
-                                  (uiop:run-program (list "zenity" "--file-selection" "--save"
-                                                          (format nil "--filename=~a" default-name)
-                                                          (format nil "--title=~a" title))
-                                                    :output :string :ignore-error-status t)))))
-    (if (and zenity-out (plusp (length zenity-out)))
-        zenity-out
-        (error "Unable to prompt for file destination"))))
+         (default-name (window-title->filename frame "txt"))
+         (path (funcall (intern "PROMPT-SAVE-PATHNAME" (find-package "SKYLINE-TOOL"))
+                        default-name :prefs-key :last-export-directory)))
+    (when path
+      (setf *last-export-directory* (make-pathname :name nil :type nil :defaults path))
+      (with-open-file (f path :direction :output :if-exists :supersede
+                              :external-format :utf-8)
+        (princ text f)))))
 
 (define-simple-echo-command (com-print-pdf :menu nil :name t) ()
   (let* ((frame clim:*application-frame*)
          (pdf-fn (frame-pdf-function frame))
-         (save-dir (default-save-directory))
-         (default-name (namestring
-                        (merge-pathnames
-                         (window-title->filename frame "pdf")
-                         save-dir)))
-         (pdf-path (%zenity-or-clim "Save As PDF..." default-name)))
+         (default-name (window-title->filename frame "pdf"))
+         (pdf-path (skyline-tool::prompt-save-pathname default-name :prefs-key :last-export-directory)))
     (when pdf-path
       (let* ((base (pathname-name pdf-path))
              (dir (make-pathname :defaults pdf-path :name nil :type nil))
@@ -159,7 +134,8 @@ Used when more sophisticated presentation methods are not available."
                 (return-from com-print-pdf))
               (let* ((frame-name (ignore-errors (clim:frame-pretty-name frame)))
                      (game-title (string-capitalize
-                                  (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "unknown")))
+                                  (or (ignore-errors (symbol-value 'skyline-tool::*game-title*))
+                                      "unknown")))
                      (title (or frame-name (format nil "Skyline-Tool: ~a" game-title)))
                      (author (ignore-errors (skyline-tool::user-real-name)))
                      (hostname (machine-instance))
@@ -291,16 +267,16 @@ Used when more sophisticated presentation methods are not available."
   "Copy TEXT to the system clipboard using wl-copy or xclip, or output it."
   (block nil
     (let ((prog (or (ignore-errors (string-trim '(#\Newline #\Space)
-                                      (uiop:run-program '("which" "wl-copy") :output :string)))
-                    (ignore-errors (string-trim '(#\Newline #\Space)
-                                      (uiop:run-program '("which" "xclip") :output :string))))))
+                                    (uiop:run-program '("which" "wl-copy") :output :string)))
+                 (ignore-errors (string-trim '(#\Newline #\Space)
+                                 (uiop:run-program '("which" "xclip") :output :string))))))
       (if prog
           (with-input-from-string (in text)
             (let ((args (if (search "wl-copy" prog)
                             (list prog)
                             (list prog "-selection" "clipboard"))))
               (let ((exit (uiop:run-program args :input in :output nil
-                                            :ignore-error-status t :force-shell nil)))
+                                                 :ignore-error-status t :force-shell nil)))
                 (unless exit (return nil))
                 (when (and (integerp exit) (zerop exit)) t))))
           ;; No clipboard tool — output to *query-io* instead
@@ -338,7 +314,7 @@ Used when more sophisticated presentation methods are not available."
       (let* ((text (frame-captured-text clim:*application-frame*))
              (frame-name (ignore-errors (clim:frame-pretty-name clim:*application-frame*)))
              (default-name (format nil "~a.json" (or frame-name "output")))
-             (path (%zenity-or-clim "Save As JSON..." default-name)))
+             (path (skyline-tool::prompt-save-pathname default-name :prefs-key :last-export-directory)))
         (when path
           (let* ((timestamp (multiple-value-bind (s m h d mo y) (get-decoded-time)
                               (declare (ignore s))
@@ -348,7 +324,7 @@ Used when more sophisticated presentation methods are not available."
                            (format nil "{ \"title\": ~s, \"content\": ~s, \"generated\": ~s }"
                                    frame-name text timestamp))))
             (with-open-file (f path :direction :output :if-exists :supersede
-                                     :external-format :utf-8)
+                                    :external-format :utf-8)
               (princ json f))
             (format *query-io* "~&Saved ~a (~d bytes).~%" path (length json)))))))
 
@@ -365,19 +341,15 @@ Used when more sophisticated presentation methods are not available."
                       #p"../Dist/7800/PhantasiaDevGuide-html/index.html"))))
     (if (probe-file html-index)
         (uiop:run-program (list "xdg-open" html-index) :output nil)
-        ;; FIXME: Use Thread Pool
-        (clim-sys:make-process
-         (lambda ()
-           (uiop:run-program (list "ptyxis" "-s" "--title" "Building Dev Guide"
-                                   "--" "make" "doc")
-                             :output nil :ignore-error-status t))
-         :name "Building Dev Guide"))))
+        (progn
+          (funcall (intern "BUILD-MAKE-TARGET" (find-package "SKYLINE-TOOL")) "doc")
+          (uiop:run-program (list "xdg-open" html-index) :output nil)))))
 
 (define-simple-echo-command (com-regenerate :menu nil :name t) ()
   "Re-run the current display function to regenerate the report."
   (clim:redisplay-frame-panes clim:*application-frame*))
 
-;; --- Print To menu population ---
+;;  Print To menu population 
 
 (defun %print-echo-to-printer (printer-queue-name)
   "Print the current echo frame's content to PRINTER-QUEUE-NAME.
@@ -428,8 +400,7 @@ Used when more sophisticated presentation methods are not available."
             (ignore-errors (delete-file ps-path))
             (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
                               :output nil :ignore-error-status t)
-            (ignore-errors (delete-file pdf-path))
-            (format *query-io* "~&Printed ~a to ~a~%" pdf-path printer-queue-name))))))
+            (ignore-errors (delete-file pdf-path)))))))
 
 (defun populate-echo-print-menu (&optional frame (command-table 'echo-print-to-menu))
   "Populate echo-print-to-menu with discovered printers.
@@ -466,7 +437,7 @@ Used when more sophisticated presentation methods are not available."
         (declare (ignore display-name))
         (%print-echo-to-printer queue-name)))))
 
-;; --- Run function ---
+;;  Run function 
 
 (defun run-in-simple-echo (function &key (width 800)
                                          (height 400)
@@ -492,7 +463,7 @@ Used when more sophisticated presentation methods are not available."
                              (run-frame-top-level frame))
                            :name process-name)))
 
-;; --- Display function with output capture ---
+;;  Display function with output capture 
 
 (defclass capturing-stream (fundamental-character-output-stream)
   ((target :initarg :target :reader capturing-target)
@@ -503,7 +474,8 @@ Used when more sophisticated presentation methods are not available."
   (write-char c (slot-value s 'target))
   (write-char c (slot-value s 'capture)))
 
-(defmethod stream-write-string ((s capturing-stream) string &optional (start 0) (end (length string)))
+(defmethod stream-write-string ((s capturing-stream) string
+                                &optional (start 0) (end (length string)))
   (write-string string (slot-value s 'target) :start start :end end)
   (write-string string (slot-value s 'capture) :start start :end end))
 
@@ -518,13 +490,11 @@ Used when more sophisticated presentation methods are not available."
   (terpri (slot-value s 'target))
   (terpri (slot-value s 'capture)))
 
-#+ ()
-(defmethod stream-start-line-p ((s capturing-stream))
-  (start-line-p (slot-value s 'target)))
-
 ;; Delegate CLIM output recording to the target (pane) stream
-(defmethod clim:invoke-with-output-to-output-record ((stream capturing-stream) continuation record-type &key parent)
-  (clim:invoke-with-output-to-output-record (slot-value stream 'target) continuation record-type :parent parent))
+(defmethod clim:invoke-with-output-to-output-record
+    ((stream capturing-stream) continuation record-type &key parent)
+  (clim:invoke-with-output-to-output-record (slot-value stream 'target)
+                                            continuation record-type :parent parent))
 
 (defmethod clim:stream-add-output-record ((stream capturing-stream) record)
   (clim:stream-add-output-record (slot-value stream 'target) record))
@@ -535,7 +505,8 @@ Used when more sophisticated presentation methods are not available."
 (defmethod clim:window-clear ((stream capturing-stream))
   (clim:window-clear (slot-value stream 'target)))
 
-(defmethod clim-internals::invoke-with-sheet-medium (continuation (stream capturing-stream))
+(defmethod clim-internals::invoke-with-sheet-medium (continuation
+                                                     (stream capturing-stream))
   ;; bordered-output and other CLIM infrastructure may need the sheet medium;
   ;; delegate to the target (pane) stream which has a proper medium.
   (clim-internals::invoke-with-sheet-medium continuation (slot-value stream 'target)))
@@ -577,7 +548,7 @@ Used when more sophisticated presentation methods are not available."
     (clim:window-clear pane)
     (let* ((capture (make-string-output-stream))
            (capturing-stream (make-instance 'capturing-stream
-                               :target pane :capture capture)))
+                                            :target pane :capture capture)))
       (let ((*standard-output* capturing-stream)
             (*trace-output* *standard-output*)
             (*error-output* *standard-output*)
@@ -588,50 +559,4 @@ Used when more sophisticated presentation methods are not available."
       ;; Restore scroll position — on first call old-x/old-y are (0,0), fine.
       (ignore-errors (setf (clim:window-viewport-position pane) (values old-x old-y))))))
 
-;;; Missing CLIM extension functions needed by gui/*.lisp
 
-(in-package :clim)
-
-(cl:defun insert-gadget (stream &key label variable activation-callback)
-  "Fallback: display value as text when interactive gadgets aren't available."
-  (cl:declare (cl:ignore label activation-callback))
-  (cl:let ((initial-value (cl:if (cl:symbolp variable) (cl:symbol-value variable) variable)))
-    (cl:format stream "~a" initial-value))
-  nil)
-
-(cl:export '(insert-button insert-gadget))
-
-(cl:export '(gadget-left gadget-top gadget-right))
-
-(cl:defun gadget-left (gadget)
-  "Return left edge of GADGET bounding rectangle."
-  (cl:declare (cl:ignore gadget))
-  0)
-
-(cl:defun gadget-top (gadget)
-  "Return top edge of GADGET bounding rectangle."
-  (cl:declare (cl:ignore gadget))
-  0)
-
-(cl:defun gadget-right (gadget)
-  "Return right edge of GADGET bounding rectangle."
-  (cl:declare (cl:ignore gadget))
-  0)
-
-(cl:defun insert-button (stream &key label activation-callback)
-  "Fallback: display label as text when interactive buttons aren't available."
-  (cl:declare (cl:ignore activation-callback))
-  (cl:format stream "[~a]" label)
-  nil)
-
-(cl:export '(menu-button radio-box))
-
-(cl:defun menu-button (stream &key label button-name)
-  "Fallback: display menu button label as text."
-  (cl:declare (cl:ignore button-name))
-  (cl:format stream "[~a]" label))
-
-(cl:defun radio-box (stream &key label button-name)
-  "Fallback: display radio box label as text."
-  (cl:declare (cl:ignore button-name))
-  (cl:format stream "(*) ~a" label))

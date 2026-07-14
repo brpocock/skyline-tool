@@ -26,7 +26,7 @@
                                            :notes (third b))))))
     (format *query-io* "~&Saved ~a~%" (namestring json-path))))
 
-(clim:define-application-frame boat-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame boat-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((boats :initarg :boats :accessor frame-boats)
    (path :initarg :path :accessor frame-path))
   (:menu-bar boat-inspector-menu-bar)
@@ -75,7 +75,7 @@
                     (error "Can't load ~a" (enough-namestring path))))
          (resource (make-instance 'game-resource-boat
                                   :moniker (or boat "unknown")
-                                  :kind "Boat"))
+                                 ))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame
                  'boat-inspector-frame

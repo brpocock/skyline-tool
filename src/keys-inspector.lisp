@@ -27,7 +27,7 @@
 " key))))
 
 ;; Key Inspector Frame
-(clim:define-application-frame keys-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame keys-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (keys :initarg :keys :accessor frame-keys))
   (:menu-bar keys-inspector-menu-bar)
@@ -75,7 +75,7 @@
          (keys (load-keys full))
          (resource (make-instance 'game-resource-from-file
                                   :moniker "Keys Index"
-                                  :kind "Keys"
+                                 
                                   :full-path (when (probe-file full) (truename full))))
          (fm (clim:find-frame-manager))
          (frame (clim:make-application-frame 'keys-inspector-frame

@@ -25,7 +25,7 @@
 ;; Resource Chooser Frame Definition
 ;; ============================================================================
 
-(clim:define-application-frame resource-chooser-frame (gui-inspector-frame)
+(clim:define-application-frame resource-chooser-frame (gui-inspector-frame clim:standard-application-frame)
   ((resource-type :initarg :resource-type :reader chooser-resource-type)
    (filter-function :initarg :filter-function :reader chooser-filter-function)
    (selection-callback :initarg :selection-callback :reader chooser-selection-callback)
@@ -244,13 +244,13 @@ TITLE is the window title."
   "List all game-resource-script objects, filtered and sorted."
   (let ((scripts (remove-if-not #'game-resource-script-p
                                 (copy-list (hash-table-keys (read-assets-list))))))
-    (sort scripts #'string< :key #'game-resource-moniker)))
+    (sort scripts #'string< :key #'cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s" )))
 
 (defmethod group-resources ((frame script-chooser-frame) resources)
   "Group scripts by locale (area)."
   (let ((groups (make-hash-table :test 'equal)))
     (dolist (script resources)
-      (let* ((moniker (game-resource-moniker script))
+      (let* ((moniker (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  script))
              (parts (split-sequence #\/ moniker))
              (locale (if (> (length parts) 2)
                          (string-capitalize (second parts))
@@ -264,7 +264,7 @@ TITLE is the window title."
 
 (defmethod present-resource-in-chooser ((resource game-resource-script) stream)
   "Present a script in the chooser list."
-  (clim:with-text-face (stream (if (search "Global/" (game-resource-moniker resource))
+  (clim:with-text-face (stream (if (search "Global/" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))
                                   :bold :roman))
     (format stream "~4t~a: "~ (cl-change-case:title-case (get-script-area resource)))
     (format stream "~a" (cl-change-case:title-case (get-script-name resource)))))
@@ -283,7 +283,7 @@ TITLE is the window title."
   "List all game-resource-song objects."
   (let ((songs (remove-if-not #'game-resource-song-p
                               (copy-list (hash-table-keys (read-assets-list))))))
-    (sort songs #'string< :key #'game-resource-moniker)))
+    (sort songs #'string< :key #'cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s" )))
 
 (defmethod group-resources ((frame song-chooser-frame) resources)
   "Group songs by type (BGM, SFX, etc.)."
@@ -309,14 +309,14 @@ TITLE is the window title."
 
 (defun get-script-area (script)
   "Extract the area name from a script's moniker."
-  (let ((parts (split-sequence #\/ (game-resource-moniker script))))
+  (let ((parts (split-sequence #\/ (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  script))))
     (if (> (length parts) 2)
         (second parts)
         "Global")))
 
 (defun get-script-name (script)
   "Extract the script name from its moniker."
-  (let ((parts (split-sequence #\/ (game-resource-moniker script))))
+  (let ((parts (split-sequence #\/ (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  script))))
     (if (> (length parts) 2)
         (first (last parts))
         (first parts))))

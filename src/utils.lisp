@@ -227,9 +227,10 @@ parameters."
 
 
 (defmacro maptimes ((var count) &body body)
-  `(mapcar (lambda (,var)
-             ,@body)
-           power-of-two-size (size)))
+  "Execute BODY with VAR bound to successive integers from 0 below COUNT.
+Collects results into a list."
+  `(loop for ,var from 0 below ,count
+         collect (progn ,@body)))
 
 
 

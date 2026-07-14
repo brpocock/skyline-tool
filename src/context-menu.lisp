@@ -36,9 +36,9 @@
        (open-instrument-inspector resource))
       (t
        (list
-        (cons "Open in Editor" (lambda () (format t "Open in editor: ~a~%" (game-resource-moniker resource))))
-        (cons "Open in File Manager" (lambda () (format t "Open in file manager: ~a~%" (game-resource-moniker resource))))
-        (cons "Delete" (lambda () (format t "Delete: ~a~%" (game-resource-moniker resource)))))))))
+        (cons "Open in Editor" (lambda () (format t "Open in editor: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))))
+        (cons "Open in File Manager" (lambda () (format t "Open in file manager: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))))
+        (cons "Delete" (lambda () (format t "Delete: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource)))))))))
 
 (defun find-existing-frame (frame-name)
   "Find an existing frame by name, or return NIL."

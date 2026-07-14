@@ -3,7 +3,7 @@
 
 (in-package :skyline-tool)
 
-(clim:define-application-frame game-resource-script-inspector (gui-inspector-frame)
+(clim:define-application-frame game-resource-script-inspector (gui-inspector-frame clim:standard-application-frame)
   ((resource :initarg :resource :reader frame-resource))
   (:menu-bar inspector-script-menu-bar)
   (:icon (skyline-tool-icon :resource :inspector))
@@ -16,7 +16,10 @@
 ;; Inspector open helper
 ;; ------------------------------------------------------------------------
 (defun open-script-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-script)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-script
+                                  :kind "Script"
+                                  :moniker "Scripts/new-script.sky")) :editing))
 
 ;; Specialize open-resource-inspector for script resources
 (defmethod open-resource-inspector ((resource game-resource-script) &optional (mode :editing))
@@ -35,6 +38,10 @@
          ("Save"             :command com-save-script)
          ("Close"            :command com-close-frame)))
 
+(clim:define-command-table script-inspector-edit-menu
+  :menu (("Copy As" :menu script-inspector-copy-as-menu)
+         ("Change Script Directory..." :command com-change-script-directory :name t)))
+
 (clim:define-command-table inspector-script-run-menu
   :menu (("Make PDF..."    :command com-make-script-pdf)   ; external LaTeX → PDF
          ("Compile Script..." :command com-compile-script) ; internal Skyline‑Tool compile
@@ -43,7 +50,7 @@
 
 (clim:define-command-table inspector-script-menu-bar
   :menu (("File"      :menu inspector-script-file-menu)
-         ("Edit"      :menu inspector-edit-menu)
+         ("Edit"     :menu script-inspector-edit-menu)
          ("View"      :menu inspector-view-menu)
          ("Run"       :menu inspector-script-run-menu)
          ("Help"      :menu inspector-help-menu)))
@@ -69,19 +76,19 @@
   ((resource 'game-resource-script :gesture :select))
   "Compile the SCRIPT using Skyline-Tool's internal compile‑script routine."
   (clim-simple-echo:run-in-simple-echo
-   (format nil "compile-script ~a" (game-resource-moniker resource))))
+   (format nil "compile-script ~a" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))))
 
 (clim:define-command (com-new-script-from-menu :command-table clim-internals::global-command-table
                                                :menu t :name t)
   ()
   "Create a new script resource."
-  (clim-simple-echo:run-in-simple-echo "New script not implemented."))
+  (error "New script not implemented."))
 
 (clim:define-command (com-open-script :command-table clim-internals::global-command-table
                                       :menu t :name t)
   ()
   "Open a script from file."
-  (clim-simple-echo:run-in-simple-echo "Open script not implemented."))
+  (error "Open script not implemented."))
 
 (clim:define-command (com-save-script :command-table clim-internals::global-command-table
                                        :menu t :name t)

@@ -44,8 +44,25 @@
   (clim:surrounding-output-with-border (stream :shape :rounded)
     (format stream "[SONG] ~a" (game-resource-title resource))))
 
+(defmethod present-editing ((resource game-resource-song) stream)
+  (clim:present resource 'game-resource-song-editable :stream stream))
+
+(defmethod present-reading ((resource game-resource-song) stream)
+  (clim:present resource 'game-resource-song-viewing :stream stream))
+
+(defmethod present-reference ((resource game-resource-song) stream)
+  (clim:present resource 'game-resource-song-reference :stream stream))
+
 (defun open-song-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-song)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-song
+                                              :moniker "New Song"
+                                              :full-path nil
+                                              :mscz-title ""
+                                              :mscz-subtitle ""
+                                              :mscz-composer ""
+                                              :mscz-copyright ""
+                                              :mscz-lyrics "")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-song))
   (list
@@ -54,6 +71,12 @@
                    (lambda ()
                      (uiop:run-program (list "musescore" (game-resource-full-path resource))
                                        :output nil :ignore-error-status t)))))
+
+(defun display-resource-project-status (frame pane)
+  "Display the project status for the resource in FRAME."
+  (declare (ignore frame))
+  (let ((*standard-output* pane))
+    (format pane "Project Pane — not yet implemented~%")))
 
 (clim:define-command-table song-menu-bar
   :menu (("Song" :menu song-file-menu)
@@ -64,25 +87,25 @@
 
 (clim:define-command-table song-file-menu
   :menu (("New..." :command com-song-new)
-         ("Import File..." :command com-song-import)
-         ("Open in MuseScore" :command com-song-open-musescore)
-         (nil :divider :line)
-         ("Save" :menu song-save-menu)
-         ("Send to" :menu send-to-menu)
-         ("Print to" :menu print-to-menu)
-         (nil :divider :line)
-         ("Close" :command com-preview-close)))
+          ("Import File..." :command com-song-import)
+          ("Open in MuseScore" :command com-song-open-musescore)
+          (nil :divider :line)
+          ("Save as" :menu song-save-menu)
+          ("Send to" :menu send-to-menu)
+          ("Print to" :menu print-to-menu)
+          (nil :divider :line)
+          ("Close" :command com-preview-close)))
 
 (clim:define-command-table song-save-menu
   :menu (("MIDI..." :command com-song-save-midi)
-         ("Ogg Vorbis..." :command com-song-save-ogg-vorbis)
-         ("Ogg FLAC..." :command com-song-save-ogg-flac)
-         ("MP3..." :command com-song-save-mp3)
-         ("Sheet Music PDF..." :command com-song-save-sheet-music)
-         (nil :divider :line)
-         ("JSON..." :command com-song-export-json)
-         ("Text..." :command com-song-export-text)
-         ("PDF..." :command com-song-export-pdf)))
+          ("Ogg Vorbis..." :command com-song-save-ogg-vorbis)
+          ("Ogg FLAC..." :command com-song-save-ogg-flac)
+          ("MP3..." :command com-song-save-mp3)
+          ("Sheet Music PDF..." :command com-song-save-sheet-music)
+          (nil :divider :line)
+          ("JSON..." :command com-song-export-json)
+          ("Text..." :command com-song-export-text)
+          ("PDF..." :command com-song-export-pdf)))
 
 (clim:define-command-table song-edit-menu
   :menu (("Cut" :command com-song-cut)
@@ -118,16 +141,17 @@
          (nil :divider :line)
          ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
-(clim:define-application-frame song-inspector-frame ()
-  ()
-  (:command-table (song-menu-bar))
-  (:menu-bar song-menu-bar)
-  (:panes
-   (resource-pane :application
-                  :display-function 'display-resource-preview
-                  :scroll-bars :vertical)
-   (project-pane :application
-                 :display-function 'display-resource-project-status))
-  (:layouts
-   (default (clim:vertically () resource-pane))
-   (project (clim:vertically () resource-pane project-pane))))
+(clim:define-application-frame song-inspector-frame (gui-inspector-frame clim:standard-application-frame)
+   ()
+   (:default-initargs :view-mode :editable)
+   (:command-table (song-menu-bar))
+   (:menu-bar song-menu-bar)
+   (:panes
+    (resource-pane :application
+                   :display-function 'display-resource-preview
+                   :scroll-bars :vertical)
+    (project-pane :application
+                  :display-function 'display-resource-project-status))
+   (:layouts
+    (default (clim:vertically () resource-pane))
+    (project (clim:vertically () resource-pane project-pane))))

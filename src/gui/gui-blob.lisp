@@ -12,7 +12,8 @@
 (clim:define-presentation-type game-resource-blob-viewing ()
   :inherit-from 'game-resource-blob)
 
-(clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-reference) stream view &key)
+(clim:define-presentation-method clim:present ((resource game-resource-blob)
+                                               (type game-resource-blob-reference) stream view &key)
   (declare (ignore view))
   (clim:formatting-table (stream)
     (clim:formatting-row (stream)
@@ -37,7 +38,13 @@
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Name: "))
       (clim:formatting-cell (stream :align-x :left)
-        (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))))
+        (interactive-editing-gadget-with-validation
+         stream resource
+         (lambda (r) (game-resource-title r))
+         (lambda (r v) (setf (game-resource-title r) v))
+         :label "Name:"
+         :validator #'validate-minifont-name
+         :max-length 20)))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-viewing) stream view &key)
   (declare (ignore view))
@@ -45,8 +52,21 @@
     (format stream "[#~a] ~a" (first (game-resource-pathnames resource))
             (game-resource-title resource))))
 
+(defmethod present-editing ((resource game-resource-blob) stream)
+  (clim:present resource 'game-resource-blob-editable :stream stream))
+
+(defmethod present-reading ((resource game-resource-blob) stream)
+  (clim:present resource 'game-resource-blob-viewing :stream stream))
+
+(defmethod present-reference ((resource game-resource-blob) stream)
+  (clim:present resource 'game-resource-blob-reference :stream stream))
+
 (defun open-blob-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-blob)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-blob
+                                 
+                                  :full-path nil
+                                  :moniker "Blobs/new-blob.xcf")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-blob))
   (list

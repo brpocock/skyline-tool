@@ -25,7 +25,7 @@
       (dolist (name names)
         (format f "~a~%" name)))))
 
-(clim:define-application-frame item-list-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame item-list-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (names :initarg :names :accessor frame-names)
    (gadgets :initform nil :accessor frame-gadgets))
@@ -91,7 +91,7 @@
          (names (load-name-list full))
          (resource (make-instance 'game-resource-from-file
                                   :moniker "Items Index"
-                                  :kind "Items"
+                                 
                                   :full-path (truename full)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame 'item-list-inspector-frame

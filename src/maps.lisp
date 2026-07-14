@@ -1521,26 +1521,17 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (defun tileset-rom-bank (xml)
   "Map TMX tileset @code{source} path to a ROM bank id for packed tile data.
+Reads from the @code{Tilesets} section of the current Project.*.json config.
 Returns @code{0} if no known prefix matches (FIXME #125)."
-  (or (loop for (string id)
-              on '("SandyIsland" 5
-                   "Indoor" 6
-                   "JungleIsland" 7
-                   "Ancient" 8
-                   "Mechanism" 98
-                   "Cityscape" #xa
-                   "Arturos" #xb
-                   "Shipboard" #xc
-                   "Undersea" #xd)
-            by #'cddr
-            when (some (lambda (match)
-                         (search (string-downcase string)
-                                 (string-downcase (first (or (assocdr "source" (second match)
-                                                                      :test #'string-equal)
-                                                             '(""))))))
-                       (xml-matches "tileset" xml))
-              do (return id))
-      (error "Can't identify tileset used by ~s" (xml-matches "tileset" xml))))
+  (let ((tileset-alist (and (boundp '*project.json*)
+                            (assocdr :tilesets *project.json*))))
+    (or (loop for match in (xml-matches "tileset" xml)
+              for source = (or (assocdr "source" (second match) :test #'string-equal) "")
+              for name = (first (last (split-sequence #\/ source)))
+              for key = (and name (intern (string-upcase name) :keyword))
+              when (and key tileset-alist (assoc key tileset-alist))
+                return (cdr (assoc key tileset-alist)))
+        (error "Can't identify tileset used by ~s" (xml-matches "tileset" xml)))))
 
 (defun write-binary-animations-list (animations-list s &key frame-rate)
   #+ () (format *trace-output* "~%WRITE-BINARY-ANIMATIONS-LIST: ~2%~s~2%" animations-list)

@@ -35,6 +35,10 @@
           (let ((sftp-servers (discover-sftp-servers)))
             (dolist (f sftp-servers)
               (push (cons :sftp f) services)))
+          ;; Discover pending offers
+          (let ((offers (discover-offers)))
+            (dolist (o offers)
+              (push (cons :offer o) services)))
           (setf *avahi-services-cache* services
                 *avahi-services-cache-time* (get-universal-time)))
       (error (e)
@@ -52,7 +56,7 @@
       (when output
         (loop for line in (split-sequence:split-sequence #\Newline output)
               when (and line (search "+;" line))
-              collect (parse-avahi-browse-line line))))))
+              collect (parse-avahi-browse-line line :printer))))))
 
 (defun discover-skyline-tool-instances ()
   "Discover other Skyline-Tool instances on the LAN."
@@ -63,7 +67,7 @@
       (when output
         (loop for line in (split-sequence:split-sequence #\Newline output)
               when (and line (search "+;" line))
-              collect (parse-avahi-browse-line line))))))
+              collect (parse-avahi-browse-line line :skyline-tool))))))
 
 (defun discover-sftp-servers ()
   "Discover SFTP/SSH servers on the LAN."
@@ -74,16 +78,35 @@
       (when output
         (loop for line in (split-sequence:split-sequence #\Newline output)
               when (and line (search "+;" line))
-              collect (parse-avahi-browse-line line))))))
+              collect (parse-avahi-browse-line line :sftp))))))
 
-(defun parse-avahi-browse-line (line)
-  "Parse an Avahi browse output line into service info."
+(defun discover-offers ()
+  "Discover pending resource offers via DNS-SD (_skyline-offer._tcp).
+   Returns a list of (offer-id . offer-info) pairs."
+  (ignore-errors
+    (let ((output (uiop:run-program
+                   (list "avahi-browse" "-t" "_skyline-offer._tcp" "-l" "-p")
+                   :output :string :ignore-error-status t)))
+      (when output
+        (loop for line in (split-sequence:split-sequence #\Newline output)
+              when (and line (search "+;" line))
+              collect (parse-avahi-browse-line line :offer))))))
+
+(defun parse-avahi-browse-line (line &optional service-type)
+  "Parse an Avahi browse output line into service info.
+   SERVICE-TYPE is the type of service (:skyline-tool, :sftp, :offer, etc.)."
   (let ((parts (split-sequence:split-sequence #\; line)))
     (when (>= (length parts) 12)
       (let ((name (string-trim '(#\Space #\Tab) (nth 7 parts)))
-            (domain (nth 11 parts)))
+            (domain (nth 11 parts))
+            (host (nth 9 parts)))
         (when (plusp (length name))
-          (list :name name :domain domain :host (nth 9 parts)))))))
+          (ecase service-type
+            (:skyline-tool (list :name name :domain domain :host host))
+            (:sftp (list :name name :domain domain :host host))
+            (:offer (list :offer-id name :domain domain :host host
+                          :resource-type (nth 12 parts)
+                          :from-host host))))))))
 
 (defun get-recipient-list ()
   "Get a formatted list of recipients for Send menu.

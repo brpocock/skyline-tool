@@ -25,10 +25,28 @@
             (game-resource-present-right-margin resource stream))))))
 
 (defun open-key-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-key)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-key
+                                              :key-id 0
+                                              :name "New Key")) :editing))
 
 (defmethod open-resource-inspector ((resource game-resource-key) &optional (mode :editing))
-  (fixme-show-window-with-this-resource))
+  (clim:run-frame-top-level
+   (clim:make-application-frame 'game-resource-key-inspector
+                                :resource resource
+                                :view-mode mode)))
+
+(clim:define-application-frame game-resource-key-inspector (gui-inspector-frame clim:standard-application-frame)
+  ()
+  (:menu-bar key-menu-bar)
+  (:pretty-name "Key Inspector"))
+
+(clim:define-command-table key-menu-bar
+  :menu (("Key" :menu inspector-file-menu)
+         ("Edit" :menu inspector-edit-menu)
+         ("Run"  :menu inspector-run-menu)
+         ("View" :menu inspector-view-menu)
+         ("Help" :menu inspector-help-menu)))
 
 (defmethod present-reading ((resource game-resource-key) stream)
   (clim:formatting-table (stream)
@@ -46,20 +64,20 @@
           (clim:formatting-cell (stream :align-x :right)
             (format stream "Name: "))
           (clim:formatting-cell (stream :align-x :left)
-            (let ((gadget (clim:insert-gadget stream
-                        :label nil
-                        :variable name
-                        :activation-callback
-                        (lambda (gadget)
-                          (setf (game-resource-title resource)
-                                (clim:gadget-value gadget)))))))
-              (unless valid-p
-                (clim:with-drawing-options (stream :ink :red)
-                  (clim:draw-line* stream (clim:gadget-left gadget) 
-                                       (+ (clim:gadget-top gadget) 10)
-                                       (clim:gadget-right gadget) 
-                                       (+ (clim:gadget-top gadget) 10))
-                  (clim:draw-text stream "✗" 
-                                  (+ (clim:gadget-right gadget) 5)
-                                  (clim:gadget-top gadget))))))))))
+            (let ((gadget (insert-gadget stream
+                                         :label nil
+                                         :variable name
+                                         :activation-callback
+                                         (lambda (gadget)
+                                           (setf (game-resource-title resource)
+                                                 (clim:gadget-value gadget)))))))
+            (unless valid-p
+              (clim:with-drawing-options (stream :ink :red)
+                (clim:draw-line* stream (gadget-left gadget) 
+                                 (+ (gadget-top gadget) 10)
+                                 (gadget-right gadget) 
+                                 (+ (gadget-top gadget) 10))
+(clim:draw-text* stream "✗" 
+                                 (+ (gadget-right gadget) 5)
+                                 (gadget-top gadget))))))))))
 

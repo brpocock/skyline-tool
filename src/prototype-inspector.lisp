@@ -13,7 +13,7 @@
                       :external-format :utf-8)
     (write-json-pretty data f)))
 
-(clim:define-application-frame prototype-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame prototype-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (data :initarg :data :accessor frame-data))
   (:menu-bar prototype-inspector-menu-bar)
@@ -88,7 +88,7 @@
   (let* ((data (load-prototype-file path))
          (resource (make-instance 'game-resource-object-prototype
                                   :moniker (pathname-name path)
-                                  :kind "Object Prototype"
+                                 
                                   :full-path (truename path)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame

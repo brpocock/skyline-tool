@@ -51,9 +51,11 @@
   :menu (("Decal" :menu decal-menu) ("Edit" :menu edit-menu) ("Help" :menu decal-help-menu)))
 
 (define-show-decal-frame-command (com-new-decal :menu nil :name t) ()
-  (format *query-io* "~&New Decal is not yet implemented.~%"))
+  (error "~&New Decal is not yet implemented.~%"))
+
 (define-show-decal-frame-command (com-import-decal :menu nil :name t) ()
-  (format *query-io* "~&Import Decal is not yet implemented.~%"))
+  (error "~&Import Decal is not yet implemented.~%"))
+
 (define-show-decal-frame-command (com-save-decal :menu nil :name t) ()
   (let* ((frame *show-decal-frame*)
          (dump (decal-from-dump frame))
@@ -110,10 +112,9 @@
                                               :color-type :truecolor :bpp 8
                                               :image-data rgb)))
             (zpng:write-png png path))
-          (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
+          (error "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
           (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t))))))
-(define-show-decal-frame-command (com-discover-printers-decal :menu nil :name t) ()
-  (populate-decal-print-menu))
+
 
 (defun %print-decal-to-printer (printer-queue-name)
   (let* ((frame *show-decal-frame*)
@@ -190,21 +191,21 @@
         (ignore-errors (delete-file ps-path))
         (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
                           :output nil :ignore-error-status t)
-        (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
+        (error "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
 
 (defun populate-decal-print-menu ()
   (ignore-errors
    (clim:remove-menu-item-from-command-table 'print-decal-menu "No printers found")
-   (dolist (p (discover-printers))
+   (dolist (p (ignore-errors (discover-printers)))
      (ignore-errors
       (clim:remove-menu-item-from-command-table 'print-decal-menu p))))
-  (let* ((printers (discover-printers-with-names)))
+  (let* ((printers (ignore-errors (discover-printers-with-names))))
     (if (null printers)
         (clim:add-menu-item-to-command-table
          'print-decal-menu "No printers found" :function
          (lambda (g n)
            (declare (ignore g n))
-           (format *query-io* "~&No printers discovered.~%")))
+           (error "~&No printers discovered.~%")))
         (dolist (pair printers)
           (let ((queue-name (car pair))
                 (display-name (cdr pair)))
@@ -218,7 +219,7 @@
                           :menu nil :name t)
         ((queue-name 'string) (display-name 'string))
       (declare (ignore display-name))
-      (format *query-io* "~&Printing decal to ~a...~%" queue-name))))
+      (error "~&Printing decal to ~a is not yet implemented.~%" queue-name))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)
@@ -672,6 +673,8 @@
          (clim:run-frame-top-level frame))))
    :name "Show Decal"))
 
-(eval-when (:load-toplevel)
-  (populate-decal-print-menu))
+(defmethod initialize-instance :after ((frame show-decal-frame) &key)
+  (ensure-printer-discovery-started))
+
+
 

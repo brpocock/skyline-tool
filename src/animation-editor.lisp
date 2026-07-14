@@ -1,4 +1,12 @@
 (in-package :skyline-tool)
+
+;; Macro for defining frame-specific commands for anim-seq-editor-frame
+(defmacro define-anim-seq-editor-frame-command ((name &rest options) args &body body)
+  "Define a CLIM command for the anim-seq-editor-frame command table."
+  `(clim:define-command (,name :command-table anim-seq-editor-frame ,@options)
+     ,args
+     ,@body))
+
 (defvar *anim-seq-editor-frame* nil)
 (defvar *show-tileset-frame* nil)
 (defvar *anim-seq-assign-frame* nil)
@@ -686,41 +694,38 @@ Called from note-sheet-grafted after the frame is connected to the display."
   (unless (slot-boundp frame '%sequence)
     (setf (anim-seq-editor-sequence frame)
           (find-animation-sequence (anim-seq-editor-index frame))))
-  (let* ((major-kind (simple-animation-sequence-major-kind
-                      (anim-seq-editor-sequence frame)))
-         (name (simple-animation-sequence-tile-sheet
-                (anim-seq-editor-sequence frame)))
-         (valid (ecase major-kind
-                  (:background (all-tilesets))
-                  (:scenery (all-scenery-decals) )
-                  (:npc (all-npc-art-sheets-for-kind
-                         (simple-animation-sequence-decal-kind
-                          (anim-seq-editor-sequence frame)))))))
-    (unless (member name valid :test #'string=)
-      (setf (simple-animation-sequence-tile-sheet
-             (anim-seq-editor-sequence frame))
-            (first (sort valid
-                         (lambda (a b)
-                           (> (prefix-match-length a name)
-                              (prefix-match-length b name)))))))
-    (setf (simple-animation-sequence-write-mode (anim-seq-editor-sequence frame))
-          (ecase major-kind
-            ((:background :scenery) :160a)
-            (:npc (case (simple-animation-sequence-decal-kind
-                         (anim-seq-editor-sequence frame))
-                    ((:nefertem :sentinel :enemy) :160a)
-                    (otherwise :160b)))))
-    (setf (simple-animation-sequence-bytes-width (anim-seq-editor-sequence frame))
-          (ecase (simple-animation-sequence-write-mode (anim-seq-editor-sequence frame))
-            (:160a 2) (:160b 4)))
-    (when (eql :160b (simple-animation-sequence-write-mode (anim-seq-editor-sequence frame)))
-      (setf (anim-seq-editor-palette frame) (if (zerop (anim-seq-editor-palette frame))
-                                                0 4))))
-  (let ((*anim-seq-editor-frame* frame))
-    (populate-palette-menu)
-    (populate-frames-menu)
-    (populate-speed-menu))
-  (clim:redisplay-frame-panes frame))
+  (let ((seq (anim-seq-editor-sequence frame)))
+    (when seq
+      (let* ((major-kind (simple-animation-sequence-major-kind seq))
+             (name (simple-animation-sequence-tile-sheet seq))
+             (valid (ecase major-kind
+                      (:background (all-tilesets))
+                      (:scenery (all-scenery-decals) )
+                      (:npc (all-npc-art-sheets-for-kind
+                             (simple-animation-sequence-decal-kind seq))))))
+        (unless (member name valid :test #'string=)
+          (setf (simple-animation-sequence-tile-sheet seq)
+                (first (sort valid
+                             (lambda (a b)
+                               (> (prefix-match-length a name)
+                                  (prefix-match-length b name)))))))
+        (setf (simple-animation-sequence-write-mode seq)
+              (ecase major-kind
+                ((:background :scenery) :160a)
+                (:npc (case (simple-animation-sequence-decal-kind seq)
+                        ((:nefertem :sentinel :enemy) :160a)
+                        (otherwise :160b)))))
+        (setf (simple-animation-sequence-bytes-width seq)
+              (ecase (simple-animation-sequence-write-mode seq)
+                (:160a 2) (:160b 4)))
+        (when (eql :160b (simple-animation-sequence-write-mode seq))
+          (setf (anim-seq-editor-palette frame) (if (zerop (anim-seq-editor-palette frame))
+                                                    0 4)))))
+    (let ((*anim-seq-editor-frame* frame))
+      (populate-palette-menu)
+      (populate-frames-menu)
+      (populate-speed-menu))
+    (clim:redisplay-frame-panes frame)))
 
 (defun load-tile-sheet-object-by-name (name artp)
   (let* ((obj-file (if artp
@@ -768,12 +773,12 @@ Called from note-sheet-grafted after the frame is connected to the display."
       mem)))
 
 (defun read-palette-for-tile-sheet (tile-sheet-name palette-index &key write-mode)
-  (let ((tileset-pathname (make-pathname :directory (list :relative "Source" "Maps" "Tiles")
-                                         :name tile-sheet-name
-                                         :type "tsx")))
-    (unless (probe-file tileset-pathname)
-      (error "Missing tileset: ~a" (enough-namestring tileset-pathname)))
-    (let* ((tileset (load-tileset tileset-pathname))
+  (let ((sprite-sheet-pathname (make-pathname :directory (list :relative "Source" "Art" tileset-name-reference)
+                                                      :name tile-sheet-name
+                                                      :type "art")))
+    (unless (probe-file sprite-sheet-pathname)
+      (error "Missing sprite sheet: ~a" (enough-namestring sprite-sheet-pathname)))
+    (let* ((tileset (load-tileset sprite-sheet-pathname))
            (palettes (extract-palettes (tileset-image tileset)))
            (colors-count (ecase write-mode
                            (:160a 4) (:160b 16)))

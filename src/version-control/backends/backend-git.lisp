@@ -85,7 +85,7 @@
        ;; Launch emacsclient editor on temp file
        (lambda ()
          (format t "Launching emacsclient to compose commit message...~%")
-         (run-program "emacsclient" "-t"
+         (uiop:run-program "emacsclient" "-t"
                       (namestring (truename temp-file)))
          
          ;; Wait for file modification to complete

@@ -104,42 +104,52 @@
 
 (defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
   "Write PDF footer with two-row tabular layout:
-   Row 1 (top): Icon (spans both rows) | 'Skyline-Tool' (Royal Blue) 'for' (black) 'GameTitle' (Navy Blue, Italic)
-   Row 2 (bottom, 75% row1 height): Icon continued | date --- author on host [at site] (75% gray) | Page N of M (75% gray, right-aligned)
+   Row 1 (top): Icon (spans both rows) | 'Skyline-Tool' (12pt Bold Times-Roman, Royal Blue)
+   'for' (10.5pt Times-Roman, black) 'GameTitle' (12pt Italic, Navy Blue) machine-dir (10.5pt, Navy Blue)
+   Row 2 (bottom): Icon continued | date --- author on host [at site] (75% gray, 8pt) | Page N of M (75% gray, right-aligned)
    All positioned 3/4\" (54pt) from page bottom. Icon height = both rows combined (48pt)."
-  (let ((site (ignore-errors (short-site-name))))
+  (let* ((site (ignore-errors (short-site-name)))
+         (machine (or (ignore-errors (machine-directory-name)) ""))
+         (date-part (escape-ps-string date-str))
+         (author-part (escape-ps-string author))
+         (host-part (escape-ps-string hostname))
+         (site-part (escape-ps-string (or site "")))
+         (gt (escape-ps-string game-title))
+         (machine-dir (escape-ps-string machine)))
     ;; Draw icon spanning both rows (48pt tall at y=54..102)
     (format ps "gsave 56 54 translate~%")
     (write-ps-header-icon ps)
     (format ps "grestore~%")
-    ;; Row 1: Branding text at y=94 baseline (10pt font, row top at y=102)
+    ;; Row 1: Branding at y=96 baseline
     (format ps "gsave~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
-    (format ps "0.0 0.2 0.6 setrgbcolor~%")           ; Royal Blue
-    (format ps "112 94 moveto~%")
-    (format ps "(Skyline-Tool) show~%")
+    ;; "Skyline-Tool" in 12pt Bold Times-Roman, Royal Blue
+    (format ps "/Times-Bold-ISOLatin1 findfont 12 scalefont setfont~%")
+    (format ps "0.0 0.2 0.6 setrgbcolor~%")
+    (format ps "112 96 moveto (Skyline-Tool) show~%")
+    ;; " for " in 10.5pt Times-Roman, Black
     (format ps "currentpoint pop 2 add 0 moveto~%")
-    (format ps "0.0 0.0 0.0 setrgbcolor~%")           ; Black
+    (format ps "/Times-Roman-ISOLatin1 findfont 10.5 scalefont setfont~%")
+    (format ps "0.0 0.0 0.0 setrgbcolor~%")
     (format ps "(for ) show~%")
+    ;; Game-Title in 12pt Italic Times-Roman, Navy Blue
     (format ps "currentpoint pop 2 add 0 moveto~%")
-    (format ps "0.0 0.0 0.5 setrgbcolor~%")           ; Navy Blue
-    (if (string= game-title "Phantasia")
-        (format ps "/Dublin-ISOLatin1 findfont 10 scalefont setfont~%")
-        (format ps "/Times-Italic-ISOLatin1 findfont 10 scalefont setfont~%"))
-    (format ps "(~a) show~%" (escape-ps-string game-title))
+    (format ps "/Times-Italic-ISOLatin1 findfont 12 scalefont setfont~%")
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")
+    (format ps "(~a) show~%" gt)
+    ;; machine-dir in 10.5pt Times-Roman, Navy Blue
+    (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 10.5 scalefont setfont~%")
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")
+    (format ps "(~a) show~%" machine-dir)
     (format ps "grestore~%")
-    ;; Row 2: Date/author/host/site at y=67.57 baseline (7.5pt font, row top at y=74.57)
+    ;; Row 2: Date/author/host/site at y=67.57 baseline (8pt)
     (format ps "gsave~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 7.5 scalefont setfont~%")
-    (format ps "0.25 0.25 0.25 setrgbcolor~%")        ; 75% gray
+    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
+    (format ps "0.25 0.25 0.25 setrgbcolor~%")
     (format ps "112 67.57 moveto~%")
-    (let ((site-str (if site (format nil " at ~a" (escape-ps-string site)) "")))
-      (format ps "(~a --- ~a on ~a~a) show~%"
-              (escape-ps-string date-str)
-              (escape-ps-string author)
-              (escape-ps-string hostname)
-              site-str))
-    ;; Page number right-aligned at x=556 (56pt from right edge of 612pt page)
+    (format ps "(~a --- ~a on ~a~@[ at ~a~]) show~%"
+            date-part author-part host-part site-part)
+    ;; Page number right-aligned at x=556
     (format ps "556 67.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
             page-num total-pages)
@@ -177,7 +187,8 @@
 (/Helvetica-Bold) cvn /Helvetica-Bold-ISOLatin1 ReEncode
 (/Times-Roman) cvn /Times-Roman-ISOLatin1 ReEncode
 (/Times-Italic) cvn /Times-Italic-ISOLatin1 ReEncode
-"))
+(/Times-Bold) cvn /Times-Bold-ISOLatin1 ReEncode
+  "))
 
 (defun escape-ps-string (string)
   "Escape PostScript string with proper Unicode to octal conversion.
@@ -247,61 +258,7 @@
     (format ps "{ currentfile ~d string readhexstring pop } image~%" bpr)
     (format ps "~a~%" hex)))
 
-;; Printer discovery functions
-(defvar *printer-cache* nil
-  "Cached list of (queue-name . display-name) printer pairs, or NIL if no cache.")
-(defvar *printer-cache-time* 0
-  "Universal time when *printer-cache* was last refreshed.")
 
-(defun discover-printers (&optional force)
-  "Return a list of CUPS printer queue names (strings).
-   Calls lpstat -e to enumerate available printers.
-   Results are cached for 30 seconds unless FORCE is true."
-  (let ((now (get-universal-time)))
-    (unless (and *printer-cache* (> (- now *printer-cache-time*) 30))
-      (setf *printer-cache* nil
-            *printer-cache-time* 0))
-    (when (or force (not *printer-cache*))
-      (setf *printer-cache*
-            (sort (delete "" (mapcar (lambda (s) (string-trim '(#\Space #\Tab) s))
-                                     (ignore-errors
-                                       (uiop:run-program '("lpstat" "-e") :output :lines))))
-                  #'string-lessp)
-            *printer-cache-time* (get-universal-time)))
-    *printer-cache*))
-
-(defun discover-printers-with-names ()
-  "Return a list of (queue-name . display-name) for CUPS printers.
-   Display names come from CUPS HTML or lpstat descriptions."
-  (flet ((trim (s) (string-trim '(#\Space #\Tab #\Newline) s)))
-    (let ((queues (discover-printers))
-          (result nil))
-      (dolist (q queues)
-        (let ((display q))
-          ;; Try CUPS HTTP API for display name
-          (ignore-errors
-            (let* ((url (format nil "http://localhost:631/printers/~a" q))
-                   (html (uiop:run-program
-                          (list "curl" "-s" "--connect-timeout" "2" url)
-                          :output :string :ignore-error-status t)))
-              (when html
-                (let ((m (ppcre:scan-to-strings
-                           "printer-make-and-model[^>]*>([^<]+)"
-                           html)))
-                  (when (and m (aref m 0) (> (length (aref m 0)) 0))
-                    (setf display (trim (aref m 0))))))))
-          ;; Fallback: lpstat description
-          (when (string= display q)
-            (ignore-errors
-              (let ((detail (uiop:run-program (list "lpstat" "-l" "-p" q)
-                                             :output :string :ignore-error-status t)))
-                (when (and detail (search "Description:" detail))
-                  (let ((start (+ 12 (search "Description:" detail)))
-                        (end (position #\Newline detail :start (search "Description:" detail))))
-                    (let ((desc (trim (subseq detail start end))))
-                      (when (> (length desc) 0) (setf display desc))))))))
-          (push (cons q display) result)))
-      (sort result #'string-lessp :key #'cdr))))
 
 (defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
   "Write PDF page footer with proper formatting.
@@ -309,58 +266,51 @@
      | < Icon >  | Skyline-Tool for _Phantasia_ 7800                                                              |              |
      | < ^^^^ >  | 2026-06-30 13:41 --- Bruce-Robert Pocock on Hermes at Star-Hope                                | Page 1 of 19 |
    Icon = two lines tall graphics, _Phantasia_ = italics navy blue, 7800 = machine-directory-name
-   Skyline-Tool in Royal Blue, 'for' '7800' in black
-   Date - time - user on host at short-site name and page n of m --- all in 75% black (dark gray) and 8pt"
-(let* ((site (ignore-errors (short-site-name)))
-          (machine (or (ignore-errors (machine-directory-name)) ""))
-          (date-part (escape-ps-string date-str))
-          (author-part (escape-ps-string author))
-          (host-part (when hostname (escape-ps-string hostname)))
-          (site-part (escape-ps-string (or site "")))
-          (game-title (escape-ps-string title-text))
-          (machine-dir (escape-ps-string machine))
-          (icon-path (asdf:system-relative-pathname :skyline-tool "../Tools/skyline-tool-icon-64.png"))
-          (icon-pattern (and (probe-file icon-path)
-                             (ignore-errors (clim:make-pattern-from-bitmap-file icon-path)))))
-     ;; Draw icon spanning both rows (icon is 64x64, drawn at 64x64 points)
-     (when icon-pattern
-       (format ps "gsave~%")
-       (format ps "/PatternType 1 /PaintType 2 /TilingType 1~%")
-       (format ps "[64 0 0 64 0 0] /PatternType 1 /PaintType 2 /TilingType 1~%")
-       (format ps "~a setpattern~%" icon-pattern)
-       (format ps "0 42 64 64 rectfill~%")
-       (format ps "grestore~%"))
-     ;; Row 1: Icon + Branding (at y=106 baseline)
-     (format ps "gsave~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
+   Skyline-Tool in 12pt Bold Times-Roman Royal Blue, 'for' 10.5pt Times-Roman black,
+   Game-Title in 12pt Italic Times-Roman Navy Blue, machine-dir in 10.5pt Times-Roman Navy Blue
+   Date/author/host/site in 75% gray 8pt, page number right-aligned."
+  (let* ((site (ignore-errors (short-site-name)))
+         (machine (or (ignore-errors (machine-directory-name)) ""))
+         (date-part (escape-ps-string date-str))
+         (author-part (escape-ps-string author))
+         (host-part (when hostname (escape-ps-string hostname)))
+         (site-part (escape-ps-string (or site "")))
+         (game-title (escape-ps-string title-text))
+         (machine-dir (escape-ps-string machine)))
+    ;; Icon spanning both rows (48x48 at y=54, translates to 54-102 range)
+    (format ps "gsave 56 54 translate~%")
+    (write-ps-header-icon ps)
+    (format ps "grestore~%")
+    ;; Row 1: Icon + Branding at y=96 baseline
+    (format ps "gsave~%")
+    ;; "Skyline-Tool" in 12pt Bold Times-Roman, Royal Blue
+    (format ps "/Times-Bold-ISOLatin1 findfont 12 scalefont setfont~%")
     (format ps "0.0 0.2 0.6 setrgbcolor~%")
-    (format ps "112 106 moveto~%")
-    (format ps "(Skyline-Tool) show~%")
+    (format ps "112 96 moveto (Skyline-Tool) show~%")
+    ;; " for " in 10.5pt Times-Roman, Black
     (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 10.5 scalefont setfont~%")
     (format ps "0.0 0.0 0.0 setrgbcolor~%")
     (format ps "(for ) show~%")
+    ;; Game-Title in 12pt Italic Times-Roman, Navy Blue
     (format ps "currentpoint pop 2 add 0 moveto~%")
+    (format ps "/Times-Italic-ISOLatin1 findfont 12 scalefont setfont~%")
     (format ps "0.0 0.0 0.5 setrgbcolor~%")
-    (format ps "/Times-Italic-ISOLatin1 findfont 8 scalefont setfont~%")
     (format ps "(~a) show~%" game-title)
+    ;; machine-dir in 10.5pt Times-Roman, Navy Blue
     (format ps "currentpoint pop 2 add 0 moveto~%")
-    (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
-    (format ps "0.25 0.25 0.25 setrgbcolor~%")
+    (format ps "/Times-Roman-ISOLatin1 findfont 10.5 scalefont setfont~%")
+    (format ps "0.0 0.0 0.5 setrgbcolor~%")
     (format ps "(~a) show~%" machine-dir)
     (format ps "grestore~%")
     ;; Row 2: Date/author on host at site + page number (dark gray, 8pt)
     (format ps "gsave~%")
     (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
     (format ps "0.25 0.25 0.25 setrgbcolor~%")
-    (format ps "112 79.57 moveto~%")
-    ;; Format: date --- author [on host] [at site]
+    (format ps "112 67.57 moveto~%")
     (format ps "(~a~@[ --- ~a~]~@[ on ~a~]~@[ at ~a~]) show~%"
-            date-part
-            author-part
-            host-part
-            site-part)
-    ;; Page number right-aligned
-    (format ps "556 79.57 moveto~%")
+            date-part author-part host-part site-part)
+    (format ps "556 67.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
             page-num total-pages)
     (format ps "grestore~%")))

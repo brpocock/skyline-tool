@@ -1,5 +1,12 @@
 (in-package :skyline-tool)
 
+;; Macro for defining frame-specific commands for read-script-frame
+(defmacro define-read-script-frame-command ((name &rest options) args &body body)
+  "Define a CLIM command for the read-script-frame command table."
+  `(clim:define-command (,name :command-table read-script-frame ,@options)
+     ,args
+     ,@body))
+
 (defun find-atarivox-serial-port ()
   (if (tty-xterm-p)
       (format t "~2%~10t[1;3;4mConnect to AtariVox (via Stelladapter) Serial Port~%[0m")

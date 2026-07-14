@@ -5,8 +5,8 @@
 
 ;; --- Tileset Inspector frame ---
 
-(clim:define-application-frame tileset-inspector-frame (resource-inspector-mixin)
-  ((%pathname :initform nil :accessor :accessor tileset-inspector-pathname)
+(clim:define-application-frame tileset-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
+  ((%pathname :initform nil :initarg :pathname :accessor tileset-inspector-pathname)
    (%tileset :initform nil :accessor tileset-inspector-tileset))
   (:panes (tileset-pane :application :height 600 :width 800
                                     :display-function 'display-tileset-inspector)
@@ -35,7 +35,7 @@
   "Open a tileset inspector for the given TSX file."
   (let* ((resource (make-instance 'game-resource-tileset
                                   :moniker (pathname-name pathname)
-                                  :kind "Tileset"
+                                 
                                   :full-path (truename pathname)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame 'tileset-inspector-frame

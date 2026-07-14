@@ -6,58 +6,69 @@
   :author "Bruce-Robert Pocock"
   :version "0.9.2"
   :maintainer "Bruce-Robert Pocock"
-  :mailto "brpocock+skyline@star-hope.org"
+  :mailto "brpocock+skyline@interworldly.com"
   :licence "MIT"
   :long-name "The Skyline tools for building ARPG's for various machines"
-
-:depends-on (
-                :alexandria
-                :bordeaux-threads
-                :cl-base64
-                :cl-change-case
-                :cl-json
-                :cl-ppcre
-                :clim-debugger
-                :clim-listener
-                :climacs
-                :clods-export
-                :clouseau
-                :cserial-port
-                :drakma
-                :dufy
-                :fiveam
-                :ironclad
-                :local-time
-                :lparallel
-                :mcclim
-                :midi
-                :parse-number
-                :png-read
-                :zpng
-                :quicklisp-slime-helper
-                :replic
-                :serapeum
-                :swank
-                :trivial-backtrace
-                :trivial-gray-streams
-                :xmls
-                :yacc
-                :zip
-                
-                :eightbol
-                )
+  
+  :depends-on (
+               :alexandria
+               :bordeaux-threads
+               :cl-base64
+               :cl-change-case
+               :cl-fad
+               :cl-json
+               :cl-ppcre
+               :clim-debugger
+               :clim-listener
+               :climacs
+               :clods-export
+               :clouseau
+               :cserial-port
+               :drakma
+               :dufy
+               :eightbol
+               :eventbus
+               :fiveam
+               :inotify  
+               :ironclad
+               :local-time
+               :lparallel
+               :mcclim
+               :midi
+               :parse-number
+               :png-read
+               :zpng
+               :quicklisp-slime-helper
+               :replic
+               :serapeum
+               :swank
+               :trivial-backtrace
+               :trivial-gray-streams
+               :xmls
+               :yacc
+               :zip
+               :journal
+               
+               :eightbol
+               )
   :encoding :utf-8
   :components
   ((:module "src"
-    :components (
+    :components ((:file "package")
+                 (:file "machines" :depends-on ("package"))
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("package" "eprom"))
-                   (:file "printer-utils" :depends-on ("package"))
-                 (:file "animation-editor" :depends-on ("package" "decode-animation-buffers" "printer-utils"))
-                 (:file "asset-allocator" :depends-on ("package" "maps" "graphics"))
-                 (:file "cbm-tooling" :depends-on ("package"))
-                 (:file "atarivox" :depends-on ("package" "runner"))
-                 (:file "clim-simple-echo" :depends-on ("package"))
+                 (:file "printer-utils" :depends-on ("package"))
+                 (:file "avahi-wrapper" :depends-on ("package" "printer-utils"))
+                 (:file "avahi-handler" :depends-on ("package" "avahi-wrapper"))
+                 (:file "animation-editor" :depends-on ("package" "decode-animation-buffers"
+                                                                  "printer-utils" "avahi-wrapper"))
+(:file "asset-allocator" :depends-on ("package" "maps" "graphics"
+                                                              "version-control"))
+                  (:file "cbm-tooling" :depends-on ("package"))
+                  (:file "atarivox" :depends-on ("package" "runner"))
+                  (:file "boat-inspector" :depends-on ("package" "game-resource"))
+                  (:file "clim-simple-echo" :depends-on ("package"))
                  (:file "decode-animation-buffers" :depends-on ("package"))
                  (:file "decode-decal" :depends-on ("peek" "decode-object"))
                  (:file "decode-header" :depends-on ("peek" "package"))
@@ -65,63 +76,137 @@
                  (:file "decode-object" :depends-on ("package" "clim-simple-echo"))
                  (:file "prototypes" :depends-on ("package" "decode-object"))
                  (:file "eprom" :depends-on ("package"))
+                 (:file "eventbus" :depends-on ("package"))
                  (:file "forth" :depends-on ("package" "fountain" "interface"))
                  (:file "fountain" :depends-on ("package" "maps"))
+(:module "gui"
+                   :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils" "game-resource")
+                   :components ((:file "gui-inspector")
+                                (:file "gui-presentations")
+                                (:file "gui-dialogs")
+                                (:file "gui-atari-vox-dictionary")
+                               (:file "gui-basic-routine")
+                               (:file "gui-blob")
+                               (:file "gui-blob-inspector")
+                               (:file "gui-boat")
+(:file "gui-character")
+                                (:file "character-inspector")
+                                (:file "gui-class")
+(:file "gui-cobol-routine")
+                                (:file "gui-validation")
+                                (:file "gui-flag")
+                               (:file "gui-forth-script")
+                               (:file "gui-instrument")
+                               (:file "gui-intellivoice-dictionary")
+                               (:file "gui-item")
+                               (:file "gui-key")
+                               (:file "gui-magic-desk-dictionary")
+                               (:file "gui-map")
+                               (:file "gui-map-inspector")
+                               (:file "gui-object-prototype")
+                               (:file "gui-pascal-routine")
+                               (:file "gui-phrasebook")
+                               (:file "gui-preferences")
+                               (:file "gui-project")
+                               (:file "gui-script")
+                               (:file "gui-script-inspector")
+                               (:file "gui-song")
+                               (:file "gui-song-inspector")
+                               (:file "gui-sprite-sheet")
+                               (:file "gui-terminal-echo")
+(:file "gui-tileset")
+                                (:file "help-about-dialog")))
                  (:module "graphics"
                   :depends-on ("package" "prototypes" "misc" "utils")
                   :components (
+                               (:file "dispatch" :depends-on ())
+                               (:file "dispatch-extras" :depends-on ("dispatch"))
                                (:file "palette")
                                (:file "chaos" :depends-on ("palette"))
                                (:file "font-compile" :depends-on ("palette"))
                                (:file "misc-graphics" :depends-on ("palette" "font-compile"))
                                (:file "pixel-utils" :depends-on ("palette" "misc-graphics"))
                                (:file "color-tools" :depends-on ("palette"))
-                               (:file "platform-2600" :depends-on ("palette" "misc-graphics" "chaos"))
-                               (:file "platform-2600-extras" :depends-on ("palette" "misc-graphics" "platform-2600"))
+                               (:file "platform-2600" :depends-on ("palette" "misc-graphics"
+                                                                             "chaos"))
+                               (:file "platform-2600-extras" :depends-on ("palette"
+                                                                          "misc-graphics"
+                                                                          "platform-2600"))
                                (:file "platform-7800" :depends-on ("palette" "misc-graphics"))
-                               (:file "platform-7800-extras" :depends-on ("palette" "misc-graphics" "platform-7800"))
+                               (:file "platform-7800-extras" :depends-on ("palette"
+                                                                          "misc-graphics"
+                                                                          "platform-7800"))
                                (:file "platform-intv" :depends-on ("palette" "misc-graphics"))
-                               (:file "platform-intv-extras" :depends-on ("palette" "misc-graphics" "platform-intv"))
+                               (:file "platform-intv-extras" :depends-on ("palette" "misc-graphics"
+                                                                                    "platform-intv"))
                                (:file "platform-vic2" :depends-on ("palette" "misc-graphics"))
                                (:file "platform-lynx" :depends-on ("palette" "misc-graphics"))
                                (:file "platform-snes" :depends-on ("palette" "misc-graphics"))
                                (:file "platform-nes" :depends-on ("palette" "misc-graphics"))
-                               (:file "platform-tms9918a" :depends-on ("palette" "misc-graphics"))
+                               (:file "platform-tms9918a" :depends-on ("palette"
+                                                                       "misc-graphics"))
                                (:file "platform-tg16" :depends-on ("palette" "misc-graphics"))
                                (:file "platform-sms" :depends-on ("palette" "misc-graphics"))
                                (:file "platform-gb" :depends-on ("palette" "misc-graphics"))
-                               (:file "platform-a2gs" :depends-on ("palette" "misc-graphics"))
-                               (:file "dispatch" :depends-on ("palette" "font-compile" "misc-graphics" "platform-2600" "platform-2600-extras" "platform-7800" "platform-7800-extras" "platform-intv" "platform-intv-extras" "platform-vic2" "platform-lynx" "platform-snes" "platform-nes" "platform-tms9918a" "platform-tg16" "platform-sms" "platform-gb" "platform-a2gs"))
-                               (:file "dispatch-extras" :depends-on ("dispatch"))))
+                               (:file "platform-a2gs" :depends-on ("palette" "misc-graphics"))))
                  (:file "i18n-l10n" :depends-on ("package"))
-                 (:file "interface" :depends-on ("package" "asset-allocator" "oops" "cbm-tooling" "launcher"))
-                   (:file "preferences" :depends-on ("package"))
-(:file "game-resource" :depends-on ("package"))
-(:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils" "printer-utils" "clim-simple-echo" "game-resource"))
-                  (:file "launcher" :depends-on ("package" "preferences" "all-resources" "clim-simple-echo" "ps-utils" "printer-utils"))
-                  (:file "gui/help-about-dialog" :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils"))
-                 (:file "map-inspector" :depends-on ("package" "maps" "launcher" "clim-simple-echo"))
-                  (:file "character-inspector" :depends-on ("package" "tables" "launcher" "item-chooser" "graphics" "printer-utils"))
-                  (:file "listings" :depends-on ("package"))
-                   (:file "ps-utils" :depends-on ("package"))
+                 
+                 (:file "interface" :depends-on ("package" "asset-allocator" "oops" "machines"
+                                                           "cbm-tooling" "launcher" "thread-pool"
+                                                           "ps-utils"))
+                 (:file "preferences" :depends-on ("package"))
+                 (:file "preferences-inspector" :depends-on ("package"))
+                 (:file "game-resource" :depends-on ("package" "version-control"))
+                 (:file "local-locale" :depends-on ("package"))
+                 (:file "context-menu" :depends-on ("package"))
+(:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
+                                                                 "printer-utils" "clim-simple-echo"
+                                                                 "game-resource" "thread-pool"
+                                                                 "context-menu" "boat-inspector"))
+                 (:file "launcher" :depends-on ("package" "preferences" "all-resources"
+                                                          "clim-simple-echo" "ps-utils"
+                                                          "printer-utils"))
+                 (:file "listings" :depends-on ("package"))
+                 (:file "ps-utils" :depends-on ("package"))
                  (:file "maps" :depends-on ("package" "prototypes"))
                  (:file "misc" :depends-on ("package"))
                  (:file "music" :depends-on ("package"))
                  (:file "globals-copybook" :depends-on ("package" "asset-allocator"))
                  (:file "oops" :depends-on ("package" "globals-copybook"))
-                 (:file "package")
                  (:file "peek" :depends-on ("package"))
-                 (:file "runner" :depends-on ("package"))
+                 (:file "scavengers" :depends-on ("package" "game-resource" "tables"))
+                 (:file "runner" :depends-on ("package" "ps-utils" "interface"
+                                                        "clim-simple-echo"))
                  (:file "sega-constants" :depends-on ("package"))
                  (:file "tables" :depends-on ("package"))
+                 (:file "thread-pool" :depends-on ("package"))
                  (:file "thumbnails" :depends-on ("package" "graphics" "maps"))
-                  (:file "item-chooser" :depends-on ("package"))
-                  (:file "item-list-inspector" :depends-on ("package"))
-                  (:file "oops-class-inspector" :depends-on ("package"))
-                   (:file "boat-inspector" :depends-on ("package"))
+                 (:file "item-chooser" :depends-on ("package"))
                  (:file "threed" :depends-on ("package"))
-                  (:file "utils" :depends-on ("package"))
-                  (:file "utilities" :depends-on ("package")))))
+                 (:file "utils" :depends-on ("package"))
+                 (:file "utilities" :depends-on ("package"))
+                 (:module "version-control"
+                  :depends-on ("package")
+                  :components ((:file "package")
+                               (:file "config" :depends-on ("package"))
+                               (:file "presentation-utils" :depends-on ("package" "config"
+                                                                                  "backends"))
+                               (:module "backends"
+                                :depends-on ("package")
+                                :components ((:file "backend-git")
+                                             (:file "backend-svn")
+                                             (:file "backend-rcs")
+                                             (:file "backend-bazaar")
+                                             (:file "backend-mercurial")
+                                             (:file "backend-cvs")))))
+                 (:module "issue-tracking"
+                  :depends-on ("package")
+                  :components ((:file "package")
+                               (:file "embedded-list" :depends-on ("package"))
+                               (:module "clients"
+                                :components ((:file "bugzilla")
+                                             (:file "github")
+                                             (:file "gitlab"))))))))
   :in-order-to ((asdf:test-op (asdf:test-op #:skyline-tool/test))))
 
 ;; Separate test system
@@ -151,7 +236,8 @@
                  (:file "multiplatform-tests" :depends-on ("package"))
                  (:file "music-compilation-tests" :depends-on ("package"))
                  (:file "music-tests" :depends-on ("package" "test-data-generators"))
-                 (:file "music-new-features-tests" :depends-on ("package" "music-compilation-tests"))
+                 (:file "music-new-features-tests"
+                  :depends-on ("package" "music-compilation-tests"))
                  (:file "near-term-makefile-parse-tests" :depends-on ("package" "interface-tests"))
                  (:file "nes-tests" :depends-on ("package"))
                  (:file "package" :depends-on ("test-data-generators"))

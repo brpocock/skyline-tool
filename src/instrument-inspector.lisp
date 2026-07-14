@@ -16,7 +16,7 @@
   nil)
 
 ;; Instrument inspector frame
-(clim:define-application-frame instrument-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame instrument-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (orchestration :initarg :orchestration :accessor frame-orchestration))
   (:menu-bar instrument-inspector-menu-bar)
@@ -75,7 +75,7 @@
          (orchestration (load-orchestration full))
          (resource (make-instance 'game-resource-instrument
                                   :moniker "Instruments"
-                                  :kind "Instruments"
+                                 
                                   :collective-path (when (probe-file full) (truename full))))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame 'instrument-inspector-frame

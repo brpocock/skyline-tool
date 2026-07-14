@@ -31,21 +31,39 @@
          (game-resource-present-right-margin resource stream)))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-script) (type game-resource-script-editable) stream view &key)
-  (declare (ignore view))
-  (clim:formatting-table (stream)
-     (clim:formatting-row (stream)
-       (clim:formatting-cell (stream :align-x :right)
-         (format stream "Title: "))
-       (clim:formatting-cell (stream :align-x :left)
-         (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))))
+   (declare (ignore view))
+   (clim:formatting-table (stream)
+      (clim:formatting-row (stream)
+        (clim:formatting-cell (stream :align-x :right)
+          (format stream "Title: "))
+        (clim:formatting-cell (stream :align-x :left)
+          (interactive-editing-gadget-with-validation
+           stream resource
+           (lambda (r) (game-resource-title r))
+           (lambda (r v) (setf (game-resource-title r) v))
+           :label "Title:"
+           :validator #'validate-asset-name
+           :max-length 200)))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-script) (type game-resource-script-viewing) stream view &key)
   (declare (ignore view))
   (clim:surrounding-output-with-border (stream :shape :rounded)
      (format stream "[SCRIPT] ~a" (game-resource-title resource))))
 
+(defmethod present-editing ((resource game-resource-script) stream)
+  (clim:present resource 'game-resource-script-editable :stream stream))
+
+(defmethod present-reading ((resource game-resource-script) stream)
+  (clim:present resource 'game-resource-script-viewing :stream stream))
+
+(defmethod present-reference ((resource game-resource-script) stream)
+  (clim:present resource 'game-resource-script-reference :stream stream))
+
 (defun open-script-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-script)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-script
+                                  :kind "Script"
+                                  :moniker "Scripts/new-script.sky")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-script))
   (list

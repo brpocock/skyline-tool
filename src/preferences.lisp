@@ -147,12 +147,13 @@
                  (set-pref prefs-key (namestring dir))
                  (set-pref :last-save-directory (namestring dir)))
                path))))
-        ;; Fallback to CLIM pathname prompter
-        (let ((path (clim:accept 'pathname :prompt "Save As" :default default)))
-          (when path
-            (let ((dir (make-pathname :name nil :type nil :defaults path)))
-              (setf *last-save-directory* dir)
-              (when prefs-key
-                (set-pref prefs-key (namestring dir))
-                (set-pref :last-save-directory (namestring dir)))
-              path))))))
+;; Fallback to file dialog
+         (let ((path (run-text-input-dialog "Save As (enter path):" :initial-value (namestring default) :title "Save As")))
+           (when path
+             (let ((pathname-path (pathname path))
+                   (dir (make-pathname :name nil :type nil :defaults (pathname path))))
+               (setf *last-save-directory* dir)
+               (when prefs-key
+                 (set-pref prefs-key (namestring dir))
+                 (set-pref :last-save-directory (namestring dir)))
+               pathname-path))))))

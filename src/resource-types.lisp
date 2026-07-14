@@ -427,7 +427,13 @@
 (defun validate-atari-vox-dictionary (path) (declare (ignore path)) t)
 (defun validate-project-config (path) (declare (ignore path)) t)
 
-;; --- Formatters ---
+  (defun resource-to-json (resource)
+    "Convert resource object to JSON representation"
+    (json:encode-json-string resource))
+
+  (defun resource-from-json (json-string)
+    "Convert JSON string to resource object"
+    (json:decode-json-from-string json-string)) }}
 
 (defun format-resource-type (rt stream)
   "Format a resource type for display."

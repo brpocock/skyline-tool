@@ -108,10 +108,6 @@
   (defparameter +compile-site-name+ (ignore-errors (short-site-name)))
   (defparameter +compile-long-site-name+ (ignore-errors (long-site-name))))
 
-(clim:define-command (com-about-skyline-tool :command-table clim-internals::global-command-table) ()
-  "Display the Skyline-Tool About dialog."
-  (show-about-skyline-tool))
-
 (clim:define-command (com-open-dev-guide :command-table clim-internals::global-command-table) ()
   (let ((html-index (asdf:system-relative-pathname
                       :skyline-tool
@@ -812,6 +808,45 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
                                            (error (e) (format t "~&(room) error: ~a~%" e))))
                                        :process-name "Room"))
 
+(defun show-lisp-threads ()
+  "Show all Lisp threads in a simple echo window."
+  (clim-simple-echo:run-in-simple-echo
+   (lambda ()
+     (format t "~&~d thread~:p:~2%" (length (bt:all-threads)))
+     (dolist (thread (bt:all-threads))
+       (format t "~&~a~%" thread)))
+   :process-name "Lisp Threads"))
+
+(defun show-lisp-threads-with-actions ()
+  "Show all Lisp threads with clickable actions (interrupt/destroy)."
+  (clim-simple-echo:run-in-simple-echo
+   (lambda ()
+     (format t "~&Lisp Threads (click on thread name for actions):~2%")
+     (dolist (thread (bt:all-threads))
+       (format t "~&[~a] - Name: ~a~%" 
+               (bt:thread-name thread)
+               (bt:thread-name thread))))
+   :process-name "Lisp Threads"))
+
+(defun interrupt-thread (thread)
+  "Interrupt a Lisp THREAD."
+  (bt:interrupt-thread thread))
+
+(defun destroy-thread (thread)
+  "Destroy a Lisp THREAD."
+  (bt:destroy-thread thread))
+
+(defun show-clouseau ()
+  "Open the Clouseau inspector on the Skyline-Tool package."
+  (let ((inspector-sym (or (find-symbol "INSPECTOR" :clouseau)
+                           (find-symbol "INSPECTOR" :clim))))
+    (if (and inspector-sym (fboundp inspector-sym))
+        (funcall inspector-sym (find-package :skyline-tool))
+        (clim-simple-echo:run-in-simple-echo
+         (lambda ()
+           (format t "Clouseau inspector not available in this build.~%"))
+         :process-name "Clouseau"))))
+
 (defun push-binary-to-7800-game-drive ()
   "Push the latest binary to the 7800GD over its serial (debug) port"
   (clim-simple-echo:run-in-simple-echo
@@ -1028,23 +1063,28 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 ;; --- Command tables ---
 
 (clim:define-command-table rom-budget-file-menu
+  :inherit-from (clim-internals::global-command-table)
   :menu (("Save As" :menu rom-budget-save-as-menu)
          ("Print To" :menu rom-budget-print-to-menu)
          (nil :divider :line)
          ("Close" :command com-close-rom-budget)))
 
 (clim:define-command-table rom-budget-save-as-menu
+  :inherit-from (clim-internals::global-command-table)
   :menu (("Text..." :command com-save-rom-budget-text)
          ("JSON..." :command com-save-rom-budget-json)
          ("PDF..." :command com-save-rom-budget-pdf)))
 
 (clim:define-command-table rom-budget-print-to-menu
+  :inherit-from (clim-internals::global-command-table)
   :menu (("Choose Printer..." :command com-print-rom-budget-to-printer)))
 
 (clim:define-command-table rom-budget-edit-menu
+  :inherit-from (clim-internals::global-command-table)
   :menu (("Copy" :command com-copy-rom-budget)))
 
 (clim:define-command-table rom-budget-help-menu
+  :inherit-from (clim-internals::global-command-table)
   :menu (("How to Manage ROM Budget" :command com-help-for-window)
          ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
          ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)

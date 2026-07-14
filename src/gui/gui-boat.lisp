@@ -6,6 +6,12 @@
 (clim:define-presentation-type game-resource-boat-reference ()
    :inherit-from 'game-resource-boat)
 
+(clim:define-presentation-type game-resource-boat-editable ()
+   :inherit-from 'game-resource-boat)
+
+(clim:define-presentation-type game-resource-boat-viewing ()
+   :inherit-from 'game-resource-boat)
+
 (defmethod present-reference ((resource game-resource-boat) stream)
     (clim:with-output-as-presentation
         (stream resource 'game-resource-boat-reference)
@@ -25,8 +31,19 @@
           (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
             (game-resource-present-right-margin resource stream))))))
 
+(defmethod open-resource-inspector ((resource game-resource-boat) &optional (mode :editing))
+  (declare (ignore mode))
+  (let ((name (game-resource-title resource)))
+    (run-boat-inspector (or name "unknown"))))
+
 (defun open-boat-inspector (resource)
-   (open-resource-inspector (or resource (make-instance 'game-resource-boat)) :editing))
+   (open-resource-inspector (or resource
+                                 (make-instance 'game-resource-boat
+                                  
+                                   :id 0
+                                   :name "New Boat"
+                                   :boat-class "rowboat"
+                                   :notes "")) :editing))
 
 (defmethod present-reading ((resource game-resource-boat) stream)
   (clim:formatting-table (stream)

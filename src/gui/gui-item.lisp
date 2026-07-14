@@ -25,8 +25,48 @@
           (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
             (game-resource-present-right-margin resource stream))))))
 
+(defmethod open-resource-inspector ((resource game-resource-item) &optional (mode :editing))
+  (clim:run-frame-top-level
+   (clim:make-application-frame 'game-resource-item-inspector
+                                :resource (or resource (make-instance 'game-resource-item))
+                                :view-mode mode)))
+
+(clim:define-application-frame game-resource-item-inspector (gui-inspector-frame clim:standard-application-frame)
+  ((frame-resource :initarg :resource :reader frame-resource :initform nil))
+  (:menu-bar item-menu-bar)
+  (:pretty-name "Item Inspector"))
+
+(clim:define-command-table item-menu-bar
+  :menu (("Item"  :menu inspector-file-menu)
+         ("Edit"  :menu inspector-edit-menu)
+         ("Run"   :menu inspector-run-menu)
+         ("View"  :menu inspector-view-menu)
+         ("Help"  :menu inspector-help-menu)))
+
 (defun open-item-inspector (resource)
-   (open-resource-inspector (or resource (make-instance 'game-resource-item)) :editing))
+   (open-resource-inspector (or resource
+                                 (make-instance 'game-resource-item
+                                               :item-id 0
+                                               :name "New Item"
+                                               :equippable-p nil
+                                               :slot :item
+                                               :sound ""
+                                               :entity-class ""
+                                               :entity-prototype ""
+                                               :course-class ""
+                                               :course-prototype ""
+                                               :decal-bank 0
+                                               :decal-sheet 0
+                                               :decal-up 0
+                                               :decal-down 0
+                                               :decal-right 0
+                                               :decal-left 0
+                                               :drawing-mode ""
+                                               :palette 0
+                                               :displacement-up 0
+                                               :displacement-down 0
+                                               :displacement-right 0
+                                               :displacement-left 0)) :editing))
 
 (defmethod present-reading ((resource game-resource-item) stream)
   (clim:formatting-table (stream)
@@ -48,12 +88,12 @@
           (clim:formatting-cell (stream)
             (let* ((value (assoc header values :test #'string-equal))
                    (gadget-value (if value (cdr value) "")))
-              (clim:insert-gadget stream
-                :label nil
-                :variable gadget-value
-                :activation-callback
-                (lambda (gadget)
-                  (setf (cdr (assoc header values :test #'string-equal))
-                        (clim:gadget-value gadget))
-                   (save-item-to-ods item ods-path values))))))))))
+              (insert-gadget stream
+                             :label nil
+                             :variable gadget-value
+                             :activation-callback
+                             (lambda (gadget)
+                               (setf (cdr (assoc header values :test #'string-equal))
+                                     (clim:gadget-value gadget))
+                               (save-item-to-ods item ods-path values))))))))))
 

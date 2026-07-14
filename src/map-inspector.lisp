@@ -3,6 +3,13 @@
 
 (in-package :skyline-tool)
 
+;; Macro for defining frame-specific commands for map-inspector-frame
+(defmacro define-map-inspector-frame-command ((name &rest options) args &body body)
+  "Define a CLIM command for the map-inspector-frame command table."
+  `(clim:define-command (,name :command-table map-inspector-frame ,@options)
+     ,args
+     ,@body))
+
 ;; --- TMX Parsing ---
 
 (defstruct map-editor-data
@@ -215,7 +222,7 @@
 
 ;; --- Frame Definition ---
 
-(clim:define-application-frame map-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame map-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((%data :initform nil :accessor map-inspector-frame-data)
    (%original-tmx-path :initarg :tmx-path :accessor map-editor-original-tmx-path)
    (%new-suffix :initform nil :accessor map-inspector-new-suffix))
@@ -972,7 +979,7 @@
                                                   (clim:find-port :server-path :x))))
          (resource (make-instance 'game-resource-map
                                   :moniker (pathname-name tmx-path)
-                                  :kind "Map"
+                                 
                                   :locale (or locale :en)
                                   :full-path (truename tmx-path)))
          (frame (clim:make-application-frame 'map-inspector-frame

@@ -17,7 +17,7 @@
                         :external-format :utf-8)
       (dolist (name names) (format f "~a~%" name)))))
 
-(clim:define-application-frame flags-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame flags-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (names :initarg :names :accessor frame-names))
   (:menu-bar flags-inspector-menu-bar)
@@ -73,7 +73,7 @@
          (names (load-flags-list full))
          (resource (make-instance 'game-resource-from-file
                                   :moniker "Flags Index"
-                                  :kind "Flags"
+                                 
                                   :full-path (truename full)))
          (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame 'flags-inspector-frame

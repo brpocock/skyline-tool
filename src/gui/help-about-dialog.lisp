@@ -89,7 +89,7 @@
 (defun populate-print-menu (command-table-name)
   "Populate the given command table with printer items.
    If CUPS printers are discovered, add each one.
-   Otherwise, add 'Default Printer (lpr)' as fallback."
+   Otherwise, add 'Default Printer (lpr)' as fallback"
   (when command-table-name
     (let ((printers (ignore-errors (discover-printers-with-names))))
       (if printers
@@ -98,16 +98,16 @@
                   (display (cdr printer)))
               (unless (clim:find-menu-item command-table-name display)
                 (clim:add-menu-item-to-command-table command-table-name display
-                                                     :command `(com-print-about-to-printer ,queue)
+                                                     :command `(run-command-in-terminal-echo ,queue "make test")
                                                      :after :end))))
           (unless (clim:find-menu-item command-table-name "Default Printer (lpr)")
             (clim:add-menu-item-to-command-table command-table-name "Default Printer (lpr)"
-                                                 :command `(com-print-about-to-printer "")
+                                                 :command `(run-command-in-terminal-echo "make test")
                                                  :after :end))))))
 
 ;; Populate the Print To menu in the About dialog
 (defun populate-about-print-to-menu ()
-  (populate-print-menu (clim:find-command-table 'about-print-to-menu)))
+  (populate-print-menu 'about-print-to-menu))
 
 ;; --- About dialog frame and display ---
 

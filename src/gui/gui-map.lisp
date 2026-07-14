@@ -37,7 +37,18 @@
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Name: "))
       (clim:formatting-cell (stream :align-x :left)
-        (fixme-interactive-editing-gadget-with-validation stream resource 'game-resource-title)))))
+        (interactive-editing-gadget-with-validation
+         stream resource
+         (lambda (r) (game-resource-title r))
+         (lambda (r v) (rename-asset r v))
+         :label "Name:"
+         :validator #'validate-asset-name
+         :max-length 200)))
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Subdirectory: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (format stream "~a (changing subdirectory not supported)" (game-resource-locale resource))))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-map) (type game-resource-map-viewing) stream view &key)
    (declare (ignore view))
@@ -45,13 +56,25 @@
      (format stream "[MAP ~a] ~a" (game-resource-asset-id resource)
              (game-resource-title resource))))
 
+(defmethod present-editing ((resource game-resource-map) stream)
+  (clim:present resource 'game-resource-map-editable :stream stream))
+
+(defmethod present-reading ((resource game-resource-map) stream)
+  (clim:present resource 'game-resource-map-viewing :stream stream))
+
+(defmethod present-reference ((resource game-resource-map) stream)
+  (clim:present resource 'game-resource-map-reference :stream stream))
+
 (defun open-map-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-map)) :editing))
+  (open-resource-inspector (or resource
+                                (make-instance 'game-resource-map
+                                  :kind "Map"
+                                  :moniker "Maps/new-map.tmx")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-map))
   (list
    (make-menu-item "Inspect..." (lambda () (open-map-inspector resource)))
    (make-menu-item "Open in Tiled..."
                    (lambda ()
-                     (uiop:run-program (list "tiled" (or (game-resource-full-path resource) (game-resource-moniker resource)))
-                                      :output nil :ignore-error-status t)))))
+                     (uiop:run-program (list "tiled" (or (game-resource-full-path resource) (game-asset-moniker resource)))
+                                       :output nil :ignore-error-status t)))))

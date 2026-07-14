@@ -3,7 +3,7 @@
 ;; AtariVox Dictionary Inspector - for viewing/editing the phonetic dictionary
 
 ;; AtariVox Dictionary Inspector Frame
-(clim:define-application-frame atari-vox-dictionary-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame atari-vox-dictionary-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
   ((path :initarg :path :accessor frame-path)
    (entries :initarg :entries :accessor frame-entries))
   (:menu-bar atari-vox-dictionary-inspector-menu-bar)
@@ -78,7 +78,7 @@
          (entries (load-atari-vox-dictionary full))
          (resource (make-instance 'game-resource-phonetic-dictionary
                                   :moniker "AtariVox Dictionary"
-                                  :kind "Translations"
+                                 
                                   :full-path (when (probe-file full) (truename full))))
          (fm (clim:find-frame-manager))
          (frame (clim:make-application-frame 'atari-vox-dictionary-inspector-frame
