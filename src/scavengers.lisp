@@ -107,11 +107,14 @@ Returns the new thread."
 (defun start-song-scavenger ()
   "Publish song resources from Source/Songs/ directory."
   (loop for file in (directory (make-pathname :name :wild :type "mscz" :defaults "Source/Songs/"))
-        do (let* ((metadata (ignore-errors (read-mscz-metadata file)))
+        do (let* ((moniker (namestring file))
+                  (metadata (ignore-errors (read-mscz-metadata file)))
                   (lyrics (ignore-errors (read-mscz-lyrics file)))
                   (resource (make-instance 'game-resource-song
-                                           :moniker (pathname-name file)
+                                           :moniker moniker
                                            :full-path (truename file)
+                                           :asset-id (ignore-errors
+                                                       (get-asset-id :song moniker))
                                            :mscz-title (getf metadata :title)
                                            :mscz-subtitle (getf metadata :subtitle)
                                            :mscz-composer (getf metadata :composer)

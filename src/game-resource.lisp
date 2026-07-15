@@ -243,27 +243,38 @@ asset is an error and such code will always be rejected.
 (defmethod game-resource-locator ((resource game-resource-script))
   (format nil "$~4,'0x" (game-resource-asset-id resource)))
 
+(defun ensure-project.json-loaded ()
+  "Ensure *project.json* is loaded from disk if not already bound."
+  (unless (and (boundp '*project.json*) *project.json*)
+    (let* ((port (or (and (boundp '*machine*) *machine*)
+                     7800))
+           (json-name (format nil "Project.~a.json" port))
+           (cwd (uiop:getcwd))
+           (json-path (or (probe-file (merge-pathnames json-name cwd))
+                          (probe-file (merge-pathnames json-name
+                                                       (make-pathname :directory
+                                                                      (butlast (cdr (pathname-directory cwd)))))))))
+      (when json-path
+        (setf *project.json* (json:decode-json-from-source json-path)))))
+  *project.json*)
+
 (defmethod game-resource-locator ((resource game-resource-tileset))
   (let* ((name (when (typep resource 'game-resource-from-file)
                   (pathname-name (game-resource-full-path resource))))
          (name-string (and name (if (symbolp name) (symbol-name name) name)))
          (lower (and name-string (string-downcase name-string))))
-    (cond
-      ((and lower (search "common decals" lower))
-       "$a800")
-      (t
-       (let* ((tileset-alist (and (boundp '*project.json*)
-                                  (assocdr :tilesets *project.json*)))
-              (key (and name (intern (string-upcase name) :keyword)))
-              (bank (and key tileset-alist
-                         (cdr (assoc key tileset-alist))))
-              (address (cond
-                         ((and lower (search "decal" lower))
-                          #xa000)
-                         ((and lower (search "tileset" lower))
-                          #x8000)
-                         (t #x8000))))
-         (format nil "$~2,'0x:~4,'0x" (or bank 0) address))))))
+    (let* ((tileset-alist (and (ensure-project.json-loaded)
+                               (assocdr :tilesets *project.json*)))
+           (key (and name (intern (string-upcase name) :keyword)))
+           (bank (and key tileset-alist
+                      (cdr (assoc key tileset-alist))))
+           (address (cond
+                      ((and lower (search "decal" lower))
+                       #xa000)
+                      ((and lower (search "tileset" lower))
+                       #x8000)
+                      (t #x8000))))
+      (format nil "$~2,'0x:~4,'0x" (or bank 0) address))))
 
 (defgeneric present-reference (resource stream)
   (:documentation "Present resource in reference context (icon, title, info, id, build checks).")
@@ -792,15 +803,22 @@ resource view mode (reference/reading/editing).")
          (parts (split-sequence #\/ moniker))
          (region (if (< 1 (length parts))
                      (string-capitalize (second parts))
-                     "NTSC")))
-    (list (format nil "Source/Scripts/~a/~a.fountain"
+                     "NTSC"))
+         (file-name (namestring (car (last parts)))))
+    (list (format nil "Source/Scripts/~a/~a"
                   region
-                  (last parts)))))
+                  (if (search ".fountain" file-name)
+                      file-name
+                      (format nil "~a.fountain" file-name))))))
 
 (defmethod game-resource-pathnames ((resource game-resource-song))
   (let* ((moniker (game-asset-moniker resource))
-         (parts (split-sequence #\/ moniker)))
-    (list (format nil "Source/Songs/~a.mscz" (last parts)))))
+         (parts (split-sequence #\/ moniker))
+         (file-name (namestring (car (last parts)))))
+    (list (format nil "Source/Songs/~a"
+                  (if (search ".mscz" file-name)
+                      file-name
+                      (format nil "~a.mscz" file-name))))))
 
 (defmethod game-resource-pathnames ((resource game-resource-map))
   (let* ((moniker (game-asset-moniker resource))
@@ -853,7 +871,8 @@ resource view mode (reference/reading/editing).")
   (list (game-resource-collective-path resource)))
 
 (defmethod game-resource-title ((resource game-resource-class))
-  (format nil "Class: ~a" (game-resource-locator resource)))
+  (or (game-resource-class-name resource)
+      (format nil "Class: ~a" (game-resource-locator resource))))
 
 (defmethod game-resource-subheading ((resource game-resource-class))
   "COBOL Class Definition")
@@ -900,10 +919,12 @@ resource view mode (reference/reading/editing).")
   (game-resource-map-notes resource))
 
 (defmethod game-resource-subheading ((resource game-resource-song))
-  (format nil "~a ~a ~@[(~a)~]"
-          (game-resource-song-mscz-title resource)
-          (game-resource-song-mscz-subtitle resource)
-          (game-resource-song-mscz-composer resource)))
+  (let ((title (game-resource-song-mscz-title resource))
+        (subtitle (game-resource-song-mscz-subtitle resource))
+        (composer (game-resource-song-mscz-composer resource)))
+    (when (or title subtitle composer)
+      (format nil "~@[~a~]~@[ ~a~]~@[ (~a)~]"
+              title subtitle composer))))
 
 (defmethod game-resource-title ((resource game-resource-boat))
   (game-resource-boat-name resource))

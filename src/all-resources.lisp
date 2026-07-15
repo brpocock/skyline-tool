@@ -57,11 +57,22 @@ Keys are kind keywords (:map, :script, :song, etc.), values are lists of game-re
     (setf (gethash kind *all-resources-cache*) resources)))
 
 (defun cache-add-resource (kind resource)
-  "Add a single RESOURCE to the cache for KIND."
+  "Add a single RESOURCE to the cache for KIND, skipping duplicates."
   (bt:with-lock-held (*all-resources-cache-lock*)
-    (let ((current (gethash kind *all-resources-cache* nil)))
-      (setf (gethash kind *all-resources-cache*)
-            (cons resource current)))))
+    (let ((current (gethash kind *all-resources-cache* nil))
+          (locator (game-resource-locator resource))
+          (full-path (when (typep resource 'game-resource-from-file)
+                       (game-resource-full-path resource))))
+      (unless (or (and locator
+                       (find locator current :key #'game-resource-locator :test #'string-equal))
+                  (and full-path
+                       (find full-path current
+                             :key (lambda (r)
+                                    (when (typep r 'game-resource-from-file)
+                                      (game-resource-full-path r)))
+                             :test #'equal)))
+        (setf (gethash kind *all-resources-cache*)
+              (cons resource current))))))
 
 (defun cache-remove-resource (kind locator)
   "Remove a resource with LOCATOR from the cache for KIND."
@@ -1428,7 +1439,7 @@ Assets.index with filesystem assets not yet indexed."
           (princ count-str *standard-output*))))
     (clim:stream-set-cursor-position *standard-output* 0 (+ cursor-y heading-h))))
 
-(defun render-locale-heading (the-pane pane-width kind-name subsection-key this-subsection skip-subsection all-assets)
+(defun render-grouping-heading (the-pane pane-width kind-name subsection-key this-grouping skip-grouping all-assets)
   "Render a 1-line subsection heading, clickable to collapse.
    When collapsed, shows count of resources in right margin."
   (let ((cursor-y (nth-value 1 (clim:stream-cursor-position *standard-output*)))
@@ -1439,8 +1450,8 @@ Assets.index with filesystem assets not yet indexed."
     (clim:stream-set-cursor-position *standard-output* 8 (+ cursor-y 2))
     (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
       (clim:with-text-size (*standard-output* :smaller)
-        (princ (if skip-subsection "▶ " "▼ ") *standard-output*)
-        (princ this-subsection *standard-output*)))
+        (princ (if skip-grouping "▶ " "▼ ") *standard-output*)
+        (princ this-grouping *standard-output*)))
     ;; Show count in right margin when collapsed
     (when skip-subsection
       (let* ((count (count-kind-assets kind-name this-subsection all-assets))
@@ -1504,32 +1515,32 @@ KIND-KEY is the keyword asset type for potential per-kind styling."
                 :current-kind nil
                 :current-locale nil)))
   (let* ((all-resources (if (and (stringp *assets-index-filter*)
-                                 (plusp (length *assets-index-filter*)))
-                            (remove-if-not (lambda (entry)
-                                             (asset-matches-filter-p entry *assets-index-filter*))
-                                           (collect-all-resources))
-                            (collect-all-resources)))
+                                  (plusp (length *assets-index-filter*)))
+                             (remove-if-not (lambda (entry)
+                                              (asset-matches-filter-p entry *assets-index-filter*))
+                                            (collect-all-resources))
+                             (collect-all-resources)))
          (all-resources (sort (copy-list all-resources)
-                              (lambda (a b)
-                                (let ((ka (game-resource-kind a))
-                                      (kb (game-resource-kind b)))
-                                  (if (eql ka kb)
-                                      (string< (or (if (typep a 'game-resource-asset)
-                                                       (game-asset-moniker a)
-                                                       (game-resource-locator a))
-                                                   "")
-                                               (or (if (typep b 'game-resource-asset)
-                                                       (game-asset-moniker b)
-                                                       (game-resource-locator b))
-                                                   ""))
-                                      (string< (or (kind-name-display ka) "~")
-                                               (or (kind-name-display kb) "~")))))))
+                               (lambda (a b)
+                                 (let ((ka (game-resource-kind a))
+                                       (kb (game-resource-kind b)))
+                                   (if (eql ka kb)
+                                       (string< (or (if (typep a 'game-resource-asset)
+                                                        (game-asset-moniker a)
+                                                        (game-resource-locator a))
+                                                    "")
+                                                (or (if (typep b 'game-resource-asset)
+                                                        (game-asset-moniker b)
+                                                        (game-resource-locator b))
+                                                    ""))
+                                       (string< (or (kind-name-display ka) "~")
+                                                (or (kind-name-display kb) "~")))))))
          (collapsed (getf *all-resources-state* :collapsed))
          (last-kind nil)
-         (last-locale nil)
+         (last-grouping nil)
          skip-kind
-         skip-locale
-         locale)
+         skip-grouping
+         grouping)
     (flet ((section-kind (kn)
              (cond
                ((null kn) nil)
@@ -1559,9 +1570,9 @@ KIND-KEY is the keyword asset type for potential per-kind styling."
           ;; --- Kind heading (skip for Special Resources: nil kind-name) ---
           (unless (string-equal sk last-kind)
             (setf last-kind sk
-                  last-locale nil
+                  last-grouping nil
                   skip-kind (gethash sk collapsed)
-                  skip-locale nil)
+                  skip-grouping nil)
             (unless (null kind-name)
               (let* ((the-pane clim-simple-echo::*echo-pane*)
                      (pane-width (clim:bounding-rectangle-width
@@ -1569,22 +1580,35 @@ KIND-KEY is the keyword asset type for potential per-kind styling."
                 (render-kind-heading the-pane pane-width kind-name sk skip-kind all-resources))))
           ;; --- Skip if kind collapsed ---
           (unless skip-kind
-            ;; --- Locale group header for Scripts, Maps, and Routines ---
+            ;; --- Subgroup header for Scripts, Maps, and Routines ---
             (let* ((parts (split-sequence #\/ moniker))
-                   (this-locale (when (member kind-name '(:script :map :routine))
-                                  (and (> (length parts) 2)
-                                       (cl-change-case:title-case (second parts))))))
-              (when (and this-locale (not (string-equal this-locale last-locale)))
-                (setf last-locale this-locale)
-                (let ((subsection-key (format nil "~a/~a" (section-key kind-name) this-locale)))
-                  (setf skip-locale (gethash subsection-key collapsed))
+                   (this-grouping
+                    (case kind-name
+                      ((:script :map)
+                       (let ((kind-dir (if (eql kind-name :script) "Scripts" "Maps")))
+                         (let ((idx (position kind-dir parts :test #'string-equal)))
+                           (when (and idx (< (1+ idx) (length parts))
+                                      (not (string-equal kind-dir (nth (1+ idx) parts))))
+                             (cl-change-case:title-case (nth (1+ idx) parts))))))
+                      (:routine
+                       (cond
+                         ((typep resource 'game-resource-routine-forth-library)
+                          "Forth Libraries")
+                         ((typep resource 'game-resource-routine-run-commands)
+                          "Run Commands")
+                         (t nil)))
+                      (t nil))))
+              (when (and this-grouping (not (string-equal this-grouping last-grouping)))
+                (setf last-grouping this-grouping)
+                (let ((subsection-key (format nil "~a/~a" (section-key kind-name) this-grouping)))
+                  (setf skip-grouping (gethash subsection-key collapsed))
                   (let* ((the-pane clim-simple-echo::*echo-pane*)
                          (pane-width (clim:bounding-rectangle-width
                                       (clim:sheet-region the-pane))))
-                    (render-locale-heading the-pane pane-width kind-name subsection-key this-locale
-                                           skip-locale all-resources)))))
-            ;; --- Entry display (skip if locale collapsed) ---
-            (unless skip-locale
+                    (render-grouping-heading the-pane pane-width kind-name subsection-key this-grouping
+                                            skip-grouping all-resources)))))
+            ;; --- Entry display (skip if grouping collapsed) ---
+            (unless skip-grouping
               (let* ((title-str (game-resource-title resource))
                      (subheading (game-resource-subheading resource))
                      (locator (game-resource-locator resource)))
