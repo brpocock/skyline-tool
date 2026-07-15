@@ -61,9 +61,9 @@ asset is an error and such code will always be rejected.
 
 ;; Asset Sub-hierarchy
 (defclass game-resource-map (game-resource-asset)
-  ((locale :initarg :locale :accessor game-resource-locale)
-   (note :initarg :note :accessor game-resource-notes)
-   (full-name :initarg :full-name :accessor game-resource-name)))
+   ((locale :initarg :locale :accessor game-resource-locale)
+    (note :initarg :note :accessor game-resource-notes)
+    (full-name :initarg :full-name :accessor game-resource-name :initform nil)))
 
 (defclass game-resource-script (game-resource-asset)
   ((locale :initarg :locale :reader game-resource-locale)))
@@ -235,7 +235,9 @@ asset is an error and such code will always be rejected.
         (present-vc-status-icon stream vc-status)))))
 
 (defmethod game-resource-locator ((resource game-resource))
-  "")
+  ;; For file-based resources without asset IDs, use the full path
+  (when (typep resource 'game-resource-from-file)
+    (game-resource-full-path resource)))
 
 (defmethod game-resource-locator ((resource game-resource-asset))
   (format nil "$~2,'0x" (game-resource-asset-id resource)))
@@ -1153,6 +1155,36 @@ a method on this generic function. This provides the list of all scavengers to b
 (defmethod open-resource-inspector ((resource game-resource-routine-run-commands) &optional (mode :editing))
   (clim:run-frame-top-level
    (clim:make-application-frame 'gui-inspector-frame
-                                 :resource (or resource (make-instance 'game-resource-routine-run-commands))
-                                :view-mode mode)))
+                                  :resource (or resource (make-instance 'game-resource-routine-run-commands))
+                                 :view-mode mode)))
+
+;; CLIM Display Interface Methods
+
+(defgeneric game-resource-class-name (resource)
+  (:documentation "Return CLIM-friendly class name for display")
+  (:method ((resource game-resource-boat)) "Boat")
+  (:method ((resource game-resource-character)) "Character")
+  (:method ((resource game-resource-map)) "Map")
+  (:method ((resource game-resource-atari-vox-dictionary)) "AtariVox Dict")
+  (:method ((resource game-resource-song)) "Song")
+  (:method ((resource game-resource-script)) "Script")
+  (:method ((resource game-resource-routine)) "Routine")
+  (:method ((resource game-resource))
+    (string-capitalize (symbol-name (class-of resource)))))
+
+(defmethod game-resource-title ((resource game-resource))
+  (title-case (pathname-name (first (game-resource-pathnames resource)))))
+
+(defmethod game-resource-title ((resource game-resource-map))
+  (or (game-resource-name resource)
+      (title-case (pathname-name (first (game-resource-pathnames resource))))))
+
+(defmethod game-resource-subheading ((resource game-resource))
+  "")
+
+(defmethod game-resource-subheading ((resource game-resource-map))
+  (game-resource-notes resource))
+
+(defmethod game-resource-full-text ((resource game-resource))
+  (game-resource-locator resource))
 

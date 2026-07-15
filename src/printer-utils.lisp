@@ -54,26 +54,26 @@
         (error (e)
           (log-printer-status (format nil "CUPS discovery failed: ~A" e))
           (setf *printer-cache* nil
-                *printer-cache-time* 0)))
+                *printer-cache-time* 0)
+          (error e)))
       *printer-cache*)))
 
 (defun parse-ipp-response (data)
   "Parse IPP response to extract printer names.
    NO FALLBACK - pure IPP parsing only.
    Returns list of printer queue names."
-  (ignore-errors
-    (let (printers)
-      ;; Parse IPP response for printer names
-      (loop for line in (split-sequence:split-sequence #\Newline data)
-            when (and line (search "printer-name" line :test #'char-equal))
-              do (let ((name-start (search "printer-name" line :test #'char-equal)))
-                   (when name-start
-                     (let ((after-name (subseq line (+ name-start 12))))
-                       (let ((name (string-trim '(#\Space #\Tab #\Newline) after-name)))
-                         (when (plusp (length name))
-                           (push name printers)))))))
-      (when printers
-        (nreverse printers)))))
+  (let (printers)
+    ;; Parse IPP response for printer names
+    (loop for line in (split-sequence:split-sequence #\Newline data)
+          when (and line (search "printer-name" line :test #'char-equal))
+            do (let ((name-start (search "printer-name" line :test #'char-equal)))
+                 (when name-start
+                   (let ((after-name (subseq line (+ name-start 12))))
+                     (let ((name (string-trim '(#\Space #\Tab #\Newline) after-name)))
+                       (when (plusp (length name))
+                         (push name printers)))))))
+    (when printers
+      (nreverse printers))))
 
 (defun discover-printers-with-names ()
   "Return a list of (queue-name . display-name) for CUPS printers.
@@ -101,20 +101,18 @@
 (defun parse-ipp-printer-attributes-response (data)
   "Parse IPP Get-Printer-Attributes response to extract printer description.
    Returns description string or NIL if not found."
-  (ignore-errors
-    (loop for line in (split-sequence:split-sequence #\Newline data)
-          when (and line (search "printer-name" line :test #'char-equal))
-            do (let ((name-start (search "printer-name" line :test #'char-equal)))
-                 (when name-start
-                   (let ((after-name (subseq line (+ name-start 12))))
-                     (let ((name (string-trim '(#\Space #\Tab #\Newline) after-name)))
-                       (when (plusp (length name))
-                         (return name))))))))
-  nil)
+  (loop for line in (split-sequence:split-sequence #\Newline data)
+        when (and line (search "printer-name" line :test #'char-equal))
+          do (let ((name-start (search "printer-name" line :test #'char-equal)))
+               (when name-start
+                 (let ((after-name (subseq line (+ name-start 12))))
+                   (let ((name (string-trim '(#\Space #\Tab #\Newline) after-name)))
+                     (when (plusp (length name))
+                       (return name))))))))
 
-;; ------------------------------------------------------------
+;; 
 ;; Event‑bus publishing for printer changes
-;; ------------------------------------------------------------
+;; 
 (defvar *printer-event-handlers* nil
   "List of symbols that are bound to a function that will be called
    when the printer list changes.  The symbol must be a *command* name
@@ -133,9 +131,9 @@
     (when (fboundp fn)
       (funcall fn printer-alist))))
 
-;; ------------------------------------------------------------
+;; 
 ;; Background discovery thread
-;; ------------------------------------------------------------
+;; 
 (defun printer-discovery-loop ()
   "Loop that periodically discovers printers and publishes changes."
   (loop while *printer-discovery-running-p*
@@ -150,7 +148,7 @@
   (unless *printer-discovery-running-p*
     (setf *printer-discovery-running-p* t)
     (setf *printer-discovery-thread*
-          (bt:make-thread #'printer-discovery-loop :name "Printer Discovery Thread"))))
+          (make-thread #'printer-discovery-loop :name "Printer Discovery Thread"))))
 
 (defun stop-printer-discovery-thread ()
   "Stop the background printer discovery thread."

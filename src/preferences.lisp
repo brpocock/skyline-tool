@@ -3,6 +3,10 @@
 (defvar *prefs-cache* nil
   "Cached preference plist loaded from the prefs file, or NIL if not yet loaded.")
 
+(defun write-json-pretty (data stream &optional (depth 0))
+  "Write DATA as pretty-printed JSON to STREAM using cl-json library."
+  (write-string (json:encode-json-to-string data) stream))
+
 (defun prefs-pathname ()
   "Return the pathname for the preferences file.
    Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
@@ -23,51 +27,16 @@
         (loop for (key . value) in alist
               append (list (intern (string-upcase key) :keyword) value))))))
 
-(defun write-json-pretty (data stream &optional (depth 0))
-  "Write DATA as pretty-printed JSON to STREAM.
-   DATA is an alist (→ object), list (→ array), string, number, or null.
-   DEPTH controls indentation — start at 0."
-  (labels ((indent (d) (format stream "~%~v@t" (* d 2)))
-           (out (obj d)
-             (etypecase obj
-               (null (princ "null" stream))
-               (string (format stream "~s" obj))
-               (integer (princ obj stream))
-               (float (format stream "~f" obj))
-               (cons
-                (if (and (car obj) (consp (car obj)))
-                    (progn
-                      (princ "{" stream)
-                      (loop for (key . value) in obj
-                            for sep = "" then ","
-                            do (princ sep stream) (indent (1+ d))
-                               (format stream "~s: " (string key))
-                               (out value (1+ d)))
-                      (when obj (indent d))
-                      (princ "}" stream))
-                    (progn
-                      (princ "[" stream)
-                      (loop for item in obj
-                            for sep = "" then ", "
-                            do (princ sep stream)
-                               (if (and (consp item) (consp (car item)))
-                                   (progn (indent (1+ d))
-                                          (out item (1+ d))
-                                          (indent d))
-                                   (out item d)))
-                      (princ "]" stream)))))))
-    (out data depth)))
-
 (defun save-prefs (plist)
   "Write PLIST as pretty-printed JSON to the preferences file.
    Creates the directory if it does not exist."
   (let ((path (prefs-pathname)))
     (ensure-directories-exist path)
     (with-open-file (s path :direction :output :if-exists :supersede
-                       :external-format :utf-8)
+                            :external-format :utf-8)
       (write-json-pretty (loop for (key value) on plist by #'cddr
-                                collect (cons (string-downcase (symbol-name key)) value))
-                           s))))
+                               collect (cons (string-downcase (symbol-name key)) value))
+                         s))))
 
 (defun get-pref (key &optional default)
   "Read a preference value from the cached prefs.
@@ -147,13 +116,13 @@
                  (set-pref prefs-key (namestring dir))
                  (set-pref :last-save-directory (namestring dir)))
                path))))
-;; Fallback to file dialog
-         (let ((path (run-text-input-dialog "Save As (enter path):" :initial-value (namestring default) :title "Save As")))
-           (when path
-             (let ((pathname-path (pathname path))
-                   (dir (make-pathname :name nil :type nil :defaults (pathname path))))
-               (setf *last-save-directory* dir)
-               (when prefs-key
-                 (set-pref prefs-key (namestring dir))
-                 (set-pref :last-save-directory (namestring dir)))
-               pathname-path))))))
+        ;; Fallback to file dialog
+        (let ((path (run-text-input-dialog "Save As (enter path):" :initial-value (namestring default) :title "Save As")))
+          (when path
+            (let ((pathname-path (pathname path))
+                  (dir (make-pathname :name nil :type nil :defaults (pathname path))))
+              (setf *last-save-directory* dir)
+              (when prefs-key
+                (set-pref prefs-key (namestring dir))
+                (set-pref :last-save-directory (namestring dir)))
+              pathname-path))))))

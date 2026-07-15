@@ -1054,7 +1054,7 @@ Concatenates lyrics from all voices in all parts, separated by newlines."
                 
                  :collective-path #p"Source/Tables/Keys.txt"
                  :offset (getf plist :index 0)
-                 :key-id (getf plist :index 0)
+                 :key-id (getf plist :index 1)
                  :name (getf plist :name)))
 
 (defun atari-vox-dict-plist->game-resource-atari-vox-dictionary (plist)

@@ -57,20 +57,15 @@ Keys are kind keywords (:map, :script, :song, etc.), values are lists of game-re
     (setf (gethash kind *all-resources-cache*) resources)))
 
 (defun cache-add-resource (kind resource)
-  "Add a single RESOURCE to the cache for KIND, skipping duplicates."
+  "Add a single RESOURCE to the cache for KIND, skipping duplicates.
+Duplicates are identified by the cons pair (type-of resource) and locator."
   (bt:with-lock-held (*all-resources-cache-lock*)
-    (let ((current (gethash kind *all-resources-cache* nil))
-          (locator (game-resource-locator resource))
-          (full-path (when (typep resource 'game-resource-from-file)
-                       (game-resource-full-path resource))))
-      (unless (or (and locator
-                       (find locator current :key #'game-resource-locator :test #'string-equal))
-                  (and full-path
-                       (find full-path current
-                             :key (lambda (r)
-                                    (when (typep r 'game-resource-from-file)
-                                      (game-resource-full-path r)))
-                             :test #'equal)))
+    (let* ((dup-key (cons (type-of resource) (game-resource-locator resource)))
+           (current (gethash kind *all-resources-cache* nil)))
+      (unless (find dup-key current :key (lambda (r)
+                                           (cons (type-of r)
+                                                 (game-resource-locator r)))
+                           :test #'equalp)
         (setf (gethash kind *all-resources-cache*)
               (cons resource current))))))
 
@@ -1453,8 +1448,8 @@ Assets.index with filesystem assets not yet indexed."
         (princ (if skip-grouping "▶ " "▼ ") *standard-output*)
         (princ this-grouping *standard-output*)))
     ;; Show count in right margin when collapsed
-    (when skip-subsection
-      (let* ((count (count-kind-assets kind-name this-subsection all-assets))
+    (when skip-grouping
+      (let* ((count (count-kind-assets kind-name this-grouping all-assets))
              (count-str (format nil "(~d)" count))
              (x-pos (- pane-width (clim:text-size the-pane count-str) 16)))
         (clim:stream-set-cursor-position *standard-output* x-pos (+ cursor-y 2))
@@ -1504,7 +1499,7 @@ KIND-KEY is the keyword asset type for potential per-kind styling."
       (dolist (k '("Scripts" "Songs" "Maps" "Characters" "Boats" "Blobs"
                    "Tilesets" "Sprite Sheets" "Object Prototypes" "Classes" "Routines"
                    "Instruments" "Items" "Flags" "Keys" "AtariVox Dictionary"))
-        (setf (gethash k *all-resources-collapsed*) nil))
+        (setf (gethash k *all-resources-collapsed*) t))
       ;; Override with persisted: "true" = collapsed (t), "false" = expanded (nil)
       (when saved
         (dolist (pair saved)

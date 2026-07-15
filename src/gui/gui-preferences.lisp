@@ -2,14 +2,139 @@
 
 (in-package :skyline-tool)
 
-;; --- Preferences data model ---
+#|
+
+Preferences Inspector:
+
+#### menu
+
+Preferences
+------------
+Reset to Defaults...
+---
+Save as > Text...
+          JSON...
+          PDF...
+Send to > { p2p recipient list }
+Print to > { printer list }
+---
+Close
+
+Edit
+-----
+Cut
+Copy
+Paste
+---
+Find...
+
+View
+-----
+[] Editable
+
+Help
+-----
+How to Manage Preferences...
+Skyline-Tool Developers' Guide...
+Skyline-Tool Scripting Guide...
+---
+About Skyline-Tool...
+
+### Window
+
+Printing
+---------
+
+Paper Size: <> U.S. Letter
+            <> U.S. Legal
+            <> A4
+            <> Custom: ____ [ mm - ] × ____ [ mm - ]
+                            [ cm   ]        [ cm   ]
+                            [ in   ]        [ in   ]
+
+Network
+--------
+
+[] LAN Resource Sharing
+[] Share "Dist/" Folder
+[] Share Music as Media Server
+
+Versioning
+-----------
+
+Version Control System: <> Git                   | git
+                        <> Subversion            | svn
+                        <> Bazaar                | bzr
+                        <> Mercurial             | hg
+                        <> Concurrent            | cvs
+                        <> Revision Control      | rcs
+
+Git                     # Specific to the version control system in use
+----
+
+   User
+   -----
+   Name: ________________________
+   eMail: ________________________
+
+   Signing key: [ Bruce-Robert Pocock <brpocock@interworldly.com>    - ]
+                [ ---                                                  ]
+                [ Generate and publish a new key...                    ]
+     [] Sign Commits
+     [] Sign Tags
+
+   Tools
+   ------
+   Merge: [ meld - ]  [] Prompt first
+   Diff:  [ meld - ]  [] Prompt first
+            ##( git difftool --tool-help first section of output only )
+            ##( "may be set to one of the following:" options only )
+            ##( do not list "valid, but not currently available" list )
+
+   Remotes
+   --------
+
+   | Remote        | URL                               | Fetch                               |
+   |-----------------------------------------------------------------------------------------|
+   | origin        | git@github.com:brpocock/Phantasia | +refs/heads/*:refs/remotes/origin/* |
+
+                                                                                         ( + )
+
+   Submodules
+   -----------
+   [] Skyline-Tool and Eightbol
+
+   [] Atari 7800 Tools
+   [] Intellivision Tools
+
+   Pushing
+   --------
+   [] When pushing, automatically set up new branches on remote
+
+   When pulling, automatically [ fast-forward only   - ]
+
+   Default Branch: ___________                                              # main default
+
+Issue Tracking
+---------------
+
+Issue tracker kind: <> GitHub
+                    <> GitLab
+                    <> Bugzilla
+
+   
+|#
+
+
+
+;;  Preferences data model 
 
 (defvar *preferences-config* nil
   "Global preferences plist. Keys:
-   :paper-size, :lan-sharing, :dist-sharing, :music-sharing,
-   :vc-system, :issue-tracker, :tracker-url,
-   :ssh-key-path, :gpg-key-path,
-   :theme, :language, :show-tips, :auto-save, :driver")
+:paper-size, :lan-sharing, :dist-sharing, :music-sharing,
+:vc-system, :issue-tracker, :tracker-url,
+:ssh-key-path, :gpg-key-path,
+:theme, :language, :show-tips, :auto-save, :driver")
 
 (defun default-preferences ()
   (list :paper-size :us-letter
@@ -26,14 +151,11 @@
         :gpg-key-path ""
         :language "en"
         :atarivox-port nil
-        :atarivox-volume 12))
-
-(define-constant +paper-sizes+
-    '((:us-letter "US Letter" 215.9 279.4)
-      (:us-legal "US Legal" 215.9 355.6)
-      (:a4 "A4" 210.0 297.0))
-  :test 'equalp
-  :documentation "Named paper sizes with their dimensions in millimetres.")
+        :atarivox-volume 12
+        :build :demo
+        :region :ntsc
+        :units (list :length :mm)
+        :last-save-dir (list :default #p"~/work")))
 
 (defun convert-unit (value from-unit to-unit)
   "Convert VALUE (a length) between :mm, :cm, :in, :pt.
@@ -44,7 +166,7 @@ All stored dimensions are kept internally in millimetres."
           (to-factor (getf factors to-unit)))
       (/ in-mm to-factor))))
 
-;; --- Frame ---
+;;  Frame 
 
 (clim:define-application-frame preferences-inspector-frame (clim:standard-application-frame)
   ((config :initarg :config :accessor frame-config)
@@ -111,31 +233,31 @@ All stored dimensions are kept internally in millimetres."
                       (clim:run-frame-top-level frame))
                     :name "Preferences Inspector")))
 
-;; --- Menus ---
+;;  Menus 
 
 (clim:define-command-table preferences-inspector-file-menu
-  :menu (("Save" :command com-preferences-save)
-         ("Reset to Defaults" :command com-preferences-reset)
+  :menu (("Reset to Defaults" :command com-preferences-reset)
+         (nil :divider :line)
+         ("Save as" :menu com-preferences-save)
+         ("Send to" :menu com-preferences-save)
+         ("Print to" :menu com-preferences-save)
          (nil :divider :line)
          ("Close" :command com-close-frame)))
 
 (clim:define-command-table preferences-inspector-help-menu
-  :menu (("How to Use..." :command com-help-for-window)
+  :menu (("How to Manage Preferences..." :command com-help-for-window)
          ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-dev-guide)
          (nil :divider :line)
          ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
 (clim:define-command-table preferences-inspector-menu-bar
   :menu (("Preferences" :menu preferences-inspector-file-menu)
+         ("Edit" :menu preferences-inspector-edit-menu)
+         ("View" :menu preferences-inspector-view-menu)
          ("Help" :menu preferences-inspector-help-menu)))
 
-;; --- Commands ---
-
-(clim:define-command (com-preferences-save :command-table clim-internals::global-command-table
-                                           :menu t :name t) ()
-  (let ((frame clim:*application-frame*))
-    (write-preferences-config frame)
-    (setf (frame-dirty frame) nil)))
+;;  Commands 
 
 (clim:define-command (com-preferences-reset :command-table clim-internals::global-command-table
                                             :menu t :name t) ()
@@ -148,7 +270,7 @@ All stored dimensions are kept internally in millimetres."
                                       :menu t :name t) ()
   (clim:frame-exit clim:*application-frame*))
 
-;; --- Display ---
+;;  Display 
 
 (defun display-preferences (frame pane)
   "Display preferences with CLIM gadgets created in display function."
@@ -398,7 +520,7 @@ All stored dimensions are kept internally in millimetres."
   (format pane "Preferences ~a"
           (if (frame-dirty frame) "(unsaved)" "")))
 
-;; --- I/O ---
+;;  I/O 
 
 (defun load-preferences-config ()
   (let ((path (prefs-pathname)))
