@@ -77,7 +77,7 @@
 
 ;; --- Frame ---
 
-(clim:define-application-frame sprite-sheet-inspector-frame (resource-inspector-mixin)
+(clim:define-application-frame sprite-sheet-inspector-frame (resource-inspector-mixin uniform-inspector-frame)
   ((path :initarg :path :accessor frame-path)
    (sprites :initform nil :accessor frame-sprites)
    (dirty :initform nil :accessor frame-dirty))

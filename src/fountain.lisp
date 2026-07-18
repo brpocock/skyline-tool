@@ -663,7 +663,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
-            '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
+            '(|(| |)| + |,| - |.| /  × ÷ |:| |…|
               a an aboard above absolute alarmed all amulet and appears
               arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
@@ -737,14 +737,14 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 			    #'stage/when)
 		      (if conditional |,| clauses |.|
 			  #'stage/when)
-		      (if conditional |,| clauses skyline-tool::|;| otherwise |,| clauses |.|
+		      (if conditional |,| clauses |;| otherwise |,| clauses |.|
 			  #'stage/if-otherwise)
 		      (unless conditional |,| clauses |.|
 			      #'stage/unless)
 		      (clauses |.| (lambda (clauses _stop)
 				     (declare (ignore _stop))
 				     clauses))
-		      (repeat numeric times skyline-tool::|:| clauses
+		      (repeat numeric times |:| clauses
 			      #'stage/repeat)
 		      preparation-paragraph)
 	   (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
@@ -753,7 +753,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 							      (list 'prepare directions))))
 	   (preparation-introduction (we open on) (open on) (we find) (we see))
 	   (preparation-closing then suddenly next)
-	   (ellipsis (|.| |.| |.|) |…| skyline-tool::|:|)
+	   (ellipsis (|.| |.| |.|) |…| |:|)
 	   (clauses clause
 		    sem-clauses
 		    (clause |,| and then clause (lambda (clause1 _comma _and _then clause2)
@@ -763,9 +763,9 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 					     (declare (ignore _comma _and))
 					     (list 'progn clause1 clause2)))
 		    do/done-block)
-	   (sem-clauses (clause skyline-tool::|;| clause
+	   (sem-clauses (clause |;| clause
 				#'stage/semicolon-clauses)
-			(sem-clauses skyline-tool::|;| clause
+			(sem-clauses |;| clause
 				     #'stage/semicolon-clauses))
 	   (clause beat-clause
 		   fade-clause
@@ -1166,7 +1166,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 				    #'stage/parens))
 	   (conditionals (simple-conditional |,| conditionals
 					     #'stage/conditionals-list))
-	   (enter-clause (skyline-tool::enter someone at location
+	   (enter-clause (enter someone at location
 					      #'stage/enter))
 	   (ship-clause
 	    (the ship-name is at location

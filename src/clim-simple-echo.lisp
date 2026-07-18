@@ -113,7 +113,7 @@ Used when more sophisticated presentation methods are not available."
   (let* ((frame clim:*application-frame*)
          (pdf-fn (frame-pdf-function frame))
          (default-name (window-title->filename frame "pdf"))
-         (pdf-path (skyline-tool::prompt-save-pathname default-name :prefs-key :last-export-directory)))
+         (pdf-path (prompt-save-pathname default-name :prefs-key :last-export-directory)))
     (when pdf-path
       (let* ((base (pathname-name pdf-path))
              (dir (make-pathname :defaults pdf-path :name nil :type nil))
@@ -134,10 +134,10 @@ Used when more sophisticated presentation methods are not available."
                 (return-from com-print-pdf))
               (let* ((frame-name (ignore-errors (clim:frame-pretty-name frame)))
                      (game-title (string-capitalize
-                                  (or (ignore-errors (symbol-value 'skyline-tool::*game-title*))
+                                  (or (ignore-errors (symbol-value '*game-title*))
                                       "unknown")))
                      (title (or frame-name (format nil "Skyline-Tool: ~a" game-title)))
-                     (author (ignore-errors (skyline-tool::user-real-name)))
+                     (author (ignore-errors (user-real-name)))
                      (hostname (machine-instance))
                      (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
                                  (declare (ignore s))
@@ -149,14 +149,14 @@ Used when more sophisticated presentation methods are not available."
                 (with-open-file (ps ps-path :direction :output :if-exists :supersede
                                             :external-format :utf-8)
                   (format ps "%!PS-Adobe-3.0~%")
-                  (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+                  (write-ps-docinfo ps title "Skyline-Tool"
                                                   (format nil "~a on ~a" author (machine-instance)))
                   (format ps "<< /PageSize [612 792] >> setpagedevice~%")
-                  (skyline-tool::write-ps-font-encodings ps)
+                  (write-ps-font-encodings ps)
                   (with-input-from-string (s text)
                     (dotimes (page total-pages)
                       (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)
-                      (skyline-tool::write-ps-header-bar ps title date-str author game-title)
+                      (write-ps-header-bar ps title date-str author game-title)
                       (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont 0 0 0 setrgbcolor~%")
                       (let ((y 680) (line-height 10) (bar-w 108) (bar-h 8))
                         (declare (ignore bar-w))
@@ -174,7 +174,7 @@ Used when more sophisticated presentation methods are not available."
                                              (pct (or pct 0)))
                                         (let ((label (string-trim " " (subseq line 0 bracket-pos))))
                                           (format ps "50 ~d moveto (~a) show~%" y
-                                                  (skyline-tool::escape-ps-string label)))
+                                                  (escape-ps-string label)))
                                         (format ps "gsave newpath ~d ~d ~d ~d rectstroke 0.7 0.85 1.0 setrgbcolor fill grestore~%"
                                                 bar-x y bar-w bar-h)
                                         (when (> pct 0)
@@ -197,9 +197,9 @@ Used when more sophisticated presentation methods are not available."
                                             (format ps " ~d ~d moveto (~d%) show~%" (+ bar-x bar-w 5) y pct)))))
                                      (t
                                       (format ps "50 ~d moveto (~a) show~%" y
-                                              (skyline-tool::escape-ps-string line))))
+                                              (escape-ps-string line))))
                                    (decf y line-height)))
-                        (skyline-tool::write-ps-page-footer ps (1+ page) total-pages game-title date-str author hostname)
+                        (write-ps-page-footer ps (1+ page) total-pages game-title date-str author hostname)
                         (format ps "showpage~%")))))
                 (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-final))
                                   :output nil :ignore-error-status t)
@@ -237,11 +237,11 @@ Used when more sophisticated presentation methods are not available."
                    (total-pages (max 1 (ceiling lines (- 700 50))))
                    (title (format nil "Skyline-Tool for ~a"
                                   (string-capitalize
-                                   (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game"))))
-                   (author (ignore-errors (skyline-tool::user-real-name))))
+                                   (or (ignore-errors (symbol-value '*game-title*)) "Game"))))
+                   (author (ignore-errors (user-real-name))))
               (with-open-file (ps ps-path :direction :output :if-exists :supersede)
                 (format ps "%!PS-Adobe-3.0~%")
-                (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+                (write-ps-docinfo ps title "Skyline-Tool"
                                                 (format nil "~a on ~a" author (machine-instance)))
                 (format ps "<< /PageSize [612 792] >> setpagedevice~%")
                 (with-input-from-string (s text)
@@ -250,7 +250,7 @@ Used when more sophisticated presentation methods are not available."
                     (let ((y 700) (line-height 10))
                       (loop for line = (read-line s nil nil)
                             while (and line (>= y 50))
-                            do (format ps "50 ~d moveto (~a) show~%" y (skyline-tool::escape-ps-string line))
+                            do (format ps "50 ~d moveto (~a) show~%" y (escape-ps-string line))
                                (decf y line-height)))
                     (format ps "showpage~%"))))
               (uiop:run-program (list "ps2pdf" ps-path pdf-path)
@@ -261,7 +261,7 @@ Used when more sophisticated presentation methods are not available."
               (ignore-errors (delete-file pdf-path))))))))
 
 (define-simple-echo-command (com-about-echo :menu nil :name t) ()
-  (skyline-tool::com-about-skyline-tool))
+  (com-about-skyline-tool))
 
 (defun %clipboard-copy (text)
   "Copy TEXT to the system clipboard using wl-copy or xclip, or output it."
@@ -314,7 +314,7 @@ Used when more sophisticated presentation methods are not available."
       (let* ((text (frame-captured-text clim:*application-frame*))
              (frame-name (ignore-errors (clim:frame-pretty-name clim:*application-frame*)))
              (default-name (format nil "~a.json" (or frame-name "output")))
-             (path (skyline-tool::prompt-save-pathname default-name :prefs-key :last-export-directory)))
+             (path (prompt-save-pathname default-name :prefs-key :last-export-directory)))
         (when path
           (let* ((timestamp (multiple-value-bind (s m h d mo y) (get-decoded-time)
                               (declare (ignore s))
@@ -377,14 +377,14 @@ Used when more sophisticated presentation methods are not available."
                  (total-pages (max 1 (ceiling lines (- 700 50))))
                  (title (format nil "Skyline-Tool for ~a"
                                 (string-capitalize
-                                 (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game"))))
-                 (author (ignore-errors (skyline-tool::user-real-name))))
+                                 (or (ignore-errors (symbol-value '*game-title*)) "Game"))))
+                 (author (ignore-errors (user-real-name))))
             (with-open-file (ps ps-path :direction :output :if-exists :supersede)
               (format ps "%!PS-Adobe-3.0~%")
-              (skyline-tool::write-ps-docinfo ps title "Skyline-Tool"
+              (write-ps-docinfo ps title "Skyline-Tool"
                                               (format nil "~a on ~a" author (machine-instance)))
               (format ps "<< /PageSize [612 792] >> setpagedevice~%")
-              (skyline-tool::write-ps-font-encodings ps)
+              (write-ps-font-encodings ps)
               (with-input-from-string (s text)
                 (dotimes (page total-pages)
                   (format ps "%%Page: ~d ~d~%" (1+ page) total-pages)
@@ -392,7 +392,7 @@ Used when more sophisticated presentation methods are not available."
                     (loop for line = (read-line s nil nil)
                           while (and line (>= y 50))
                           do (format ps "50 ~d moveto (~a) show~%" y
-                                     (skyline-tool::escape-ps-string line))
+                                     (escape-ps-string line))
                              (decf y line-height)))
                   (format ps "showpage~%"))))
             (uiop:run-program (list "ps2pdf" ps-path pdf-path)
@@ -410,10 +410,10 @@ Used when more sophisticated presentation methods are not available."
   (ignore-errors
    (clim:remove-menu-item-from-command-table command-table "No printers found")
    (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)")
-   (dolist (p (ignore-errors (skyline-tool::discover-printers)))
+   (dolist (p (ignore-errors (discover-printers)))
      (ignore-errors
       (clim:remove-menu-item-from-command-table command-table p))))
-  (let* ((printers (ignore-errors (skyline-tool::discover-printers-with-names))))
+  (let* ((printers (ignore-errors (discover-printers-with-names))))
     (if printers
         (dolist (pair printers)
           (let ((queue-name (car pair))

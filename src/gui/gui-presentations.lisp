@@ -4,9 +4,16 @@
 
 (in-package :skyline-tool)
 
-;; ============================================================================
+;; 
 ;; Common Presentation Infrastructure
-;; ============================================================================
+;; 
+
+(defun validate-json-version (json expected-version)
+  "Validate JSON version against expected version, erroring if incompatible."
+  (let ((tool-version (gethash "skyline-tool" json)))
+    (unless (clojure->number= tool-version expected-version)
+      (error "Incompatible JSON version ~a (expected ~a). Resource import aborted."
+             tool-version expected-version))))
 
 (defgeneric resource-to-json (resource)
   (:documentation "Convert RESOURCE to JSON-compatible object for export."))
@@ -23,9 +30,9 @@
 (defgeneric open-resource-preview (resource)
   (:documentation "Open a read-only preview window for RESOURCE."))
 
-;; ============================================================================
+;; 
 ;; JSON Export/Import Infrastructure
-;; ============================================================================
+;; 
 
 (defun export-resource-to-json-file (resource filepath)
   "Export RESOURCE to JSON file at FILEPATH."
@@ -38,11 +45,41 @@
   "Import RESOURCE of CLASS from JSON file at FILEPATH."
   (let ((json (cl-json:decode-json-from-string
                (uiop:read-file-string filepath))))
-    (resource-from-json json class)))
+    (validate-json-version json 0.6)
+    (let ((resource (resource-from-json json class)))
+      (restore-resource-content-from-json resource json)
+      resource)))
 
-;; ============================================================================
+(defun restore-resource-content-from-json (resource json)
+  "If JSON has an embedded 'content' block (base91-encoded), write it back to disk.
+Used by importers to materialize the actual file from a portable JSON export."
+  (let ((content (gethash "content" json)))
+    (when (and (listp content)
+               (string-equal (getf content :encoding) "base91"))
+      (let ((data (getf content :data))
+            (path (or (ignore-errors (game-resource-full-path resource))
+                      (gethash "path" json))))
+        (when (and data path)
+          (ensure-directories-exist path)
+          (with-open-file (stream path :direction :output
+                                  :element-type '(unsigned-byte 8)
+                                  :if-exists :supersede
+                                  :if-does-not-exist :create)
+            (let ((bytes (decode-base91 data)))
+              (write-sequence bytes stream))))))))
+
+(defun wrap-with-headers (obj class-name)
+  "Wrap JSON object with skyline-tool version and class headers."
+  (let ((wrapped (make-hash-table :test 'equal)))
+    (setf (gethash "skyline-tool" wrapped) 0.6)
+    (setf (gethash "class" wrapped) class-name)
+    (loop for key being the hash-keys of obj
+          do (setf (gethash key wrapped) (gethash key obj)))
+    wrapped))
+
+;; 
 ;; PostScript Export Infrastructure
-;; ============================================================================
+;; 
 
 (defun export-resource-to-ps-file (resource filepath &key title author)
   "Export RESOURCE to PostScript file at FILEPATH with proper headers/footers."
@@ -62,9 +99,9 @@
     (resource-to-text resource out))
   filepath)
 
-;; ============================================================================
+;; 
 ;; Inspector/Preview Window Infrastructure
-;; ============================================================================
+;; 
 
 (clim:define-application-frame resource-preview (gui-inspector-frame clim:standard-application-frame)
   ()
@@ -171,9 +208,9 @@
         (uiop:run-program (list "lp" pdf-filepath) :output nil)
         (format t "~&Sent to printer~%")))))
 
-;; ============================================================================
+;; 
 ;; Open Functions
-;; ============================================================================
+;; 
 
 (defmethod open-resource-preview (resource)
   "Open a read-only preview window for RESOURCE."
@@ -182,11 +219,11 @@
                                 :resource resource
                                 :view-mode :reading)))
 
-;; ============================================================================
+;; 
 ;; JSON Export/Import Infrastructure
-;; ============================================================================
+;; 
 ;; Common PostScript Content Generation
-;; ============================================================================
+;; 
 
 (defgeneric write-resource-ps-content (resource ps)
   (:documentation "Write the main content of RESOURCE to PostScript stream PS."))
@@ -211,9 +248,103 @@
   (write-resource-text-content resource stream)
   (terpri stream))
 
-;; ============================================================================
+;; 
+;; Standardized Resource Reference Presentation
+;; 
+;; 
+;; Layout:
+;;   {Icon} | Title (red if missing from builds) | Locator
+;;   | Subheading (75% gray, smaller) | Build checkboxes for assets
+;;   | VC/issue indicators bottom-right
+;; 
+
+(defun present-resource-reference (stream resource)
+  "Present RESOURCE in the standardized reference format.
+Used as the default display for all resource types in inspectors and listings."
+  (clim:with-output-as-presentation (stream resource 'game-resource-reference)
+    (clim:formatting-table (stream)
+      (clim:formatting-row (stream)
+        ;; Icon column
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
+          (format stream "~3%"))
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 48)
+          (ignore-errors
+           (game-resource-present-icon resource stream)))
+        ;; Title and subheading column
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 300)
+          ;; Title - red if missing from builds
+          (let ((ink (if (and (typep resource 'game-resource-asset)
+                              (zerop (game-resource-builds resource)))
+                         +missing-red+
+                         clim:+black+)))
+            (clim:with-drawing-options (stream :ink ink)
+              (clim:with-text-size (stream :larger)
+                (clim:with-text-face (stream :bold)
+                  (game-resource-present-title resource stream))))
+            (format stream "~%~5t")
+            ;; Subheading in 75% gray
+            (clim:with-drawing-options (stream :ink +dark-gray+)
+              (clim:with-text-size (stream :smaller)
+                (game-resource-present-subheading resource stream)))
+            ;; Build checkboxes for assets
+            (when (typep resource 'game-resource-asset)
+              (format stream "~%~5t")
+              (clim:with-text-size (stream :smaller)
+                (format stream "[~a] Build"
+                        (if (plusp (game-resource-builds resource))
+                            "✓" " ")))))
+          ;; Right margin: locator / VC status / issue indicators
+          (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
+            (game-resource-present-right-margin resource stream)))))))
+
+;; 
+;; Standard presentation generics
+;; 
+
+(defgeneric game-resource-present-icon (resource stream)
+  (:documentation "Present an icon glyph for RESOURCE on STREAM."))
+
+(defgeneric game-resource-present-title (resource stream)
+  (:documentation "Present the title text for RESOURCE on STREAM."))
+
+(defgeneric game-resource-present-subheading (resource stream)
+  (:documentation "Present the subheading line for RESOURCE on STREAM."))
+
+(defgeneric game-resource-present-right-margin (resource stream)
+  (:documentation "Present right-margin info (locator, VC, issues) for RESOURCE on STREAM."))
+
+(defmethod game-resource-present-icon ((resource game-resource) stream)
+  "Default icon - shows a bullet character."
+  (format stream "•"))
+
+(defmethod game-resource-present-title ((resource game-resource) stream)
+  "Default title display."
+  (format stream "~a" (game-resource-title resource)))
+
+(defmethod game-resource-present-subheading ((resource game-resource) stream)
+  "Default subheading: shows resource kind."
+  (format stream "~a" (game-resource-kind resource)))
+
+(defmethod game-resource-present-right-margin ((resource game-resource) stream)
+  "Default right margin: shows locator and VC status."
+  (let ((locator (ignore-errors (game-resource-locator resource)))
+        (vc-status (ignore-errors
+                    (vc-file-status (or (game-resource-full-path resource)
+                                        (game-resource-collective-path resource))))))
+    (when locator
+      (clim:with-drawing-options (stream :ink clim:+black+)
+        (clim:with-text-face (stream :roman)
+          (clim:with-text-size (stream :smaller)
+            (format stream "~a" locator))))
+      (format stream "~%"))
+    (when vc-status
+      (clim:with-drawing-options (stream :ink +dark-gray+)
+        (clim:with-text-size (stream :smaller)
+          (format stream "VC: ~a" vc-status))))))
+
+;; 
 ;; Helper Functions for Common Fields
-;; ============================================================================
+;; 
 
 (defun write-resource-common-ps (resource ps)
   "Write common resource fields to PS stream."
@@ -240,9 +371,18 @@
     (when vc-status
       (format stream "VC Status: ~a~%" vc-status))))
 
-;; ============================================================================
+;; 
 ;; resource-to-json methods for all concrete resource classes
-;; ============================================================================
+;; 
+
+(defun encode-file-to-base91 (path)
+  "Read file at PATH and return base91-encoded string, or NIL if file not found.
+Base91 provides ~23% overhead vs base64's 33%."
+  (when (and path (probe-file path))
+    (with-open-file (stream path :element-type '(unsigned-byte 8))
+      (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))
+        (read-sequence bytes stream)
+        (encode-base91 bytes)))))
 
 (defmethod resource-to-json ((resource game-resource))
   (let ((obj (make-hash-table :test 'equal)))
@@ -251,11 +391,19 @@
     (when (typep resource 'game-resource-asset)
       (setf (gethash "moniker" obj) (game-asset-moniker resource)))
     (when (typep resource 'game-resource-from-file)
-      (setf (gethash "path" obj) (game-resource-full-path resource)))
+      (let ((path (game-resource-full-path resource)))
+        (setf (gethash "path" obj) (namestring path))
+        ;; Include file contents as base91 for file-based resources
+        (let ((content (encode-file-to-base91 path)))
+          (when content
+            (setf (gethash "content" obj)
+                  (list :encoding "base91"
+                        :size (file-length (game-resource-full-path resource))
+                        :data content))))))
     (when (typep resource 'game-resource-asset)
       (setf (gethash "assetId" obj) (game-resource-asset-id resource))
       (setf (gethash "builds" obj) (game-resource-builds resource)))
-    obj))
+    (wrap-with-headers obj (class-name (class-of resource)))))
 
 (defmethod resource-to-json ((resource game-resource-map))
   (let ((obj (call-next-method)))
@@ -324,9 +472,9 @@
 (defmethod resource-to-json ((resource game-resource-routine-run-commands))
   (call-next-method))
 
-;; ============================================================================
+;; 
 ;; resource-from-json methods for all concrete resource classes
-;; ============================================================================
+;; 
 
 (defmethod resource-from-json (json (class (eql 'game-resource-map)))
   (make-instance 'game-resource-map
@@ -448,9 +596,9 @@
                            (gethash "kind" json))
                  :full-path (gethash "path" json)))
 
-;; ============================================================================
+;; 
 ;; write-resource-ps-content methods for all concrete resource classes
-;; ============================================================================
+;; 
 
 (defmethod write-resource-ps-content ((resource game-resource-map) ps)
   (write-resource-common-ps resource ps)

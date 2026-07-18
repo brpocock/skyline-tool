@@ -11,8 +11,17 @@
 (defun start-resource-directory-watcher (directories &key (name "resource-watcher"))
   "Start a thread watching DIRECTORIES via inotify, redisplaying the frame on changes.
 Returns the new thread."
+  (ensure-worker-journal)
+  (journal:journaled (watcher-start
+                      :args (list :name name :dir-count (length directories)
+                                        :thread (list :id (thread-os-tid (current-thread))
+                                                      :name (thread-name (current-thread))))))
   (make-thread
    (lambda ()
+     (journal:journaled (watcher-thread-entered)
+       :args (list :name name
+                         :thread (list :id (thread-os-tid (current-thread))
+                                       :name (thread-name (current-thread)))))
      (let* ((paths (mapcar (lambda (d)
                              (probe-file (merge-pathnames d (truename "."))))
                            directories))
@@ -22,11 +31,22 @@ Returns the new thread."
        (when valid
          (inotify:with-inotify (inot (mapcar (lambda (p) (list p inotify:in-all-events))
                                              valid))
+           (journal:journaled (watcher-inotify-open)
+             :args (list :name name :paths valid
+                               :thread (list :id (thread-os-tid (current-thread))
+                                             :name (thread-name (current-thread)))))
            (loop for ev = (inotify:read-events inot)
                  do (ignore-errors
+                     (journal:journaled (watcher-event)
+                       :args (list :name name :event ev
+                                         :thread (list :id (thread-os-tid (current-thread))
+                                                       :name (thread-name (current-thread)))))
                      (when (and frame (typep frame 'clim:application-frame))
-                       (clim:redisplay-frame-panes frame :force-p t))))))))
-   :name name))
+                       (clim:redisplay-frame-panes frame :force-p t)))))))
+     (journal:journaled (watcher-thread-exited)
+       :args (list :name name
+                         :thread (list :id (thread-os-tid (current-thread))
+                                       :name (thread-name (current-thread))))))))
 
 ;;; 
 ;;; Resource Scavenger Implementations
@@ -285,26 +305,35 @@ Returns the new thread."
 (defun start-all-resources-scavengers (frame)
   "Start all resource scavenger threads."
   (declare (ignore frame))
-  (ensure-thread-pool-kernel)
-  (dolist (scavenger '(start-item-scavenger
-                        start-boat-scavenger
-                        start-blob-scavenger
-                        start-character-scavenger
-                        start-script-scavenger
-                        start-song-scavenger
-                        start-map-scavenger
-                        start-tileset-scavenger
-                        start-sprite-sheet-scavenger
-                        start-routine-run-command-scavenger
-                        start-routine-forth-library-scavenger
-                        start-class-scavenger
-                        start-instrument-scavenger
-                        start-flag-scavenger
-                        start-key-scavenger
-                        start-atari-vox-dictionary-scavenger
-                        start-intellivoice-dictionary-scavenger
-                        start-object-prototype-scavenger
-                        start-phrasebook-scavenger
-                        start-translation-scavenger
-                        start-preferences-scavenger))
-    (submit-task scavenger)))
+  (ensure-worker-journal)
+  (let ((thread-id (thread-os-tid (current-thread)))
+        (thread-name (thread-name (current-thread))))
+    (journal:journaled (all-scavengers-start)
+      :args (list :thread (list :id thread-id :name thread-name)
+                        :operation "start"))
+    (ensure-thread-pool-kernel)
+    (dolist (scavenger '(start-item-scavenger
+                         start-boat-scavenger
+                         start-blob-scavenger
+                         start-character-scavenger
+                         start-script-scavenger
+                         start-song-scavenger
+                         start-map-scavenger
+                         start-tileset-scavenger
+                         start-sprite-sheet-scavenger
+                         start-routine-run-command-scavenger
+                         start-routine-forth-library-scavenger
+                         start-class-scavenger
+                         start-instrument-scavenger
+                         start-flag-scavenger
+                         start-key-scavenger
+                         start-atari-vox-dictionary-scavenger
+                         start-intellivoice-dictionary-scavenger
+                         start-object-prototype-scavenger
+                         start-phrasebook-scavenger
+                         start-translation-scavenger
+                         start-preferences-scavenger))
+      (submit-task scavenger))
+    (journal:journaled (all-scavengers-complete)
+      :args (list :thread (list :id thread-id :name thread-name)
+                        :operation "complete"))))

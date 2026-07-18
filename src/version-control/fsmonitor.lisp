@@ -27,13 +27,12 @@ Returns a monitor object that can be stopped with STOP-FS-MONITOR."
                                            inotify:+in-moved-from+)))
     (setf (monitor-active-p monitor) t)
     (setf (monitor-thread monitor)
-          (bt:make-thread
+          (submit-task
            (lambda ()
              (loop while (monitor-active-p monitor)
                    do (let ((events (inotify:read-events (watch-descriptor monitor))))
                         (dolist (event events)
-                          (funcall callback (event-mask event) (event-name event))))))
-           :name "fs-monitor-thread"))
+                          (funcall callback (event-mask event) (event-name event))))))))
     monitor))
 
 (defmethod stop-fs-monitor ((monitor inotify-monitor))
@@ -42,7 +41,7 @@ Returns a monitor object that can be stopped with STOP-FS-MONITOR."
   (when (watch-descriptor monitor)
     (inotify:rm-watch (watch-descriptor monitor)))
   (when (monitor-thread monitor)
-    (bt:join-thread (monitor-thread monitor))))
+    (join-thread (monitor-thread monitor))))
 
 (defmacro with-fs-monitor ((monitor-var backend path callback) &body body)
   "Execute BODY with filesystem monitoring active."

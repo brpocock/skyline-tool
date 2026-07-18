@@ -7,8 +7,8 @@
   "Format window title as: $(Thing) - Skyline-Tool for *Game-Title* (Machine-Directory-Name)"
   (format nil "~a - Skyline-Tool for ~a (~a)"
           thing
-          (cl-change-case:title-case skyline-tool::*game-title*)
-          (skyline-tool::machine-directory-name)))
+          (cl-change-case:title-case *game-title*)
+          (machine-directory-name)))
 
 ;; Git Browser Window
 (clim:define-application-frame git-browser-frame ()

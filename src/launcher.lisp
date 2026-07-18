@@ -17,7 +17,7 @@
           (interactor :interactor :height 125 :width 450
                                   :max-height 125))
   (:menu-bar launcher-menu-bar)
-  (:icon (skyline-tool-icon))
+  (:icon (skyline-tool::skyline-tool-icon))
   (:layouts (default (clim:vertically () menu-list-pane interactor))))
 
 ;; --- Launcher Commands (after frame so define-launcher-frame-command is available) ---
@@ -782,7 +782,8 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
 ;; --- Launcher wrappers ---
 
 (defun show-all-resources ()
-  "Open the unified All Resources browser."
+  "Open the unified All Resources browser and run its frame top-level.
+Blocks until the frame is closed."
   (let ((frame (clim:make-application-frame 'all-resources-frame)))
     (clim:run-frame-top-level frame)))
 
@@ -812,8 +813,8 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
   "Show all Lisp threads in a simple echo window."
   (clim-simple-echo:run-in-simple-echo
    (lambda ()
-     (format t "~&~d thread~:p:~2%" (length (bt:all-threads)))
-     (dolist (thread (bt:all-threads))
+     (format t "~&~d thread~:p:~2%" (length (all-threads)))
+     (dolist (thread (all-threads))
        (format t "~&~a~%" thread)))
    :process-name "Lisp Threads"))
 
@@ -822,19 +823,19 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
   (clim-simple-echo:run-in-simple-echo
    (lambda ()
      (format t "~&Lisp Threads (click on thread name for actions):~2%")
-     (dolist (thread (bt:all-threads))
+     (dolist (thread (all-threads))
        (format t "~&[~a] - Name: ~a~%" 
-               (bt:thread-name thread)
-               (bt:thread-name thread))))
+               (thread-name thread)
+               (thread-name thread))))
    :process-name "Lisp Threads"))
 
 (defun interrupt-thread (thread)
   "Interrupt a Lisp THREAD."
-  (bt:interrupt-thread thread))
+  (interrupt-thread thread))
 
 (defun destroy-thread (thread)
   "Destroy a Lisp THREAD."
-  (bt:destroy-thread thread))
+  (destroy-thread thread))
 
 (defun show-clouseau ()
   "Open the Clouseau inspector on the Skyline-Tool package."
@@ -1058,7 +1059,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
   (:layouts
    (default (clim:vertically () bank-list-pane summary-pane)))
   (:menu-bar rom-budget-menu-bar)
-  (:icon (skyline-tool-icon)))
+  (:icon (skyline-tool::skyline-tool-icon)))
 
 ;; --- Command tables ---
 

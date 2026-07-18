@@ -995,7 +995,7 @@ or compilation steps for graphics conversion."
   (let ((art-name (pathname-name pathname))
         (art-path (enough-namestring pathname))
         (machine-dir (machine-directory-name)))
-    (ecase *machine*
+    (case *machine*
       (200 ; Lynx
        (format t "~%
 Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
@@ -1004,10 +1004,10 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
                machine-dir art-name art-path machine-dir))
       (7800 ; Atari 7800
        (format t "~%
-Object/~a/Assets/Art.~a.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
+Object/~a/Assets/Art.~a.NTSC.o Object/~a/Assets/Art.~a.PAL.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
-	bin/skyline-tool --port 7800 compile-art-7800 $@ $<"
-               machine-dir art-name art-path
+	bin/skyline-tool --port 7800 --region PAL compile-art-7800 $@ $<"
+               machine-dir art-name machine-dir art-name art-path
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))
                machine-dir))
@@ -1038,8 +1038,8 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port 264 compile-art-264 $@ $<"
                machine-dir art-name art-path machine-dir))
-      ((1 2 8 16 20 64 88 128 223 1601 2600 3010 5200 400 800) ; Other supported machines without art support
-       (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
+      (otherwise
+       (error "Art generation not supported for machine ~A (~A)" *machine* (machine-long-name))))))
 
 (defun write-tsx-generation (pathname)
   (let ((machine-dir (machine-directory-name)))

@@ -53,6 +53,33 @@
   (declare (ignore new-name))
   (error "Renaming assets is not currently supported for resource: ~a" (game-resource-title resource)))
 
+(defun insert-gadget (stream &key label variable presentation-type activation-callback)
+  "Insert a text-field gadget into STREAM with initial value VARIABLE.
+LABEL is an optional label string displayed before the field.
+PRESENTATION-TYPE is currently ignored (text fields don't use presentations).
+ACTIVATION-CALLBACK is called with the gadget when the value changes.
+Returns the gadget."
+  (declare (ignore presentation-type))
+  (when label
+    (clim:with-text-face (stream :bold)
+      (format stream "~a " label)))
+  (let ((gadget (clim:with-output-as-gadget (stream)
+                  (clim:make-pane 'clim:text-field
+                                 :value (or variable "")
+                                 :activate-callback activation-callback))))
+    gadget))
+
+(defun insert-button (stream &key label activation-callback)
+  "Insert a button gadget into STREAM with label LABEL.
+ACTIVATION-CALLBACK is a zero-argument function called when the button is pressed.
+Returns the gadget."
+  (clim:with-output-as-gadget (stream)
+    (clim:make-pane 'clim:push-button
+                    :label (or label "Button")
+                    :activate-callback (lambda (g)
+                                         (declare (ignore g))
+                                         (funcall activation-callback)))))
+
 ;; Gadget geometry accessors
 (defun gadget-left (gadget)
   (clim:bounding-rectangle-min-x (clim:bounding-rectangle gadget)))
@@ -120,7 +147,7 @@
   (interactive-editing-gadget-with-validation
    stream resource
    (lambda (r) (funcall accessor r))
-   (lambda (r v) (setf (funcall (fdefinition `(setf ,accessor)) r) v))
+   (lambda (r v) (funcall (fdefinition `(setf ,accessor)) v r))
    :label (string-downcase (symbol-name accessor))
    :validator #'validate-minifont-name
    :max-length 20))

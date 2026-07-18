@@ -1,13 +1,11 @@
 ;;; Skyline-Tool src/gui/gui-dialogs.lisp
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
-;;;
+
 ;;; Generic dialog frames for user input using CLIM gadgets
 
 (in-package :skyline-tool)
 
-;;; ---------------------------------------------------------------------
 ;;; Generic Text Input Dialog
-;;; ---------------------------------------------------------------------
 
 (clim:define-application-frame text-input-dialog ()
   ((prompt :initarg :prompt :accessor dialog-prompt :initform "")
@@ -70,17 +68,15 @@
 (defun run-text-input-dialog (prompt &key (initial-value "") (title "Input"))
   "Run a text input dialog and return the entered string, or NIL if cancelled."
   (let ((frame (clim:make-application-frame 'text-input-dialog
-                                             :prompt prompt
-                                             :initial-value initial-value
-                                             :pretty-name title
-                                             :width 420 :height 180)))
+                                            :prompt prompt
+                                            :initial-value initial-value
+                                            :pretty-name title
+                                            :width 420 :height 180)))
     (clim:run-frame-top-level frame)
     (when (dialog-confirmed frame)
       (dialog-result frame))))
 
-;;; ---------------------------------------------------------------------
 ;;; Generic Number Input Dialog
-;;; ---------------------------------------------------------------------
 
 (clim:define-application-frame number-input-dialog ()
   ((prompt :initarg :prompt :accessor dialog-prompt :initform "")
@@ -125,19 +121,17 @@
 (defun run-number-input-dialog (prompt &key (initial-value 0) (min-value 0) (max-value 255) (title "Number Input"))
   "Run a number input dialog and return the entered number, or NIL if cancelled."
   (let ((frame (clim:make-application-frame 'number-input-dialog
-                                             :prompt prompt
-                                             :initial-value initial-value
-                                             :min-value min-value
-                                             :max-value max-value
-                                             :pretty-name title
-                                             :width 420 :height 180)))
+                                            :prompt prompt
+                                            :initial-value initial-value
+                                            :min-value min-value
+                                            :max-value max-value
+                                            :pretty-name title
+                                            :width 420 :height 180)))
     (clim:run-frame-top-level frame)
     (when (dialog-confirmed frame)
       (dialog-result frame))))
 
-;;; ---------------------------------------------------------------------
 ;;; Generic Multi-Field Input Dialog
-;;; ---------------------------------------------------------------------
 
 (clim:define-application-frame multi-field-input-dialog ()
   ((prompt :initarg :prompt :accessor dialog-prompt :initform "")
@@ -192,10 +186,10 @@
 (defun run-multi-field-input-dialog (prompt fields &key (title "Input"))
   "Run a multi-field input dialog. FIELDS is a list of plists with :NAME, :LABEL, :VALUE, :TYPE."
   (let ((frame (clim:make-application-frame 'multi-field-input-dialog
-                                             :prompt prompt
-                                             :fields fields
-                                             :pretty-name title
-                                             :width 420 :height 350)))
+                                            :prompt prompt
+                                            :fields fields
+                                            :pretty-name title
+                                            :width 420 :height 350)))
     (clim:run-frame-top-level frame)
     (when (dialog-confirmed frame)
       (let ((result ()))
@@ -203,9 +197,7 @@
           (push (cons (car pair) (clim:gadget-value (cdr pair))) result))
         (nreverse result)))))
 
-;;; ---------------------------------------------------------------------
 ;;; Generic Selection Dialog (from a list)
-;;; ---------------------------------------------------------------------
 
 (clim:define-application-frame selection-dialog ()
   ((prompt :initarg :prompt :accessor dialog-prompt :initform "")
@@ -244,19 +236,17 @@
 (defun run-selection-dialog (prompt options &key (title "Select") (default nil))
   "Run a selection dialog and return the selected item, or NIL if cancelled."
   (let ((frame (clim:make-application-frame 'selection-dialog
-                                             :prompt prompt
-                                             :options options
-                                             :pretty-name title
-                                             :width 420 :height 340)))
+                                            :prompt prompt
+                                            :options options
+                                            :pretty-name title
+                                            :width 420 :height 340)))
     (when default
       (setf (dialog-result frame) default))
     (clim:run-frame-top-level frame)
     (when (dialog-confirmed frame)
       (dialog-result frame))))
 
-;;; ---------------------------------------------------------------------
 ;;; Color Selection Dialog
-;;; ---------------------------------------------------------------------
 
 (defun run-color-selection-dialog (prompt &key (current "White") (title "Color Selection"))
   "Run a color selection dialog with Atari color names."
@@ -269,9 +259,7 @@
                     (t (position (format nil "NTSC: ~a" current) all-colors :test #'string-equal)))))
     (run-selection-dialog prompt all-colors :title title :default (when default (nth default all-colors)))))
 
-;;; ---------------------------------------------------------------------
 ;;; Confirmation Dialog
-;;; ---------------------------------------------------------------------
 
 (clim:define-application-frame confirm-dialog ()
   ((prompt :initarg :prompt :accessor dialog-prompt :initform "")
@@ -311,33 +299,21 @@
     (clim:stream-set-cursor-position pane 120 5)
     (clim:note-gadget-activated cancel-btn pane)))
 
-(defun run-confirm-dialog (prompt &key (default-action "OK") (danger-action "Cancel") (title "Confirm"))
+(defun run-confirm-dialog (prompt &key (default-action "Execute") (danger-action "Cancel")
+                                       (title "Confirm"))
   "Run a confirmation dialog and return T if confirmed, NIL if cancelled."
   (let ((frame (clim:make-application-frame 'confirm-dialog
-                                             :prompt prompt
-                                             :default-action default-action
-                                             :danger-action danger-action
-                                             :pretty-name title
-                                             :width 420 :height 160)))
+                                            :prompt prompt
+                                            :default-action default-action
+                                            :danger-action danger-action
+                                            :pretty-name title
+                                            :width 420 :height 160)))
     (clim:run-frame-top-level frame)
     (dialog-result frame)))
 
-;;; ---------------------------------------------------------------------
 ;;; Boolean Dialog (Yes/No)
-;;; ---------------------------------------------------------------------
 
 (defun run-boolean-dialog (prompt &key (default nil) (title "Confirm"))
   "Run a Yes/No dialog and return T for Yes, NIL for No."
   (run-confirm-dialog prompt :default-action "Yes" :danger-action "No" :title title))
 
-;;; ---------------------------------------------------------------------
-;;; Export all dialog functions
-;;; ---------------------------------------------------------------------
-
-(export '(run-text-input-dialog
-          run-number-input-dialog
-          run-multi-field-input-dialog
-          run-selection-dialog
-          run-color-selection-dialog
-          run-confirm-dialog
-          run-boolean-dialog))

@@ -77,37 +77,35 @@
   (when (frame-pdf-function frame)
     (let ((temp-ps (format nil "/tmp/about-~a.ps" (get-universal-time))))
       (funcall (frame-pdf-function frame) temp-ps)
-      (ensure-thumbnail-kernel)  ; reuse LParallel kernel
+      (ensure-thumbnail-kernel)
       (lparallel:submit-task
        (lambda ()
          (uiop:run-program (list "lp" "-d" printer-name temp-ps)
                            :ignore-error-status t))))))
 
 
-;; Populate any Print To menu with available printers
-;; If no printers are found, adds "Default Printer (lpr)" as fallback
-(defun populate-print-menu (command-table-name)
-  "Populate the given command table with printer items.
-   If CUPS printers are discovered, add each one.
-   Otherwise, add 'Default Printer (lpr)' as fallback"
-  (when command-table-name
-    (let ((printers (ignore-errors (discover-printers-with-names))))
-      (if printers
-          (dolist (printer printers)
-            (let ((queue (car printer))
-                  (display (cdr printer)))
-              (unless (clim:find-menu-item command-table-name display)
-                (clim:add-menu-item-to-command-table command-table-name display
-                                                     :command `(run-command-in-terminal-echo ,queue "make test")
-                                                     :after :end))))
-          (unless (clim:find-menu-item command-table-name "Default Printer (lpr)")
-            (clim:add-menu-item-to-command-table command-table-name "Default Printer (lpr)"
-                                                 :command `(run-command-in-terminal-echo "make test")
-                                                 :after :end))))))
-
-;; Populate the Print To menu in the About dialog
+;; Populate the About dialog's Print To menu with available printers.
+;; Each printer entry sends the About page to that specific printer queue
+;; via com-print-about-to-printer (rather than the shared com-print-to-specific
+;; used by resource inspectors, because the About dialog uses a different PDF
+;; generation path).
 (defun populate-about-print-to-menu ()
-  (populate-print-menu 'about-print-to-menu))
+  "Populate the About dialog's Print To menu with discovered printers."
+  (let ((printers (ignore-errors (discover-printers-with-names))))
+    (if printers
+        (dolist (printer printers)
+          (let ((queue (car printer))
+                (display (cdr printer)))
+            (unless (ignore-errors (clim:find-menu-item 'about-print-to-menu display :errorp nil))
+              (clim:add-menu-item-to-command-table
+               'about-print-to-menu display
+               :command `(com-print-about-to-printer ,queue)
+               :after :end))))
+        (unless (ignore-errors (clim:find-menu-item 'about-print-to-menu "Default Printer (lpr)" :errorp nil))
+          (clim:add-menu-item-to-command-table
+           'about-print-to-menu "Default Printer (lpr)"
+           :command '(com-print-about-to-printer "lpr")
+           :after :end)))))
 
 ;; --- About dialog frame and display ---
 
@@ -120,10 +118,16 @@
    (:panes (about-pane :application :height 500 :width 600
                                         :display-function 'display-about-skyline-tool))
    (:menu-bar about-menu-bar)
-   (:icon (skyline-tool-icon :resource :about))
+   (:icon (skyline-tool::skyline-tool-icon :resource :about))
    (:layouts (default about-pane)))
 
 (defun display-about-skyline-tool (frame pane)
+  "Display the About dialog contents with precise graphical presentation.
+Layout:
+  - Centered header: icon + 'Skyline-Tool' in royal blue, large sans-serif bold
+  - Horizontal rule in navy blue
+  - Version / copyright / compilation info
+  - Two-column data rows for user, machine, CPU, OS, Lisp, site"
   (declare (ignore frame))
   (let* ((data (%about-data))
          (pane-width (clim:bounding-rectangle-width (clim:sheet-region pane))))
@@ -144,35 +148,46 @@
             (clim:draw-pattern* pane icon-pattern start-x y)
             (clim:with-drawing-options (pane :ink (clim:make-rgb-color 0 0.2 0.6))
               (clim:with-text-style (pane title-style)
-                (clim:draw-text* pane title-text (+ start-x icon-size gap) (+ y 48))))))))
-    ;; Horizontal rule below header
-    (clim:draw-line* pane 10 90 (- pane-width 10) 90
-                     :ink (clim:make-rgb-color 0 0.2 0.6) :line-thickness 2)
-    ;; Position stream cursor below the rule
-    (clim:stream-set-cursor-position pane 10 100)
-    ;; Version / copyright / compilation
-    (format pane "~&~%  Version ~a~%~%" (getf data :version))
-    (format pane "  Copyright © 2014-2024 Bruce-Robert Pocock~%")
-    (format pane "  Copyright © 2024-2026 Interworldly Adventuring, LLC~%~%")
-    (format pane "  ~a~%~%" (getf data :compiled))
-    ;; Two-column data rows
-    (format pane "~&  Currently: ~a~%~%" (getf data :timestamp))
-    (format pane "  User: ~a~%" (getf data :user))
-    (format pane "  Machine: ~a~%" (getf data :machine))
-    (format pane "  CPU: ~a~%" (getf data :cpu))
-    (format pane "  OS: ~a~%" (getf data :os))
-    (format pane "  Lisp: ~a~%" (getf data :lisp))
-    (format pane "  Site: ~a~%" (getf data :site))
-    (terpri)))
+                (clim:draw-text* pane title-text (+ start-x icon-size gap) (+ y 48)))))))
+      ;; Horizontal rule below header in navy blue
+      (clim:draw-line* pane 10 90 (- pane-width 10) 90
+                       :ink (clim:make-rgb-color 0 0.2 0.6) :line-thickness 2)
+      ;; Position stream cursor below the rule
+      (clim:stream-set-cursor-position pane 10 100)
+      ;; Version / copyright / compilation
+      (format pane "~&~%  Version ~a~%~%" (getf data :version))
+      (format pane "  Copyright © 2014-2024 Bruce-Robert Pocock~%")
+      (format pane "  Copyright © 2024-2026 Interworldly Adventuring, LLC~%~%")
+      (format pane "  ~a~%~%" (getf data :compiled))
+      ;; Two-column data rows with labels in bold
+      (flet ((about-row (label value)
+               (format pane "~&  ")
+               (clim:with-text-face (pane :bold)
+                 (format pane "~a: " label))
+               (clim:with-text-face (pane :roman)
+                 (format pane "~a~%" value))))
+        (about-row "Currently" (getf data :timestamp))
+        (about-row "User" (getf data :user))
+        (about-row "Machine" (getf data :machine))
+        (about-row "CPU" (getf data :cpu))
+        (about-row "OS" (getf data :os))
+        (about-row "Lisp" (getf data :lisp))
+        (about-row "Site" (getf data :site))))))
 
 (defun show-about-skyline-tool ()
-  "Open the About Skyline-Tool dialog."
+  "Open the About Skyline-Tool dialog with proper thread management."
   (let* ((fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
          (frame (clim:make-application-frame 'about-skyline-tool-frame
                                               :pretty-name "About Skyline-Tool"
                                               :frame-manager fm
                                              :width 620 :height 620)))
     (populate-about-print-to-menu)
+    ;; Subscribe to printer changes to dynamically update the Print To menu
+    (subscribe :printer-list-changed
+               (lambda (event)
+                 (declare (ignore event))
+                 (ignore-errors
+                  (clim:redisplay-frame-panes frame :force-p t))))
     (clim-sys:make-process
      (lambda ()
        (clim:run-frame-top-level frame))

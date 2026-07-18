@@ -3080,29 +3080,34 @@ List of byte lists, one per column
     (reverse bytes-across)))
 
 
-(defun compile-art-7800 (index-out index-in)
+(defun compile-art-7800 (index-out index-in &optional (region :ntsc))
 
   "Compile 7800 art assets from INDEX-IN to binary at INDEX-OUT.
 
+  Parses a 7800 art index file, converts the referenced PNG assets into
+  interleaved 7800-format bytes (bitplanes for Maria), and writes the
+  resulting binary file.
 
+  @table @asis
 
-Parses a 7800 art index file, converts the referenced PNG assets into
-interleaved 7800-format bytes (bitplanes for Maria), and writes the
-resulting binary file.
+  @item INDEX-OUT
+  Output path for the compiled binary
 
-@table @asis
+  @item INDEX-IN
+  Input path for the 7800 art index file
 
-@item INDEX-OUT
-Output path for the compiled binary
+  @item REGION
+  Video region (:ntsc or :pal) (default: :ntsc)
 
-@item INDEX-IN
-Input path for the 7800 art index file
+  @item Side Effects
+  Sets *machine* to 7800 and *region* to REGION during compilation
 
-@end table
+  @end table
 
-@xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
-  
-  (let ((*machine* 7800))
+  @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
+   
+  (let ((*machine* 7800)
+        (*region* region))
     (write-7800-binary index-out
 
                        (interleave-7800-bytes

@@ -125,11 +125,15 @@
 
 (defun publish-printer-change (printer-alist)
   "Invoke every handler bound via SUBSRIBE-PRINTER-CHANGE.
+   Also publishes :printer-list-changed on the global eventbus for
+   dynamic menu update subscribers.
    The handlers are expected to be commands that take one argument –
    the printer alist."
   (dolist (fn *printer-event-handlers*)
     (when (fboundp fn)
-      (funcall fn printer-alist))))
+      (funcall fn printer-alist)))
+  ;; Also notify eventbus subscribers for dynamic menu updates
+  (ignore-errors (publish :printer-list-changed :payload printer-alist)))
 
 ;; 
 ;; Background discovery thread
@@ -148,12 +152,12 @@
   (unless *printer-discovery-running-p*
     (setf *printer-discovery-running-p* t)
     (setf *printer-discovery-thread*
-          (make-thread #'printer-discovery-loop :name "Printer Discovery Thread"))))
+          (submit-task #'printer-discovery-loop))))
 
 (defun stop-printer-discovery-thread ()
   "Stop the background printer discovery thread."
   (when *printer-discovery-thread*
-    (bt:destroy-thread *printer-discovery-thread*)
+    (destroy-thread *printer-discovery-thread*)
     (setf *printer-discovery-thread* nil
           *printer-discovery-running-p* nil)))
 

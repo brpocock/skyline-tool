@@ -93,7 +93,9 @@
                                 (when (probe-file p) p)))
                   '("work/" "Work/" "Documents/" "./"))))))
 
-(defun prompt-save-pathname (default-name &key prefs-key)
+(defun prompt-save-pathname (default-name
+                             &key (type (pathname-type default-name))
+                                  prefs-key)
   "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
    DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
    PREFS-KEY is a keyword used to persist the chosen directory in preferences.

@@ -283,7 +283,7 @@
                         (simple-animation-sequence-index seq)))))
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede)
-        (skyline-tool::write-json-pretty (skyline-tool::sequence-alist seq) f))
+        (write-json-pretty (sequence-alist seq) f))
       (format *query-io* "~&Saved ~a~%" (namestring path)))))
 
 (define-anim-seq-editor-frame-command (com-save-animation-seq-as-text :menu nil :name t) ()
@@ -464,12 +464,12 @@
                         (or (simple-animation-sequence-label seq) "untitled"))))
     (with-open-file (ps ps-path :direction :output :if-exists :supersede)
       (format ps "%!PS-Adobe-3.0~%")
-      (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+      (write-ps-docinfo ps title "Skyline-Tool" author)
       (format ps "%%Page: 1 1~%")
       (format ps "<< /PageSize [792 612] >> setpagedevice~%")
-      (skyline-tool::write-ps-font-encodings ps)
+      (write-ps-font-encodings ps)
       ;; Header bar with icon
-      (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
+      (write-ps-header-bar ps title date-str author (title-case *game-title*))
       (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont~%")
       (flet ((attr (y label value)
                (format ps "50 ~d moveto (~a:) show 200 ~d moveto (~a) show~%" y label y value)))
@@ -482,7 +482,7 @@
         (attr 410 "Write Mode" (string-downcase (simple-animation-sequence-write-mode seq)))
         (attr 395 "Frames" (format nil "~d" (simple-animation-sequence-frame-count seq)))
         (attr 380 "Rate" (princ-to-string (simple-animation-sequence-frame-rate-scalar seq))))
-      (skyline-tool::write-ps-footer ps date-str author (machine-instance) (title-case *game-title*) 1 1)
+      (write-ps-footer ps date-str author (machine-instance) (title-case *game-title*) 1 1)
       (let* ((fc (simple-animation-sequence-frame-count seq))
              (cols (min 4 fc))
              (rows (ceiling fc cols))
@@ -1931,13 +1931,13 @@ Called from note-sheet-grafted after the frame is connected to the display."
     (when path
       (with-open-file (f path :direction :output :if-exists :supersede
                               :external-format :utf-8)
-        (skyline-tool::write-json-pretty
+        (write-json-pretty
          (loop for key being the hash-keys of *animation-assignments*
                  using (hash-value seq)
                collect (cons (format nil "~(~a~)-~d-~(~a~)-~(~a~)"
                                      (first key) (second key)
                                      (third key) (fourth key))
-                             (skyline-tool::sequence-alist seq)))
+                             (sequence-alist seq)))
          f)))))
 
 (define-anim-seq-assigns-frame-command (com-save-assignments-as-text :menu nil :name t) ()

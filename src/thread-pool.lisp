@@ -25,7 +25,7 @@
 (defun log-worker-condition (condition)
   "Log a condition from a worker thread."
   (journal:journaled ((format nil "~a: ~a" (thread-name (current-thread)) condition)
-                      :log-record (list :thread (current-thread)
+                      :args (list :thread (current-thread)
                                         :backtrace
                                         (with-output-to-string (s)
                                           (trivial-backtrace:print-backtrace condition

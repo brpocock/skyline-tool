@@ -133,10 +133,10 @@
              (lines (count #\Newline text))
              (total-pages (max 1 (ceiling lines (/ (- 700 50) 10))))
              (title "Skyline-Tool Script List")
-             (author (skyline-tool::user-real-name)))
+             (author (user-real-name)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
-          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+          (write-ps-docinfo ps title "Skyline-Tool" author)
           (format ps "<< /PageSize [612 792] >> setpagedevice~%")
           (with-input-from-string (s text)
             (dotimes (page total-pages)
@@ -144,7 +144,7 @@
               (let ((y 700) (line-height 10))
                 (loop for line = (read-line s nil nil)
                       while (and line (>= y 50))
-                      do (format ps "50 ~d moveto (~a) show~%" y (skyline-tool::escape-ps-string line))
+                      do (format ps "50 ~d moveto (~a) show~%" y (escape-ps-string line))
                          (decf y line-height)))
               (format ps "showpage~%"))))
         (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring path))
@@ -293,13 +293,13 @@
          (pdf-path (format nil "~a.pdf" base))
          (lines (count #\Newline text))
          (total-pages (max 1 (ceiling lines (- 700 50))))
-         (author (skyline-tool::user-real-name))
+         (author (user-real-name))
          (title (format nil "Skyline-Tool for ~a"
                         (string-capitalize
-                         (or (ignore-errors (symbol-value 'skyline-tool::*game-title*)) "Game")))))
+                         (or (ignore-errors (symbol-value '*game-title*)) "Game")))))
     (with-open-file (ps ps-path :direction :output :if-exists :supersede)
       (format ps "%!PS-Adobe-3.0~%")
-      (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+      (write-ps-docinfo ps title "Skyline-Tool" author)
       (format ps "<< /PageSize [612 792] >> setpagedevice~%")
       (with-input-from-string (s text)
         (dotimes (page total-pages)
@@ -307,7 +307,7 @@
           (let ((y 700) (line-height 10))
             (loop for line = (read-line s nil nil)
                   while (and line (>= y 50))
-                  do (format ps "50 ~d moveto (~a) show~%" y (skyline-tool::escape-ps-string line))
+                  do (format ps "50 ~d moveto (~a) show~%" y (escape-ps-string line))
                      (decf y line-height)))
           (format ps "showpage~%"))))
     (uiop:run-program (list "ps2pdf" ps-path pdf-path)
@@ -570,11 +570,11 @@ Launches an emulator playtest session for the specified script.
                (format ps "gsave
  56 745 translate
 ")
-               (skyline-tool::write-ps-header-icon ps)
+               (write-ps-header-icon ps)
                (format ps "newpath 48 -3 moveto 500 -3 lineto stroke~%")
                (format ps "/Helvetica-Bold-ISOLatin1 findfont 10 scalefont setfont 0.2 0.2 0.25 setrgbcolor~%")
                (format ps "56 22 moveto (~a) show~%"
-                       (skyline-tool::escape-ps-string title-text))
+                       (escape-ps-string title-text))
                ;; Page number top right
                (format ps " /Helvetica-ISOLatin1 findfont 10 scalefont setfont 0.4 0.4 0.45 setrgbcolor~%")
                (format ps " ~d ~d moveto (~d.) show~%" (- page-w rm 30) (- page-h tm 12) page-num)
@@ -585,7 +585,7 @@ Launches an emulator playtest session for the specified script.
                  (format ps "gsave
  0 12 translate
 ")
-                 (skyline-tool::write-ps-header-icon ps)
+                 (write-ps-header-icon ps)
                  (format ps "
 /Times-Roman-ISOLatin1 findfont 10 scalefont setfont
 72 38 moveto
@@ -605,9 +605,9 @@ currentpoint pop 3 add 38 moveto
 522 12 moveto
 (Page ~d of ~d) show
 grestore
-" (skyline-tool::escape-ps-string title-text)
-      (skyline-tool::escape-ps-string date-str) emdash
-      (skyline-tool::escape-ps-string author-str)
+" (escape-ps-string title-text)
+      (escape-ps-string date-str) emdash
+      (escape-ps-string author-str)
       page-num total-pages)))
              (new-page ()
                (footer)
@@ -757,10 +757,10 @@ grestore
     (with-open-file (ps ps-path :direction :output :if-exists :supersede
                                 :external-format :utf-8)
       (format ps "%!PS-Adobe-3.0~%")
-      (skyline-tool::write-ps-docinfo ps script-title "Skyline-Tool"
+      (write-ps-docinfo ps script-title "Skyline-Tool"
                                      (format nil "~a on ~a" author (machine-instance)))
       (format ps "<< /PageSize [612 792] >> setpagedevice~%")
-      (skyline-tool::write-ps-font-encodings ps)
+      (write-ps-font-encodings ps)
       (%fountain->ps ps elements script-title date-str author pdf-pathname))
     (uiop:run-program (list "ps2pdf" (namestring ps-path) pdf-pathname)
                       :output nil :ignore-error-status t)

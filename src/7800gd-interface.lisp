@@ -10,8 +10,7 @@
 
 (defun spawn-thread-to-look-for-7800gd-on-port (pathname)
   (check-type pathname (or pathname string))
-  (make-thread (lambda () (ignore-errors (serial-port-has-7800gd-p pathname)))
-               :name (format nil "Looking for 7800GD on port ~a" pathname)))
+  (submit-task (lambda () (ignore-errors (serial-port-has-7800gd-p pathname)))))
 
 (defun find-7800gd-serial-port ()
   (if (tty-xterm-p)

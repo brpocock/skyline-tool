@@ -8,7 +8,6 @@
   "Current machine identifier.")
 (defvar *region* nil
   "Target region")
-(defvar *region-list* (list :ntsc :pal :secam))
 (defvar *sound* nil
   "Sound configuration")
 (defvar *common-palette* nil
@@ -19,14 +18,8 @@
   "Default hair color")
 (defvar *default-clothes-color* nil
   "Default clothes color")
-(defvar *project.json* nil
-  "Project data from JSON file")
-(defvar *part-number* nil
-  "Part number from project data")
-(defvar *studio* nil
-  "Studio from project data")
-(defvar *publisher* nil
-  "Publisher from project data")
+(defvar *build* :demo
+  "Current build type: :demo, :public, :publisher")
 
 (defvar *invocation*
   (list :--help 'about-skyline-tool
@@ -338,14 +331,15 @@ User input string with whitespace trimmed
 (defvar *speech-thread* nil)
 
 (defun say-aloud (format &rest args)
-  (unless (and *speech-thread* (thread-alive-p *speech-thread*))
-    (setf *speech-thread*
-          (make-thread (lambda ()
-                         (uiop/run-program:run-program
-                          (list "speak-ng" (format nil "\"~a\""
-                                                   (substitute #\apostrophe #\quotation_mark
-                                                               (apply #'format nil format args))))
-                          :ignore-error-status t))
+  (when (and *speech-thread* (thread-alive-p *speech-thread*))
+    (destroy-thread *speech-thread*))
+  (setf *speech-thread*
+        (submit-task (lambda ()
+                       (uiop/run-program:run-program
+                        (list "speak-ng" (format nil "\"~a\""
+                                                 (substitute #\apostrophe #\quotation_mark
+                                                             (apply #'format nil format args))))
+                        :ignore-error-status t)
                        :name "Speaking aloud"))))
 
 (defun user-real-name (&optional (user-id (sb-posix:geteuid)))
@@ -707,7 +701,7 @@ Example: bin/skyline-tool --port Intv ~a ?"
   label)
 
 (defun load-project.json (thunk &optional (port-label (find-default-port)))
-  "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
+  "Load Project.{port}.json and run THUNK with *game-title*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
    Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
   (let* ((effective-port (if (or (null port-label) (string-equal port-label "nil"))
@@ -730,16 +724,12 @@ Example: bin/skyline-tool --port Intv ~a ?"
          (*part-number* (assocdr :*part-number project-data))
          (*studio* (assocdr :*studio project-data))
          (*publisher* (assocdr :*publisher project-data))
-         (*machine* (or (assocdr :*machine project-data)
-                        (ignore-errors
-                         (machine-number-by-tag (make-keyword (string-upcase effective-port))))))
+         (*machine* (machine-number-from-tag (make-keyword (string-upcase port-label))))
          (*sound* (assocdr :*sound project-data))
          (*common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) nil)))
          (*default-skin-color* (assocdr :*default-skin-color project-data))
          (*default-hair-color* (assocdr :*default-hair-color project-data))
-         (*default-clothes-color* (assocdr :*default-clothes-color project-data))
-         (*region-list* (or (ensure-list (assocdr :*region project-data))
-                            (list (all-regions-for-machine)))))
+         (*default-clothes-color* (assocdr :*default-clothes-color project-data)))
     (funcall thunk)))
 
 (defun run-for-port (port-label &rest subcommand)
@@ -778,27 +768,43 @@ Executes the requested command, may exit the process
   (format t "~&Skyline tool (© 2026) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
           argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-  (let ((sb-impl::*default-external-format* :utf-8)
-        (explicit-port
-          (loop for args on (cdr argv)
-                for token = (car args)
-                when (or (string= token "--port") (string= token "-p"))
-                  do (return (cadr args))
-                finally (return nil))))
-(unless (and (boundp '*machine*) *machine*)
-       (if explicit-port
-           (machine-for-port-string explicit-port)
-           (progn
-             ;; Try to detect PORT from Makefile symlink
-             (handler-case
-                 (let* ((makefile-path (make-pathname :name "Makefile" :defaults *default-pathname-defaults*))
-                        (makefile-pathname (when (probe-file makefile-path) (truename makefile-path)))
-                        (port-string (when makefile-pathname (pathname-name makefile-pathname))))
-                   (when port-string
-                     (machine-for-port-string port-string)))
-               (error (e)
-                 (declare (ignore e))
-                 (error "Machine type not detected ... should check Makefile for link here, but that code is regressed and broken ... needs repair URGENTLY"))))))
+  (let* ((sb-impl::*default-external-format* :utf-8)
+         (explicit-port
+           (loop for args on (cdr argv)
+                 for token = (car args)
+                 when (or (string-equal token "--port") (string-equal token "-p"))
+                   do (return (cadr args))
+                 finally (return nil)))
+         (explicit-region
+           (loop for args on (cdr argv)
+                 for token = (car args)
+                 when (or (string-equal token "--region") (string-equal token "-r"))
+                   do (let ((region-arg (cadr args)))
+                        (return (string-case (string-upcase region-arg)
+                                  ("NTSC" :ntsc)
+                                  ("PAL" :pal)
+                                  ("SECAM" :secam)
+                                  ("INTERNAL" :internal)
+                                  (otherwise
+                                   (error "Invalid region: ~a. Use NTSC, PAL, SECAM, or INTERNAL"
+                                          region-arg)))))
+                 finally (return nil)))
+         (*machine* (if explicit-port
+                        (machine-for-port-string explicit-port)
+                        (progn
+                          ;; Try to detect PORT from Makefile symlink
+                          (handler-case
+                              (let* ((makefile-path #p"Makefile")
+                                     (makefile-pathname (when (probe-file makefile-path)
+                                                          (truename makefile-path)))
+                                     (port-string (when makefile-pathname
+                                                    (pathname-name makefile-pathname))))
+                                (when port-string
+                                  (machine-for-port-string port-string)))
+                            (error (e)
+                              (declare (ignore e))
+                              nil)))))
+         (*region* (or explicit-region *region*)))
     (load-project.json
      (lambda ()
        (unless (< 1 (length argv))
@@ -837,19 +843,18 @@ Executes the requested command, may exit the process
   "Submit a build task via the global thread pool and optionally wait for completion.
    Uses the thread-pool module for proper worker management and queueing."
   (let ((output-path (enough-namestring (truename target-pathname))))
-    (if-let (builder (skyline-tool-writes-p target-pathname))
-      (clim-simple-echo:run-in-simple-echo builder
-                                           :process-name (format nil "Build ~a" output-path))
-      (submit-task
-       (lambda ()
+    (submit-task
+     (lambda ()
+       (if-let (builder (skyline-tool-writes-p target-pathname))
+         (clim-simple-echo:run-in-simple-echo builder
+                                              :process-name (format nil "Build ~a" output-path))
          (run-command-in-terminal-echo (list "make" output-path)
                                        :title (format nil "Build ~a" output-path)))))
     (unless phonyp
       (wait-for-build-completion output-path))))
 
 (defun wait-for-build-completion (path)
-  "Wait until the build output file appears.
-   Simple polling implementation to avoid missing uiop file-watcher support."
+  "Wait until the build output file appears."
   (inotify:with-inotify (inot (list (list path inotify:in-close-write)))
-    (bt:thread-yield)))
+    (thread-yield)))
 

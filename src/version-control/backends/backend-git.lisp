@@ -168,7 +168,7 @@
       (move (push "-m" cmd) (push move cmd)))
     (let ((output (ignore-errors (uiop:run-program cmd :output :string))))
       (when output
-        (mapcar (curry #'string-trim skyline-tool::+whitespace+)
+        (mapcar (curry #'string-trim +whitespace+)
                 (split-sequence #\newline output :remove-empty-subseqs t))))))
 
 (defmethod vc-checkout ((backend git-backend) target &key create-branch)

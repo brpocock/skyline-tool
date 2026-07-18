@@ -65,7 +65,7 @@ Columns: ~d
         (print-wide-pixel color *trace-output*)
         (cond
           ((< (length colors) 20)
-           (format *trace-output* " ~a~%"(elt color-names i)))
+           (format *trace-output* " ~a~%" (elt color-names i)))
           (t
            (when (= 15 (mod i 16))
              (terpri *trace-output*))))
@@ -94,14 +94,18 @@ Columns: ~d
                                        #'string)
                               +intv-color-names+)))
 (defun palette-reference (rgb palette &key allow-imperfect-p)
-  (or (position rgb palette :test 'equalp)
-      (if allow-imperfect-p
-          (let ((nearest (find-nearest-in-palette (copy-list palette)
-                                                  (first rgb)
-                                                  (second rgb)
-                                                  (third rgb))))
-            (or (position nearest palette :test 'equalp)
-                (error "Could not map ~s to anything close to palette ~s (wanted ~s)"
-                       rgb palette nearest)))
-          (error "Palette value ~s is not in palette ~s" rgb palette))))
+   (or (position rgb palette :test 'equalp)
+       (if allow-imperfect-p
+           (let ((nearest (find-nearest-in-palette (copy-list palette)
+                                                   (first rgb)
+                                                   (second rgb)
+                                                   (third rgb))))
+             (or (position nearest palette :test 'equalp)
+                 (error "Could not map ~s to anything close to palette ~s (wanted ~s)"
+                        rgb palette nearest)))
+           (error "Palette value ~s is not in palette ~s" rgb palette))))
 
+(defun regions-for-machine (&optional (machine *machine*))
+   "Return the valid regions for a numeric machine ID.
+    Delegates to the canonical ALL-REGIONS-FOR-MACHINE."
+   (all-regions-for-machine machine))

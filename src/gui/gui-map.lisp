@@ -3,14 +3,20 @@
 
 (in-package :skyline-tool)
 
-(clim:define-presentation-type game-resource-map-reference ()
-  :inherit-from 'game-resource-map)
+(clim:define-presentation-type game-resource-map-reference ())
 
-(clim:define-presentation-type game-resource-map-editable ()
-  :inherit-from 'game-resource-map)
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-map-reference)))
+  (typep object 'game-resource-map))
 
-(clim:define-presentation-type game-resource-map-viewing ()
-  :inherit-from 'game-resource-map)
+(clim:define-presentation-type game-resource-map-editable ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-map-editable)))
+  (typep object 'game-resource-map))
+
+(clim:define-presentation-type game-resource-map-viewing ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-map-viewing)))
+  (typep object 'game-resource-map))
 
 (clim:define-presentation-method clim:present ((resource game-resource-map) (type game-resource-map-reference) stream view &key)
   (declare (ignore view))
@@ -21,8 +27,9 @@
       (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
         (game-resource-present-icon resource stream))
       (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
-        (clim:with-text-face (stream :bold)
-          (game-resource-present-title resource stream))
+        (clim:with-text-size (stream :larger)
+          (clim:with-text-face (stream :bold)
+            (game-resource-present-title resource stream)))
         (format stream "~%~5t")
         (clim:with-text-size (stream :smaller)
           (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))

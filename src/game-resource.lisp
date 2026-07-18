@@ -73,7 +73,8 @@ asset is an error and such code will always be rejected.
    (mscz-subtitle :initarg :mscz-subtitle :accessor game-resource-song-mscz-subtitle :initform nil)
    (mscz-composer :initarg :mscz-composer :accessor game-resource-song-mscz-composer :initform nil)
    (mscz-copyright :initarg :mscz-copyright :accessor game-resource-song-mscz-copyright :initform nil)
-   (mscz-lyrics :initarg :mscz-lyrics :accessor game-resource-song-mscz-lyrics :initform nil)))
+   (mscz-lyrics :initarg :mscz-lyrics :accessor game-resource-song-mscz-lyrics :initform nil)
+   (duration :initarg :duration :accessor game-resource-song-duration :initform nil)))
 
 (defclass game-resource-blob (game-resource-asset) ())
 
@@ -187,14 +188,20 @@ asset is an error and such code will always be rejected.
 (defclass game-resource-routine-rc-basic (game-resource-routine-run-commands) ())
 (defclass game-resource-routine-rc-pascal (game-resource-routine-run-commands) ())
 
-(clim:define-presentation-type game-resource-reference ()
-  :inherit-from 'game-resource)
+(clim:define-presentation-type game-resource-reference ())
 
-(clim:define-presentation-type game-resource-reading ()
-  :inherit-from 'game-resource)
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-reference)))
+  (typep object 'game-resource))
 
-(clim:define-presentation-type game-resource-editing ()
-  :inherit-from 'game-resource)
+(clim:define-presentation-type game-resource-reading ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-reading)))
+  (typep object 'game-resource))
+
+(clim:define-presentation-type game-resource-editing ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-editing)))
+  (typep object 'game-resource))
 
 (defgeneric game-resource-present-title (resource stream)
   (:documentation "Present the title string for reference presentation.")
@@ -232,7 +239,8 @@ asset is an error and such code will always be rejected.
       (format stream "~a~%" (game-resource-locator resource))
       (game-resource-present-build-checkboxes resource stream)
       (when vc-status
-        (present-vc-status-icon stream vc-status)))))
+        (let ((*standard-output* stream))
+          (present-vc-status-icon vc-status))))))
 
 (defmethod game-resource-locator ((resource game-resource))
   ;; For file-based resources without asset IDs, use the full path
@@ -240,10 +248,10 @@ asset is an error and such code will always be rejected.
     (game-resource-full-path resource)))
 
 (defmethod game-resource-locator ((resource game-resource-asset))
-  (format nil "$~2,'0x" (game-resource-asset-id resource)))
+  (format nil "$~2,'0x" (or (game-resource-asset-id resource) (game-asset-moniker resource))))
 
 (defmethod game-resource-locator ((resource game-resource-script))
-  (format nil "$~4,'0x" (game-resource-asset-id resource)))
+  (format nil "$~4,'0x" (or (game-resource-asset-id resource) (sxhash (game-asset-moniker resource)))))
 
 (defun ensure-project.json-loaded ()
   "Ensure *project.json* is loaded from disk if not already bound."
@@ -444,7 +452,7 @@ asset is an error and such code will always be rejected.
 
 (defun game-resource-to-text (resource)
   "Convert resource to plain text for reference/detail view."
-  (error "unimplemented"))
+  (game-resource-fulltext resource))
 
 (defgeneric resource-folder (resource)
   (:method ((resource game-resource))
@@ -466,6 +474,8 @@ asset is an error and such code will always be rejected.
 Provides RESOURCE slot (accessed via INSPECTOR-RESOURCE) and VIEW-MODE slot.
 Each resource type specializes PRESENT-REFERENCE, PRESENT-DETAIL, and
 PRESENT-EDITING on its Game-Resource subclass to render the inspector body."))
+
+(defmethod inspector-resource (frame) nil)
 
 ;; 
 ;; Generic Resource Inspector Frame — fallback for un-specialized resources
@@ -756,29 +766,29 @@ resource view mode (reference/reading/editing).")
       (t 'game-resource))))
 
 (defun make-game-resource (moniker builds kind-name
-                           asset-id hex-str present-p full-path)
+                           asset-id hex-str full-path)
   "Create a game-resource object from collected asset data."
   (let* ((class (kind->resource-class kind-name)))
     (cond
       ((subtypep class 'game-resource-asset)
        (let ((initargs (list :moniker moniker))
              (extra-args '()))
-        (when (eql class 'game-resource-map)
-          (let ((parts (split-sequence #\/ moniker)))
-            (when (> (length parts) 2)
-              (setf extra-args (list :locale (second parts))))))
-        (when (eql class 'game-resource-script)
-          (let ((parts (split-sequence #\/ moniker)))
-            (when (> (length parts) 2)
-              (setf extra-args (list :locale (second parts))))))
+         (when (eql class 'game-resource-map)
+           (let ((parts (split-sequence #\/ moniker)))
+             (when (> (length parts) 2)
+               (setf extra-args (list :locale (second parts))))))
+         (when (eql class 'game-resource-script)
+           (let ((parts (split-sequence #\/ moniker)))
+             (when (> (length parts) 2)
+               (setf extra-args (list :locale (second parts))))))
          (when (eql class 'game-resource-blob)
            (setf extra-args nil))
-        (let ((base-args (list :full-path full-path
+         (let ((base-args (list :full-path full-path
                                 :asset-id asset-id
                                 :hex-str hex-str
                                 :builds builds)))
-          (apply #'make-instance class
-                 (append initargs base-args extra-args)))))
+           (apply #'make-instance class
+                  (append initargs base-args extra-args)))))
       ((subtypep class 'game-resource-from-file)
        (make-instance class :full-path full-path))
       ((subtypep class 'game-resource-from-collective-file)
@@ -918,7 +928,7 @@ resource view mode (reference/reading/editing).")
 ;; --- Asset title methods (use game-asset-moniker) ---
 
 (defmethod game-resource-subheading ((resource game-resource-map))
-  (game-resource-map-notes resource))
+  (game-resource-notes resource))
 
 (defmethod game-resource-subheading ((resource game-resource-song))
   (let ((title (game-resource-song-mscz-title resource))
@@ -957,7 +967,7 @@ resource view mode (reference/reading/editing).")
   (setf (game-resource-key-name resource) value))
 
 (defmethod game-resource-title ((resource game-resource-object-prototype))
-  (format nil "Object Prototype: ~a" (game-resource-locator resource)))
+  (game-resource-locator resource))
 
 (defmethod game-resource-subheading ((resource game-resource-object-prototype))
   "Object Prototype Definition")
@@ -977,7 +987,7 @@ resource view mode (reference/reading/editing).")
   "U.S. English")
 
 (defmethod game-resource-title ((resource game-resource-intellivoice-dictionary))
-  "IntelliVoice.doc")
+  "IntelliVoice.dic")
 
 (defmethod game-resource-subheading ((resource game-resource-intellivoice-dictionary))
   "U.S. English")
@@ -1038,14 +1048,21 @@ resource view mode (reference/reading/editing).")
     (file-write-date (first (game-resource-pathnames resource))))
   (:method ((resource game-resource-from-collective-file))
     (file-write-date (first (game-resource-pathnames resource)))))
+
 (defgeneric game-resource-version-control-status (resource))
+
 (defgeneric game-resource-locator (resource))
+
 (defgeneric game-resource-asset-p (resource)
   (:method ((resource game-resource)) nil)
   (:method ((resource game-resource-asset)) t))
+
 (defgeneric game-resource-present-icon (resource stream))
+
 (defgeneric game-resource-present-reference (resource stream))
+
 (defgeneric game-resource-present-editing (resource stream))
+
 (defgeneric game-resource-kind (resource)
   (:method ((resource game-resource-blob)) :blob)
   (:method ((resource game-resource-map)) :map)
@@ -1067,6 +1084,7 @@ resource view mode (reference/reading/editing).")
   (:method ((resource game-resource-atari-vox-dictionary)) :phonetic-dictionary)
   (:method ((resource game-resource-intellivoice-dictionary)) :phonetic-dictionary)
   (:method ((resource game-resource-phrasebook)) :translation))
+
 (defgeneric game-resource-depends-upon-resources (resource))
 
 (defvar *resource-scavenger-thread* nil)
@@ -1091,50 +1109,48 @@ a method on this generic function. This provides the list of all scavengers to b
 (defun ensure-scavenger-thread-running ()
   (unless *resource-scavenger-thread*
     (setf *resource-scavenger-thread*
-          (make-thread #'resource-scavenger-thread
-                       :name "Resource Scavenger Thread"))))
+          (submit-task #'resource-scavenger-thread))))
 
 (defun asset-index-scavenger ()
   "Read Assets.index and publish resource-added events for each entry."
   (read-assets-list)
-  (dolist (entry *assets-list*)
-    (let* ((moniker (first entry))
-           (builds (second entry))
-           (kind-name (if (asset-kind/name moniker)
-                          (first (asset-kind/name moniker))
-                          nil))
-           (kind (when kind-name
-                   (kind-by-name kind-name)))
-           (asset-type-p (member kind '(:map :script :song :blob)))
-           (resource (when kind
-                       (apply #'make-instance
-                              (ecase kind
-                                (:atari-vox-dictionary 'game-resource-atari-vox-dictionary)
-                                (:blob 'game-resource-blob)
-                                (:boat 'game-resource-boat)
-                                (:character 'game-resource-character)
-                                (:class 'game-resource-class)
-                                (:flags 'game-resource-flag)
-                                (:instruments 'game-resource-instrument)
-                                (:items 'game-resource-item)
-                                (:keys 'game-resource-key)
-                                (:map 'game-resource-map)
-                                (:object-prototype 'game-resource-object-prototype)
-                                (:phrasebook 'game-resource-phrasebook)
-                                (:routine 'game-resource-routine)
-                                (:script 'game-resource-script)
-                                (:song 'game-resource-song)
-                                (:sprite-sheet 'game-resource-sprite-sheet)
-                                (:tileset 'game-resource-tileset))
-                              (append
-                               (list :kind kind
-                                     :asset-id (ignore-errors (get-asset-id kind (second (asset-kind/name moniker))))
-                                     :builds builds)
-                               (when asset-type-p
-                                 (list :moniker moniker)))))))
-      (when resource
-        (cache-add-resource kind resource)
-        (publish-resource-added resource)))))
+  (maphash
+   (lambda (moniker builds)
+     (let* ((kind-name (when (asset-kind/name moniker)
+                         (first (asset-kind/name moniker))))
+            (kind (when kind-name
+                    (kind-by-name kind-name)))
+            (asset-type-p (member kind '(:map :script :song :blob)))
+            (resource (when kind
+                        (apply #'make-instance
+                               (ecase kind
+                                 (:atari-vox-dictionary 'game-resource-atari-vox-dictionary)
+                                 (:blob 'game-resource-blob)
+                                 (:boat 'game-resource-boat)
+                                 (:character 'game-resource-character)
+                                 (:class 'game-resource-class)
+                                 (:flags 'game-resource-flag)
+                                 (:instruments 'game-resource-instrument)
+                                 (:items 'game-resource-item)
+                                 (:keys 'game-resource-key)
+                                 (:map 'game-resource-map)
+                                 (:object-prototype 'game-resource-object-prototype)
+                                 (:phrasebook 'game-resource-phrasebook)
+                                 (:routine 'game-resource-routine)
+                                 (:script 'game-resource-script)
+                                 (:song 'game-resource-song)
+                                 (:sprite-sheet 'game-resource-sprite-sheet)
+                                 (:tileset 'game-resource-tileset))
+                               (append
+                                (list :kind kind
+                                      :asset-id (ignore-errors (get-asset-id kind (second (asset-kind/name moniker))))
+                                      :builds builds)
+                                (when asset-type-p
+                                  (list :moniker moniker)))))))
+       (when resource
+         (cache-add-resource kind resource)
+         (publish-resource-added resource))))
+   *assets-list*))
 
 ;; Add asset-index-scavenger to the scavenger list via :around method.
 (defmethod resource-scavenger-functions :around ()
@@ -1162,17 +1178,10 @@ a method on this generic function. This provides the list of all scavengers to b
 
 (defgeneric game-resource-class-name (resource)
   (:documentation "Return CLIM-friendly class name for display")
-  (:method ((resource game-resource-boat)) "Boat")
-  (:method ((resource game-resource-character)) "Character")
-  (:method ((resource game-resource-map)) "Map")
-  (:method ((resource game-resource-atari-vox-dictionary)) "AtariVox Dict")
-  (:method ((resource game-resource-song)) "Song")
-  (:method ((resource game-resource-script)) "Script")
-  (:method ((resource game-resource-routine)) "Routine")
   (:method ((resource game-resource))
-    (string-capitalize (symbol-name (class-of resource)))))
+    (title-case (string (class-name (class-of resource))))))
 
-(defmethod game-resource-title ((resource game-resource))
+(defmethod game-resource-title ((resource game-resource-from-file))
   (title-case (pathname-name (first (game-resource-pathnames resource)))))
 
 (defmethod game-resource-title ((resource game-resource-map))
@@ -1185,6 +1194,4 @@ a method on this generic function. This provides the list of all scavengers to b
 (defmethod game-resource-subheading ((resource game-resource-map))
   (game-resource-notes resource))
 
-(defmethod game-resource-full-text ((resource game-resource))
-  (game-resource-locator resource))
 

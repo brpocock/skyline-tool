@@ -231,7 +231,7 @@
             :display-function 'display-resource-inspector)
    (interactor :interactor :height 100 :width 600 :max-height 100))
   (:menu-bar map-inspector-menu-bar)
-  (:icon (skyline-tool-icon))
+  (:icon (skyline-tool::skyline-tool-icon))
   (:layouts (default (clim:vertically () content interactor))))
 
 ;; --- Command Tables ---

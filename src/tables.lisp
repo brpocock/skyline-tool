@@ -276,7 +276,7 @@ ProjectionTables:~20t.block")
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
 (defun write-inventory-tables (&optional (source-text (merge-pathnames "Source/Tables/Inventory.txt" (uiop:getcwd)))
-                                         (source-code (merge-pathnames (format nil "Source/Generated/~a/InventoryLabels.s" (skyline-tool::machine-directory-name))
+                                         (source-code (merge-pathnames (format nil "Source/Generated/~a/InventoryLabels.s" (machine-directory-name))
                                                                        (uiop:getcwd)))
                                          (label "Item"))
   "Collect the names of all inventory items and write them out"
@@ -349,7 +349,7 @@ GameFlag: .block~2%"
 (defun write-characters-tables
     (&optional (spreadsheet-pathname #p"Source/Tables/NPCStats.ods")
                (source-pathname (format nil "Source/Generated/~a/CharacterTables.s"
-                                        (skyline-tool::machine-directory-name)))) 
+                                        (machine-directory-name)))) 
   "Write character tables from SPREADSHEET-PATHNAME to SOURCE-PATHNAME.
 
 SPREADSHEET-PATHNAME: Path to the NPC stats spreadsheet (default: Source/Tables/NPCStats.ods)
@@ -1123,57 +1123,19 @@ Concatenates lyrics from all voices in all parts, separated by newlines."
                       ".byte >~a" #'here? :decal-sheet)
               by #'cdddr
 
-for field-name = (if (listp field-info)
-                                     (first field-info)
-                                     field-info)
-               for field-asm-name = (if (listp field-info)
-                                         (second field-info)
-                                         field-info)
-               do (format output "~2%~a:" (pascal-case (string field-asm-name)))
-               do (dolist (item equipment-stats)
-                    (let ((value (getf item field-name)))
-                      (format output "~%~10t~?~40t; ~a"
-                              (funcall validator format value)
-                              (cons value nil)
-                              (title-case (getf item :item-name)))))))
+              for field-name = (if (listp field-info)
+                                   (first field-info)
+                                   field-info)
+              for field-asm-name = (if (listp field-info)
+                                       (second field-info)
+                                       field-info)
+              do (format output "~2%~a:" (pascal-case (string field-asm-name)))
+              do (dolist (item equipment-stats)
+                   (let ((value (getf item field-name)))
+                     (format output "~%~10t~?~40t; ~a"
+                             (funcall validator format value)
+                             (cons value nil)
+                             (title-case (getf item :item-name)))))))
       (format output "~2%~10t.bend~%"))))
 
-;; --- Missing functions for scavenger compatibility ---
 
-(defvar *orchestration* nil
-  "Cached orchestration data from Orchestration.ods")
-
-(defvar *equipment-index* nil
-  "Cached equipment index data from EquipmentIndex.ods")
-
-(defvar *flags* nil
-  "Cached flags data from Flags.txt")
-
-(defvar *keys* nil
-  "Cached keys data from Keys.txt")
-
-(defun load-orchestration ()
-  "Load Orchestration.ods into *ORCHESTRATION*."
-  (setf *orchestration* (read-orchestration))
-  *orchestration*)
-
-(defun load-equipment-index ()
-  "Load EquipmentIndex.ods into *EQUIPMENT-INDEX*."
-  (setf *equipment-index* (read-equipment-stats))
-  *equipment-index*)
-
-(defun load-flags ()
-  "Load Flags.txt into *FLAGS*."
-  (setf *flags* (read-flag-data))
-  *flags*)
-
-(defun load-keys ()
-  "Load Keys.txt into *KEYS*."
-  (setf *keys* (read-key-data))
-  *keys*)
-
-(defun load-asset-resource (moniker)
-  "Load a resource by MONIKER and return a game-resource object.
-This is a stub for compatibility with old-collect-resources-do-not-use."
-  (declare (ignore moniker))
-  nil)

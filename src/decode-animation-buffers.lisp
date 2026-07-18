@@ -478,10 +478,10 @@
              (pdf-path (format nil "~a.pdf" base)))
         (with-open-file (ps ps-path :direction :output :if-exists :supersede)
           (format ps "%!PS-Adobe-3.0~%")
-          (skyline-tool::write-ps-docinfo ps title "Skyline-Tool" author)
+          (write-ps-docinfo ps title "Skyline-Tool" author)
           (format ps "<< /PageSize [792 612] >> setpagedevice~%")
           (format ps "%%Page: 1 1~%")
-          (skyline-tool::write-ps-header-bar ps title date-str author (title-case *game-title*))
+          (write-ps-header-bar ps title date-str author (title-case *game-title*))
           (format ps "/Helvetica-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor 50 15 moveto (Page 1 of 1) show~%")
           (format ps "/Helvetica findfont 9 scalefont setfont~%")
           (format ps "50 500 moveto (Buffer: $~x  Address: $~4,'0x  Mode: ~a) show~%"
@@ -505,7 +505,7 @@
                           (- 60 (* (floor i 4) 14)))))))
           (format ps "grestore~%")
           ;; Sprite image
-          (skyline-tool::write-ps-image ps rgb iw ih 490 280)
+          (write-ps-image ps rgb iw ih 490 280)
           (format ps "showpage~%"))
         (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                           :output nil :ignore-error-status t)

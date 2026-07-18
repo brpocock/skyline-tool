@@ -13,7 +13,7 @@
           (interactor :interactor :height 100 :width 800
                                   :max-height 100))
   (:menu-bar tileset-inspector-menu-bar)
-  (:icon (skyline-tool-icon))
+  (:icon (skyline-tool::skyline-tool-icon))
   (:layouts (default (clim:vertically () tileset-pane interactor))))
 
 ;; --- Command tables ---

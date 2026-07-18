@@ -56,12 +56,12 @@
       (9918 "ClcV" "ColecoVision" "ColecoVision" :ntsc)
       (-1 "Lin" "Linux" "Linux Desktop" :hd)
       (-2 "mac" "macOS" "macOS Desktop" :hd)
-      (-666 "Win" "Win" "MicroSoft Windows Desktop" :hd)
+      (-3 "BSD" "FreeBSD" "FreeBSD Desktop" :hd)
       (-10 "Android" "Android" "Android" :hd)
       (-11 "Fire" "FireTX" "Amazon FireTV" :hd)
       (-12 "iOS" "iOS" "Apple iOS" :hd)
       (-13 "iPad" "iPadOS" "Apple iPadOS" :hd)
-      (-3 "BSD" "FreeBSD" "FreeBSD Desktop" :hd))
+      (-666 "Win" "Win" "MicroSoft Windows Desktop" :hd))
   :test 'equal
   :documentation
   "Bidirectional mappings: (numeric-id directory-name short-name long-name).
@@ -70,15 +70,18 @@ chars; LONG-NAME official.")
 
 (defun machine-for-port-string (dir)
   "Convert directory name (e.g. \"7800\") to numeric ID. Case-sensitive."
-  (let ((found (find dir +machine-mappings+ :key #'second :test #'string=)))
-    (when found
-      (first found))))
+  (when-let (found (find dir +machine-mappings+ :key #'second :test #'string=))
+    (first found)))
+
+(defun machine-number-from-tag (tag)
+  "Convert directory name/tag (e.g. \"7800\") to numeric machine ID.
+Inverse of MACHINE-DIRECTORY-NAME. Case-sensitive."
+  (machine-for-port-string tag))
 
 (defun machine-directory-name (&optional (machine *machine*))
   "Return directory name (also used in various other filename parts) for numeric ID.
 Returns NIL if MACHINE is NIL."
-  (when machine
-    (second (find machine +machine-mappings+ :key #'first :test #'=))))
+  (second (find machine +machine-mappings+ :key #'first :test #'=)))
 
 (defun machine-short-name (&optional (machine *machine*))
   "Return short name (<=20 chars) for numeric ID."

@@ -103,7 +103,7 @@
 ;;; FIXME make-pathname
 (defun read-class-ids-from-file (&optional (pathname (merge-pathnames
                                                       (format nil "Source/Generated/~a/ClassConstants.s"
-                                                              (skyline-tool::machine-directory-name))
+                                                              (machine-directory-name))
                                                       (uiop:getcwd))))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
     (let ((classes-table (make-hash-table)))

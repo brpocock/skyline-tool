@@ -29,6 +29,7 @@
                :eightbol
                :eventbus
                :fiveam
+               :hunchentoot  
                :inotify  
                :ironclad
                :local-time
@@ -55,20 +56,23 @@
   :components
   ((:module "src"
     :components ((:file "package")
+                 (:file "base91" :depends-on ("package"))
                  (:file "machines" :depends-on ("package"))
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("package" "eprom"))
                  (:file "printer-utils" :depends-on ("package"))
-                 (:file "avahi-wrapper" :depends-on ("package" "printer-utils"))
-                 (:file "avahi-handler" :depends-on ("package" "avahi-wrapper"))
+                 (:file "p2p-avahi" :depends-on ("package"))
+                 (:file "p2p-dlna" :depends-on ("package" "p2p-avahi"))
+                 (:file "p2p-webdav" :depends-on ("package" "p2p-avahi"))
+                 (:file "avahi-handler" :depends-on ("package" "p2p-avahi" "printer-utils"))
                  (:file "animation-editor" :depends-on ("package" "decode-animation-buffers"
-                                                                  "printer-utils" "avahi-wrapper"))
-(:file "asset-allocator" :depends-on ("package" "maps" "graphics"
-                                                              "version-control"))
-                  (:file "cbm-tooling" :depends-on ("package"))
-                  (:file "atarivox" :depends-on ("package" "runner"))
-                  (:file "boat-inspector" :depends-on ("package" "game-resource"))
-                  (:file "clim-simple-echo" :depends-on ("package"))
+                                                                  "printer-utils" "p2p-avahi"))
+                 (:file "asset-allocator" :depends-on ("package" "maps" "graphics"
+                                                                 "version-control"))
+                 (:file "cbm-tooling" :depends-on ("package"))
+                 (:file "atarivox" :depends-on ("package" "runner"))
+                 (:file "boat-inspector" :depends-on ("package" "game-resource"))
+                 (:file "clim-simple-echo" :depends-on ("package"))
                  (:file "decode-animation-buffers" :depends-on ("package"))
                  (:file "decode-decal" :depends-on ("peek" "decode-object"))
                  (:file "decode-header" :depends-on ("peek" "package"))
@@ -79,22 +83,23 @@
                  (:file "eventbus" :depends-on ("package"))
                  (:file "forth" :depends-on ("package" "fountain" "interface"))
                  (:file "fountain" :depends-on ("package" "maps"))
-(:module "gui"
-                   :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils" "game-resource")
-                   :components ((:file "gui-inspector")
-                                (:file "gui-presentations")
-                                (:file "gui-dialogs")
-                                (:file "gui-atari-vox-dictionary")
+                 (:module "gui"
+                  :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils" "game-resource")
+                  :components ((:file "gui-thread")
+                               (:file "gui-style")
+                               (:file "gui-inspector")
+                               (:file "gui-presentations")
+                               (:file "gui-dialogs")
+                               (:file "gui-atari-vox-dictionary")
                                (:file "gui-basic-routine")
                                (:file "gui-blob")
                                (:file "gui-blob-inspector")
                                (:file "gui-boat")
-(:file "gui-character")
-                                (:file "character-inspector")
-                                (:file "gui-class")
-(:file "gui-cobol-routine")
-                                (:file "gui-validation")
-                                (:file "gui-flag")
+                               (:file "gui-character")
+                               (:file "gui-class")
+                               (:file "gui-cobol-routine")
+                               (:file "gui-validation")
+                               (:file "gui-flag")
                                (:file "gui-forth-script")
                                (:file "gui-instrument")
                                (:file "gui-intellivoice-dictionary")
@@ -114,8 +119,8 @@
                                (:file "gui-song-inspector")
                                (:file "gui-sprite-sheet")
                                (:file "gui-terminal-echo")
-(:file "gui-tileset")
-                                (:file "help-about-dialog")))
+                               (:file "gui-tileset")
+                               (:file "help-about-dialog")))
                  (:module "graphics"
                   :depends-on ("package" "prototypes" "misc" "utils")
                   :components (
@@ -159,13 +164,14 @@
                  (:file "game-resource" :depends-on ("package" "version-control"))
                  (:file "local-locale" :depends-on ("package"))
                  (:file "context-menu" :depends-on ("package"))
-(:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
-                                                                 "printer-utils" "clim-simple-echo"
-                                                                 "game-resource" "thread-pool"
-                                                                 "context-menu" "boat-inspector"))
+                 (:file "p2p-sharing" :depends-on ("package"))
+                 (:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
+                                                               "printer-utils" "clim-simple-echo"
+                                                               "game-resource" "thread-pool"
+                                                               "context-menu" "boat-inspector" "p2p-sharing"))
                  (:file "launcher" :depends-on ("package" "preferences" "all-resources"
                                                           "clim-simple-echo" "ps-utils"
-                                                          "printer-utils"))
+                                                          "printer-utils" "logging"))
                  (:file "listings" :depends-on ("package"))
                  (:file "ps-utils" :depends-on ("package"))
                  (:file "maps" :depends-on ("package" "prototypes"))
@@ -174,7 +180,7 @@
                  (:file "globals-copybook" :depends-on ("package" "asset-allocator"))
                  (:file "oops" :depends-on ("package" "globals-copybook"))
                  (:file "peek" :depends-on ("package"))
-                 (:file "scavengers" :depends-on ("package" "game-resource" "tables"))
+                 (:file "scavengers" :depends-on ("package" "game-resource" "tables" "logging"))
                  (:file "runner" :depends-on ("package" "ps-utils" "interface"
                                                         "clim-simple-echo"))
                  (:file "sega-constants" :depends-on ("package"))
@@ -185,6 +191,7 @@
                  (:file "threed" :depends-on ("package"))
                  (:file "utils" :depends-on ("package"))
                  (:file "utilities" :depends-on ("package"))
+                 (:file "logging" :depends-on ("package"))
                  (:module "version-control"
                   :depends-on ("package")
                   :components ((:file "package")

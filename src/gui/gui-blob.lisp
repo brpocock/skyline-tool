@@ -3,14 +3,20 @@
 
 (in-package :skyline-tool)
 
-(clim:define-presentation-type game-resource-blob-reference ()
-  :inherit-from 'game-resource-blob)
+(clim:define-presentation-type game-resource-blob-reference ())
 
-(clim:define-presentation-type game-resource-blob-editable ()
-  :inherit-from 'game-resource-blob)
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-reference)))
+  (typep object 'game-resource-blob))
 
-(clim:define-presentation-type game-resource-blob-viewing ()
-  :inherit-from 'game-resource-blob)
+(clim:define-presentation-type game-resource-blob-editable ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-editable)))
+  (typep object 'game-resource-blob))
+
+(clim:define-presentation-type game-resource-blob-viewing ())
+
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-viewing)))
+  (typep object 'game-resource-blob))
 
 (clim:define-presentation-method clim:present ((resource game-resource-blob)
                                                (type game-resource-blob-reference) stream view &key)
@@ -22,8 +28,9 @@
       (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
         (game-resource-present-icon resource stream))
       (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
-        (clim:with-text-face (stream :bold)
-          (game-resource-present-title resource stream))
+        (clim:with-text-size (stream :larger)
+          (clim:with-text-face (stream :bold)
+            (game-resource-present-title resource stream)))
         (format stream "~%~5t")
         (clim:with-text-size (stream :smaller)
           (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))

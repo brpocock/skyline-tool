@@ -11,4 +11,7 @@
   (clim:run-frame-top-level
    (clim:make-application-frame 'song-inspector-frame
                                 :resource resource
+                                :pretty-name (format nil "~a — ~a ~a"
+                                                     (game-resource-title resource)
+                                                     *game-title* (machine-directory-name))
                                 :view-mode mode)))

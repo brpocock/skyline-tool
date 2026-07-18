@@ -14,30 +14,27 @@
 (defun discover-skyline-tool-instances ()
   "Discover nearby Skyline-Tool instances using mDNS.
    Returns a list of (name . host:port) pairs."
-  (let ((services (ignore-errors (discover-avahi-services))))
+  (let ((services (ignore-errors (discover-skl-tool-instances))))
     (when services
-      (loop for (type info) in services
-            when (eq type :skyline-tool)
+      (loop for info in services
             collect (cons (getf info :name)
                           (format nil "~a:~a" (getf info :host) (getf info :port)))))))
 
 (defun discover-printers-service ()
   "Discover CUPS printers via mDNS/Bonjour.
    Returns a list of (name . queue-name) pairs."
-  (let ((services (ignore-errors (discover-avahi-services))))
+  (let ((services (ignore-errors (discover-ipp-printers))))
     (when services
-      (loop for (type info) in services
-            when (eq type :printer)
+      (loop for info in services
             collect (cons (getf info :name)
                           (getf info :name))))))
 
 (defun discover-sftp-servers ()
   "Find SFTP/SSH servers advertising Skyline-Tool services.
    Returns a list of (name . host:port) pairs."
-  (let ((services (ignore-errors (discover-avahi-services))))
+  (let ((services (ignore-errors (discover-sftp-servers))))
     (when services
-      (loop for (type info) in services
-            when (eq type :sftp)
+      (loop for info in services
             collect (cons (getf info :name)
                           (format nil "~a:~a" (getf info :host) (getf info :port)))))))
 
@@ -51,13 +48,12 @@
     (when (or (> (- now *offers-cache-time*) 30) (null *offers-cache*))
       (setf *offers-cache*
             (ignore-errors
-              (let ((services (discover-avahi-services)))
+              (let ((services (discover-skyline-offers)))
                 (when services
-                  (loop for (type info) in services
-                        when (eq type :offer)
-                        collect (cons (getf info :offer-id) info))))
+                  (loop for info in services
+                        collect (cons (getf info :offer-id) info)))))
             *offers-cache-time* (get-universal-time)))
-      *offers-cache*)))
+    *offers-cache*))
 
 (defun publish-offer (offer-id resource-info)
   "Advertise an offer via DNS-SD for other instances to discover.

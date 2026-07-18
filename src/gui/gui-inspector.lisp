@@ -78,34 +78,6 @@ Thread, and Project Inspectors as well.
   (make-pathname :type (string-downcase (string extension))
                  :name (game-resource-title resource)))
 
-(defun start-file-watcher (frame)
-  "Start a background thread that monitors the resource's file for changes
-and updates the inspector when the modification time changes.
-Returns nil when FRAME has no game-resource or no watchable paths."
-  (let ((resource (ignore-errors (slot-value frame 'frame-resource))))
-    (unless (typep resource 'game-resource)
-      (return-from start-file-watcher nil))
-    (let ((paths (remove-if-not #'probe-file
-                                (remove-if-not #'identity
-                                               (game-resource-pathnames resource)))))
-      (unless paths
-        (return-from start-file-watcher nil))
-      (make-thread
-       (lambda ()
-         (inotify:with-inotify (inot (mapcar (lambda (pathname)
-                                               (list pathname inotify:in-all-events))
-                                             paths))
-           (loop for ev = (inotify:read-events inot)
-                 do (ignore-errors
-                     (clim:redisplay-frame-panes frame)))))
-       :name (format nil "Watcher for ~a" (ignore-errors (game-resource-title resource)))))))
-
-(defun stop-file-watcher (frame)
-  "Stop the file watcher thread if running."
-  (let ((thread (ignore-errors (frame-watcher-thread frame))))
-    (when (and thread (bt:thread-alive-p thread))
-      (bt:destroy-thread thread))))
-
 ;; 
 ;; Menu definitions (MUST come before uniform-inspector-frame which references them)
 ;; 
@@ -121,8 +93,7 @@ Returns nil when FRAME has no game-resource or no watchable paths."
          ("PDF..." :command com-save-as-pdf)))
 
 (clim:define-command-table inspector-send-to-menu
-  :menu (("Send as Backup..." :command com-send-to-backup)
-         ("Send to Repository..." :command com-send-to-repo)))
+  :menu ())
 
 (clim:define-command-table inspector-print-to-menu
   :menu ())
@@ -169,13 +140,122 @@ Returns nil when FRAME has no game-resource or no watchable paths."
          ("View" :menu inspector-view-menu)
          ("Help" :menu inspector-help-menu)))
 
+;; Define submenu for default printer fallback (used by populate-print-menu)
+(clim:define-command-table default-printer-submenu
+  :menu (("Default Printer (lpr)" :command com-print-to-default)))
+
+;; Define printer and p2p menus for All Resources frame
+(clim:define-command-table printer-menu
+  :menu ())
+
+(clim:define-command-table p2p-sharing-menu
+  :menu ())
+
+;; 
+;; Shared Submenu Population Functions
+;; These populate dynamic submenus (Print To, Send To, Build, Region)
+;; and should be called in initialize-instance :after of each inspector frame.
+;;
+
+(defun populate-print-menu (command-table)
+  (dolist (printer (ignore-errors (discover-printers-with-names)))
+    (let ((queue (car printer))
+          (display (cdr printer)))
+      (unless (ignore-errors (clim:find-menu-item command-table display :errorp nil))
+        (clim:add-menu-item-to-command-table
+         command-table display
+         :command `(com-print-to-specific ,queue)
+         :after :end))))
+  (unless (ignore-errors (clim:find-menu-item command-table "Default Printer (lpr)"))
+    (clim:add-menu-item-to-command-table
+     command-table "Default Printer (lpr)"
+     :command 'com-print-to-default
+     :after :end)))
+
+(defun populate-send-to-menu (command-table)
+  "Populate COMMAND-TABLE with discovered p2p recipients via mDNS."
+  (dolist (recipient (ignore-errors (discover-p2p-recipients)))
+    (let ((name (car recipient))
+          (service (cdr recipient)))
+      (unless (clim:find-menu-item name command-table)
+        (clim:add-menu-item-to-command-table
+         command-table name
+         :command `(com-send-to-p2p ,(first service) ,(second service))
+         :after :end)))))
+
+(defun populate-inspector-build-menu (command-table)
+  "Populate COMMAND-TABLE with available build targets.
+Reflects the current project configuration (e.g., Demo/Public/Publisher builds).
+Call this when build targets change or on initial window creation."
+  (dolist (build (or (ignore-errors (project-build-targets *project.json*))
+                     '("Demo" "Public" "Publisher")))
+    (let ((label build))
+      (unless (clim:find-menu-item label command-table)
+        (clim:add-menu-item-to-command-table
+         command-table label
+         :command `(com-build-target ,build)
+         :after :end)))))
+
+(clim:define-command (com-build-target :command-table clim-internals::global-command-table
+                                       :menu t :name t)
+    ((build-name 'string :prompt "Build target"))
+  "Set the active build target and rebuild."
+  (setf *build* (make-keyword (string-upcase build-name)))
+  (format *query-io* "~&Build target set to ~a~%" build-name))
+
+(defun populate-inspector-region-menu (command-table)
+  "Populate COMMAND-TABLE with available region targets.
+Reflects the current project configuration (NTSC/PAL/SECAM).
+Call this when region targets change or on initial window creation."
+  (dolist (region (or (ignore-errors (project-region-targets *project.json*))
+                      '("NTSC" "PAL" "SECAM")))
+    (unless (clim:find-menu-item region command-table)
+      (clim:add-menu-item-to-command-table
+       command-table region
+       :command `(com-build-region ,region)
+       :after :end))))
+
+(clim:define-command (com-build-region :command-table clim-internals::global-command-table
+                                       :menu t :name t)
+    ((region-name 'string :prompt "Region"))
+  "Set the active region and rebuild."
+  (setf *region* (make-keyword (string-upcase region-name)))
+  (publish :region-changed :payload *region*)
+  (format *query-io* "~&Region set to ~a~%" region-name))
+
 ;; 
 ;; Uniform Inspector Base Class
-;; Provides standardized layout, display functions, and menu infrastructure
-;; for all resource type inspectors
+;; Provides standardized layout, display functions, menu infrastructure,
+;; thread management, and eventbus subscription for all resource type inspectors
 ;;
 (defclass uniform-inspector-frame ()
-  ())
+  ((watcher-thread :initform nil :accessor frame-watcher-thread)
+   (eventbus-subscriber :initform nil :accessor frame-eventbus-subscriber)
+   (view-mode :initform :editing :initarg :view-mode :accessor frame-view-mode)))
+
+(defun setup-inspector-eventbus (frame)
+  "Subscribe FRAME to resource change events for auto-redisplay.
+Returns the subscriber function for later cleanup with teardown-inspector-eventbus."
+   (let* ((event-types '(:resource-added :resource-changed :resource-removed
+                         :resource-cache-dump :resource-scan-complete
+                         :printer-list-changed :region-changed))
+          (handler (lambda (event)
+                     (declare (ignore event))
+                     (ignore-errors
+                      (clim:redisplay-frame-panes frame :force-p t)))))
+     (dolist (event-type event-types)
+       (subscribe event-type handler))
+     (setf (frame-eventbus-subscriber frame) (cons event-types handler))))
+
+(defun teardown-inspector-eventbus (frame)
+  "Remove FRAME's eventbus subscriptions."
+  (let ((subscriber (frame-eventbus-subscriber frame)))
+    (when subscriber
+      (let ((event-types (car subscriber))
+            (handler (cdr subscriber)))
+        (dolist (event-type event-types)
+          (unsubscribe event-type handler)))
+      (setf (frame-eventbus-subscriber frame) nil))))
 
 ;; Standardized display functions for uniform 3-column layout
 ;; display-inspector-content is a generic defined in game-resource.lisp
@@ -194,8 +274,7 @@ Returns nil when FRAME has no game-resource or no watchable paths."
 
 
 (clim:define-application-frame gui-inspector-frame (resource-inspector-mixin uniform-inspector-frame clim:standard-application-frame)
-  ((view-mode :initform :editing :initarg :view-mode :accessor frame-view-mode)
-   (watcher-thread :initform nil :accessor frame-watcher-thread))
+  ()
   (:panes
    (content-pane :application :display-function 'display-inspector-content
                                :scroll-bars :vertical :height 600 :width 800)
@@ -207,16 +286,15 @@ Returns nil when FRAME has no game-resource or no watchable paths."
   (:pretty-name "Skyline-Tool Resource Inspector"))
 
 (defmethod initialize-instance :after ((frame gui-inspector-frame) &key)
+  "Initialize inspector frame: start printer discovery, watcher, and eventbus subscriptions."
   (ensure-printer-discovery-started)
   (setf (frame-watcher-thread frame) (start-file-watcher frame))
-  ;; Subscribe to resource events so the inspector redraws when resources change
-  (dolist (event-type '(:resource-added :resource-changed :resource-removed
-                        :resource-cache-dump :resource-scan-complete))
-    (subscribe event-type
-               (lambda (event)
-                 (declare (ignore event))
-                 (ignore-errors
-                  (clim:redisplay-frame-panes frame :force-p t))))))
+  (setup-inspector-eventbus frame))
+
+(defmethod finalize-instance :after ((frame gui-inspector-frame))
+  "Cleanup: stop watcher thread and remove eventbus subscriptions."
+  (stop-file-watcher frame)
+  (teardown-inspector-eventbus frame))
 
 (clim:define-command (com-import-resource :command-table clim-internals::global-command-table
                                           :menu t :name t)
@@ -311,11 +389,9 @@ Returns nil when FRAME has no game-resource or no watchable paths."
 (clim:define-command (com-toggle-project-pane :command-table clim-internals::global-command-table
                                               :menu t :name t)
     ()
-  "Toggle project pane visibility. Only available in All Resources view."
-  (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
-    (unless (and resource (game-resource-pathnames resource))
-      (error "Project pane is only available for resources with file backing (e.g., game assets with pathnames)."))))
+  "Toggle project pane visibility."
+  (let ((frame clim:*application-frame*))
+    (ignore-errors (clim:redisplay-frame-panes frame :force-p t))))
 
 (clim:define-command (com-inspector-toggle-view :command-table clim-internals::global-command-table
                                                 :menu t :name t)
@@ -327,65 +403,47 @@ Returns nil when FRAME has no game-resource or no watchable paths."
     (setf (frame-view-mode frame) new)
     (clim:redisplay-frame-panes frame :force-p t)))
 
-(clim:define-command (com-send-to-backup :command-table clim-internals::global-command-table
-                                          :menu t :name t)
-    ()
-  "Send resource as backup by copying to ~/Backups/"
-  (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
-    (when resource
-      (let ((backup-dir (merge-pathnames #p"Backups/Skyline-Tool/" (user-homedir-pathname))))
-        (ensure-directories-exist backup-dir)
-        (let* ((title (game-resource-title resource))
-               (timestamp (format-timestring nil (get-universal-time)
-                                              :format '(:year "-" :month "-" :day "T"
-                                                        :hour ":" :min ":" :sec)))
-               (backup-path (merge-pathnames (format nil "~a-~a.backup" title timestamp)
-                                             backup-dir)))
-          (export-resource-to-json-file resource backup-path)
-          (format t "~&Backed up ~a to ~a~%" title backup-path))))))
-
 (clim:define-command (com-print-to-default :command-table clim-internals::global-command-table
-                                           :menu t :name t)
+                                            :menu t :name t)
+     ()
+   (let* ((frame clim:*application-frame*)
+          (resource (inspector-resource frame)))
+     (when resource
+       (let ((printer (first (get-printer-list))))
+         (if printer
+             (progn
+               (print-to-printer resource printer)
+               (clim-simple-echo:run-in-simple-echo (lambda () (format t "Printing ~a to ~a..." (game-resource-title resource) printer)))
+               (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))))
+
+(clim:define-command (com-print-to-specific :command-table clim-internals::global-command-table
+                                            :menu t :name t)
     ()
   (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
-    (when resource
-      (let ((printer (first (get-printer-list))))
-        (if printer
-            (progn
-              (print-to-printer resource printer)
-              (clim-simple-echo:run-in-simple-echo (lambda () (format t "Printing ~a to ~a..." (game-resource-title resource) printer)))
-              (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))))
+         (resource (inspector-resource frame))
+         (printers (get-printer-list)))
+    (if printers
+        (let* ((choice (error "CLIM:ACCEPT was used (which is not allowed)")))
+          (if (member choice printers :test #'string-equal)
+              (print-to-printer resource choice)
+              (clim-simple-echo:run-in-simple-echo (lambda () (format t "Invalid printer selected")))))
+        (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))
 
-  (clim:define-command (com-print-to-specific :command-table clim-internals::global-command-table
-                                              :menu t :name t)
-      ()
-    (let* ((frame clim:*application-frame*)
-           (resource (inspector-resource frame))
-           (printers (get-printer-list)))
-      (if printers
-          (let* ((choice (error "CLIM:ACCEPT was used (which is not allowed)")))
-            (if (member choice printers :test #'string-equal)
-                (print-to-printer resource choice)
-                (clim-simple-echo:run-in-simple-echo (lambda () (format t "Invalid printer selected")))))
-          (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))
+(clim:define-command (com-refresh-printers :command-table clim-internals::global-command-table
+                                         :menu t :name t)
+    ()
+  (clim-simple-echo:run-in-simple-echo (lambda () (format t "Printer list refreshed")))
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
-  (clim:define-command (com-refresh-printers :command-table clim-internals::global-command-table
-                                             :menu t :name t)
-      ()
-    (clim-simple-echo:run-in-simple-echo (lambda () (format t "Printer list refreshed")))
-    (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
-
-  (defun print-to-printer (resource printer-name)
-    "Print RESOURCE to PRINTER-NAME by exporting to PostScript and sending to the printer."
-    (unless (find printer-name (get-printer-list) :test #'string-equal)
-      (error "Printer ~a not found. Available printers: ~a" printer-name (get-printer-list)))
-    (uiop:with-temporary-file (:stream stream :pathname temp-file)
-      (export-resource-to-ps-file resource temp-file
-                                  :title (game-resource-title resource)
-                                  :author (user-homedir-pathname))
-      (uiop:run-program (list "lp" "-d" printer-name (namestring temp-file)) :output nil)))
+(defun print-to-printer (resource printer-name)
+  "Print RESOURCE to PRINTER-NAME by exporting to PostScript and sending to the printer."
+  (unless (find printer-name (get-printer-list) :test #'string-equal)
+    (error "Printer ~a not found. Available printers: ~a" printer-name (get-printer-list)))
+  (uiop:with-temporary-file (:stream stream :pathname temp-file)
+    (export-resource-to-ps-file resource temp-file
+                                :title (game-resource-title resource)
+                                :author (user-homedir-pathname))
+    (uiop:run-program (list "lp" "-d" printer-name (namestring temp-file)) :output nil)))
 
   (clim:define-command (com-run-resource :command-table clim-internals::global-command-table
                                          :menu t :name t)
@@ -479,9 +537,8 @@ Returns nil when FRAME has no game-resource or no watchable paths."
 (defmethod open-resource-inspector :around ((resource game-resource) &optional (mode :editing))
   "Launch every inspector in its own thread so the calling frame stays responsive."
   (declare (ignore mode))
-  (bt:make-thread (lambda ()
-                    (call-next-method))
-                  :name (format nil "Inspector: ~a" (ignore-errors (game-resource-title resource)))))
+  (make-window-thread (format nil "Inspector: ~a" (ignore-errors (game-resource-title resource)))
+                      (lambda () (call-next-method))))
 
 ;; 
 ;; External tool execution helper
