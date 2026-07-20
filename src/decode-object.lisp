@@ -956,7 +956,9 @@ Room for objects:
 
 (defvar *forth-window* nil)
 
-(define-anim-buffer-frame-command (com-refresh-forth :menu t :name t) ()
+(clim:define-command (com-refresh-forth :command-table clim-internals::global-command-table
+                       :menu t :name t) ()
+  "Refresh the Forth stack window."
   (clim:redisplay-frame-panes *forth-window*))
 
 (defun echo-forth-stack ()

@@ -839,21 +839,21 @@ Executes the requested command, may exit the process
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))
 
-(defun build-target (target-pathname &key (phonyp nil))
+(defun build-target (target &key (phonyp nil))
   "Submit a build task via the global thread pool and optionally wait for completion.
    Uses the thread-pool module for proper worker management and queueing."
-  (let ((output-path (enough-namestring (truename target-pathname))))
+  (let ((output-path (if phonyp target (enough-namestring (truename target)))))
     (submit-task
      (lambda ()
-       (if-let (builder (skyline-tool-writes-p target-pathname))
+       (if-let (builder (skyline-tool-writes-p target))
          (clim-simple-echo:run-in-simple-echo builder
                                               :process-name (format nil "Build ~a" output-path))
          (run-command-in-terminal-echo (list "make" output-path)
                                        :title (format nil "Build ~a" output-path)))))
     (unless phonyp
-      (wait-for-build-completion output-path))))
+      (wait-for-close-write output-path))))
 
-(defun wait-for-build-completion (path)
+(defun wait-for-close-write (path)
   "Wait until the build output file appears."
   (inotify:with-inotify (inot (list (list path inotify:in-close-write)))
     (thread-yield)))

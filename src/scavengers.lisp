@@ -13,12 +13,14 @@
 Returns the new thread."
   (ensure-worker-journal)
   (journal:journaled (watcher-start
+                      :log-record *worker-journal*
                       :args (list :name name :dir-count (length directories)
                                         :thread (list :id (thread-os-tid (current-thread))
                                                       :name (thread-name (current-thread))))))
   (make-thread
    (lambda ()
      (journal:journaled (watcher-thread-entered)
+       :log-record *worker-journal*
        :args (list :name name
                          :thread (list :id (thread-os-tid (current-thread))
                                        :name (thread-name (current-thread)))))
@@ -32,18 +34,21 @@ Returns the new thread."
          (inotify:with-inotify (inot (mapcar (lambda (p) (list p inotify:in-all-events))
                                              valid))
            (journal:journaled (watcher-inotify-open)
+             :log-record *worker-journal*
              :args (list :name name :paths valid
                                :thread (list :id (thread-os-tid (current-thread))
                                              :name (thread-name (current-thread)))))
            (loop for ev = (inotify:read-events inot)
                  do (ignore-errors
                      (journal:journaled (watcher-event)
+                       :log-record *worker-journal*
                        :args (list :name name :event ev
                                          :thread (list :id (thread-os-tid (current-thread))
                                                        :name (thread-name (current-thread)))))
                      (when (and frame (typep frame 'clim:application-frame))
                        (clim:redisplay-frame-panes frame :force-p t)))))))
      (journal:journaled (watcher-thread-exited)
+       :log-record *worker-journal*
        :args (list :name name
                          :thread (list :id (thread-os-tid (current-thread))
                                        :name (thread-name (current-thread))))))))
@@ -309,6 +314,7 @@ Returns the new thread."
   (let ((thread-id (thread-os-tid (current-thread)))
         (thread-name (thread-name (current-thread))))
     (journal:journaled (all-scavengers-start)
+      :log-record *worker-journal*
       :args (list :thread (list :id thread-id :name thread-name)
                         :operation "start"))
     (ensure-thread-pool-kernel)
@@ -335,5 +341,6 @@ Returns the new thread."
                          start-preferences-scavenger))
       (submit-task scavenger))
     (journal:journaled (all-scavengers-complete)
+      :log-record *worker-journal*
       :args (list :thread (list :id thread-id :name thread-name)
                         :operation "complete"))))

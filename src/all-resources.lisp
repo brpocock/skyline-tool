@@ -1,5 +1,11 @@
 (in-package :skyline-tool)
 
+(define-constant +all-resource-kinds+
+    '(:Script  :Song  :Map  :Character  :Boat  :Blob 
+      :Tileset  :Sprite-Sheet  :Object-Prototype  :Class  :Routine 
+      :Instrument  :Item  :Flag  :Key  :Translation )
+  :test 'equalp)
+
 (defvar *dump* nil
   "Memory array for loading core dumps (e.g., fault.core).")
 
@@ -53,7 +59,7 @@ Duplicates are identified by the cons pair (type-of resource) and locator."
       (unless (find dup-key current :key (lambda (r)
                                            (cons (type-of r)
                                                  (game-resource-locator r)))
-                           :test #'equalp)
+                                    :test #'equalp)
         (setf (gethash kind *all-resources-cache*)
               (cons resource current))))))
 
@@ -103,10 +109,10 @@ Duplicates are identified by the cons pair (type-of resource) and locator."
                           :kind (game-resource-kind resource)
                           :locator (game-resource-locator resource))))
 
-(defun publish-resource-removed (kind moniker)
-  "Publish :resource-removed event for a resource identified by KIND and MONIKER."
+(defun publish-resource-removed (kind locator)
+  "Publish :resource-removed event for a resource identified by KIND and LOCATOR"
   (publish :resource-removed
-           :payload (list :kind kind :moniker moniker)))
+           :payload (list :kind kind :locator locator)))
 
 (defun publish-cache-dump ()
   "Publish :resource-cache-dump event with full cache contents."
@@ -180,13 +186,13 @@ Duplicates are identified by the cons pair (type-of resource) and locator."
   (open-blob-inspector nil))
 
 (define-all-resources-frame-command (com-new-character :menu nil :name t) ()
-                                    (open-character-inspector nil))
+  (open-character-inspector nil))
 
 (define-all-resources-frame-command (com-new-map :menu nil :name t) ()
-                                    (open-map-inspector nil))
+  (open-map-inspector nil))
 
 (define-all-resources-frame-command (com-new-object-prototype :menu nil :name t) ()
-                                    (open-object-prototype-inspector nil))
+  (open-object-prototype-inspector nil))
 
 (define-all-resources-frame-command (com-new-script-from-menu :menu nil :name t) ()
   (open-script-inspector nil))
@@ -207,10 +213,10 @@ Duplicates are identified by the cons pair (type-of resource) and locator."
   (open-class-inspector nil))
 
 (define-all-resources-frame-command (com-new-flag :menu nil :name t) ()
-                                    (open-flag-inspector nil))
+  (open-flag-inspector nil))
 
 (define-all-resources-frame-command (com-new-item :menu nil :name t) ()
-                                    (open-item-inspector nil))
+  (open-item-inspector nil))
 
 (define-all-resources-frame-command (com-new-key :menu nil :name t) ()
   (open-key-inspector nil))
@@ -250,9 +256,9 @@ Duplicates are identified by the cons pair (type-of resource) and locator."
   (let* ((pathname (prompt-load-pathname "Import Resource JSON"))
          (resource (when pathname
                      (let* ((json (cl-json:decode-json-from-string
-                                  (uiop:read-file-string pathname)))
+                                   (uiop:read-file-string pathname)))
                             (class-name (intern (string-upcase (gethash "class" json))
-                                               :skyline-tool)))
+                                                :skyline-tool)))
                        (import-resource-from-json-file pathname class-name)))))
     (when resource
       (publish-resource-added resource)
@@ -374,14 +380,14 @@ ___________________________
 
 (clim:define-command (com-set-sort-alpha :command-table clim-internals::global-command-table
                                          :menu t :name t) ()
-  "Sort All Resources alphabetically by moniker within each kind."
+  "Sort All Resources alphabetically by title within each kind."
   (setf *all-resources-sort-mode* :alpha)
   (when (boundp 'clim:*application-frame*)
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 (clim:define-command (com-set-sort-numeric :command-table clim-internals::global-command-table
                                            :menu t :name t) ()
-  "Sort All Resources numerically by asset ID within each kind."
+  "Sort All Resources stringwise by locator within each kind."
   (setf *all-resources-sort-mode* :numeric)
   (when (boundp 'clim:*application-frame*)
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
@@ -389,9 +395,7 @@ ___________________________
 (clim:define-command (com-resource-close-all :command-table clim-internals::global-command-table
                                              :menu t :name t) ()
   "Collapse all resource groups in All Resources."
-  (dolist (k '("Scripts" "Songs" "Maps" "Characters" "Boats" "Blobs"
-               "Tilesets" "Sprite Sheets" "Object Prototypes" "Classes" "Routines"
-               "Instruments" "Items" "Flags" "Keys" "Translations"))
+  (dolist (k +all-resource-kinds+)
     (setf (gethash k *resource-groups-open*) nil))
   (set-pref :resource-groups-open
             (loop for k being the hash-keys of *resource-groups-open*
@@ -402,9 +406,7 @@ ___________________________
 (clim:define-command (com-resource-open-all :command-table clim-internals::global-command-table
                                             :menu t :name t) ()
   "Expand all resource groups in All Resources."
-  (dolist (k '("Scripts" "Songs" "Maps" "Characters" "Boats" "Blobs"
-               "Tilesets" "Sprite Sheets" "Object Prototypes" "Classes" "Routines"
-               "Instruments" "Items" "Flags" "Keys" "AtariVox Dictionary"))
+  (dolist (k +all-resource-kinds+)
     (setf (gethash k *resource-groups-open*) nil))
   (set-pref :resource-groups-open
             (loop for k being the hash-keys of *resource-groups-open*
@@ -431,6 +433,7 @@ ___________________________
                                             :menu t :name t) ()
   "Exit Skyline-Tool."
   (if (pending-outbound-offers-p)
+      ;; FIXME: This should be via a two-button "Quit" / "Don't Quit Yet" dialog
       (cerror "Quit Anyway"
               "You still have these offers outbound, if you quit, the offers will be retracted? ~
 ~{~%~:d offer~:p of ~a~}"
@@ -461,264 +464,13 @@ ___________________________
   "Show Lisp memory usage."
   (%menu-run "Lisp Room" #'show-lisp-room))
 
-(clim:define-command (com-show-lisp-threads-inspector :command-table clim-internals::global-command-table
-                                                      :menu t :name t) ()
-  "Show Lisp Threads Inspector with table view, sorting, and actions."
-  (show-lisp-threads-inspector))
-
-(clim:define-presentation-type lisp-thread ())
-
-(clim:define-command-table lisp-thread-actions-menu
-  :inherit-from (clim-internals::global-command-table)
-  :menu (("Interrupt Thread" :command com-interrupt-thread)
-         ("Destroy Thread" :command com-destroy-thread)))
-
-(clim:define-presentation-to-command-translator lisp-thread-to-actions
-    (lisp-thread com-interrupt-thread lisp-thread-actions-menu
-                 :gesture :menu
-                 :menu t
-                 :documentation "Thread actions")
-    (thread)
-  (list thread))
-
-(defun show-lisp-threads-inspector ()
-  "Show Lisp Threads Inspector in a CLIM frame with table view, sorting, and actions."
-  (let ((frame (clim:make-application-frame 'lisp-threads-inspector-frame)))
-    (clim:run-frame-top-level frame)))
-
-(clim:define-command-table lisp-threads-inspector-frame
-  :inherit-from (lisp-thread-actions-menu clim-internals::global-command-table))
-
-(clim:define-application-frame lisp-threads-inspector-frame ()
-  ((refresh-interval :initform 1 :accessor lti-refresh-interval)
-   (sort-column :initform :tid :accessor lti-sort-column)
-   (sort-reverse :initform nil :accessor lti-sort-reverse)
-   (selected-thread :initform nil :accessor lti-selected-thread))
-  (:panes (thread-table :application :scroll-bars t
-                                     :display-function 'display-lisp-threads-table
-                                     :height 600 :width 800))
-  (:layouts (default (clim:vertically () thread-table)))
-  (:menu-bar lisp-threads-menu-bar)
-  (:icon (skyline-tool::skyline-tool-icon))
-  (:default-initargs
-   :pretty-name "Lisp Threads Inspector — Skyline-Tool"
-   :application-frame-name "Lisp Threads Inspector"))
-
-(clim:define-command-table lisp-threads-file-menu
-  :inherit-from (clim-internals::global-command-table)
-  :menu (("Refresh Now" :command com-refresh-threads)
-         (nil :divider :line)
-         ("Save As Text..." :command com-save-threads-text)
-         ("Close" :command com-close-threads-inspector)))
-
-(clim:define-command-table lisp-threads-edit-menu
-  :inherit-from (clim-internals::global-command-table)
-  :menu (("Copy" :command com-copy)
-         (nil :divider :line)
-         ("Find..." :command com-find)))
-
-(clim:define-command-table lisp-threads-view-menu
-  :inherit-from (clim-internals::global-command-table)
-  :menu (("Sort by TID" :command com-sort-threads-by-tid :toggle t)
-         ("Sort by Name" :command com-sort-threads-by-name :toggle t)
-         ("Sort by State" :command com-sort-threads-by-state :toggle t)
-         (nil :divider :line)
-         ("Reverse Sort" :command com-reverse-threads-sort :toggle t)
-         (nil :divider :line)
-         ("Auto Refresh (1s)" :command com-set-refresh-1s :toggle t)
-         ("Auto Refresh (5s)" :command com-set-refresh-5s :toggle t)
-         ("Pause Auto Refresh" :command com-pause-refresh :toggle t)))
-
-(clim:define-command-table lisp-threads-help-menu
-  :inherit-from (clim-internals::global-command-table)
-  :menu (("How to Use..." :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
-         (nil :divider :line)
-         ("About Skyline-Tool..." :command com-about-skyline-tool)))
-
-(clim:define-command-table lisp-threads-menu-bar
-  :menu (("File" :menu lisp-threads-file-menu)
-         ("Edit" :menu lisp-threads-edit-menu)
-         ("View" :menu lisp-threads-view-menu)
-         ("Help" :menu lisp-threads-help-menu)))
-
-(clim:define-command (com-close-threads-inspector :menu nil :name t) ()
-  (clim:frame-exit clim:*application-frame*))
-
-(clim:define-command (com-refresh-threads :menu t :name t) ()
-  "Force an immediate refresh of the thread list."
-  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
-
-(clim:define-command (com-save-threads-text :menu t :name t) ()
-  "Save the current thread list as a text file."
-  (let* ((frame clim:*application-frame*)
-         (default-name (format nil "Lisp-Threads-~a.txt"
-                               (format-timestring nil (get-universal-time) :format '(:year :month :day :hour :min :sec))))
-         (path (prompt-save-pathname default-name :prefs-key :last-export-directory)))
-    (when path
-      (with-open-file (out path :direction :output :if-exists :supersede :external-format :utf-8)
-        (let* ((threads (all-threads))
-               (sorted (sort-threads threads (lti-sort-column frame) (lti-sort-reverse frame))))
-          (let ((id-column-width (loop for thread on threads
-                                       maximize (length (princ-to-string (thread-os-tid thread)))))
-                (name-column-width (loop for thread on threads
-                                         maximize (length (thread-name thread))))
-                (state-column-width (loop for thread on threads
-                                          maximize (length (thread-state-string thread)))))
-            (format out "~&~va | ~va | ~va"
-                    id-column-width "Thread ID"
-                    name-column-width "Name"
-                    state-column-width "State")
-            (dolist (thread sorted)
-              (let ((tid (thread-os-tid thread))
-                    (name (thread-name thread))
-                    (state (thread-state-string thread)))
-                (format out "~%~va | ~va | ~va"
-                        id-column-width tid
-                        name-column-width name
-                        state-column-width state)))))
-        (fresh-line out)))))
-
-(clim:define-command (com-sort-threads-by-tid :menu t :name t) ()
-  "Sort thread list by TID."
-  (let ((frame clim:*application-frame*))
-    (if (eq (lti-sort-column frame) :tid)
-        (setf (lti-sort-reverse frame) (not (lti-sort-reverse frame)))
-        (progn
-          (setf (lti-sort-column frame) :tid
-                (lti-sort-reverse frame) nil)))
-    (clim:redisplay-frame-panes frame :force-p t)))
-
-(clim:define-command (com-sort-threads-by-name :menu t :name t) ()
-  "Sort thread list by Name."
-  (let ((frame clim:*application-frame*))
-    (if (eq (lti-sort-column frame) :name)
-        (setf (lti-sort-reverse frame) (not (lti-sort-reverse frame)))
-        (progn
-          (setf (lti-sort-column frame) :name
-                (lti-sort-reverse frame) nil)))
-    (clim:redisplay-frame-panes frame :force-p t)))
-
-(clim:define-command (com-sort-threads-by-state :menu t :name t) ()
-  "Sort thread list by State."
-  (let ((frame clim:*application-frame*))
-    (if (eq (lti-sort-column frame) :state)
-        (setf (lti-sort-reverse frame) (not (lti-sort-reverse frame)))
-        (progn
-          (setf (lti-sort-column frame) :state
-                (lti-sort-reverse frame) nil)))
-    (clim:redisplay-frame-panes frame :force-p t)))
-
-(clim:define-command (com-reverse-threads-sort :menu t :name t) ()
-  "Reverse the current sort order."
-  (let ((frame clim:*application-frame*))
-    (setf (lti-sort-reverse frame) (not (lti-sort-reverse frame)))
-    (clim:redisplay-frame-panes frame :force-p t)))
-
-(clim:define-command (com-set-refresh-1s :menu t :name t) ()
-  "Set auto-refresh interval to 1 second."
-  (setf (lti-refresh-interval clim:*application-frame*) 1)
-  (format *query-io* "~&Auto-refresh set to 1 second~%"))
-
-(clim:define-command (com-set-refresh-5s :menu t :name t) ()
-  "Set auto-refresh interval to 5 seconds."
-  (setf (lti-refresh-interval clim:*application-frame*) 5)
-  (format *query-io* "~&Auto-refresh set to 5 seconds~%"))
-
-(clim:define-command (com-pause-refresh :menu t :name t) ()
-  "Pause auto-refresh."
-  (setf (lti-refresh-interval clim:*application-frame*) nil)
-  (format *query-io* "~&Auto-refresh paused~%"))
-
-(clim:define-command (com-interrupt-thread :command-table lisp-thread-actions-menu
-                                           :menu t :name t)
-    ((thread 'lisp-thread :gesture :menu))
-  "Interrupt the selected thread."
-  (interrupt-thread thread)
-  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
-
-(clim:define-command (com-destroy-thread :command-table lisp-thread-actions-menu
-                                         :menu t :name t)
-    ((thread 'lisp-thread :gesture :menu))
-  "Destroy the selected thread."
-  (destroy-thread thread)
-  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
-
-(defun thread-os-tid (thread)
-  "Return the OS thread ID for THREAD."
-  (sb-thread:thread-os-tid thread))
-
-(defun thread-state-string (thread)
-  "Return the state of THREAD as a string."
-  (if (thread-alive-p thread)
-      "Alive"
-      "Dead"))
-
-(defun sort-threads (threads sort-column sort-reverse)
-  "Sort THREADS by SORT-COLUMN (:tid, :name, or :state)."
-  (let ((sorted (sort (copy-list threads)
-                      (case sort-column
-                        (:tid (lambda (a b) (< (thread-os-tid a) (thread-os-tid b))))
-                        (:name (lambda (a b) (string-lessp (thread-name a) (thread-name b))))
-                        (:state (lambda (a b) (string-lessp (thread-state-string a) (thread-state-string b))))))))
-    (if sort-reverse (nreverse sorted) sorted)))
-
-(defun sort-indicator (frame column)
-  "Return a sort arrow string if COLUMN is the active sort column."
-  (if (eq (lti-sort-column frame) column)
-      (if (lti-sort-reverse frame) " ^" " v")
-      ""))
-
-(defun display-lisp-threads-table (frame pane)
-  "Display the Lisp threads table with columns: TID, Name, State."
-  (clim:window-clear pane)
-  (let* ((threads (all-threads))
-         (sorted (sort-threads threads (lti-sort-column frame) (lti-sort-reverse frame))))
-    ;; Header row
-    (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (format pane "Thread ID~a" (sort-indicator frame :tid))))
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (format pane "Name~a" (sort-indicator frame :name))))
-        (clim:formatting-cell (pane)
-          (clim:with-text-face (pane :bold)
-            (format pane "State~a" (sort-indicator frame :state)))))
-      (dolist (thread sorted)
-        (let* ((tid (thread-os-tid thread))
-               (name (thread-name thread))
-               (state (thread-state-string thread)))
-          ;; Present thread as clickable for context menu
-          (clim:formatting-row (pane)
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane thread 'lisp-thread)
-                (format pane "~10d" tid)))
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane thread 'lisp-thread)
-                (format pane "~a" name)))
-            (clim:formatting-cell (pane)
-              (clim:with-output-as-presentation (pane thread 'lisp-thread)
-                (format pane "~a" state))))))))
-  
-  ;; Auto-refresh if interval is set
-  (let ((interval (lti-refresh-interval frame)))
-    (when interval
-      (clim-sys:make-process
-       (lambda ()
-         (sleep interval)
-         (ignore-errors
-          (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
-       :name "Lisp Threads Auto-Refresh"))))
-
 (clim:define-command (com-show-clouseau :command-table clim-internals::global-command-table
                                         :menu t :name t) ()
   "Show Clouseau inspector on Skyline-Tool package."
   (show-clouseau))
 
 (clim:define-command (com-reload-skyline-tool-from-sources :command-table clim-internals::global-command-table
-                                                            :menu t :name t) ()
+                                                           :menu t :name t) ()
   "Recompile and reload Skyline-Tool from sources."
   (%menu-run "Recompile" #'reload-skyline-tool-from-sources))
 
@@ -791,14 +543,14 @@ ___________________________
   (compare-dlls-from-dumps))
 
 (clim:define-command (com-show-animation-buffer :command-table clim-internals::global-command-table
-                                                 :menu t :name t)
-  "Show an animation buffer from a core dump."
+                                                :menu t :name t)
+    "Show an animation buffer from a core dump."
   (let ((index (clim:accept 'integer :stream *query-io* :prompt "Animation buffer index:" :default 0)))
     (show-animation-buffer index)))
 
 (clim:define-command (com-show-decal :command-table clim-internals::global-command-table
-                                      :menu t :name t)
-  "Show a decal from a core dump."
+                                     :menu t :name t)
+    "Show a decal from a core dump."
   (let ((index (clim:accept 'integer :stream *query-io* :prompt "Decal index:" :default 0)))
     (show-decal index)))
 
@@ -852,19 +604,11 @@ ___________________________
   "Show room for objects from a core dump."
   (%menu-run "Room for Objects" #'show-room-for-objects))
 
-;;  Asset path resolution 
-
-(defun asset-index->filesystem-path (&rest _)
-  "Obsolete function. Use GAME-RESOURCE-PATHNAMES instead.
-   Returns the first filesystem path for a MONIKER, or NIL if not found."
-  (declare (ignore _))
-  (error "Asset-index->filesystem-path is obsolete. Use (GAME-RESOURCE-PATHNAMES MONIKER) instead."))
-
 ;;  Additional commands for Resource menu 
 
 (clim:define-command (com-find-in-assets :command-table clim-internals::global-command-table
-                                          :menu t :name t)
-  "Prompt for a filter string and apply it to the All Resources display."
+                                         :menu t :name t)
+    "Prompt for a filter string and apply it to the All Resources display."
   (when (boundp 'clim:*application-frame*)
     (let ((frame clim:*application-frame*))
       (setf (clim:frame-current-layout frame) :search)
@@ -881,7 +625,7 @@ ___________________________
       (clim:redisplay-frame-panes frame :force-p t))))
 
 (clim:define-command (com-toggle-project-bar :command-table clim-internals::global-command-table
-                                              :menu t :name t) ()
+                                             :menu t :name t) ()
   "Toggle the project/structure pane in All Resources."
   (when (boundp 'clim:*application-frame*)
     (let ((frame clim:*application-frame*))
@@ -890,7 +634,7 @@ ___________________________
       (clim:redisplay-frame-panes frame :force-p t))))
 
 (clim:define-command (com-resource-focus-search-filters :command-table clim-internals::global-command-table
-                                                          :menu nil :name t) ()
+                                                        :menu nil :name t) ()
   "Focus the resource search/filter field."
   (when (boundp 'clim:*application-frame*)
     (let ((frame clim:*application-frame*))
@@ -902,7 +646,7 @@ ___________________________
   "Run the current build in the a7800 emulator."
   (let* ((build (or (get-pref :build) "Public"))
          (region (or (get-pref :region) "NTSC"))
-         (bin-path (game-emulator-binary-pathname build region)))
+         (bin-path (game-emulator-binary-pathname :build build :region region)))
     (if (probe-file bin-path)
         (uiop:run-program (list "a7800" (namestring bin-path))
                           :output nil :ignore-error-status t)
@@ -913,7 +657,7 @@ ___________________________
   "Run the current build in js7800 (browser-based emulator)."
   (let* ((build (or (get-pref :build) "Public"))
          (region (or (get-pref :region) "NTSC"))
-         (bin-path (game-emulator-binary-pathname build region)))
+         (bin-path (game-emulator-binary-pathname :build build :region region)))
     (if (probe-file bin-path)
         (uiop:run-program (list "js7800" (namestring bin-path))
                           :output nil :ignore-error-status t)
@@ -935,15 +679,20 @@ ___________________________
                                               :menu t :name t) ()
   "Load a core dump from a user-specified file."
   (let ((path (clim:accept 'pathname :stream *query-io*
-                           :prompt "Core dump file:"
-                           :default #p"/tmp/dump")))
+                                     :prompt "Core dump file:"
+                                     :default #p"/tmp/dump")))
     (setf *dump* (load-dump-into-mem path))
     (format *query-io* "~&Loaded ~a into memory.~%" path)))
 
 (clim:define-command (com-instance-inspector :command-table clim-internals::global-command-table
-                                              :menu t :name t) ()
+                                             :menu t :name t) ()
   "Open an object instance inspector for core dump analysis."
-  (error "~&Instance inspector not yet implemented.~%"))
+  (clim-simple-echo:run-in-simple-echo
+   (lambda ()
+     (if *dump*
+         (format t "~&Instance inspector is not yet implemented.~%Load a dump first, then use the Objects menu.~%")
+         (format t "~&No dump loaded. Use Debug > Core Dump > Load /tmp/dump first.~%")))
+   :window-title "Instance Inspector"))
 
 (clim:define-command (com-cut-resource-list :command-table clim-internals::global-command-table
                                             :menu t :name t) ()
@@ -1216,22 +965,12 @@ Assets.index with filesystem assets not yet indexed."
                 (decf y 24)
                 ;; Group by locale for Scripts and Maps
                 (clrhash locale-groups)
-                (dolist (e entries)
-                  (let* ((moniker (if (typep e 'game-resource-asset)
-                                      (game-asset-moniker e)
-                                      (game-resource-locator e)))
-                         (parts (split-sequence #\/ moniker))
-                         (locale (if (member kind '("Scripts" "Maps") :test #'string-equal)
-                                     (and (> (length parts) 2)
-                                          (title-case (second parts)))
-                                     (if (string-equal kind "Characters")
-                                         (and (> (length parts) 1)
-                                              (title-case (second parts)))
-                                         ""))))
-                    (push e (gethash (or locale "") locale-groups))))
+                (dolist (resource entries)
+                  (push resource (gethash (game-resource-subgroup resource) locale-groups)))
                 ;; Sort locales alphabetically
                 (let ((locale-keys (sort (loop for k being the hash-keys of locale-groups
-                                               collect k) #'string-lessp)))
+                                               collect k)
+                                         #'string-lessp)))
                   (dolist (locale-key locale-keys)
                     (let ((locale-entries (reverse (gethash locale-key locale-groups))))
                       ;; Locale heading
@@ -1248,42 +987,22 @@ Assets.index with filesystem assets not yet indexed."
                         (decf y 16))
                       ;; Asset entries
                       (dolist (entry locale-entries)
-                        (let* ((moniker (if (typep entry 'game-resource-asset)
-                                            (game-asset-moniker entry)
-                                            (game-resource-locator entry)))
+                        (check-space ps entry-h)
+                        (let* ((locator (game-resource-locator entry))
                                (builds (game-resource-builds entry))
                                (kind-name (game-resource-kind entry))
-                               (hex-string (when (typep entry 'game-resource-asset)
-                                             (let ((aid (game-resource-asset-id entry)))
-                                               (when aid
-                                                 (format nil "$~(~v,'0x~)"
-                                                         (if (eql (kind-by-name kind-name) :script) 4 2)
-                                                         aid)))))
-                               (present-p (some #'probe-file (game-resource-pathnames entry))))
-                          (check-space ps entry-h)
-                          (let* ((parts (split-sequence #\/ moniker))
-                                 (basename (car (last parts)))
-                                 (kind-key (kind-by-name kind-name))
-                                 (display-name
-                                   (case kind-key
-                                     ((:script :song :blob)
-                                      (format nil "~c~a~c" (code-char #x201C)
-                                              (title-case
-                                               (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't"))
-                                              (code-char #x201D)))
-                                     (:map
-                                      (title-case
-                                       (cl-ppcre:regex-replace "\\bDont\\b" basename "Don't")))
-                                     (t basename)))
-                                 (rgb (if present-p "0 0 0" "0.8 0 0")))
-                            (declare (ignore rgb))
-                            ;; Border
-                            (format ps "gsave
+                               (title (game-resource-title entry))
+                               (rgb (if (and (typep entry 'game-resource-asset)
+                                             (not (some #'probe-file (game-resource-pathnames entry))))
+                                        "0.8 0 0" "0 0 0")))
+                          
+                          ;; Border
+                          (format ps "gsave
  newpath ~d ~d ~d ~d rectstroke
  grestore
 " margin-left (- y entry-h) (- page-width margin-left margin-right) entry-h)
-                            ;; Kind badge — golden rectangle (φ ≈ 1.618), full entry height, white text
-                            (format ps "gsave
+                          ;; Kind badge — golden rectangle (φ ≈ 1.618), full entry height, white text
+                          (format ps "gsave
  ~a
  newpath ~d ~d ~d ~d rectfill
  1.0 1.0 1.0 setrgbcolor
@@ -1291,51 +1010,38 @@ Assets.index with filesystem assets not yet indexed."
  ~d ~d moveto (~a) show
  grestore
 " (color-rgb-for-kind kind-name)
-                                    margin-left (- y entry-h) 22 entry-h
-                                    (+ margin-left 4) (- y 4) (escape-ps-string kind-name))
-                            ;; Asset name
-                            (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont
+                                  margin-left (- y entry-h) 22 entry-h
+                                  (+ margin-left 4) (- y 4) (escape-ps-string kind-name))
+                          ;; Asset name
+                          (format ps "/Times-Roman-ISOLatin1 findfont 9 scalefont setfont
  ~d ~d moveto (~a) show
-" (+ margin-left 66) (- y 4) (escape-ps-string display-name))
-                            ;; Map name trailing digits in gray
-                            (when (and (eq kind-key :map) (plusp (length display-name))
-                                       (digit-char-p (char display-name (1- (length display-name)))))
-                              (let* ((str (princ-to-string display-name))
-                                     (split (position-if-not #'digit-char-p str :from-end t :end (1- (length str)))))
-                                (when split
-                                  (let ((digits (subseq str (1+ split))))
-                                    (format ps "0.25 0.25 0.25 setrgbcolor
- ~d ~d moveto (~a) show
- 0 0 0 setrgbcolor
-" (+ margin-left 66 (* 2 (length (subseq str 0 (1+ split))) 4))
-                                            (- y 4) (escape-ps-string digits))))))
-                            ;; Hex ID
-                            (when hex-string
-                              (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
+" (+ margin-left 66) (- y 4) (escape-ps-string title))
+                          ;; Hex ID
+                          (format ps "/Times-Roman-ISOLatin1 findfont 7 scalefont setfont
  0.5 0.5 0.5 setrgbcolor
  ~d ~d moveto (~a) show
  0 0 0 setrgbcolor
-" (- page-width margin-right 80) (- y 4) (escape-ps-string hex-string)))
-                            ;; D/P/A checkboxes
-                            (let* ((x-check (+ (- page-width margin-right) 2))
-                                   (checked-d (and builds (member "Demo" builds :test #'string-equal)))
-                                   (checked-p (and builds (member "Public" builds :test #'string-equal)))
-                                   (checked-a (and builds (member "AA" builds :test #'string-equal))))
-                              (format ps "/Times-Bold-ISOLatin1 findfont 8 scalefont setfont
+" (- page-width margin-right 80) (- y 4) (escape-ps-string locator))
+                          ;; D/P/A checkboxes
+                          (let* ((x-check (+ (- page-width margin-right) 2))
+                                 (checked-d (and builds (member "Demo" builds :test #'string-equal)))
+                                 (checked-p (and builds (member "Public" builds :test #'string-equal)))
+                                 (checked-a (and builds (member "AA" builds :test #'string-equal))))
+                            (format ps "/Times-Bold-ISOLatin1 findfont 8 scalefont setfont
  ~d ~d moveto
 " x-check (- y 2))
-                              (if checked-d
-                                  (format ps "0.0 0.6 0.0 setrgbcolor (D) show ")
-                                  (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
-                              (format ps "~d ~d moveto" (+ x-check 10) (- y 2))
-                              (if checked-p
-                                  (format ps "0.0 0.6 0.0 setrgbcolor (P) show ")
-                                  (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
-                              (format ps "~d ~d moveto" (+ x-check 20) (- y 2))
-                              (if checked-a
-                                  (format ps "0.0 0.6 0.0 setrgbcolor (A) show~%")
-                                  (format ps "0.6 0.6 0.6 setrgbcolor ( ) show~%")))
-                            (decf y entry-h))))))))))
+                            (if checked-d
+                                (format ps "0.0 0.6 0.0 setrgbcolor (D) show ")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
+                            (format ps "~d ~d moveto" (+ x-check 10) (- y 2))
+                            (if checked-p
+                                (format ps "0.0 0.6 0.0 setrgbcolor (P) show ")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show "))
+                            (format ps "~d ~d moveto" (+ x-check 20) (- y 2))
+                            (if checked-a
+                                (format ps "0.0 0.6 0.0 setrgbcolor (A) show~%")
+                                (format ps "0.6 0.6 0.6 setrgbcolor ( ) show~%")))
+                          (decf y entry-h)))))))))
           ;; Page footer and showpage
           (write-ps-page-footer ps page-num page-num
                                 (string-capitalize *game-title*) nil
@@ -1355,7 +1061,7 @@ Assets.index with filesystem assets not yet indexed."
   "Plist holding the assets index display state.")
 
 (defvar *assets-index-filter* nil
-  "When non-NIL, a string used to filter All Resources entries by moniker or display name.")
+  "When non-NIL, a string used to filter All Resources entries by title, or full text")
 
 (clim:define-command (com-toggle-section-header :command-table clim-internals::global-command-table
                                                 :menu t :name t)
@@ -1537,7 +1243,9 @@ Assets.index with filesystem assets not yet indexed."
     (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
       (clim:with-text-face (*standard-output* :bold)
         (clim:with-text-size (*standard-output* :larger)
-          (format *standard-output* "~a ~a" (if skip-kind-p "> " "v ") (title-case (string-downcase kind))))))
+          (format *standard-output* "~a ~a"
+                  (if skip-kind-p "⮞ " "⮟ ")
+                  (title-case (string-downcase kind))))))
     ;; Show count in right margin when collapsed
     (when skip-kind-p
       (let* ((count (count-kind-assets kind nil all-assets))
@@ -1562,124 +1270,125 @@ Assets.index with filesystem assets not yet indexed."
     (clim:stream-set-cursor-position *standard-output* 8 (+ cursor-y 2))
     (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
       (clim:with-text-size (*standard-output* :smaller)
-        (format t "~a ~a" (if skip-grouping-p "> " "v ") subsection-key)))
-    ;; Show count in right margin when opened
-    (when skip-grouping-p
-      (let* ((count (count-kind-assets kind subsection-key all-assets))
-             (count-string (format nil "(~d)" count))
-             (text-width (nth-value 0 (clim:text-size pane count-string)))
-             (x-pos (- pane-width text-width 16)))
-        (clim:stream-set-cursor-position *standard-output* x-pos (+ cursor-y 2))
-        (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
-          (princ count-string *standard-output*))))
-    (clim:stream-set-cursor-position *standard-output* 0 (+ cursor-y heading-h))))
-
-(defun asset-matches-filter-p (entry filter &key (search-title-p t) search-body-p)
-  "Return T if ENTRY (moniker builds kind-name ...) matches FILTER string.
+        (format t "~a ~a" (if skip-grouping-p "⮞ " "⮟ ") (first subsection-key)))
+      ;; Show count in right margin when opened
+      (when skip-grouping-p
+        (let* ((count (count-kind-assets kind subsection-key all-assets))
+               (count-string (format nil "(~d)" count))
+               (text-width (nth-value 0 (clim:text-size pane count-string)))
+               (x-pos (- pane-width text-width 16)))
+          (clim:stream-set-cursor-position *standard-output* x-pos (+ cursor-y 2))
+          (clim:with-drawing-options (*standard-output* :ink (clim:make-rgb-color 1 1 1))
+            (princ count-string *standard-output*))))
+      (clim:stream-set-cursor-position *standard-output* 0 (+ cursor-y heading-h))))
+  
+  (defun asset-matches-filter-p (entry filter &key (search-title-p t) search-body-p)
+    "Return T if ENTRY (moniker builds kind-name ...) matches FILTER string.
 Matches against the full moniker or the asset base name, case-insensitive."
-  (let ((needle (remove-if-not #'alphanumericp (string-downcase filter))))
-    (or (when search-title-p
-          (search needle
-                  (remove-if-not #'alphanumericp (string-downcase (game-resource-title entry)))))
-        (when search-body-p
-          (search needle
-                  (remove-if-not #'alphanumericp (string-downcase (game-resource-full-text entry))))))))
-
-(defun present-asset-name (stream display-name redp &optional kind-key)
-  "Present DISPLAY-NAME on STREAM, optionally in red when REDP is true.
+    (let ((needle (remove-if-not #'alphanumericp (string-downcase filter))))
+      (or (when search-title-p
+            (search needle
+                    (remove-if-not #'alphanumericp (string-downcase (game-resource-title entry)))))
+          (when search-body-p
+            (search needle
+                    (remove-if-not #'alphanumericp (string-downcase (game-resource-full-text entry))))))))
+  
+  (defun present-asset-name (stream display-name redp &optional kind-key)
+    "Present DISPLAY-NAME on STREAM, optionally in red when REDP is true.
 KIND-KEY is the keyword asset type for potential per-kind styling."
-  (declare (ignore kind-key))
-  (clim:with-drawing-options (stream :ink (if redp clim:+red+ clim:+black+))
-    (write-string display-name stream)))
-
-(defgeneric game-resource-subgroup (resource)
-  (:documentation "Return subgroup name for resources that need sub-grouping"))
-
-(defmethod game-resource-subgroup ((resource game-resource-map))
-  (last (pathname-directory (first (game-resource-pathnames resource)))))
-
-(defmethod game-resource-subgroup ((resource game-resource-script))
-  (last (pathname-directory (first (game-resource-pathnames resource)))))
-
-(defun show-all-resources-internal ()
-  "Display all resources with colored type squares (\"icons\"), title-cased names, 
+    (declare (ignore kind-key))
+    (clim:with-drawing-options (stream :ink (if redp clim:+red+ clim:+black+))
+      (write-string display-name stream)))
+  
+  (defgeneric game-resource-subgroup (resource)
+    (:documentation "Return subgroup name for resources that need sub-grouping"))
+  
+  (defmethod game-resource-subgroup ((resource game-resource-map))
+    (car (last (pathname-directory (first (game-resource-pathnames resource))))))
+  
+  (defmethod game-resource-subgroup ((resource game-resource-script))
+    (car (last (pathname-directory (first (game-resource-pathnames resource))))))
+  
+  (defun show-all-resources-internal ()
+    "Display all resources with colored type squares (\"icons\"), title-cased names, 
 locator IDs,  assets with  D/P/A checkboxes.  Click name  for action 
 menu. Assets absent  from all builds in Assets.index  appear in red. 
 Click kind/locale headings to collapse/expand sections."
-  (unless (and *all-resources-state*
-               (getf *all-resources-state* :opened))
-    (let ((saved (get-pref :resource-groups-open)))
-      (dolist (k '("Scripts" "Songs" "Maps" "Characters" "Boats" "Blobs"
-                   "Tilesets" "Sprite Sheets" "Object Prototypes" "Classes" "Routines"
-                   "Instruments" "Items" "Flags" "Keys" "Translations"))
-        (setf (gethash k *resource-groups-open*) nil))
-      (when saved
-        (dolist (pair saved)
-          (setf (gethash (car pair) *resource-groups-open*)
-                (string-equal (cdr pair) "true")))))
-    (setf *all-resources-state*
-          (list :opened *resource-groups-open*
-                :current-kind nil
-                :current-locale nil)))
-  (let* ((all-resources (if (and (stringp *assets-index-filter*)
-                                 (plusp (length *assets-index-filter*)))
-                            (remove-if-not (lambda (entry)
-                                             (asset-matches-filter-p entry *assets-index-filter*))
-                                           (collect-all-resources))
-                            (collect-all-resources)))
-         (all-resources (sort (copy-list all-resources)
-                              (lambda (a b)
-                                (let ((ka (game-resource-kind a))
-                                      (kb (game-resource-kind b)))
-                                  (if (eql ka kb)
-                                      (if (get-pref :sort-numeric)
-                                          (string-lessp (game-resource-locator a)
-                                                        (game-resource-locator b))
-                                          (string-lessp (game-resource-title a)
-                                                        (game-resource-title b)))
-                                      (string-lessp (kind-name-display ka)
-                                                    (kind-name-display kb)))))))
-         (opened (getf *all-resources-state* :opened))
-         last-kind last-grouping
-         skip-kind-p skip-grouping)
-    (clim:window-clear *standard-output*)
-    (dolist (resource all-resources)
-      (let ((kind-name (game-resource-kind resource)))
-        (unless (eql kind-name last-kind)
-          (setf last-kind kind-name
-                last-grouping nil
-                skip-kind-p (not (gethash kind-name opened)))
-          (render-kind-heading kind-name skip-kind-p all-resources))
-        (unless skip-kind-p
-          (let* ((this-grouping
-                   (case kind-name
-                     ((:script :map)
-                      (last (pathname-directory
-                             (first (game-resource-pathnames resource)))))
-                     (:routine
-                      (cond
-                        ((typep resource 'game-resource-routine-forth-library)
-                         "Forth Libraries")
-                        ((typep resource 'game-resource-routine-run-commands)
-                         "Run Commands")
-                        (t "Other Routines")))
-                     (:translation
-                      (cond
-                        ((typep resource 'game-resource-phonetic-dictionary)
-                         "Phonetic Dictionaries")
-                        ((typep resource 'game-resource-phrasebook)
-                         "Phrasebooks")
-                        (t "Other Translation Resources")))
-                     (t nil))))
-            (when (and this-grouping
-                       (not (string-equal this-grouping last-grouping)))
-              (setf last-grouping this-grouping)
-              (let ((subsection-key
-                     (format nil "~a/~a"
-                             (kind-name-plural kind-name) this-grouping)))
-                (setf skip-grouping (gethash subsection-key opened))
-                (render-grouping-heading
-                 kind-name subsection-key skip-grouping all-resources)))
+    (unless (and *all-resources-state*
+                 (getf *all-resources-state* :opened))
+      (let ((saved (get-pref :resource-groups-open)))
+        (dolist (k +all-resource-kinds+)
+          (setf (gethash k *resource-groups-open*) nil))
+        (when saved
+          (dolist (pair saved)
+            (setf (gethash (car pair) *resource-groups-open*)
+                  (string-equal (cdr pair) "true")))))
+      (setf *all-resources-state*
+            (list :opened *resource-groups-open*
+                  :current-kind nil
+                  :current-locale nil)))
+    (let* ((all-resources (if (and (stringp *assets-index-filter*)
+                                   (plusp (length *assets-index-filter*)))
+                              (remove-if-not (lambda (entry)
+                                               (asset-matches-filter-p entry *assets-index-filter*))
+                                             (collect-all-resources))
+                              (collect-all-resources)))
+           (all-resources (sort (copy-list all-resources)
+                                (lambda (a b)
+                                  (let ((ka (game-resource-kind a))
+                                        (kb (game-resource-kind b)))
+                                    (if (eql ka kb)
+                                        (if (get-pref :sort-numeric)
+                                            (string-lessp 
+                                             (format nil "~a" (game-resource-locator a))
+                                             (format nil "~a" (game-resource-locator b)))
+                                            (string-lessp 
+                                             (game-resource-title a)
+                                             (game-resource-title b)))
+                                        (string-lessp 
+                                         (kind-name-display ka)
+                                         (kind-name-display kb)))))))
+           (opened (getf *all-resources-state* :opened))
+           last-kind last-grouping
+           skip-kind-p skip-grouping)
+      (clim:window-clear *standard-output*)
+      (dolist (resource all-resources)
+        (let ((kind-name (game-resource-kind resource)))
+          (unless (eql kind-name last-kind)
+            (setf last-kind kind-name
+                  last-grouping nil
+                  skip-kind-p (not (gethash kind-name opened)))
+            (render-kind-heading kind-name skip-kind-p all-resources))
+          (unless skip-kind-p
+            (let* ((this-grouping
+                     (case kind-name
+                       ((:script :map)
+                        (car (last (pathname-directory
+                                    (first (game-resource-pathnames resource))))))
+                       (:routine
+                        (cond
+                          ((typep resource 'game-resource-routine-forth-library)
+                           "Forth Libraries")
+                          ((typep resource 'game-resource-routine-run-commands)
+                           "Run Commands")
+                          (t "Other Routines")))
+                       (:translation
+                        (cond
+                          ((typep resource 'game-resource-phonetic-dictionary)
+                           "Phonetic Dictionaries")
+                          ((typep resource 'game-resource-phrasebook)
+                           "Phrasebooks")
+                          (t "Other Translation Resources")))
+                       (t nil))))
+              (when (and this-grouping
+                         (not (string-equal this-grouping last-grouping)))
+                (setf last-grouping this-grouping)
+                (let ((subsection-key
+                        (format nil "~a/~a"
+                                (kind-name-plural kind-name) this-grouping)))
+                  (setf skip-grouping (gethash subsection-key opened))
+                  (render-grouping-heading
+                   kind-name subsection-key skip-grouping all-resources))))
             (unless skip-grouping
               (let* ((title-string (game-resource-title resource))
                      (subheading (game-resource-subheading resource))
@@ -1701,7 +1410,7 @@ Click kind/locale headings to collapse/expand sections."
                      (pane-width (clim:bounding-rectangle-width
                                   (clim:sheet-region the-pane)))
                      (start-y (nth-value 1
-                               (clim:stream-cursor-position the-pane)))
+                                         (clim:stream-cursor-position the-pane)))
                      (badge-h 72)
                      (badge-w (floor (* badge-h 1.618)))
                      (red (not present-p))
@@ -1737,15 +1446,14 @@ Click kind/locale headings to collapse/expand sections."
                        the-pane moniker builds kind-name
                        asset-id hex-string present-p full-path))
                     (loop while (< (nth-value 1
-                                    (clim:stream-cursor-position the-pane))
+                                              (clim:stream-cursor-position the-pane))
                                    target-y)
                           do (terpri the-pane))
                     (clim:stream-set-cursor-position
                      the-pane
                      (- pane-width 5)
                      (nth-value 1
-                       (clim:stream-cursor-position the-pane)))))))))))))
-
+                                (clim:stream-cursor-position the-pane)))))))))))))
 ;;  Asset action menu command 
 
 (clim:define-command (com-asset-action-menu :command-table clim-internals::global-command-table
@@ -1918,17 +1626,18 @@ When all three flags are set, the entry has no letters in Assets.index."
    (list "Publisher" 'com-set-build-publisher t)))
 
 (defun supported-regions-for-machine (&optional (machine *machine*))
-  "Return list of (label command enabled) tuples for regions supported by MACHINE."
-  (loop for region in (all-regions-for-machine machine)
-        collect
-        (list (string-capitalize (string region))
-              (ecase region
-                (:ntsc 'com-set-region-ntsc)
-                (:pal 'com-set-region-pal)
-                (:secam 'com-set-region-secam)
-                (:internal nil)
-                (:hd nil))
-              (not (member region '(:internal :hd))))))
+  "Return list of (label command enabled) tuples for all regions.
+   Standard regions (NTSC/PAL/SECAM) are first, then a divider,
+   then special regions (Internal/HD).  Unsupported regions are disabled."
+  (let ((machine-regions (all-regions-for-machine machine)))
+    (flet ((region-enabled-p (region) (member region machine-regions)))
+      (list
+       (list "Ntsc" 'com-set-region-ntsc (region-enabled-p :ntsc))
+       (list "Pal" 'com-set-region-pal (region-enabled-p :pal))
+       (list "Secam" 'com-set-region-secam (region-enabled-p :secam))
+       (list :divider nil nil)
+       (list "Internal" 'com-set-region-internal (region-enabled-p :internal))
+       (list "Hd" 'com-set-region-hd (region-enabled-p :hd))))))
 
 (defun populate-region-menu ()
   "Populate the resource-region-menu with current region checked."
@@ -1936,31 +1645,38 @@ When all three flags are set, the entry has no letters in Assets.index."
     (clear-command-table-menu 'resource-region-menu)
     (dolist (item (supported-regions-for-machine))
       (destructuring-bind (label cmd enabled) item
-        (let ((checked (string-equal label current)))
-          (handler-case
-            (clim:add-menu-item-to-command-table
-             'resource-region-menu
-             (format nil "~:[☐~;☑~] ~a" checked label)
-             :command (if enabled cmd nil)
-             :after :end)
-            (clim:command-already-present ())))))))
+        (cond
+          ((eq label :divider)
+           (handler-case
+               (clim:add-menu-item-to-command-table
+                'resource-region-menu nil :divider t :after :end)
+             (error () nil)))
+          (t
+           (let ((checked (string-equal label current)))
+             (handler-case
+                 (clim:add-menu-item-to-command-table
+                  'resource-region-menu
+                  (format nil "~:[○~;●~] ~a" checked label)
+                  :command (if enabled cmd nil)
+                  :after :end)
+               (clim:command-already-present ())))))))))
 
 (defun populate-build-menu ()
-  "Populate the resource-build-menu with current build checked."
-  (let ((current (get-current-build)))
-    (clear-command-table-menu 'resource-build-menu)
-    (dolist (item (supported-builds-for-machine))
-      (destructuring-bind (label cmd enabled) item
-        (let ((checked (string-equal label current)))
-          (handler-case
+"Populate the resource-build-menu with current build checked."
+(let ((current (get-current-build)))
+  (clear-command-table-menu 'resource-build-menu)
+  (dolist (item (supported-builds-for-machine))
+    (destructuring-bind (label cmd enabled) item
+      (let ((checked (string-equal label current)))
+        (handler-case
             (clim:add-menu-item-to-command-table
              'resource-build-menu
-             (format nil "~:[☐~;☑~] ~a" checked label)
+             (format nil "~:[○~;●~] ~a" checked label)
              :command (if enabled cmd nil)
              :after :end)
-            (clim:command-already-present ())))))))
+          (clim:command-already-present ())))))))
 
-;; Commands for setting build
+;; Commands for setting build — eventbus via set-pref
 (clim:define-command (com-set-build-demo :command-table clim-internals::global-command-table
                                          :menu t :name t) ()
   (set-pref :build "Demo")
@@ -1977,12 +1693,12 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (clim:define-command (com-set-build-publisher :command-table clim-internals::global-command-table
                                               :menu t :name t) ()
-  (set-pref :build "Publisher")
-  (populate-build-menu)
-  (when (boundp 'clim:*application-frame*)
-    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+(set-pref :build "Publisher")
+(populate-build-menu)
+(when (boundp 'clim:*application-frame*)
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
-;; Commands for setting region
+;; Commands for setting region — eventbus via set-pref
 (clim:define-command (com-set-region-ntsc :command-table clim-internals::global-command-table
                                           :menu t :name t) ()
   (set-pref :region "NTSC")
@@ -1992,14 +1708,32 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (clim:define-command (com-set-region-pal :command-table clim-internals::global-command-table
                                          :menu t :name t) ()
-  (set-pref :region "PAL")
-  (populate-region-menu)
-  (when (boundp 'clim:*application-frame*)
-    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+(set-pref :region "PAL")
+(publish :region-changed :payload :pal)
+(populate-region-menu)
+(when (boundp 'clim:*application-frame*)
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 (clim:define-command (com-set-region-secam :command-table clim-internals::global-command-table
                                            :menu t :name t) ()
   (set-pref :region "SECAM")
+  (publish :region-changed :payload :secam)
+  (populate-region-menu)
+  (when (boundp 'clim:*application-frame*)
+    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+
+(clim:define-command (com-set-region-internal :command-table clim-internals::global-command-table
+                                              :menu t :name t) ()
+(set-pref :region "Internal")
+(publish :region-changed :payload :internal)
+(populate-region-menu)
+(when (boundp 'clim:*application-frame*)
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+
+(clim:define-command (com-set-region-hd :command-table clim-internals::global-command-table
+                                        :menu t :name t) ()
+  (set-pref :region "Hd")
+  (publish :region-changed :payload :hd)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
@@ -2007,7 +1741,17 @@ When all three flags are set, the entry has no letters in Assets.index."
 ;; Initialize menus when frame is created
 (defun initialize-run-menus ()
   (populate-build-menu)
-  (populate-region-menu))
+  (populate-region-menu)
+  ;; Subscribe to preference changes so menus refresh across all windows
+  (subscribe :build-changed (lambda (event) (declare (ignore event)) (populate-build-menu)))
+  (subscribe :region-changed (lambda (event) (declare (ignore event)) (populate-region-menu)))
+  (subscribe :preference-change
+             (lambda (event)
+               (let ((key (first event)))
+                 (case key
+                   (:build (populate-build-menu))
+                   (:region (populate-region-menu))))))
+  (values))
 
 ;;  Build and Region command tables (dynamic) 
 
@@ -2150,7 +1894,7 @@ When all three flags are set, the entry has no letters in Assets.index."
          (build-string (pascal-case (string (or build :demo))))
          (region-string (string-upcase (string (or region :ntsc))))
          (name (format nil "Phantasia.~a.~a" build-string region-string)))
-    (make-pathname :directory (list :relative "Dist" machine-namey)
+    (make-pathname :directory (list :relative "Dist" machine-name)
                    :name name :type ext)))
 
 ;;  Build commands 
@@ -2158,30 +1902,22 @@ When all three flags are set, the entry has no letters in Assets.index."
 (clim:define-command (com-make-test :command-table clim-internals::global-command-table
                                     :menu t :name t) ()
   "Build and run tests in a terminal window."
-  (submit-task
-   (make-thread (lambda () (build-target "test" :phonyp t))
-                :name "Running Tests")))
+  (build-target "test" :phonyp t))
 
 (clim:define-command (com-make-documentation :command-table clim-internals::global-command-table
                                              :menu t :name t) ()
   "Build documentation (PDF and HTML) in a terminal window."
-  (submit-task
-   (make-thread (lambda () (build-target "doc" :phonyp t))
-                :name "Building Documentation")))
+  (build-target "doc" :phonyp t))
 
 (clim:define-command (com-make-game :command-table clim-internals::global-command-table
                                     :menu t :name t) ()
   "Build the game binary for the current machine/region in a terminal window."
-  (submit-task
-   (make-thread (lambda () (build-target (game-emulator-binary-pathname)))
-                :name (format nil "Building ~a…" (enough-namestring (game-emulator-binary-pathname))))))
+  (build-target (enough-namestring (game-emulator-binary-pathname)) :phonyp t))
 
 (clim:define-command (com-make-all :command-table clim-internals::global-command-table
                                    :menu t :name t) ()
   "Build everything: demo game, documentation, packages, music-book, map-book, cd-ready in a terminal window."
-  (submit-task
-   (make-thread (lambda () (build-target "all" :phonyp t))
-                :name "Building all")))
+  (build-target "all" :phonyp t))
 
 ;;  Make menu 
 
@@ -2197,12 +1933,16 @@ When all three flags are set, the entry has no letters in Assets.index."
   "Send the built binary to SD card for hardware testing."
   (let* ((build (or (get-pref :build) "Public"))
          (region (or (get-pref :region) "NTSC"))
-         (bin-path (game-emulator-binary-pathname build region)))
+         (bin-path (game-emulator-binary-pathname :build build :region region)))
     (if (probe-file bin-path)
-        (progn
-          (error "~&Sending ~a to SD card...~%" bin-path)
-          (uiop:run-program (list "cp" bin-path "/media/*/SDCARD/" bin-path)
-                            :output *standard-output* :error-output *standard-output*))
+        (let ((dest-dir (car (directory #p"/media/*/SDCARD/"))))
+          (if dest-dir
+              (progn
+                (format *query-io* "~&Sending ~a to ~a~%" bin-path dest-dir)
+                (uiop:run-program (list "cp" (namestring bin-path)
+                                        (namestring (merge-pathnames (file-namestring bin-path) dest-dir)))
+                                  :output *standard-output* :error-output *standard-output*))
+              (error "No SD card found under /media/*/SDCARD/")))
         (error "Binary not found: ~a. Build it first with Make > Game..." bin-path))))
 
 (clim:define-command-table resource-core-dump-menu
@@ -2259,8 +1999,8 @@ When all three flags are set, the entry has no letters in Assets.index."
          ("Close" :command com-quit-skyline-tool :shortcut :ctrl-q)))
 
 (clim:define-command-table resource-view-sort-menu
-  :menu (("☐ Alphabetically" :command com-set-sort-alpha)
-         ("☐ Numerically" :command com-set-sort-numeric)))
+  :menu (("○ Alphabetically" :command com-set-sort-alpha)
+         ("○ Numerically" :command com-set-sort-numeric)))
 
 (clim:define-command-table resource-view-menu
   :menu (("Close all Groups" :command com-resource-close-all)
@@ -2295,7 +2035,6 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (defun populate-accept-from-menu ()
   "Populate the Accept From menu with pending offers from each sender."
-  #+ () (clim:remove-command-from-command-table 'resource-accept-from-menu :FIXME-command-table)
   (let ((pending-offers (pending-offers)))
     (when (plusp (hash-table-count pending-offers))
       (maphash (lambda (sender offers)
@@ -2314,9 +2053,6 @@ When all three flags are set, the entry has no letters in Assets.index."
   :menu ())
 
 ;;  Frame definition 
-
-
-
 (defun display-all-resources (frame pane)
   (declare (ignore frame))
   (clim:window-clear pane)
@@ -2329,21 +2065,14 @@ When all three flags are set, the entry has no letters in Assets.index."
   (clim:window-clear pane)
   (clim:with-text-style (pane (clim:make-text-style :sans-serif :roman :normal))
     (princ "Filter: " pane)
-    (clim:accept 'string :stream pane
-                 :default *assets-index-filter*
-                 :prompt ""
-                 :activation :activate
-                 :value-changed-callback
-                 (lambda (string)
-                   (setf *assets-index-filter* string)
-                   (when (boundp 'clim:*application-frame*)
-                     (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))))
+    (error "unimplemented")))
 
 (defun display-versioning-and-issues (frame pane)
   "Display version control status and issue indicators."
   (declare (ignore frame))
   (clim:window-clear pane)
   (clim:with-text-style (pane (clim:make-text-style :sans-serif :roman :small))
+    (cerror "Continue" "unimplemented: display-versioning-and-issues")
     (princ "VC status and issue indicators will appear here." pane)))
 
 (defun populate-resource-print-to-menu ()
@@ -2379,13 +2108,13 @@ When all three flags are set, the entry has no letters in Assets.index."
             (kind-name (game-resource-kind entry)))
         (push moniker (gethash kind-name kinds))))
     (with-output-to-string (out)
-      (dolist (kind '("Scripts" "Songs" "Maps" "Characters" "Boats" "Blobs"
-                      "Tilesets" "Sprite Sheets" "Object Prototypes" "Classes"
-                      "Routines" "Instruments" "Items" "Flags" "Keys"
-                      "Translations"))
+      (dolist (kind +all-resource-kinds+)
         (let ((items (gethash kind kinds)))
           (when items
-            (setf items (sort (copy-list items) #'string-lessp))
+            (setf items (sort (copy-list items) #'string-lessp
+                              :key (if (get-pref :sort-alpha-p)
+                                       'game-resource-title
+                                       'game-resource-locator)))
             (format out "~&~a:~%" kind)
             (dolist (item items)
               (format out "  ~a~%" item))))))))

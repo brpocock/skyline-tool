@@ -9,14 +9,26 @@
 
 (defun prefs-pathname ()
   "Return the pathname for the preferences file.
-   Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
-   using *game-title* (Header-Case) and machine-directory-name."
+    Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
+    using *game-title* (Header-Case) and machine-directory-name."
   (make-pathname
    :directory (append (pathname-directory (user-homedir-pathname))
-                      '(".config" "Skyline-Tool")
-                      (list (header-case (if (boundp '*game-title*) *game-title* "Game"))))
+                       '(".config" "Skyline-Tool")
+                       (list (header-case (if (boundp '*game-title*) *game-title* "Game"))))
    :name (machine-directory-name)
    :type "lisp"))
+
+(defun user-full-name ()
+  "Return the full name of the current user via POSIX getpwuid.
+   Uses system name service switch (files, NIS, LDAP, etc.) automatically."
+  (let ((pw (ignore-errors (sb-posix:getpwuid (sb-posix:getuid)))))
+    (cond
+      ((and pw (plusp (length (sb-posix:passwd-gecos pw)))
+             (not (string= (sb-posix:passwd-gecos pw) "")))
+       (first (split-sequence #\, (sb-posix:passwd-gecos pw))))
+      ((and pw (plusp (length (sb-posix:passwd-name pw))))
+       (sb-posix:passwd-name pw))
+      (t (or (getenv "NAME") (getenv "USERNAME") (getenv "USER") "unknown")))))
 
 (defun load-prefs ()
   "Read the preferences JSON file and return a plist.
@@ -48,11 +60,17 @@
       default))
 
 (defun set-pref (key value)
-  "Set a preference value, update the cache, and save the file."
+  "Set a preference value, update the cache, and save the file.
+   Publishes :build-changed / :region-changed / :preference-change
+   on the eventbus so all windows can react."
   (unless *prefs-cache*
     (setf *prefs-cache* (load-prefs)))
   (setf (getf *prefs-cache* key) value)
   (save-prefs *prefs-cache*)
+  (publish :preference-change :payload (list key value))
+  (case key
+    (:build (publish :build-changed :payload value))
+    (:region (publish :region-changed :payload value)))
   value)
 
 (defvar *last-save-directory* nil

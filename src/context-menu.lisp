@@ -1,45 +1,5 @@
 (in-package :skyline-tool)
 
-(defun %show-resource-context-menu (resource)
-  "Show context menu for a resource entry - opens the appropriate inspector."
-  (let ((kind (game-resource-kind resource)))
-    (case kind
-      ("Characters"
-       (open-character-inspector resource))
-      ("Scripts"
-       (open-script-inspector resource))
-      ("Sprite Sheets"
-       (open-sprite-sheet-inspector resource))
-      ("Maps"
-       (open-map-inspector resource))
-      ("Songs"
-       (open-song-inspector resource))
-      ("Blobs"
-       (open-blob-inspector resource))
-      ("Tilesets"
-       (open-tileset-inspector resource))
-      ("Objects"
-       (open-object-prototype-inspector resource))
-      ("Classes"
-       (open-class-inspector resource))
-      ("Routines"
-       (open-routine-inspector resource))
-      ("Items"
-       (open-item-inspector resource))
-      ("Flags"
-       (open-flag-inspector resource))
-      ("Keys"
-       (open-key-inspector resource))
-      ("Boats"
-       (open-boat-inspector resource))
-      ("Instruments"
-       (open-instrument-inspector resource))
-      (t
-       (list
-        (cons "Open in Editor" (lambda () (format t "Open in editor: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))))
-        (cons "Open in File Manager" (lambda () (format t "Open in file manager: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource))))
-        (cons "Delete" (lambda () (format t "Delete: ~a~%" (cerror "fuck that guy, that is so dumb" "some fucking moron thought there was a moniker on ~s"  resource)))))))))
-
 (defun find-existing-frame (frame-name)
   "Find an existing frame by name, or return NIL."
   (let ((fm (clim:find-frame-manager)))

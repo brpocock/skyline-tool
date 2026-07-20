@@ -25,6 +25,7 @@
 (defun log-worker-condition (condition)
   "Log a condition from a worker thread."
   (journal:journaled ((format nil "~a: ~a" (thread-name (current-thread)) condition)
+                      :log-record *worker-journal*
                       :args (list :thread (current-thread)
                                         :backtrace
                                         (with-output-to-string (s)
@@ -153,10 +154,15 @@
   (loop
      (sleep 1)
      (dolist (worker (pool-workers *global-thread-pool*))
-       (when (not (thread-alive-p worker))
-         (log-worker-condition
-          (make-condition 'warning
-                          :message (format nil "Restarting dead worker ~a" (thread-name worker))))
-         (make-thread
-          (lambda () (thread-pool-worker-loop *global-thread-pool*))
-          :name (thread-name worker))))))
+        (when (not (thread-alive-p worker))
+          (log-worker-condition
+           (make-condition 'warning
+                           :message (format nil "Restarting dead worker ~a" (thread-name worker))))
+          (make-thread
+           (lambda () (thread-pool-worker-loop *global-thread-pool*))
+           :name (thread-name worker))))))
+
+(defun thread-os-tid (thread)
+  "Return the OS thread ID for THREAD."
+  #+sbcl (sb-thread:thread-os-tid thread)
+  #-sbcl (progn (declare (ignore thread)) -1))

@@ -1,11 +1,12 @@
 ;;; Skyline-Tool src/p2p-avahi.lisp
+;;; Copyright © 2026 Interworldly Adventuring, LLC
+
 ;;; CFFI bindings for Avahi mDNS/DNS-SD service discovery
 
 (in-package :skyline-tool)
 
-;; Load CFFI and Avahi library
+;; Load Avahi library via CFFI (CFFI declared as system dependency)
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (asdf:load-system :cffi)
   (cffi:define-foreign-library libavahi-common
     (:unix (:or "libavahi-common.so.0" "libavahi-common.so"))
     (t (:default "libavahi-common")))
@@ -102,11 +103,12 @@
 (cffi:defcallback avahi-client-callback :void
     ((client :pointer) (state :int) (user-data :pointer))
   (journal:journaled (avahi-client-state
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
-                                  :avahi (list :client client
-                                               :state state
-                                               :user-data user-data)))))
+                                   :avahi (list :client client
+                                                :state state
+                                                :user-data user-data)))))
 
 ;; Service browser callback
 (cffi:defcallback avahi-service-browser-callback :void
@@ -114,6 +116,7 @@
                         (event :int) (name :string) (type :string) (domain :string) (user-data :pointer))
   (journal:journaled
       (avahi-service-browse
+       :log-record *worker-journal*
        :args (list :thread
                    (list :id (thread-os-tid (current-thread))
                          :name (thread-name (current-thread)))
@@ -142,6 +145,7 @@
                          (txt :pointer) (flags :int) (user-data :pointer))
   (journal:journaled
       (avahi-service-resolved
+       :log-record *worker-journal*
        :args (list :thread (list :id (thread-os-tid (current-thread))
                                  :name (thread-name (current-thread)))
                    :avahi (list :resolver resolver
@@ -160,7 +164,7 @@
                                 :resolver resolver
                                 :user-data user-data))))
   (case event
-    (+avahi-resolver-found+
+    (#.+avahi-resolver-found+
      (let ((txt-plist nil))
        (when (cffi:pointerp txt)
          (loop for txt-ptr = txt then (avahi-string-list-get-next txt-ptr)
@@ -189,6 +193,7 @@
                       (3 :collision)
                       (4 :failure))))
     (journal:journaled (avahi-entry-group-state
+                        :log-record *worker-journal*
                         :args (list :thread (list :id (thread-os-tid (current-thread))
                                                   :name (thread-name (current-thread)))
                                     :avahi (list :group group
@@ -197,6 +202,7 @@
                                                  :user-data user-data))))
     (when (or (eql state-name :established) (eql state-name :failure))
       (journal:journaled (avahi-entry-group-error
+                          :log-record *worker-journal*
                           :args (list :thread (list :id (thread-os-tid (current-thread))
                                                     :name (thread-name (current-thread)))
                                       :avahi (list :group group
@@ -250,6 +256,7 @@
                                                      (cffi:null-pointer)))))
       (when (< result 0)
         (journal:journaled (avahi-service-publish-failure
+                            :log-record *worker-journal*
                             :args (list :thread (list :id (thread-os-tid (current-thread))
                                                       :name (thread-name (current-thread)))
                                         :avahi (list :result result :port port :domain domain))))
@@ -259,6 +266,7 @@
       (let ((commit-result (avahi-entry-group-commit *avahi-entry-group*)))
         (when (< commit-result 0)
           (journal:journaled (avahi-service-publish-failure
+                              :log-record *worker-journal*
                               :args (list :thread (list :id (thread-os-tid (current-thread))
                                                         :name (thread-name (current-thread)))
                                           :avahi (list :commit-result commit-result
@@ -310,22 +318,24 @@
 (defun offer-resource (resource-type resource-path &key destination)
   "Offer a resource to another Skyline-Tool instance."
   (journal:journaled (avahi-resource-offer
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
-                                  :avahi (list :resource-type resource-type
-                                               :resource-path resource-path
-                                               :destination destination
-                                               :status :offered)))))
+                                   :avahi (list :resource-type resource-type
+                                                :resource-path resource-path
+                                                :destination destination
+                                                :status :offered)))))
 
 ;; Resource Accepting (All parameters logged)
 (defun accept-resource-offer (offer-id offer-path)
   "Accept an offered resource."
   (journal:journaled (avahi-resource-accept
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
-                                  :avahi (list :offer-id offer-id
-                                               :offer-path offer-path
-                                               :status :accepted)))))
+                                   :avahi (list :offer-id offer-id
+                                                :offer-path offer-path
+                                                :status :accepted)))))
 
 ;; Start native Avahi browsers
 (defun start-native-avahi-browsers ()
@@ -355,9 +365,10 @@
                           (avahi-simple-poll-loop *avahi-poll*))
                         :name "Avahi Poll Loop"))
   (journal:journaled (avahi-browsers-started
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
-                                  :avahi (list :browsers *avahi-browsers*)))))
+                                   :avahi (list :browsers *avahi-browsers*)))))
 
 (defun stop-native-avahi-browsers ()
   "Stop Avahi browsers and clean up."
@@ -377,6 +388,7 @@
     (setf *avahi-poll* nil)
     (avahi-simple-poll-free poll))
   (journal:journaled (avahi-browsers-stopped
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
                                   :avahi (list :status :stopped)))))

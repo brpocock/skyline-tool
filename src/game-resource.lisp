@@ -243,9 +243,13 @@ asset is an error and such code will always be rejected.
           (present-vc-status-icon vc-status))))))
 
 (defmethod game-resource-locator ((resource game-resource))
-  ;; For file-based resources without asset IDs, use the full path
+  ;; For file-based resources without asset IDs, generate a unique hex ID from pathnames
   (when (typep resource 'game-resource-from-file)
-    (game-resource-full-path resource)))
+    (format nil "~6,'0x"
+      (logand #xffffff
+        (reduce #'logxor
+          (mapcar #'sxhash
+            (mapcar #'enough-namestring (game-resource-pathnames resource))))))))
 
 (defmethod game-resource-locator ((resource game-resource-asset))
   (format nil "$~2,'0x" (or (game-resource-asset-id resource) (game-asset-moniker resource))))
@@ -347,12 +351,11 @@ asset is an error and such code will always be rejected.
             (format stream "Kind: "))
           (clim:formatting-cell (stream :align-x :left)
             (princ kind stream)))
-        (when (and locator (not (string= locator "")))
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream :align-x :right)
-              (format stream "Locator: "))
-            (clim:formatting-cell (stream :align-x :left)
-              (princ locator stream))))
+        (clim:formatting-row (stream)
+          (clim:formatting-cell (stream :align-x :right)
+            (format stream "Locator: "))
+          (clim:formatting-cell (stream :align-x :left)
+            (princ locator stream)))
         (when full-path
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream :align-x :right)
@@ -399,12 +402,11 @@ asset is an error and such code will always be rejected.
             (format stream "Kind: "))
           (clim:formatting-cell (stream :align-x :left)
             (format stream "~a (read-only)" kind)))
-        (when (and locator (not (string= locator "")))
-          (clim:formatting-row (stream)
-            (clim:formatting-cell (stream :align-x :right)
-              (format stream "Locator: "))
-            (clim:formatting-cell (stream :align-x :left)
-              (princ locator stream))))
+        (clim:formatting-row (stream)
+          (clim:formatting-cell (stream :align-x :right)
+            (format stream "Locator: "))
+          (clim:formatting-cell (stream :align-x :left)
+            (princ locator stream)))
         (clim:formatting-row (stream)
           (clim:formatting-cell (stream :align-x :right)
             (format stream "Path~p: " (length (game-resource-pathnames resource))))
@@ -765,41 +767,6 @@ resource view mode (reference/reading/editing).")
       ((eql key :phrasebook) 'game-resource-phrasebook)
       (t 'game-resource))))
 
-(defun make-game-resource (moniker builds kind-name
-                           asset-id hex-str full-path)
-  "Create a game-resource object from collected asset data."
-  (let* ((class (kind->resource-class kind-name)))
-    (cond
-      ((subtypep class 'game-resource-asset)
-       (let ((initargs (list :moniker moniker))
-             (extra-args '()))
-         (when (eql class 'game-resource-map)
-           (let ((parts (split-sequence #\/ moniker)))
-             (when (> (length parts) 2)
-               (setf extra-args (list :locale (second parts))))))
-         (when (eql class 'game-resource-script)
-           (let ((parts (split-sequence #\/ moniker)))
-             (when (> (length parts) 2)
-               (setf extra-args (list :locale (second parts))))))
-         (when (eql class 'game-resource-blob)
-           (setf extra-args nil))
-         (let ((base-args (list :full-path full-path
-                                :asset-id asset-id
-                                :hex-str hex-str
-                                :builds builds)))
-           (apply #'make-instance class
-                  (append initargs base-args extra-args)))))
-      ((subtypep class 'game-resource-from-file)
-       (make-instance class :full-path full-path))
-      ((subtypep class 'game-resource-from-collective-file)
-       (make-instance class :collective-path full-path))
-      (t
-       (make-instance class)))))
-
-(defun fixme-interactive-editing-gadget-with-validation (stream resource slot)
-  "Fallback: display the slot value as text since interactive editing isn't available."
-  (format stream "~a" (slot-value resource slot)))
-
 (defgeneric game-resource-pathnames (resource)
   (:documentation "Return a list of filesystem paths for RESOURCE based on its type."))
 
@@ -1013,12 +980,26 @@ resource view mode (reference/reading/editing).")
 
 (defgeneric game-resource-title (resource))
 (defgeneric game-resource-subheading (resource))
+(defun game-resource-fulltext (resource)
+  (game-resource-full-text resource))
 (defgeneric game-resource-full-text (resource)
   (:method ((resource game-resource))
     (concatenate 'string
                  (game-resource-title resource)
                  " "
-                 (game-resource-subheading resource))))
+                 (game-resource-subheading resource)))
+  (:method ((resource game-resource-script))
+    (concatenate 'string
+                 (call-next-method)
+                 " "
+                 (reduce (lambda (a b) (concatenate 'string a b))
+                         (mapcar #'read-file-into-string (game-resource-pathnames resource)))))
+  (:method ((resource game-resource-routine))
+    (concatenate 'string
+                 (call-next-method)
+                 #(#\Newline #\Newline)
+                 (reduce (lambda (a b) (concatenate 'string a #(#\Newline #\Newline) b))
+                         (mapcar #'read-file-into-string (game-resource-pathnames resource))))))
 
 (defmethod file-name-and-contents ((resource game-resource-from-file))
   (concatenate 'string
@@ -1026,21 +1007,12 @@ resource view mode (reference/reading/editing).")
                " "
                (read-file-into-string (first (game-resource-pathnames resource)))))
 
-(defmethod game-resource-full-text ((resource game-resource-script))
-  (file-name-and-contents resource))
-
-(defmethod game-resource-full-text ((resource game-resource-routine))
-  (file-name-and-contents resource))
-
 (defmethod game-resource-full-text ((resource game-resource-song))
   (let ((parts (list (game-resource-title resource)
-                     (game-resource-subheading resource))))
-    (when (game-resource-song-mscz-composer resource)
-      (push (game-resource-song-mscz-composer resource) parts))
-    (when (game-resource-song-mscz-copyright resource)
-      (push (game-resource-song-mscz-copyright resource) parts))
-    (when (game-resource-song-mscz-lyrics resource)
-      (push (game-resource-song-mscz-lyrics resource) parts))
+                     (game-resource-subheading resource)
+                     (game-resource-song-mscz-composer resource)
+                     (game-resource-song-mscz-copyright resource)
+                     (game-resource-song-mscz-lyrics resource))))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
 (defgeneric game-resource-last-updated (resource)
@@ -1064,6 +1036,7 @@ resource view mode (reference/reading/editing).")
 (defgeneric game-resource-present-editing (resource stream))
 
 (defgeneric game-resource-kind (resource)
+  (:documentation "The Kind of a resource is its least-general type.")
   (:method ((resource game-resource-blob)) :blob)
   (:method ((resource game-resource-map)) :map)
   (:method ((resource game-resource-script)) :script)
@@ -1074,16 +1047,12 @@ resource view mode (reference/reading/editing).")
   (:method ((resource game-resource-object-prototype)) :object-prototype)
   (:method ((resource game-resource-class)) :class)
   (:method ((resource game-resource-routine)) :routine)
-  (:method ((resource game-resource-routine-forth-library)) :routine)
-  (:method ((resource game-resource-routine-run-commands)) :routine)
   (:method ((resource game-resource-boat)) :boat)
   (:method ((resource game-resource-instrument)) :instrument)
   (:method ((resource game-resource-item)) :item)
   (:method ((resource game-resource-flag)) :flag)
   (:method ((resource game-resource-key)) :key)
-  (:method ((resource game-resource-atari-vox-dictionary)) :phonetic-dictionary)
-  (:method ((resource game-resource-intellivoice-dictionary)) :phonetic-dictionary)
-  (:method ((resource game-resource-phrasebook)) :translation))
+  (:method ((resource game-resource-translation)) :translation))
 
 (defgeneric game-resource-depends-upon-resources (resource))
 

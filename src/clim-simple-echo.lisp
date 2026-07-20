@@ -472,12 +472,14 @@ Used when more sophisticated presentation methods are not available."
 
 (defmethod stream-write-char ((s capturing-stream) c)
   (write-char c (slot-value s 'target))
-  (write-char c (slot-value s 'capture)))
+  (write-char c (slot-value s 'capture))
+  (when (or (char= c #\Newline) (char= c #\Return))
+    (force-output (slot-value s 'target))))
 
 (defmethod stream-write-string ((s capturing-stream) string
                                 &optional (start 0) (end (length string)))
-  (write-string string (slot-value s 'target) :start start :end end)
-  (write-string string (slot-value s 'capture) :start start :end end))
+  (loop for i from start below end
+        do (stream-write-char s (char string i))))
 
 (defmethod stream-force-output ((s capturing-stream))
   (force-output (slot-value s 'target)))

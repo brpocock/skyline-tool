@@ -3,26 +3,131 @@
 
 (in-package :skyline-tool)
 
-;; 
-;; MENU DEFINITIONS
-;; 
-;; This frame provides a full-featured inspector for project resources, including
-;; real-time regional configuration, build settings, and printing workflows.
-;; Menu commands handle imports, exports, and dissemination of project assets.
-;; 
-;; Key commands:
-;;   :build-demo, :build-public, :build-publisher - Set build target
-;;   :region-ntsc, :region-pal, :region-secam, :region-internal - Select regional target
-;;   :com-amend-project - Update configuration in place
-;;   :save-project - Persist changes externally
-;; 
-;; All commands publish relevant status changes via the eventbus.
-;; 
-;; See also: :project-build-menu for build selection, :project-region-menu
-;; for regional settings, and :project-save-as-menu for export formats.
-;; 
-;; (defun populate-project-print-to-menu () ...)
-;; (defun populate-project-send-to-menu () ...) 
+#|
+
+Requirements follow, do not alter this documentation.
+
+Project Inspector:
+
+Game Title: _______________________________
+
+Version: ___.___      | Part Number: ____________
+
+Studio: __________________________
+Publisher: __________________________
+
+[] Special Intro for ZPH
+
+New Game Script
+| {   } | Demo Game                       | $1234   |
+| {   } |     Global                      |[]D[]P[]A|   ( Choose ... )
+| {   } |                                 |         |
+
+Machine: [ Atari 7800 ProSystem                - ]
+[ Atari 5200 SuperSystem                ]
+[ ColecoVision                          ]
+[ Intellivision                         ]
+[ Nintendo Entertainment System         ]
+[ Super Nintendo Entertainment System   ]
+$(all platforms listed alphabetically)
+
+
+Atari 7800 Options
+-------------------
+
+CPU: 6502                                              # just text, not editable
+
+Sound options: <> TIA Only   <> Hokey + TIA
+
+Common Palette:
+
+P4C1 [##] _________________                # pick color from palettes and assign name
+P4C2 [##] _________________
+P4C3 [##] _________________
+
+P5C1 [##] _________________
+P5C2 [##] _________________
+P5C3 [##] _________________
+
+P6C1 [##] _________________
+P6C2 [##] _________________
+P6C3 [##] _________________
+
+P7C1 [##] _________________
+P7C2 [##] _________________
+P7C3 [##] _________________
+
+#### menu
+
+Project
+--------
+New...
+New from URL...
+Port to Machine...
+---
+Save as > Text...
+JSON...
+PDF...
+---
+Print to > { list of printers }
+---
+Close
+
+Edit
+-----
+Cut
+Copy
+Paste
+---
+Find...
+
+Tools
+------
+Show ROM Budget...
+
+Run
+----
+Build > <> Demo
+<> Public
+<> $(Publisher)
+Region > <> NTSC
+<> PAL
+<> SECAM
+<> Internal
+<> HD
+---
+Run in A7800...
+Run in js7800...
+Run in test7800...
+Run in Ocelot...
+---
+Send to SD Card...
+Send to 7800GD Debug Port...
+---
+Make > Test...
+Documentation...
+Game...
+---
+All...
+---
+Build a Release Package...
+
+View
+-----
+[] Editable
+---
+[] Project Pane
+
+Help
+-----
+How to Manage Projects...
+Skyline-Tool Developers' Guide...
+Skyline-Tool Scripting Guide...
+---
+About Skyline-Tool..
+
+|#
+
 
 (clim:define-command-table project-save-as-menu
   :menu (("JSON..." :command com-save-as-json)

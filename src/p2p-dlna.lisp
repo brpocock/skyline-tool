@@ -82,9 +82,10 @@
                                      "" *dlna-server-port* 0
                                      txt-record)))
   (journal:journaled (dlna-service-registered
+                      :log-record *worker-journal*
                       :args (list :thread (list :id (thread-os-tid (current-thread))
                                                 :name (thread-name (current-thread)))
-                                  :dlna (list :directory (namestring directory)
-                                              :friendly-name friendly-name
-                                              :port *dlna-server-port*
-                                              :status :registered)))))
+                                   :dlna (list :directory (namestring directory)
+                                               :friendly-name friendly-name
+                                               :port *dlna-server-port*
+                                               :status :registered)))))

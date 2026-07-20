@@ -859,7 +859,7 @@ Blocks until the frame is closed."
          (uiop:run-program (list "make" (format nil "Dist/~a.Public.NTSC.a78" *game-title*))
                            :output t :ignore-error-status t))
        (push-7800gd-bin rom-path)))
-   :process-name "Push binary"))
+   :process-name "Send to 7800GD"))
 
 (defun shove-binary-into-running-7800-game-drive ()
   "Update the running game with a new binary image

@@ -219,7 +219,9 @@
   (:panes (echo-pane :application
                      :display-function 'display-terminal-echo
                      :scroll-bars :vertical
-                     :height 600 :width 800)
+                     :height 400 :width 800)
+          (input-pane :interactor
+                      :height 100 :width 800)
           (output-pane :application
                        :display-function 'display-terminal-output
                        :scroll-bars :vertical
@@ -227,15 +229,17 @@
           (error-pane :application
                       :display-function 'display-terminal-error
                       :scroll-bars :vertical
-                      :height 300 :width 800)
-          (input-pane :application
-                      :display-function 'display-terminal-input
-                      :scroll-bars :vertical
-                      :height 40 :width 800))
+                      :height 300 :width 800))
   (:command-table (terminal-echo-frame))
   (:menu-bar terminal-echo-menu-bar)
-  (:layouts (default echo-pane)
-            (with-input (clim:vertically () echo-pane input-pane))
+  (:layouts (default (clim:vertically ()
+                       echo-pane
+                       (clim:make-pane 'clim-extensions:box-adjuster-gadget)
+                       input-pane))
+            (with-input (clim:vertically ()
+                          echo-pane
+                          (clim:make-pane 'clim-extensions:box-adjuster-gadget)
+                          input-pane))
             (split (clim:vertically () output-pane error-pane))
             (split-with-input (clim:vertically () output-pane error-pane input-pane))))
 
@@ -273,22 +277,24 @@
                                                 :target pane :capture error-capture)))
     (let ((*standard-output* capturing-stream)
           (*trace-output* capturing-stream)
-          (*error-output* error-capturing-stream))
+          (*error-output* error-capturing-stream)
+          (*query-io* capturing-stream)
+          (*standard-input* (clim:frame-standard-input frame)))
       (setf (frame-captured-text frame) (get-output-stream-string capture))
       (setf (frame-captured-errors frame) (get-output-stream-string error-capture))
-      (funcall (frame-command frame) pane))))
+      (when (frame-command frame)
+        (funcall (frame-command frame) pane)))))
 
 (defun terminal-echo-pipe (frame pane)
-  "Pipe function that reads from process and writes to pane with ANSI parsing."
+  "Pipe function that reads from process and writes to pane with ANSI parsing.
+   Reads character-by-character for real-time output (progress bars, \\r updates)."
   (let ((process (frame-process frame))
         (parser (frame-parser frame)))
     (when process
       (with-open-stream (input (process-output process))
-        (loop for line = (read-line input nil nil)
-              while line
-              do (clim:with-output-as-presentation (pane line 'string)
-                   (write-string-with-ansi parser line pane)
-                   (terpri pane))
+        (loop for char = (read-char input nil nil)
+              while char
+              do (write-char-with-ansi parser char pane)
                  (force-output pane))
         ;; Process exited
         (let ((exit-status (process-exit-code process)))
@@ -340,7 +346,17 @@
       (process-kill process)
       (setf (frame-process *application-frame*) nil))))
 
-;;; Public API
+(define-terminal-echo-frame-command (com-send-input :menu nil :name "Input")
+    ((text 'string :prompt "> "))
+  "Send TEXT to the running process's stdin."
+  (let* ((frame *application-frame*)
+         (process (frame-process frame)))
+    (when process
+      (with-open-stream (output (uiop:process-info-input process))
+        (write-line text output)
+        (force-output output)))))
+
+;; Terminal Echo View menu
 
 (defun setup-terminal-echo (&key command (name "Terminal Echo") (width 800) (height 600))
   "Create and show a terminal echo window for running commands.
@@ -406,7 +422,7 @@
   "Get git status for FILE-PATH relative to VC-DIR."
   (let* ((file-truename (truename file-path))
          (vc-truename (truename vc-dir))
-         (relative-path (enough-pathname file-truename vc-truename))
+         (relative-path (enough-namestring file-truename vc-truename))
          (output (uiop:run-program (list "git" "status" "--porcelain" "--" relative-path)
                                    :output :string
                                    :ignore-error-status t

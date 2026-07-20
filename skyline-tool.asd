@@ -24,6 +24,7 @@
                :clods-export
                :clouseau
                :cserial-port
+               :cffi
                :drakma
                :dufy
                :eightbol
@@ -61,7 +62,7 @@
                  (:file "7800gd-debug" :depends-on ("package"))
                  (:file "7800gd-interface" :depends-on ("package" "eprom"))
                  (:file "printer-utils" :depends-on ("package"))
-                 (:file "p2p-avahi" :depends-on ("package"))
+                 (:file "p2p-avahi" :depends-on ("package" "thread-pool" "interface"))
                  (:file "p2p-dlna" :depends-on ("package" "p2p-avahi"))
                  (:file "p2p-webdav" :depends-on ("package" "p2p-avahi"))
                  (:file "avahi-handler" :depends-on ("package" "p2p-avahi" "printer-utils"))
@@ -85,12 +86,13 @@
                  (:file "fountain" :depends-on ("package" "maps"))
                  (:module "gui"
                   :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils" "game-resource")
-                  :components ((:file "gui-thread")
-                               (:file "gui-style")
-                               (:file "gui-inspector")
-                               (:file "gui-presentations")
-                               (:file "gui-dialogs")
-                               (:file "gui-atari-vox-dictionary")
+                   :components ((:file "gui-thread")
+                                (:file "gui-threads")
+                                (:file "gui-style")
+                                (:file "gui-inspector")
+                                (:file "gui-presentations")
+                                (:file "gui-dialogs")
+                                (:file "gui-atari-vox-dictionary")
                                (:file "gui-basic-routine")
                                (:file "gui-blob")
                                (:file "gui-blob-inspector")
@@ -164,11 +166,12 @@
                  (:file "game-resource" :depends-on ("package" "version-control"))
                  (:file "local-locale" :depends-on ("package"))
                  (:file "context-menu" :depends-on ("package"))
-                 (:file "p2p-sharing" :depends-on ("package"))
-                 (:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
-                                                               "printer-utils" "clim-simple-echo"
-                                                               "game-resource" "thread-pool"
-                                                               "context-menu" "boat-inspector" "p2p-sharing"))
+                  (:file "p2p-sharing" :depends-on ("package"))
+                  (:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
+                                                                "printer-utils" "clim-simple-echo"
+                                                                "game-resource" "thread-pool"
+                                                                "context-menu" "boat-inspector" "p2p-sharing"
+                                                                "gui"))
                  (:file "launcher" :depends-on ("package" "preferences" "all-resources"
                                                           "clim-simple-echo" "ps-utils"
                                                           "printer-utils" "logging"))
