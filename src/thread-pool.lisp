@@ -1,5 +1,12 @@
 (in-package :skyline-tool)
 
+;; Define preserved dynamics with earmuff naming and equalp test
+(define-constant */basic-dynamics-list/
+  `(*machine *region *project.json *game-title *build *sound
+    *part-number *studio *publisher *common-palette *default-skin-color
+    *default-hair-color *default-clothes-color)
+  :test 'equalp)
+
 (defvar *worker-journal* nil
   "Journal for thread pool worker errors and events.")
 

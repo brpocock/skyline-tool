@@ -32,6 +32,12 @@ Affects whether bank directories are named \"LastBank\" vs \"Bank$XX\".
 
 Do not modify this variable after system initialization.")
 
+(define-constant +all-build-codes+
+    '((#\A "AA" :publisher)
+      (#\P "Public" :public)
+      (#\D "Demo" :demo))
+  :test #'equalp)
+
 (defun parse-assets-line (line)
   "Parse one LINE from Assets.index.
 
@@ -47,17 +53,13 @@ Returns @code{(ASSET BUILDS)} where ASSET is the asset identifier and BUILDS is 
       (destructuring-bind (asset &optional builds-string &rest machines)
           (split-sequence #\space line :remove-empty-subseqs t)
         (declare (ignore machines)) ;; TODO
-        (list (string-trim " " asset)
+        (list (string-trim +whitespace+ asset)
               (if (null builds-string)
-                  (list "AA" "Public" "Demo")
+                  (mapcar #'second +all-build-codes+)
                   (remove-if #'null
-                             (list
-                              (when (find #\A builds-string :test #'char-equal)
-                                "AA")
-                              (when (find #\P builds-string :test #'char-equal)
-                                "Public")
-                              (when (find #\D builds-string :test #'char-equal)
-                                "Demo"))))))))
+                             (loop for (code name) in +all-build-codes+
+                                   when (find code builds-string :test #'char-equal)
+                                     collect name)))))))
 
 (defun kind-by-name (kind$)
   "Convert a string KIND$ representing an asset type to the corresponding keyword.
@@ -588,32 +590,8 @@ trying greedy orderings for ~:d ROM bank~:p … "
 (define-constant +all-builds+ '("AA" "Public" "Demo")
   :test #'equalp)
 
-(define-constant +all-video+ '(:ntsc :pal :secam)
+(define-constant +all-video+ '(:ntsc :pal :secam :internal :hd)
   :test #'equalp)
-
-(defun supported-video-types (&optional (machine *machine*))
-  "Return the list of video types supported by MACHINE.
-
-Portable and single-region handheld devices return a one-element list
-@code{(:ntsc)} so that Makefile generation iterates only once and
-@code{asset->object-name} emits a single video-suffix-free target.
-TV-connected machines with both NTSC and PAL releases return
-@code{(:ntsc :pal)}; the catch-all additionally includes SECAM."
-  (case machine
-    ;; Portable/single-region devices: Lynx, Game Boy family, Game Gear,
-    ;; WonderSwan family, Virtual Boy.  All emit video-independent objects.
-    ((200    ; Lynx
-      810    ; VB
-      837    ; GG
-      3296   ; GBA
-      4800   ; WS
-      6800   ; WSC
-      20953  ; CGB
-      35902) ; DMG
-     '(:ntsc))
-    (5200 '(:ntsc))
-    ((400 800 20 64 128 7800 7850) '(:ntsc :pal))
-    (t '(:ntsc :pal :secam))))
 
 (defvar *first-assets-bank* nil)
 
@@ -732,7 +710,7 @@ binding exists."
     (assert (member build +all-builds+ :test 'equal) (build)
             "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
     (let ((assets-list (all-assets-for-build build)))
-      (dolist (video (supported-video-types))
+      (dolist (video (all-regions-for-machine))
         (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
                 build video)
         (loop with allocation = (find-best-allocation assets-list
@@ -1170,12 +1148,22 @@ file ~a.s in bank $~2,'0x~
       (make-pathname :directory (list :relative "Object" (machine-directory-name))
                      :name "StagehandLow" :type "o")))
   (when (eql 0 (search "Art." name))
-    (let ((possible-file (make-pathname :directory (list :relative "Source" "Art" (machine-directory-name))
-                                        :name (subseq name 4) :type "art")))
-      (when (probe-file possible-file)
-        (return-from find-included-binary-file
-          (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
-                         :name name :type "o")))))
+    (flet ((try-art (stem)
+             (let ((possible-file (make-pathname
+                                   :directory (list :relative "Source" "Art" (machine-directory-name))
+                                   :name stem :type "art")))
+               (when (probe-file possible-file)
+                 (return-from find-included-binary-file
+                   (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
+                                  :name name :type "o"))))))
+      (let ((stem (subseq name 4)))
+        (try-art stem)
+        (dolist (video-type (all-regions-for-machine))
+          (let ((suffix (format nil ".~:@(~a~)" video-type))
+                (stem-len (length stem)))
+            (when (and (> stem-len (length suffix))
+                       (string-equal (subseq stem (- stem-len (length suffix))) suffix))
+              (try-art (subseq stem 0 (- stem-len (length suffix))))))))))
   (when (eql 0 (search "Tileset." name))
     (let ((possible-file (make-pathname
                           :directory (list :relative "Source" "Maps" "Tiles")
@@ -1595,11 +1583,11 @@ Each element is a single path suitable for Makefile continuation lines (one path
     (destructuring-bind (kind name) (asset-kind/name asset-indicator)
       (cond ((equal kind "Songs")
 	   (list* (format nil "Source/Generated/~a/Orchestration.s" machine-dir)
-		(loop for video in (supported-video-types)
+		(loop for video in (all-regions-for-machine)
                           collect (format nil "Object/~a/Assets/Song.~a.~a.o"
                                           machine-dir name video))))
 	  ((equal kind "Maps")
-	   (loop for video in (supported-video-types)
+	   (loop for video in (all-regions-for-machine)
                    collect (asset->object-name asset-indicator :video video)))
 	  ((equal kind "Blob")
 	   (list (format nil "Source/Generated/Assets/Blob.~a.s" name)))
@@ -1698,12 +1686,12 @@ and target platform. Handles special cases for different machines and video mode
         (ensure-directories-exist source-pathname)
         (with-output-to-file (source source-pathname :if-exists :supersede)
           (format source ";; This is a generated file~2%")
-          (dolist (video (supported-video-types))
+          (dolist (video (all-regions-for-machine))
             (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
                     video basename video)))))
-    (dolist (video (supported-video-types))
+    (dolist (video (all-regions-for-machine))
       (format t "
 ~a: ~a \\
           Source/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
@@ -1772,7 +1760,7 @@ and target platform. Handles special cases for different machines and video mode
                 source c))))
     (format t "~%~{~a~^ ~}: ~a \\~%          Source/Assets.index bin/skyline-tool"
             (mapcar (lambda (v) (asset->object-name asset-indicator :video v))
-                    (supported-video-types))
+                    (all-regions-for-machine))
             source)
     (dolist (dep (reverse deps))
       (format t " \\~%          ~a" dep))
@@ -1786,7 +1774,7 @@ Blobs whose paths omit a video suffix (TMS9918-family Z80 ports) must not
 emit duplicate GNU Make targets for :ntsc / :pal / :secam."
   (if (member *machine* '(3010 9918 1000 837 2110))
       '(:ntsc)
-      (supported-video-types)))
+      (all-regions-for-machine)))
 
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
@@ -2506,7 +2494,7 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (format t "
 Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 ~{\\~%     Source/Generated/Classes/$(CPUDIR)/~aClass.s~}
@@ -2528,7 +2516,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 	bin/eightbol ~a$< -m $(CPUDIR) -o $@"
                   out (enough-namestring f) machine-dir flag)))))
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
@@ -2621,7 +2609,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
   "Emit Dist and per-bank recipes for @code{*machine*} 5200, 400, or 800 (32×32 KiB / 1 MiB)."
   (let ((machine *machine*))
     (dolist (build +all-builds+)
-      (dolist (video (supported-video-types machine))
+      (dolist (video (all-regions-for-machine machine))
         (let ((*region* video)
 	    (*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
@@ -2705,7 +2693,7 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 (defmethod write-master-makefile-for-machine ((machine (eql 20953)))
   "Write makefile content for Game Boy Color"
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)

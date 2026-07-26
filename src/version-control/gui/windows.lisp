@@ -3,7 +3,7 @@
 
 (in-package :skyline-tool.version-control)
 
-(defun format-vc-window-title (thing)
+(defun format-version-control-window-title (thing)
   "Format window title as: $(Thing) - Skyline-Tool for *Game-Title* (Machine-Directory-Name)"
   (format nil "~a - Skyline-Tool for ~a (~a)"
           thing
@@ -26,7 +26,7 @@
   (:menu-bar t))
 
 (defmethod clim:frame-pretty-name ((frame git-browser-frame))
-  (format-vc-window-title "Git Repository"))
+  (format-version-control-window-title "Git Repository"))
 
 ;; Issue Tracker Window
 (clim:define-application-frame issue-tracker-frame ()
@@ -41,7 +41,7 @@
   (:menu-bar t))
 
 (defmethod clim:frame-pretty-name ((frame issue-tracker-frame))
-  (format-vc-window-title "Issue Tracker"))
+  (format-version-control-window-title "Issue Tracker"))
 
 ;; Welcome/Clone Wizard Window
 (clim:define-application-frame welcome-frame ()
@@ -55,7 +55,7 @@
   (:menu-bar t))
 
 (defmethod clim:frame-pretty-name ((frame welcome-frame))
-  (format-vc-window-title "Welcome"))
+  (format-version-control-window-title "Welcome"))
 
 ;; Drawing functions (stubs)
 (defun draw-git-browser (frame pane)
@@ -120,7 +120,7 @@
   (:menu-bar t))
 
 (defmethod clim:frame-pretty-name ((frame preferences-frame))
-  (format-vc-window-title "Preferences"))
+  (format-version-control-window-title "Preferences"))
 
 (defun draw-preferences-dialog (frame pane)
   (declare (ignore frame))
@@ -163,7 +163,7 @@
   (:menu-bar t))
 
 (defmethod clim:frame-pretty-name ((frame project-inspector-frame))
-  (format-vc-window-title "Project Inspector"))
+  (format-version-control-window-title "Project Inspector"))
 
 ;; Helper: get machine list from asset-allocator
 (defun get-all-machines ()

@@ -198,54 +198,61 @@
       (loop for c across string
             for code = (char-code c)
             do (cond
-                 ((member c '(#\( #\) #\\) :test 'char=)
+                 ((find c "()\\" :test 'char=)
                   (princ "\\" out) (princ c out))
                  ((char= c #\—) (format out "\\~8,3,'0r" #x2014)) ;; em dash → ---
                  ((char= c #\–) (format out "\\~8,3,'0r" #x2013)) ;; en dash → --
                  ((char= c #\apostrophe) (format out "\\~8,3,'0r" #x2019)) ;; right quote
-                 ((char= c #\left_double_quotation_mark) (format out "\\~8,3,'0r" #x201C)) ;; left double
-                 ((char= c #\right_double_quotation_mark) (format out "\\~8,3,'0r" #x201D)) ;; right double
+                 ((char= c #\left_double_quotation_mark)
+                  (format out "\\~8,3,'0r" #x201C)) ;; left double
+                 ((char= c #\right_double_quotation_mark)
+                  (format out "\\~8,3,'0r" #x201D)) ;; right double
                  ((char= c #\•) (format out "\\042")) ;; bullet
                  ((char= c #\…) (format out "\\263")) ;; ellipsis
                  ((char= c #\>) (format out "\\047")) ;; right angle
                  ((char= c #\<) (format out "\\046")) ;; left angle
-                 ((char= c #\non-breaking_space) (princ " " out)) ;; NBSP → space ERROR FIXME
+                 ((char= c #\non-breaking_space)
+                  (princ " " out)) ;; NBSP → space ERROR FIXME
                  ((< code 128) (princ c out))
                  ((< code 256) (format out "\\~8,3,'0r" code)) ;; Latin-1 octal
-                 (t (princ "\\?" out))))))) ;; Unicode fallback FIXME this is not acceptable
+                 (t (error "PostScript Univode failure")))))))
 
 (defun render-maria-to-rgb (dump mode address width colors)
   "Render Maria tile pixels to a flat RGB byte vector using COLORS (vector of Atari register values).
    Returns PIXELS-WIDE HEIGHT RGB-ARRAY."
-  (let* ((ppb (ecase mode (:160a 4) (:160b 2)))
-         (tw (* width ppb))
-         (th 16)
-         (system-palette (ecase *region*
-                           (:ntsc +prosystem-ntsc-palette+)
-                           (:pal +prosystem-pal-palette+)))
+  (let* ((pixels-per-byte (ecase mode (:160a 4) (:160b 2)))
+         (total-width (* width pixels-per-byte))
+         (total-height 16)
+         (system-palette
+           (ecase *region*
+             (:ntsc +prosystem-ntsc-palette+)
+             (:pal +prosystem-pal-palette+)))
          (fp (extract-maria-pixels dump mode address width))
-         (rgb (make-array (* tw th 3 2) :element-type '(unsigned-byte 8) :initial-element 0)))
-    (dotimes (y th)
-      (dotimes (x tw)
+         (rgb (make-array (* total-width total-height 3 2)
+                          :element-type '(unsigned-byte 8) :initial-element 0)))
+    (dotimes (y total-height)
+      (dotimes (x total-width)
         (let* ((pen (aref fp x y))
                (reg (elt colors pen))
-               (col (if (and (integerp reg) (<= 0 reg 255) (nth reg system-palette))
+               (col (if (and (integerp reg) (<= 0 reg 15)
+                             (nth reg system-palette))
                         (nth reg system-palette)
                         '(0 0 0)))
-               (base (* y tw 2)))
+               (base (* y total-width 2)))
           (setf (aref rgb (* (+ base (* 2 x)) 3)) (first col)
                 (aref rgb (+ (* (+ base (* 2 x)) 3) 1)) (second col)
                 (aref rgb (+ (* (+ base (* 2 x)) 3) 2)) (third col)
                 (aref rgb (* (+ base (1+ (* 2 x))) 3)) (first col)
                 (aref rgb (+ (* (+ base (1+ (* 2 x))) 3) 1)) (second col)
                 (aref rgb (+ (* (+ base (1+ (* 2 x))) 3) 2)) (third col)))))
-    (values (* tw 2) th rgb)))
+    (values (* total-width 2) total-height rgb)))
 
-(defun write-ps-image (ps rgb-array img-width img-height max-width max-height)
+(defun write-ps-image (ps rgb-array
+                       img-width img-height max-width max-height)
   "Write PostScript code to display an RGB image, scaled to fit within MAX-WIDTH x MAX-HEIGHT points.
    Does NOT emit gsave/grestore; caller must manage graphics state."
   (let* ((scale (min (/ max-width (max 1 img-width))
-                      (/ max-height (max 1 img-height))))
+                     (/ max-height (max 1 img-height))))
          (bpr (* img-width 3))
          (hex (with-output-to-string (s)
                 (dotimes (i (length rgb-array))
@@ -258,9 +265,9 @@
     (format ps "{ currentfile ~d string readhexstring pop } image~%" bpr)
     (format ps "~a~%" hex)))
 
-
-
-(defun write-ps-page-footer (ps page-num total-pages title-text date-str author &optional hostname)
+(defun write-ps-page-footer (ps page-num total-pages
+                             title-text date-str author
+                             &optional hostname)
   "Write PDF page footer with proper formatting.
    Layout:
      | < Icon >  | Skyline-Tool for _Phantasia_ 7800                                                              |              |

@@ -370,8 +370,7 @@
                (error  "~&Print: no PDF export for this window.~%")))))
       (error  "~&No active frame.~%")))
 
-(clim:define-command (com-open-go-to :command-table clim-internals::global-command-table
-                                     ) ()
+(clim:define-command (com-open-go-to :command-table clim-internals::global-command-table) ()
   "Open or go to a specific resource."
   (if (boundp 'clim:*application-frame*)
       (let ((frame clim:*application-frame*))
@@ -1493,17 +1492,14 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
                      :frame-rate-scalar (v "frameRateScalar")
                      :frames (coerce (v "frames") 'vector)))))
 
-  ;; --- CLIPBOARD PRESENTATION TYPES ---
-  ;; These types tag clipboard data so request-selection can find translators.
-  
-
+;; --- CLIPBOARD PRESENTATION TYPES ---
+;; These types tag clipboard data so request-selection can find translators.
 
 (clim:define-presentation-type clipboard-text () :inherit-from 'string)
 (clim:define-presentation-type clipboard-json () :inherit-from 'string)
 (clim:define-presentation-type clipboard-xpm () :inherit-from 'string)
 
-  ;; Wrapper class for animation sequence clipboard data
-  
+;; Wrapper class for animation sequence clipboard data
 
 (defclass animation-sequence-clipboard ()
   ((sequence :initarg :sequence :reader clipboard-sequence)
@@ -1516,10 +1512,9 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 (clim:define-presentation-type animation-sequence-clipboard-data ()
   :inherit-from 'animation-sequence-clipboard)
 
-  ;; --- SELECTION TRANSLATORS: animation sequence → clipboard formats ---
-  ;; Use define-presentation-translator with :translator-class selection-translator
-  ;; so that request-selection will find them during format negotiation.
-  
+;; --- SELECTION TRANSLATORS: animation sequence → clipboard formats ---
+;; Use define-presentation-translator with :translator-class selection-translator
+;; so that request-selection will find them during format negotiation.
 
 
 (clim:define-presentation-translator seq->text

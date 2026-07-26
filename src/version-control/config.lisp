@@ -8,7 +8,7 @@
 ;; Configuration Management
 ;;-----------------------------------------------------------------------------
 
-(defclass vc-config ()
+(defclass version-control-config ()
   ((last-commit :initform nil :accessor config-last-commit)
    (staged-files :initform '() :accessor config-staged-files)
    (ignored-files :initform '() :accessor config-ignored-files)
@@ -17,104 +17,104 @@
    (ahead-count :initform 0 :accessor config-ahead-count)
    (behind-count :initform 0 :accessor config-behind-count)))
 
-(defvar *vc-config* nil
+(defvar *version-control-config* nil
   "Current version control configuration instance")
 
-(defun load-vc-config ()
+(defun load-version-control-config ()
   "Load configuration from disk, creating default if not exists"
-  (let ((config-path (vc-config-pathname)))
+  (let ((config-path (version-control-config-pathname)))
     (if (probe-file config-path)
         (with-open-file (s config-path)
           (let ((*standard-input* s))
             (read)))
-        (make-instance 'vc-config))))
+        (make-instance 'version-control-config))))
 
-(defun save-vc-config (&optional (config *vc-config*))
+(defun save-version-control-config (&optional (config *version-control-config*))
   "Save configuration to disk"
-  (let ((config-path (vc-config-pathname)))
+  (let ((config-path (version-control-config-pathname)))
     (with-open-file (s config-path :direction :output :if-exists :supersede)
       (write config :stream s))))
 
-(defun ensure-vc-config ()
+(defun ensure-version-control-config ()
   "Ensure config is loaded"
-  (unless *vc-config*
-    (setf *vc-config* (load-vc-config))))
+  (unless *version-control-config*
+    (setf *version-control-config* (load-version-control-config))))
 
 ;;-----------------------------------------------------------------------------
 ;; Auto-persistence Hooks
 ;;-----------------------------------------------------------------------------
 
-(defmacro with-vc-auto-save (&body body)
+(defmacro with-version-control-auto-save (&body body)
   "Execute BODY and auto-save config on exit"
   `(progn
-     (ensure-vc-config)
+     (ensure-version-control-config)
      (unwind-protect
           (progn ,@body)
-       (save-vc-config))))
+       (save-version-control-config))))
 
 ;;-----------------------------------------------------------------------------
 ;; Convenience Accessors
 ;;-----------------------------------------------------------------------------
 
-(defun vc-get-last-commit ()
-  (ensure-vc-config)
-  (config-last-commit *vc-config*))
+(defun version-control-get-last-commit ()
+  (ensure-version-control-config)
+  (config-last-commit *version-control-config*))
 
-(defun vc-set-last-commit (commit)
-  (ensure-vc-config)
-  (setf (config-last-commit *vc-config*) commit)
-  (save-vc-config))
+(defun version-control-set-last-commit (commit)
+  (ensure-version-control-config)
+  (setf (config-last-commit *version-control-config*) commit)
+  (save-version-control-config))
 
-(defun vc-get-staged-files ()
-  (ensure-vc-config)
-  (config-staged-files *vc-config*))
+(defun version-control-get-staged-files ()
+  (ensure-version-control-config)
+  (config-staged-files *version-control-config*))
 
-(defun vc-set-staged-files (files)
-  (ensure-vc-config)
-  (setf (config-staged-files *vc-config*) files)
-  (save-vc-config))
+(defun version-control-set-staged-files (files)
+  (ensure-version-control-config)
+  (setf (config-staged-files *version-control-config*) files)
+  (save-version-control-config))
 
-(defun vc-get-ignored-files ()
-  (ensure-vc-config)
-  (config-ignored-files *vc-config*))
+(defun version-control-get-ignored-files ()
+  (ensure-version-control-config)
+  (config-ignored-files *version-control-config*))
 
-(defun vc-set-ignored-files (files)
-  (ensure-vc-config)
-  (setf (config-ignored-files *vc-config*) files)
-  (save-vc-config))
+(defun version-control-set-ignored-files (files)
+  (ensure-version-control-config)
+  (setf (config-ignored-files *version-control-config*) files)
+  (save-version-control-config))
 
-(defun vc-get-tracked-files ()
-  (ensure-vc-config)
-  (config-tracked-files *vc-config*))
+(defun version-control-get-tracked-files ()
+  (ensure-version-control-config)
+  (config-tracked-files *version-control-config*))
 
-(defun vc-set-tracked-files (files)
-  (ensure-vc-config)
-  (setf (config-tracked-files *vc-config*) files)
-  (save-vc-config))
+(defun version-control-set-tracked-files (files)
+  (ensure-version-control-config)
+  (setf (config-tracked-files *version-control-config*) files)
+  (save-version-control-config))
 
-(defun vc-get-branch ()
-  (ensure-vc-config)
-  (config-branch *vc-config*))
+(defun version-control-get-branch ()
+  (ensure-version-control-config)
+  (config-branch *version-control-config*))
 
-(defun vc-set-branch (branch)
-  (ensure-vc-config)
-  (setf (config-branch *vc-config*) branch)
-  (save-vc-config))
+(defun version-control-set-branch (branch)
+  (ensure-version-control-config)
+  (setf (config-branch *version-control-config*) branch)
+  (save-version-control-config))
 
-(defun vc-get-ahead-count ()
-  (ensure-vc-config)
-  (config-ahead-count *vc-config*))
+(defun version-control-get-ahead-count ()
+  (ensure-version-control-config)
+  (config-ahead-count *version-control-config*))
 
-(defun vc-set-ahead-count (count)
-  (ensure-vc-config)
-  (setf (config-ahead-count *vc-config*) count)
-  (save-vc-config))
+(defun version-control-set-ahead-count (count)
+  (ensure-version-control-config)
+  (setf (config-ahead-count *version-control-config*) count)
+  (save-version-control-config))
 
-(defun vc-get-behind-count ()
-  (ensure-vc-config)
-  (config-behind-count *vc-config*))
+(defun version-control-get-behind-count ()
+  (ensure-version-control-config)
+  (config-behind-count *version-control-config*))
 
-(defun vc-set-behind-count (count)
-  (ensure-vc-config)
-  (setf (config-behind-count *vc-config*) count)
-  (save-vc-config))
+(defun version-control-set-behind-count (count)
+  (ensure-version-control-config)
+  (setf (config-behind-count *version-control-config*) count)
+  (save-version-control-config))

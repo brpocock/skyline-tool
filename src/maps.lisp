@@ -1,5 +1,7 @@
 (in-package :skyline-tool)
 
+(defvar *region* :ntsc)
+
 (defmacro dovector ((var seq &optional retvar) &body body)
   `(loop for ,var across ,seq do (progn ,@body) finally (return (values ,retvar))))
 
@@ -1523,15 +1525,22 @@ range is 0 - #xffffffff (4,294,967,295)"
   "Map TMX tileset @code{source} path to a ROM bank id for packed tile data.
 Reads from the @code{Tilesets} section of the current Project.*.json config.
 Returns @code{0} if no known prefix matches (FIXME #125)."
-  (let ((tileset-alist (and (boundp '*project.json*)
-                            (assocdr :tilesets *project.json*))))
-    (or (loop for match in (xml-matches "tileset" xml)
-              for source = (or (assocdr "source" (second match) :test #'string-equal) "")
-              for name = (first (last (split-sequence #\/ source)))
-              for key = (and name (intern (string-upcase name) :keyword))
-              when (and key tileset-alist (assoc key tileset-alist))
-                return (cdr (assoc key tileset-alist)))
-        (error "Can't identify tileset used by ~s" (xml-matches "tileset" xml)))))
+  (if *project.json*
+      (let ((tileset-alist (assocdr :*tilesets *project.json*)))
+        (or (loop for match in (xml-matches "tileset" xml)
+                  for source = (or (second (assoc "source" (second match) :test #'string-equal)) "")
+                  for base = (and source (pathname-name source))
+                  for entry = (and base
+                                   (find-if (lambda (el)
+                                              (string-equal base
+                                                            (concatenate 'string
+                                                                         (pascal-case (string (car el)))
+                                                                         "Tiles")))
+                                            tileset-alist))
+                  when entry
+                    return (cdr entry))
+            (error "Can't identify tileset used by ~s" (xml-matches "tileset" xml))))
+      (load-project.json (curry #'tileset-rom-bank xml))))
 
 (defun write-binary-animations-list (animations-list s &key frame-rate)
   #+ () (format *trace-output* "~%WRITE-BINARY-ANIMATIONS-LIST: ~2%~s~2%" animations-list)

@@ -9,14 +9,13 @@
    #:issue-labels #:issue-created #:issue-updated
    #:make-issue #:create-issue #:update-issue #:close-issue #:list-issues
    #:search-issues #:get-issue-by-id
-   #:bugzilla-client #:github-client #:gitlab-client
-   #:with-issue-tracker))
+   #:bugzilla-client #:github-client #:gitlab-client #:redmine-client
+   #:make-github-client #:make-gitlab-client #:make-bugzilla-client #:make-redmine-client
+   #:default-issue-tracker #:with-issue-tracker))
 
 (in-package :skyline-tool.issue-tracking)
 
-;;-----------------------------------------------------------------------------
 ;; Issue Data Model
-;;-----------------------------------------------------------------------------
 (defclass issue ()
   ((id :reader issue-id :initarg :id)
    (title :reader issue-title :initarg :title)
@@ -32,9 +31,7 @@
                  :id id :title title :status status :priority priority
                  :assignee assignee :labels labels :created created :updated updated))
 
-;;-----------------------------------------------------------------------------
 ;; Issue Tracker Backend Protocol
-;;-----------------------------------------------------------------------------
 (defclass issue-tracker-backend ()
   ((name :reader backend-name :initarg :name)
    (url :reader backend-url :initarg :url)))
@@ -57,9 +54,7 @@
 (defgeneric search-issues (backend query)
   (:documentation "Search issues in BACKEND by QUERY string"))
 
-;;-----------------------------------------------------------------------------
 ;; HTTP Client Base Class
-;;-----------------------------------------------------------------------------
 (defclass http-issue-tracker (issue-tracker-backend)
   ((auth-token :initarg :auth-token :accessor auth-token)
    (username :initarg :username :accessor username)
@@ -71,53 +66,50 @@
 
 (defun load-or-prompt-credentials (backend)
   "Load credentials from config or prompt for new ones"
-  (let ((config-path (merge-pathnames ".config/skyline-issue-tracking/" (user-homedir-pathname))))
-    (when (probe-file config-path)
-      (let ((creds (read-config-file config-path)))
-        (setf (auth-token backend) (getf creds :token)
-              (username backend) (getf creds :username))))))
+  (setf (auth-token backend) (get-pref'(:issue-tracker :token))
+        (username backend) (get-pref '(:issue-tracker :username))))
 
-;;-----------------------------------------------------------------------------
-;; Bugzilla Client
-;;-----------------------------------------------------------------------------
-(defclass bugzilla-client (http-issue-tracker)
-  ((api-endpoint :initform "https://bugzilla.example.com/rest.cgi")))
+;; Specific Clients
+;; Specific clients (bugzilla-client, github-client, gitlab-client, redmine-client)
+;; are defined in their respective files under src/issue-tracking/clients/.
 
-(defmethod create-issue ((backend bugzilla-client) issue-data)
-  (let ((request `(("product" . ,(getf issue-data :product))
-                   ("component" . ,(getf issue-data :component))
-                   ("summary" . ,(getf issue-data :title))
-                   ("description" . ,(getf issue-data :description))
-                   ("priority" . ,(getf issue-data :priority)))))
-    (post-json (backend-url backend) request)))
+;; Factory Functions
+(defun make-github-client (&key repo-owner repo-name auth-token)
+  "Create a GitHub issue tracker client."
+  (make-instance 'github-client
+                 :name "GitHub"
+                 :url (format nil "https://github.com/~a/~a" repo-owner repo-name)
+                 :repo-owner repo-owner
+                 :repo-name repo-name
+                 :auth-token auth-token))
 
-;;-----------------------------------------------------------------------------
-;; GitHub Client
-;;-----------------------------------------------------------------------------
-(defclass github-client (http-issue-tracker)
-  ((api-endpoint :initform "https://api.github.com")))
+(defun make-gitlab-client (&key (api-endpoint "https://gitlab.com/api/v4")
+                           (project-id "Phantasia")
+                           (private-token ""))
+  "Create a GitLab issue tracker client with configurable endpoint and project"
+  (make-instance 'gitlab-client
+                 :name "GitLab"
+                 :url api-endpoint
+                 :api-endpoint api-endpoint
+                 :project-id project-id
+                 :private-token private-token))
 
-(defmethod create-issue ((backend github-client) issue-data)
-  (let ((request `((:title . ,(getf issue-data :title))
-                   (:body . ,(getf issue-data :description))
-                   (:labels . ,(getf issue-data :labels)))))
-    (gh-post (backend-url backend) request)))
+(defun make-bugzilla-client (&key login password api-endpoint)
+  "Create a Bugzilla issue tracker client."
+  (make-instance 'bugzilla-client
+                 :name "Bugzilla"
+                 :url api-endpoint
+                 :login login
+                 :password password))
 
-;;-----------------------------------------------------------------------------
-;; GitLab Client
-;;-----------------------------------------------------------------------------
-(defclass gitlab-client (http-issue-tracker)
-  ((api-endpoint :initform "https://gitlab.com/api/v4")))
+(defun make-redmine-client (&key api-endpoint auth-token)
+  "Create a Redmine issue tracker client."
+  (make-instance 'redmine-client
+                 :name "Redmine"
+                 :url api-endpoint
+                 :auth-token auth-token))
 
-(defmethod create-issue ((backend gitlab-client) issue-data)
-  (let ((request `((:title . ,(getf issue-data :title))
-                   (:description . ,(getf issue-data :description))
-                   (:labels . ,(getf issue-data :labels)))))
-    (gl-post (backend-url backend) request)))
-
-;;-----------------------------------------------------------------------------
 ;; Convenience Macros
-;;-----------------------------------------------------------------------------
 (defmacro with-issue-tracker ((var backend) &body body)
   "Execute BODY with VAR bound to issue tracker BACKEND"
   `(let ((,var ,backend))

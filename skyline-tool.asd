@@ -72,7 +72,6 @@
                                                                  "version-control"))
                  (:file "cbm-tooling" :depends-on ("package"))
                  (:file "atarivox" :depends-on ("package" "runner"))
-                 (:file "boat-inspector" :depends-on ("package" "game-resource"))
                  (:file "clim-simple-echo" :depends-on ("package"))
                  (:file "decode-animation-buffers" :depends-on ("package"))
                  (:file "decode-decal" :depends-on ("peek" "decode-object"))
@@ -85,17 +84,17 @@
                  (:file "forth" :depends-on ("package" "fountain" "interface"))
                  (:file "fountain" :depends-on ("package" "maps"))
                  (:module "gui"
-                  :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils" "game-resource")
-                   :components ((:file "gui-thread")
-                                (:file "gui-threads")
-                                (:file "gui-style")
-                                (:file "gui-inspector")
-                                (:file "gui-presentations")
-                                (:file "gui-dialogs")
-                                (:file "gui-atari-vox-dictionary")
+                  :depends-on ("package" "clim-simple-echo" "ps-utils" "printer-utils"
+                                         "eventbus" "game-resource")
+                  :components ((:file "gui-thread")
+                               (:file "gui-threads")
+                               (:file "gui-style")
+                               (:file "gui-inspector")
+                               (:file "gui-presentations")
+                               (:file "gui-dialogs")
+                               (:file "gui-atari-vox-dictionary")
                                (:file "gui-basic-routine")
                                (:file "gui-blob")
-                               (:file "gui-blob-inspector")
                                (:file "gui-boat")
                                (:file "gui-character")
                                (:file "gui-class")
@@ -109,20 +108,18 @@
                                (:file "gui-key")
                                (:file "gui-magic-desk-dictionary")
                                (:file "gui-map")
-                               (:file "gui-map-inspector")
                                (:file "gui-object-prototype")
                                (:file "gui-pascal-routine")
                                (:file "gui-phrasebook")
                                (:file "gui-preferences")
                                (:file "gui-project")
                                (:file "gui-script")
-                               (:file "gui-script-inspector")
                                (:file "gui-song")
-                               (:file "gui-song-inspector")
                                (:file "gui-sprite-sheet")
                                (:file "gui-terminal-echo")
                                (:file "gui-tileset")
-                               (:file "help-about-dialog")))
+                               (:file "help-about-dialog")
+                               (:file "keyboard-shortcuts")))
                  (:module "graphics"
                   :depends-on ("package" "prototypes" "misc" "utils")
                   :components (
@@ -162,16 +159,15 @@
                                                            "cbm-tooling" "launcher" "thread-pool"
                                                            "ps-utils"))
                  (:file "preferences" :depends-on ("package"))
-                 (:file "preferences-inspector" :depends-on ("package"))
                  (:file "game-resource" :depends-on ("package" "version-control"))
                  (:file "local-locale" :depends-on ("package"))
                  (:file "context-menu" :depends-on ("package"))
-                  (:file "p2p-sharing" :depends-on ("package"))
-                  (:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
-                                                                "printer-utils" "clim-simple-echo"
-                                                                "game-resource" "thread-pool"
-                                                                "context-menu" "boat-inspector" "p2p-sharing"
-                                                                "gui"))
+                 (:file "p2p-sharing" :depends-on ("package"))
+                 (:file "all-resources" :depends-on ("package" "asset-allocator" "ps-utils"
+                                                               "printer-utils" "clim-simple-echo"
+                                                               "game-resource" "thread-pool"
+                                                               "context-menu"  "p2p-sharing"
+                                                               "gui"))
                  (:file "launcher" :depends-on ("package" "preferences" "all-resources"
                                                           "clim-simple-echo" "ps-utils"
                                                           "printer-utils" "logging"))

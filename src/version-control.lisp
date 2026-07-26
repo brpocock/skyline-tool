@@ -1,45 +1,45 @@
 (in-package :skyline-tool)
 
-(defun vc-find-root (file-path)
+(defun version-control-find-root (file-path)
   "Find the closest version control root for FILE-PATH."
   (let ((start-dir (pathname-directory (truename (etypecase file-path
-                                                  (string (parse-namestring file-path))
-                                                  (pathname file-path))))))
+                                                   (string (parse-namestring file-path))
+                                                   (pathname file-path))))))
     (loop for dir = start-dir then (uiop:pathname-directory-pathname dir)
           while dir
-          thereis (loop for vc-dir in '(".git" ".hg" ".svn" ".bzr")
-                        thereis (probe-file (merge-pathnames vc-dir dir))))))
+          thereis (loop for version-control-dir in '(".git" ".hg" ".svn" ".bzr")
+                        thereis (probe-file (merge-pathnames version-control-dir dir))))))
 
-(defun vc-backend (vc-dir)
+(defun version-control-backend (version-control-dir)
   "Determine the VC backend from the VC directory."
   (cond
-    ((probe-file (merge-pathnames ".git/" vc-dir)) :git)
-    ((probe-file (merge-pathnames ".hg/" vc-dir)) :hg)
-    ((probe-file (merge-pathnames ".svn/" vc-dir)) :svn)
-    ((probe-file (merge-pathnames ".bzr/" vc-dir)) :bzr)
+    ((probe-file (merge-pathnames ".git/" version-control-dir)) :git)
+    ((probe-file (merge-pathnames ".hg/" version-control-dir)) :hg)
+    ((probe-file (merge-pathnames ".svn/" version-control-dir)) :svn)
+    ((probe-file (merge-pathnames ".bzr/" version-control-dir)) :bzr)
     (t :unknown)))
 
-(defun vc-file-status (file-path)
+(defun version-control-file-status (file-path)
   "Return version control status as keyword."
-  (let ((vc-dir (vc-find-root file-path)))
-    (if vc-dir
-        (ecase (vc-backend vc-dir)
-          (:git (vc-git-file-status file-path vc-dir))
-          (:hg (vc-hg-file-status file-path vc-dir))
-          (:svn (vc-svn-file-status file-path vc-dir))
-          (:bzr (vc-bzr-file-status file-path vc-dir))
-          (:unknown)))
+  (let ((version-control-dir (version-control-find-root file-path)))
+    (if version-control-dir
+        (ecase (version-control-backend version-control-dir)
+          (:git (version-control-git-file-status file-path version-control-dir))
+          (:hg (version-control-hg-file-status file-path version-control-dir))
+          (:svn (version-control-svn-file-status file-path version-control-dir))
+          (:bzr (version-control-bzr-file-status file-path version-control-dir))
+          (:unknown))
       :unknown)))
 
-(defun vc-git-file-status (file-path vc-dir)
+(defun version-control-git-file-status (file-path version-control-dir)
   "Get Git status for FILE-PATH relative to VC-DIR."
   (let* ((file-truename (truename file-path))
-         (vc-truename (truename vc-dir))
-         (relative-path (enough-namestring file-truename vc-truename))
+         (version-control-truename (truename version-control-dir))
+         (relative-path (enough-namestring file-truename version-control-truename))
          (output (uiop:run-program (list "git" "status" "--porcelain" "--" relative-path)
-                                 :output :string
-                                 :ignore-error-status t
-                                 :directory-string vc-dir)))
+                                   :output :string
+                                   :ignore-error-status t
+                                   :directory-string version-control-dir)))
     (cond
       ((string= output "") :unmodified)
       ((search "??" output) :untracked)
@@ -49,19 +49,19 @@
       ((search "!!" output) :ignored)
       (t :modified))))
 
-(defun vc-hg-file-status (file-path vc-dir)
-  (declare (ignore file-path vc-dir))
+(defun version-control-hg-file-status (file-path version-control-dir)
+  (declare (ignore file-path version-control-dir))
   :unknown)
 
-(defun vc-svn-file-status (file-path vc-dir)
-  (declare (ignore file-path vc-dir))
+(defun version-control-svn-file-status (file-path version-control-dir)
+  (declare (ignore file-path version-control-dir))
   :unknown)
 
-(defun vc-bzr-file-status (file-path vc-dir)
-  (declare (ignore file-path vc-dir))
+(defun version-control-bzr-file-status (file-path version-control-dir)
+  (declare (ignore file-path version-control-dir))
   :unknown)
 
-(defun present-vc-status-icon (status)
+(defun present-version-control-status-icon (status)
   "Return string icon for VC status."
   (ecase status
     (:unmodified "✓")

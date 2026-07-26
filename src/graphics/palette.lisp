@@ -11,11 +11,6 @@
                       collect (list (* r #x10) (* g #x10) (* b #x10)))))
   :test 'equalp)
 
-(define-constant +lynx-color-names+
-    (loop for i from 0 below 256
-          collect (format nil "lynx-~3,'0d" i))
-  :test 'equalp)
-
 (define-constant +c64-names+
     '(black white red cyan
       purple green blue yellow
@@ -447,24 +442,18 @@ canonical VDP colors.")
   :documentation "TMS9918A Game Gear palette - same as TMS9918 base palette")
 
 (define-constant +prosystem-ntsc-color-names+
-  '(black dark-gray gray light-gray
-    dark-red red light-red
-    dark-green green light-green
-    dark-blue blue light-blue
-    dark-yellow yellow light-yellow
-    dark-magenta magenta light-magenta
-    white)
-  :test 'equalp)
+    '(GREY YELLOW BROWN ORANGE
+      RED MAGENTA PURPLE INDIGO
+      BLUE TURQUOISE CYAN TEAL
+      SEAFOAM GREEN SPRING-GREEN GOLD)
+  :test #'equalp)
 
 (define-constant +prosystem-pal-color-names+
-  '(black dark-gray gray light-gray
-    dark-red red light-red
-    dark-green green light-green
-    dark-blue blue light-blue
-    dark-yellow yellow light-yellow
-    dark-magenta magenta light-magenta
-    white)
-  :test 'equalp)
+    '(GREY SPINACH GOLD ORANGE
+      RED MAGENTA VIOLET PURPLE
+      INDIGO BLUE STONEWASH TURQUOISE
+      GREEN SEAFOAM SPRING-GREEN ALGAE)
+  :test #'equalp)
 
 (define-constant +unicode->ascii-ish+ nil)
 
@@ -487,11 +476,7 @@ New list with each element duplicated
 (assert (equalp '(a a b b c c) (double-up '(a b c))))
 
 (defun machine-palette (&optional (machine *machine*))
-  (let* ((region (or (and (boundp '*region*) *region*)
-                     (cerror "Use :ntsc as the region."
-                             "Region not set. Provide a value for *region* (:ntsc, :pal, :secam, :internal)."
-                             :ntsc))))
-    (palette-for-machine-and-region machine region)))
+  (palette-for-machine-and-region machine *region*))
 
 (defgeneric palette-for-machine-and-region (machine region)
   (:documentation

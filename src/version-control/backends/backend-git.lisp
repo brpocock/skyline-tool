@@ -1,245 +1,167 @@
-;;; src/version-control/backends/git.lisp
+;;; src/version-control/backends/backend-git.lisp
 ;;; Git backend implementation for Skyline-Tool version control
+;;; Pure procedural implementation - no classes
 
 (in-package :skyline-tool.version-control)
 
-;;
-;; Git Backend Classes
-;;
+;; Git backend protocol implementations using EQL dispatch
 
-(defclass git-backend (vc-backend)
-  ((repo-path :initarg :repo-path :accessor repo-path)
-   (branch :initform "main" :accessor git-branch)))
+(defmethod version-control-backend ((backend (eql :git)) &key)
+  "Returns the backend identifier for Git"
+  :git)
 
-(defun make-git-backend (&optional (path (uiop:getcwd)))
-  "Create a Git backend instance for PATH"
-  (make-instance 'git-backend :repo-path path))
+(defmethod version-control-name ((backend (eql :git)))
+  "Return the name of the version control system"
+  "git")
 
-;;
-;; Git Backend Protocol Implementations
-;;
-
-(defmethod vc-name ((backend git-backend)) "git")
-
-(defmethod vc-version ((backend git-backend))
-  (or (ignore-errors 
-       (uiop:run-program (list "git" "--version") :output :string)) 
+(defmethod version-control-version ((backend (eql :git)))
+  "Return the version string of git"
+  (or (ignore-errors
+        (uiop:run-program (list "git" "--version") :output :string))
       "unknown"))
 
-(defmethod vc-available-p ((backend git-backend))
-  (ignore-errors 
-   (zerop (uiop:run-program (list "git" "--version") :output nil))))
+(defmethod version-control-available-p ((backend (eql :git)))
+  "Check if git is available on the system"
+  (ignore-errors
+    (zerop (uiop:run-program (list "git" "--version") :output nil))))
 
-(defmethod vc-init ((backend git-backend) path &key)
+(defmethod version-control-init ((backend (eql :git)) path &key)
+  "Initialize a new git repository at PATH"
   (when (probe-file path)
     (uiop:run-program (list "git" "init" path)))
-  (make-instance 'git-backend :repo-path path))
+  (make-git-backend path))
 
-(defmethod vc-clone ((backend git-backend) url path &key)
+(defmethod version-control-clone ((backend (eql :git)) url path &key)
+  "Clone repository from URL to PATH"
   (uiop:run-program (list "git" "clone" url path))
-  (make-instance 'git-backend :repo-path path))
+  (make-git-backend path))
 
-(defmethod vc-status ((backend git-backend) path &key)
-  (let ((output (ignore-errors 
-                 (uiop:run-program (append (list "git" "-C" path "status" "--porcelain")
-                                           (when (probe-file (merge-pathnames ".git/index" path))
-                                             (list "--untracked-files=no")))
-                                   :output :string))))
-    (parse-git-status output)))
+(defmethod version-control-status ((backend (eql :git)) path &key)
+  "Return status of working tree as a plist"
+  (let ((output (ignore-errors
+                  (uiop:run-program (list "git" "-C" path "status" "--porcelain")
+                                    :output :string))))
+    (when output (parse-git-status output))))
 
 (defun parse-git-status (output)
   "Parse git status --porcelain output into status plist"
   (let ((staged '()) (modified '()) (untracked '()))
     (dolist (line (split-sequence #\newline output))
       (when (plusp (length line))
-        (let ((code (subseq line 0 2)))
+        (let ((code (string-trim skyline-tool::+whitespace+ (subseq line 0 2))))
           (case (intern (string-upcase code) :keyword)
             (:A (push :staged staged))
             (:M (push :modified modified))
-            (:?? (push :untracked untracked))))))
-    (append (when staged '(:staged . t))
-            (when modified '(:modified . t))
-            (when untracked '(:untracked . t)))))
+            (:?? (push :untracked untracked)))))
+      (append (when staged '(:staged . t))
+              (when modified '(:modified . t))
+              (when untracked '(:untracked . t))))))
 
-(defmethod vc-add ((backend git-backend) paths &key)
-  (uiop:run-program (append (list "git" "-C" (repo-path backend) "add") paths)))
+(defmethod version-control-add ((backend (eql :git)) paths &key)
+  "Stage PATHS for commit"
+  (uiop:run-program (append (list "git" "add") paths)))
 
-
-;; Enhanced VC commit implementation using secure temporary file and emacsclient
-(defmethod vc-commit ((backend git-backend) message &key amend signoff author)
-  ;; Handle case where no message is provided (trigger interactive editor)
-  (cond
-    (message
-     ;; Direct commit with provided message
-     (let ((cmd (list "git" "-C" (repo-path backend) "commit" "-m" message)))
-       (when amend (push "--amend" cmd))
-       (when signoff (push "--signoff" cmd))
-       (when author (append cmd (list "--author" author)))
-       (uiop:run-program cmd)))
-
-    ;; No message provided: use emacsclient with secure temporary file
-    (t
-     (cl-fad:with-open-temporary-file (temp-file)
-       (wait-for-emacs temp-file)
-       
-       ;; Launch emacsclient editor on temp file
-       (lambda ()
-         (format t "Launching emacsclient to compose commit message...~%")
-         (uiop:run-program "emacsclient" "-t"
-                      (namestring (truename temp-file)))
-         
-         ;; Wait for file modification to complete
-         (let ((initial-size 0))
-           (loop while (< (file-size temp-file) (+ initial-size 1000))
-                 do (sleep 0.5)
-                 do (setf initial-size (file-size temp-file))
-                 when (>= initial-size 1000)
-                   do (return)
-                 finally (when (>= initial-size 3000) (return)))) ; arbitrary threshold
-         
-         ;; Read final commit message
-         (let ((final-message (read-file-into-string temp-file)))
-           (when (emptyp final-message)
-             (error "Commit message composition cancelled"))
-           
-           ;; Perform actual commit with the composed message
-           (let ((commit-cmd (list "git" "-C" (repo-path backend) "commit" "-m" final-message)))
-             (when amend (push "--amend" commit-cmd))
-             (when signoff (push "--signoff" commit-cmd))
-             (when author (append commit-cmd (list "--author" author)))
-             (uiop:run-program commit-cmd))))))))
-
-(defmethod vc-reset ((backend git-backend) paths &key soft mixed hard)
-  (let ((cmd (list "git" "-C" (repo-path backend) "checkout" "--")))
-    (when hard (push "--hard" cmd))
-    (uiop:run-program (append cmd paths))))
-
-(defmethod vc-checkout ((backend git-backend) target &key create-branch)
-  (let ((cmd (list "git" "-C" (repo-path backend) "checkout")))
-    (when create-branch (push "-b" cmd))
-    (uiop:run-program (append cmd (list target)))))
-
-(defmethod vc-push ((backend git-backend) remote branch &key force-with-lease)
-  (let ((cmd (list "git" "-C" (repo-path backend) "push" remote branch)))
-    (when force-with-lease (push "--force-with-lease" cmd))
-    (uiop:run-program cmd)))
-
-(defmethod vc-pull ((backend git-backend) remote branch &key rebase)
-  (let ((cmd (list "git" "-C" (repo-path backend) "pull" remote branch)))
-    (when rebase (push "--rebase" cmd))
-    (uiop:run-program cmd)))
-
-(defmethod vc-fetch ((backend git-backend) &key remote all tags prune)
-  (let ((cmd (list "git" "-C" (repo-path backend) "fetch")))
-    (when all (push "--all" cmd))
-    (when remote (push remote cmd))
-    (when prune (push "--prune" cmd))
-    (uiop:run-program cmd)))
-
-(defmethod vc-log ((backend git-backend) path &key limit since until author)
-  (let ((cmd (list "git" "-C" (or path (repo-path backend)) "log" "--oneline")))
-    (when limit (append cmd (list "-n" (format nil "~a" limit))))
-    (when since (append cmd (list "--since" since)))
-    (when until (append cmd (list "--until" until)))
+(defmethod version-control-commit ((backend (eql :git)) message &key amend signoff author)
+  "Commit staged changes with MESSAGE"
+  (let ((cmd (list "git" "commit" "-m" message)))
+    (when amend (push "--amend" cmd))
+    (when signoff (push "--signoff" cmd))
     (when author (append cmd (list "--author" author)))
-    (let ((output (ignore-errors (uiop:run-program cmd :output :string))))
-      (split-sequence #\newline output))))
+    (uiop:run-program (nreverse cmd))))
 
-(defmethod vc-diff ((backend git-backend) path &key cached name-only)
-  (let ((cmd (list "git" "-C" (repo-path backend) "diff")))
+(defmethod version-control-reset ((backend (eql :git)) paths &key soft mixed hard)
+  "Reset PATHS in index/working tree"
+  (let ((cmd (list "git" "reset")))
+    (when soft (push "--soft" cmd))
+    (when mixed (push "--mixed" cmd))
+    (when hard (push "--hard" cmd))
+    (uiop:run-program (append (nreverse cmd) paths))))
+
+(defmethod version-control-checkout ((backend (eql :git)) target &key create-branch)
+  "Checkout TARGET branch or commit"
+  (let ((cmd (list "git" "checkout")))
+    (when create-branch (push "-b" cmd))
+    (uiop:run-program (append (nreverse cmd) (list target)))))
+
+(defmethod version-control-push ((backend (eql :git)) remote branch &key force-with-lease)
+  "Push BRANCH to REMOTE"
+  (let ((cmd (list "git" "push" remote branch)))
+    (when force-with-lease (append cmd (list "--force-with-lease")))
+    (uiop:run-program cmd)))
+
+(defmethod version-control-pull ((backend (eql :git)) remote branch &key rebase)
+  "Pull BRANCH from REMOTE with optional REBASE"
+  (let ((cmd (list "git" "pull" remote branch)))
+    (when rebase (append cmd (list "--rebase")))
+    (uiop:run-program cmd)))
+
+(defmethod version-control-fetch ((backend (eql :git)) &key remote all tags prune)
+  "Fetch from REMOTE(s)"
+  (let ((cmd (list "git" "fetch")))
+    (when all (append cmd (list "--all")))
+    (when remote (append cmd (list remote)))
+    (when tags (append cmd (list "--tags")))
+    (when prune (append cmd (list "--prune")))
+    (uiop:run-program (nreverse cmd))))
+
+(defmethod version-control-log ((backend (eql :git)) path &key limit since until author)
+  "Return commit log for PATH (or project if nil)"
+  (let ((base-path (or path (getf (version-control-config backend) :repo-path))))
+    (let ((cmd (list "git" "-C" base-path "log" "--oneline")))
+      (when limit (append cmd (list "-n" (write-to-string limit))))
+      (when since (append cmd (list "--since" (write-to-string since))))
+      (when until (append cmd (list "--until" (write-to-string until))))
+      (when author (append cmd (list "--author" (write-to-string author))))
+      (let ((output (ignore-errors (uiop:run-program cmd :output :string))))
+        (when output (split-sequence #\newline output))))))
+
+(defmethod version-control-diff ((backend (eql :git)) path &key cached name-only)
+  "Return diff for PATH or staged if CACHED"
+  (let ((cmd (list "git" "diff")))
     (when cached (push "--cached" cmd))
     (when name-only (push "--name-only" cmd))
-    (ignore-errors (uiop:run-program cmd :output :string))))
+    (when path (append cmd (list path)))
+    (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
 
-(defmethod vc-difftool ((backend git-backend) path &key base target (tool "meld"))
-  (let ((cmd (list "git" "-C" (repo-path backend) "difftool")))
-    (when base (push base cmd))
-    (when target (push target cmd))
-    (when (string= tool "meld") (push "--tool" cmd))
-    (uiop:run-program (append cmd (list path)) :output nil :ignore-errors t)))
+(defmethod version-control-difftool ((backend (eql :git)) path &key base target (tool "meld"))
+  "Launch external diff tool for PATH or staged if BASE/TARGET"
+  (let ((cmd (list "git" "difftool" "--tool" tool)))
+    (when base (append cmd (list base)))
+    (when target (append cmd (list target)))
+    (when path (append cmd (list path)))
+    (uiop:run-program (nreverse cmd) :output nil :ignore-errors t)))
 
-(defmethod vc-branch ((backend git-backend) &key list all create delete rename move)
-  (let ((cmd (list "git" "-C" (repo-path backend) "branch")))
+(defmethod version-control-branch ((backend (eql :git)) &key list all create delete rename move)
+  "Branch operations: list, create, delete, rename, or move"
+  (let ((cmd (list "git" "branch")))
     (cond
       (list (push (if all "-a" "--list") cmd))
-      (create (push create cmd))
-      (delete (push "-d" cmd) (push delete cmd))
-      (rename (push "-m" cmd) (push rename cmd) (push move cmd))
-      (move (push "-m" cmd) (push move cmd)))
-    (let ((output (ignore-errors (uiop:run-program cmd :output :string))))
+      (create (append cmd (list create)))
+      (delete (append cmd (list "-d" delete)))
+      (rename (append cmd (list "-m" rename move)))
+      (move (append cmd (list "-m" move))))
+    (let ((output (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
       (when output
-        (mapcar (curry #'string-trim +whitespace+)
-                (split-sequence #\newline output :remove-empty-subseqs t))))))
+        (mapcar 'string-trim (split-sequence #\newline output :remove-empty-subseqs t))))))
 
-(defmethod vc-checkout ((backend git-backend) target &key create-branch)
-  (let ((cmd (list "git" "-C" (repo-path backend) "checkout")))
-    (when create-branch (push "-b" cmd))
-    (push target cmd)
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-merge ((backend git-backend) source &key no-ff fast-forward)
-  (let ((cmd (list "git" "-C" (repo-path backend) "merge")))
+(defmethod version-control-merge ((backend (eql :git)) source &key no-ff fast-forward)
+  "Merge SOURCE into current branch"
+  (let ((cmd (list "git" "merge")))
     (when no-ff (push "--no-ff" cmd))
     (when (not fast-forward) (push "--ff-only" cmd))
-    (push source cmd)
-    (uiop:run-program cmd :output nil :ignore-errors t)))
+    (append cmd (list source))
+    (uiop:run-program (nreverse cmd))))
 
-(defmethod vc-rebase ((backend git-backend) target &key interactive)
-  (let ((cmd (list "git" "-C" (repo-path backend) "rebase")))
+(defmethod version-control-rebase ((backend (eql :git)) target &key interactive)
+  "Rebase current branch onto TARGET"
+  (let ((cmd (list "git" "rebase")))
     (when interactive (push "-i" cmd))
-    (push target cmd)
-    (uiop:run-program cmd :output nil :ignore-errors t)))
+    (append cmd (list target))
+    (uiop:run-program (nreverse cmd))))
 
-(defmethod vc-push ((backend git-backend) remote branch &key force-with-lease)
-  (let ((cmd (list "git" "-C" (repo-path backend) "push")))
-    (when force-with-lease (push "--force-with-lease" cmd))
-    (push remote cmd)
-    (when branch (push branch cmd))
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-pull ((backend git-backend) remote branch &key rebase)
-  (let ((cmd (list "git" "-C" (repo-path backend) "pull")))
-    (when rebase (push "--rebase" cmd))
-    (push remote cmd)
-    (when branch (push branch cmd))
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-fetch ((backend git-backend) &key remote all tags prune)
-  (let ((cmd (list "git" "-C" (repo-path backend) "fetch")))
-    (when remote (push remote cmd))
-    (when all (push "--all" cmd))
-    (when tags (push "--tags" cmd))
-    (when prune (push "--prune" cmd))
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-remote-add ((backend git-backend) name url)
-  (uiop:run-program (list "git" "-C" (repo-path backend) "remote" "add" name url)
-                    :output nil :ignore-errors t))
-
-(defmethod vc-remote-list ((backend git-backend))
-  (let ((output (ignore-errors (uiop:run-program (list "git" "-C" (repo-path backend) "remote")
-                                                 :output :string))))
-    (when output
-      (split-sequence #\newline output :remove-empty-subseqs t))))
-
-(defmethod vc-submodule-add ((backend git-backend) url path &key branch)
-  (let ((cmd (list "git" "-C" (repo-path backend) "submodule" "add" url path)))
-    (when branch (push "-b" cmd) (push branch cmd))
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-submodule-update ((backend git-backend) &key init recursive remote)
-  (let ((cmd (list "git" "-C" (repo-path backend) "submodule" "update")))
-    (when init (push "--init" cmd))
-    (when recursive (push "--recursive" cmd))
-    (when remote (push "--remote" cmd))
-    (uiop:run-program cmd :output nil :ignore-errors t)))
-
-(defmethod vc-submodule-status ((backend git-backend))
-  (ignore-errors (uiop:run-program (list "git" "-C" (repo-path backend) "submodule" "status")
-                                   :output :string)))
-
-(defmethod vc-stash ((backend git-backend) action &rest args)
-  (let ((cmd (list "git" "-C" (repo-path backend) "stash")))
+(defmethod version-control-stash ((backend (eql :git)) action &rest args)
+  "Manage stashes: push/pop/list/drop"
+  (let ((cmd (list "git" "stash")))
     (ecase action
       (:push (push "push" cmd))
       (:pop (push "pop" cmd))
@@ -249,36 +171,73 @@
     (append cmd args)
     (uiop:run-program cmd :output :string :ignore-errors t)))
 
-(defmethod vc-tag ((backend git-backend) &key list create delete annotate)
-  (let ((cmd (list "git" "-C" (repo-path backend) "tag")))
+(defmethod version-control-tag ((backend (eql :git)) &key list create delete annotate)
+  "Manage tags: list/create/delete/annotate"
+  (let ((cmd (list "git" "tag")))
     (cond
       (list (push "-l" cmd))
-      (create (push create cmd))
-      (delete (push "-d" cmd) (push delete cmd))
-      (annotate (push "-a" cmd) (push annotate cmd)))
-    (uiop:run-program cmd :output :string :ignore-errors t)))
+      (create (append cmd (list create))))
+    (uiop:run-program (nreverse cmd) :output :string :ignore-errors t)))
 
-(defmethod vc-config-get ((backend git-backend) key &key global local)
-  (let ((cmd (list "git" "-C" (repo-path backend) "config")))
+(defmethod version-control-config-get ((backend (eql :git)) key &key global local)
+  "Get config KEY value (global or local)"
+  (let ((cmd (list "git" "config")))
     (when global (push "--global" cmd))
     (when local (push "--local" cmd))
     (push key cmd)
-    (ignore-errors (uiop:run-program cmd :output :string))))
+    (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
 
-(defmethod vc-config-set ((backend git-backend) key value &key global local)
-  (let ((cmd (list "git" "-C" (repo-path backend) "config")))
+(defmethod version-control-config-set ((backend (eql :git)) key value &key global local)
+  "Set config KEY to VALUE (global or local)"
+  (let ((cmd (list "git" "config")))
     (when global (push "--global" cmd))
     (when local (push "--local" cmd))
     (push key cmd)
     (push value cmd)
-    (uiop:run-program cmd :output nil :ignore-errors t)))
+    (uiop:run-program (nreverse cmd) :output nil :ignore-errors t)))
 
-(defmethod vc-user-name ((backend git-backend) &key global)
-  (vc-config-get backend "user.name" :global global))
+(defmethod version-control-user-name ((backend (eql :git)) &key global)
+  "Get user name from config"
+  (version-control-config-get backend "user.name" :global global))
 
-(defmethod vc-user-email ((backend git-backend) &key global)
-  (vc-config-get backend "user.email" :global global))
+(defmethod version-control-user-email ((backend (eql :git)) &key global)
+  "Get user email from config"
+  (version-control-config-get backend "user.email" :global global))
 
-(defmethod vc-set-user ((backend git-backend) name email &key global)
-  (vc-config-set backend "user.name" name :global global)
-  (vc-config-set backend "user.email" email :global global))
+(defmethod version-control-set-user ((backend (eql :git)) name email &key global)
+  "Set user name and email in config"
+  (version-control-config-set backend "user.name" name :global global)
+  (version-control-config-set backend "user.email" email :global global))
+
+(defmethod version-control-remote-add ((backend (eql :git)) name url)
+  "Add remote named NAME with URL"
+  (uiop:run-program (list "git" "remote" "add" name url)))
+
+(defmethod version-control-remote-list ((backend (eql :git)))
+  "List configured remotes"
+  (let ((output (ignore-errors (uiop:run-program (list "git" "remote") :output :string))))
+    (when output
+      (split-sequence #\newline output :remove-empty-subseqs t))))
+
+(defmethod version-control-submodule-add ((backend (eql :git)) url path &key branch)
+  "Add submodule from URL at PATH with optional BRANCH"
+  (let ((cmd (list "git" "submodule" "add" url path)))
+    (when branch (append cmd (list "-b" branch)))
+    (uiop:run-program (nreverse cmd))))
+
+(defmethod version-control-submodule-update ((backend (eql :git)) &key init recursive remote)
+  "Update submodules with options"
+  (let ((cmd (list "git" "submodule" "update")))
+    (when init (push "--init" cmd))
+    (when recursive (push "--recursive" cmd))
+    (when remote (push "--remote" cmd))
+    (uiop:run-program (nreverse cmd))))
+
+(defmethod version-control-submodule-status ((backend (eql :git)))
+  "Return submodule status"
+  (ignore-errors (uiop:run-program (list "git" "submodule" "status") :output :string)))
+
+(defun make-git-backend (&optional (path (uiop:getcwd)))
+  "Create a Git backend instance for PATH"
+  (declare (ignore path))
+  'git-backend)

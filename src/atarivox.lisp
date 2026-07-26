@@ -145,33 +145,20 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
        (when byte
          (write-byte byte *atarivox-port*)
          (sleep 1/50)))
-     (interactive-wait "~& (AtariVox: Next)…"))
-    (:intellivoice
-     ;; IntelliVoice speech synthesis is handled by the jzIntv emulator
-     ;; We prepare the phoneme data here for the Forth interpreter to use
-     (let ((phonemes (convert-for-speech phrase :intellivoice)))
-       (format t "~& (IntelliVoice phonemes prepared for '~a': ~{~a~^ ~})~%" phrase phonemes)
-       ;; Return phoneme data for Forth bytecode generation
-       phonemes))))
+     (interactive-wait "~& (AtariVox: Next)…"))))
 
 (defun current-speech-system ()
   "Determine the appropriate speech system based on the current machine."
   (case *machine*
     (2609 :intellivoice)  ; Intellivision with IntelliVoice (CP1610)
-    (2600 :atarivox)      ; Atari 2600 with AtariVox
-    (7800 :atarivox)))    ; Atari 7800 with AtariVox
+    (64 :magic-desk)
+    ((2600 7800 3000) :atarivox)))    ; AtariVox/VecVox
 
 (defun atarivox-speak (phrase)
   (speech-speak phrase :atarivox))
 
 (defun intellivoice-speak (phrase)
-  "Generate IntelliVoice phoneme data for emulator synthesis.
-   Since there's no Linux hardware interface for IntelliVoice,
-   this prepares phoneme data that jzIntv can synthesize."
-  (let ((phonemes (convert-for-speech phrase :intellivoice)))
-    (format t "~&IntelliVoice phonemes for '~a': ~{~a~^ ~}~%" phrase phonemes)
-    ;; Return the phoneme data for use by the Forth interpreter
-    phonemes))
+  (error "unimplemented"))
 
 (defun convert-for-speech (string speech-system)
   "Convert STRING into a list of tokens for the specified speech system."
@@ -216,14 +203,6 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                                      ;; Fallback: try to pronounce unknown words using basic rules
                                      (intellivoice-basic-pronunciation word))))))))
       bytes)))
-
-(defun intellivoice-basic-pronunciation (word)
-  "Fallback phoneme sequence for unknown IntelliVoice WORD.
-
-Returns a conservative pause token so script compilation succeeds even when
-the dictionary lacks an entry."
-  (declare (ignore word))
-  (list "PA1"))
 
 (defvar *intellivoice-dictionary* nil)
 

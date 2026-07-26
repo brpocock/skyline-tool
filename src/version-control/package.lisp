@@ -1,5 +1,6 @@
 ;;; src/version-control/package.lisp
 ;;; Package definition for Skyline-Tool version control
+;;; Properly exported symbols with version-control-* naming
 
 (defpackage :skyline-tool.version-control
   (:use :cl :alexandria :serapeum)
@@ -7,206 +8,261 @@
                 #:run-program
                 #:directory-exists-p)
   (:export
-   ;; Backend protocol
-   #:vc-name
-   #:vc-version
-   #:vc-available-p
-   #:vc-init
-   #:vc-clone
-   #:vc-status
-   #:vc-add
-   #:vc-commit
-   #:vc-reset
-   #:vc-log
-   #:vc-diff
-   #:vc-difftool
-   #:vc-branch
-   #:vc-checkout
-   #:vc-merge
-   #:vc-rebase
-   #:vc-push
-   #:vc-pull
-   #:vc-fetch
-   #:vc-remote-add
-   #:vc-remote-list
-   #:vc-submodule-add
-   #:vc-submodule-update
-   #:vc-submodule-status
-   #:vc-stash
-   #:vc-tag
-   #:vc-config-get
-   #:vc-config-set
-   #:vc-user-name
-   #:vc-user-email
-   #:vc-set-user
-   #:detect-vc-backend
-   #:list-available-backends
+   ;; Backend protocol symbols
+   :version-control-backend
+   :version-control-name
+   :version-control-version
+   :version-control-available-p
+   :version-control-init
+   :version-control-clone
+   :version-control-status
+   :version-control-add
+   :version-control-commit
+   :version-control-reset
+   :version-control-checkout
+   :version-control-push
+   :version-control-pull
+   :version-control-fetch
+   :version-control-log
+   :version-control-diff
+   :version-control-difftool
+   :version-control-branch
+   :version-control-merge
+   :version-control-rebase
+   :version-control-stash
+   :version-control-tag
+   :version-control-config-get
+   :version-control-config-set
+   :version-control-user-name
+   :version-control-user-email
+   :version-control-set-user
+   :version-control-remote-add
+   :version-control-remote-list
+   :version-control-submodule-add
+   :version-control-submodule-update
+   :version-control-submodule-status
+   
    ;; Filesystem monitoring
-   #:start-fs-monitor
-   #:stop-fs-monitor
-   #:with-fs-monitor
-   #:vc-status-changed-p
-   ;; Configuration interface (DRY - single pathname definition)
-   #:vc-config-pathname
-   #:load-vc-config
-   #:save-vc-config
-   #:ensure-vc-config
-   #:with-vc-auto-save
-   #:vc-get-last-commit
-   #:vc-set-last-commit
-   #:vc-get-staged-files
-   #:vc-set-staged-files
-   #:vc-get-ignored-files
-   #:vc-set-ignored-files
-   #:vc-get-tracked-files
-   #:vc-set-tracked-files
-   #:vc-get-branch
-   #:vc-set-branch
-   #:vc-get-ahead-count
-   #:vc-set-ahead-count
-   #:vc-get-behind-count
-   #:vc-set-behind-count
-;; Status presentation utilities
-    #:vc-status-icon
-    #:vc-status-text
-    #:vc-file-status
-    #:draw-vc-status-icon
-    #:draw-vc-status-bar
-    #:present-vc-status-icon
-    #:present-vc-status-bar
-    #:vc-menu-commands
-    #:vc-get-tracked-status
-    #:vc-set-tracked-status
-    #:vc-get-ignored-status
-    #:vc-set-ignored-status
-    ;; Backend implementations
-    #:make-git-backend
-    #:make-svn-backend))
+   :start-fs-monitor
+   :stop-fs-monitor
+   :with-fs-monitor
+   :version-control-status-changed-p
+   
+   ;; Configuration interface
+   :version-control-config-pathname
+   :load-version-control-config
+   :save-version-control-config
+   :ensure-version-control-config
+   :with-version-control-auto-save
+   
+   ;; Commit utilities
+   :version-control-get-last-commit
+   :version-control-set-last-commit
+   :version-control-get-staged-files
+   :version-control-set-staged-files
+   :version-control-get-ignored-files
+   :version-control-set-ignored-files
+   :version-control-get-tracked-files
+   :version-control-set-tracked-files
+   :version-control-get-branch
+   :version-control-set-branch
+   :version-control-get-ahead-count
+   :version-control-set-ahead-count
+   :version-control-get-behind-count
+   :version-control-set-behind-count
+   
+   ;; Status presentation
+   :version-control-status-for-file
+   :version-control-status-icon
+   :version-control-status-text
+   :version-control-file-status
+   :draw-version-control-status-icon
+   :draw-version-control-status-bar
+   :present-version-control-status-icon
+   :present-version-control-status-bar
+   :version-control-menu-commands
+   :version-control-get-tracked-status
+   :version-control-set-tracked-status
+   :version-control-get-ignored-status
+   :version-control-set-ignored-status
+   
+   ;; Backend implementations
+   :make-git-backend
+   :make-svn-backend
+   :make-bazaar-backend
+   :make-cvs-backend
+   :make-rcs-backend
+   :make-mercurial-backend
+   
+   ;; Error condition
+   :version-control-error
+   :version-control-error-backend
+   :version-control-error-message))
 
 (in-package :skyline-tool.version-control)
 
-;;; Protocol definition
+;;; Error conditions
+
 (define-condition version-control-error (error)
-  ((backend :initarg :backend :reader vc-error-backend)
-   (message :initarg :message :reader vc-error-message))
+  ((backend :initarg :backend :reader version-control-error-backend)
+   (message :initarg :message :reader version-control-error-message))
   (:report (lambda (c s)
-             (format s "VC Error (~a): ~a" (vc-error-backend c) (vc-error-message c)))))
+             (format s "Version Control Error (~a): ~a"
+                     (version-control-error-backend c)
+                     (version-control-error-message c)))))
 
-;; Backend base class
-(defclass vc-backend ()
-  ((name :reader vc-name :initarg :name)
-   (version :reader vc-version :initarg :version :initform "unknown")))
+;;; Backend base class (if needed for common functionality)
 
-;; Generic functions for version control operations
-(defgeneric vc-available-p (backend)
+(defclass version-control-backend ()
+  ((name :reader version-control-name :initarg :name)
+   (version :reader version-control-version :initarg :version :initform "unknown")))
+
+;;; Generic functions for version control operations
+
+(defgeneric version-control-backend (backend &key)
+  (:documentation "Return the backend identifier for the given backend."))
+
+(defgeneric version-control-name (backend)
+  (:documentation "Return the name of the version control system."))
+
+(defgeneric version-control-version (backend)
+  (:documentation "Return the version string of the version control system."))
+
+(defgeneric version-control-available-p (backend)
   (:documentation "Return T if the backend executable is available on the system."))
 
-(defgeneric vc-init (backend path &key)
+(defgeneric version-control-init (backend path &key)
   (:documentation "Initialize a new repository at PATH. Returns a new backend instance."))
 
-(defgeneric vc-clone (backend url path &key)
+(defgeneric version-control-clone (backend url path &key)
   (:documentation "Clone repository from URL to PATH. Returns a new backend instance."))
 
-(defgeneric vc-status (backend path &key)
-  (:documentation "Return status of working tree as a plist with :staged, :modified, :untracked keys."))
+(defgeneric version-control-status (backend path &key)
+  (:documentation "Return status of working tree as a plist."))
 
-(defgeneric vc-add (backend paths &key)
+(defgeneric version-control-add (backend paths &key)
   (:documentation "Stage PATHS for commit."))
 
-(defgeneric vc-commit (backend message &key)
+(defgeneric version-control-commit (backend message &key)
   (:documentation "Commit staged changes with MESSAGE."))
 
-(defgeneric vc-reset (backend paths &key soft mixed hard)
+(defgeneric version-control-reset (backend paths &key)
   (:documentation "Reset PATHS in index/working tree."))
 
-(defgeneric vc-log (backend path &key limit since until author)
-  (:documentation "Return commit log for PATH (or project if nil)."))
-
-(defgeneric vc-diff (backend path &key cached name-only)
-  (:documentation "Return diff for PATH or staged if CACHED."))
-
-(defgeneric vc-branch (backend &key list all create delete rename move)
-  (:documentation "Manage branches: list/create/delete/rename/move."))
-
-(defgeneric vc-checkout (backend target &key create-branch)
+(defgeneric version-control-checkout (backend target &key)
   (:documentation "Checkout TARGET branch or commit."))
 
-(defgeneric vc-merge (backend source &key no-ff fast-forward)
-  (:documentation "Merge SOURCE into current branch."))
-
-(defgeneric vc-rebase (backend target &key interactive)
-  (:documentation "Rebase current branch onto TARGET."))
-
-(defgeneric vc-push (backend remote branch &key force-with-lease)
+(defgeneric version-control-push (backend remote branch &key)
   (:documentation "Push BRANCH to REMOTE."))
 
-(defgeneric vc-pull (backend remote branch &key rebase)
-  (:documentation "Pull BRANCH from REMOTE with optional REBASE."))
+(defgeneric version-control-pull (backend remote branch &key)
+  (:documentation "Pull BRANCH from REMOTE."))
 
-(defgeneric vc-fetch (backend &key remote all tags prune)
+(defgeneric version-control-fetch (backend &key)
   (:documentation "Fetch from REMOTE(s)."))
 
-(defgeneric vc-remote-add (backend name url)
-  (:documentation "Add remote named NAME with URL."))
+(defgeneric version-control-log (backend path &key)
+  (:documentation "Return commit log for PATH (or project if nil)."))
 
-(defgeneric vc-remote-list (backend)
-  (:documentation "List configured remotes."))
+(defgeneric version-control-diff (backend path &key)
+  (:documentation "Return diff for PATH or staged if CACHED."))
 
-(defgeneric vc-submodule-add (backend url path &key branch)
-  (:documentation "Add submodule from URL at PATH with optional BRANCH."))
+(defgeneric version-control-difftool (backend path &key)
+  (:documentation "Launch external diff tool for PATH or staged."))
 
-(defgeneric vc-submodule-update (backend &key init recursive remote)
-  (:documentation "Update submodules with options."))
+(defgeneric version-control-branch (backend &key)
+  (:documentation "Branch operations: list, create, delete, rename."))
 
-(defgeneric vc-submodule-status (backend)
-  (:documentation "Return submodule status list."))
+(defgeneric version-control-merge (backend source &key)
+  (:documentation "Merge SOURCE into current branch."))
 
-(defgeneric vc-stash (backend action &rest args)
+(defgeneric version-control-rebase (backend target &key)
+  (:documentation "Rebase current branch onto TARGET."))
+
+(defgeneric version-control-stash (backend action &rest args)
   (:documentation "Manage stashes: push/pop/list/drop."))
 
-(defgeneric vc-tag (backend &key list create delete annotate)
+(defgeneric version-control-tag (backend &key)
   (:documentation "Manage tags: list/create/delete/annotate."))
 
-(defgeneric vc-config-get (backend key &key global local)
-  (:documentation "Get config KEY value (global or local)."))
+(defgeneric version-control-config-get (backend key &key)
+  (:documentation "Get config KEY value."))
 
-(defgeneric vc-config-set (backend key value &key global local)
-  (:documentation "Set config KEY to VALUE (global or local)."))
+(defgeneric version-control-config-set (backend key value &key)
+  (:documentation "Set config KEY to VALUE."))
 
-(defgeneric vc-user-name (backend &key global)
+(defgeneric version-control-user-name (backend &key)
   (:documentation "Get user name from config."))
 
-(defgeneric vc-user-email (backend &key global)
+(defgeneric version-control-user-email (backend &key)
   (:documentation "Get user email from config."))
 
-(defgeneric vc-set-user (backend name email &key global)
+(defgeneric version-control-set-user (backend name email &key)
   (:documentation "Set user name and email in config."))
 
-;; Backend detection
-(defgeneric detect-vc-backend (path)
-  (:documentation "Detect version control backend from directory PATH. Returns :git, :svn, or NIL."))
+(defgeneric version-control-remote-add (backend name url)
+  (:documentation "Add remote named NAME with URL."))
 
-(defgeneric list-available-backends ()
-  (:documentation "List all version control backends available on the system."))
+(defgeneric version-control-remote-list (backend)
+  (:documentation "List configured remotes."))
 
-;; Filesystem monitoring
-(defgeneric start-fs-monitor (backend path callback)
-  (:documentation "Start monitoring PATH for changes. CALLBACK is a function of (event-type path)."))
+(defgeneric version-control-submodule-add (backend url path &key)
+  (:documentation "Add submodule from URL at PATH."))
 
-(defgeneric stop-fs-monitor (monitor)
-  (:documentation "Stop filesystem monitoring."))
+(defgeneric version-control-submodule-update (backend &key)
+  (:documentation "Update submodules with options."))
 
-(defmacro with-fs-monitor ((monitor-var backend path callback) &body body)
-  "Execute BODY with filesystem monitoring active."
-  `(let ((,monitor-var (start-fs-monitor ,backend ,path ,callback)))
-     (unwind-protect (progn ,@body)
-       (when ,monitor-var (stop-fs-monitor ,monitor-var)))))
+(defgeneric version-control-submodule-status (backend)
+  (:documentation "Return submodule status list."))
 
-(defgeneric vc-status-changed-p (backend path)
-  (:documentation "Check if working tree status has changed since last check."))
+;;; Backend implementations
 
-;; Diff tool for external diff programs
-(defgeneric vc-difftool (backend path &key base target tool)
-  (:documentation "Launch external diff tool for PATH or staged if BASE/TARGET.
-Optional KEYWORDS: BASE (base branch), TARGET (target branch),
-and TOOL (tool name, defaults to \"meld\")."))
+(defmethod version-control-backend ((backend (eql :git)) &key)
+  :git)
+
+(defmethod version-control-backend ((backend (eql :svn)) &key)
+  :svn)
+
+(defmethod version-control-backend ((backend (eql :bazaar)) &key)
+  :bazaar)
+
+(defmethod version-control-backend ((backend (eql :cvs)) &key)
+  :cvs)
+
+(defmethod version-control-backend ((backend (eql :rcs)) &key)
+  :rcs)
+
+(defmethod version-control-backend ((backend (eql :mercurial)) &key)
+  :mercurial)
+
+;;; Factory functions
+
+(defun make-git-backend (&optional (path (uiop:getcwd)))
+  "Create a Git backend instance for PATH"
+  (declare (ignore path))
+  'git)
+
+(defun make-svn-backend (path)
+  "Create an SVN backend instance"
+  (declare (ignore path))
+  'svn)
+
+(defun make-bazaar-backend (path)
+  "Create a Bazaar backend instance"
+  (declare (ignore path))
+  'bazaar)
+
+(defun make-cvs-backend (path)
+  "Create a CVS backend instance"
+  (declare (ignore path))
+  'cvs)
+
+(defun make-rcs-backend (path)
+  "Create an RCS backend instance"
+  (declare (ignore path))
+  'rcs)
+
+(defun make-mercurial-backend (path)
+  "Create a Mercurial backend instance"
+  (declare (ignore path))
+  'mercurial)

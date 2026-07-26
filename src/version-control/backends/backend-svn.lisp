@@ -1,115 +1,148 @@
-;;; src/version-control/backends/svn.lisp
-;;; SVN backend implementation for Skyline-Tool
+;;; src/version-control/backends/backend-svn.lisp
+;;; SVN backend implementation for Skyline-Tool version control
+;;; Pure procedural implementation - no classes
 
 (in-package :skyline-tool.version-control)
 
-(defclass svn-backend (vc-backend)
-  ((repo-path :initarg :repo-path :accessor repo-path)))
+;; SVN backend protocol implementations
 
-(defmethod vc-name ((backend svn-backend))
+(defmethod version-control-backend ((backend (eql :svn)) &key)
+  "Returns the backend identifier for Subversion"
+  :svn)
+
+(defmethod version-control-name ((backend (eql :svn)))
+  "Return the name of the version control system"
   "svn")
 
-(defmethod vc-version ((backend svn-backend))
-  (or (ignore-errors 
-        (uiop:run-program (list "svn" "--version") :output :string)) 
-      "unknown"))
+(defmethod version-control-version ((backend (eql :svn)))
+  "Return the version string of svn"
+  (uiop:run-program (list "svn" "--version") :output :string))
 
-(defmethod vc-available-p ((backend svn-backend))
-  (ignore-errors 
-   (zerop (uiop:run-program (list "svn" "--version") :output nil))))
+(defmethod version-control-available-p ((backend (eql :svn)))
+  "Check if svn is available on the system"
+  (uiop:run-program (list "svn" "--version") :output nil))
 
-(defmethod vc-init ((backend svn-backend) path &key)
-  (when (probe-file path)
-    (uiop:run-program (list "svnadmin" "create" path)))
-  (make-instance 'svn-backend :repo-path path))
+(defmethod version-control-init ((backend (eql :svn)) path &key)
+  "Initialize a new svn repository at PATH"
+  (uiop:run-program (list "svnadmin" "create" path)))
 
-(defmethod vc-clone ((backend svn-backend) url path &key)
-  (uiop:run-program (list "svn" "checkout" url path))
-  (make-instance 'svn-backend :repo-path path))
+(defmethod version-control-clone ((backend (eql :svn)) url path &key)
+  "Checkout repository from URL to PATH"
+  (uiop:run-program (list "svn" "checkout" url path)))
 
-(defmethod vc-status ((backend svn-backend) path &key)
-  (let ((output (ignore-errors 
-                  (uiop:run-program (list "svn" "status" path) :output :string))))
-    (when output (parse-svn-status output))))
+(defmethod version-control-status ((backend (eql :svn)) path &key)
+  "Return status of working tree"
+  (let ((output (uiop:run-program (list "svn" "status" path) :output :string)))
+    (when (not (emptyp (string-trim skyline-tool::+whitespace+ output))) (parse-svn-status output))))
 
 (defun parse-svn-status (output)
+  "Parse svn status output into status plist"
   (let (result)
     (dolist (line (split-sequence #\newline output))
       (when (plusp (length line))
-        (cond
-          ((search "A" (subseq line 0 1)) (push :staged result))
-          ((search "M" (subseq line 0 1)) (push :modified result))
-          ((search "?" (subseq line 0 1)) (push :untracked result)))))
-    result))
+        (let ((status-char (char line 0)))
+          (cond
+            ((char= status-char #\A) (push :staged result))  ; Added
+            ((char= status-char #\M) (push :modified result))  ; Modified
+            ((char= status-char #\?) (push :untracked result))  ; Untracked
+            ((char= status-char #\+) (push :staged result))  ; In conflict
+            ((char= status-char #\-) (push :staged result)))))  ; Removed
+      result)))
 
-(defmethod vc-add ((backend svn-backend) paths &key)
+(defmethod version-control-add ((backend (eql :svn)) paths &key)
+  "Add PATHS for commit"
   (uiop:run-program (append (list "svn" "add") paths)))
 
-(defmethod vc-commit ((backend svn-backend) message &key)
+(defmethod version-control-commit ((backend (eql :svn)) message &key)
+  "Commit with MESSAGE"
   (uiop:run-program (list "svn" "commit" "-m" message)))
 
-(defmethod vc-reset ((backend svn-backend) paths &key soft mixed hard)
+(defmethod version-control-reset ((backend (eql :svn)) paths &key soft mixed hard)
+  "Revert PATHS"
+  (declare (ignore soft mixed hard))
   (uiop:run-program (append (list "svn" "revert") paths)))
 
-(defmethod vc-log ((backend svn-backend) path &key limit since until author)
+(defmethod version-control-log ((backend (eql :svn)) path &key limit since until author)
+  "Return commit log"
   (let ((cmd (list "svn" "log")))
-    (when limit (push (format nil "-l ~a" limit) cmd))
-    (ignore-errors 
-      (uiop:run-program (append cmd (list (or path (repo-path backend)))) :output :string))))
+    (when limit
+      (appendf cmd (list "-l" limit)))
+    (uiop:run-program (append cmd (list (or path (version-control-config-get backend "svn:repository-root"))))
+                      :output :string)))
 
-(defmethod vc-push ((backend svn-backend) remote branch &key force-with-lease)
-  (uiop:run-program (list "svn" "commit" "-m" (format nil "pushing ~a ~a" remote branch))))
+(defmethod version-control-push ((backend (eql :svn)) remote branch &key force-with-lease-p)
+  "Commit and push changes"
+  (declare (ignore force-with-lease-p))
+  (uiop:run-program (list "svn" "commit" "-m" (format nil "Pushing to ~a branch ~a" remote branch))))
 
-(defmethod vc-pull ((backend svn-backend) remote branch &key rebase)
+(defmethod version-control-pull ((backend (eql :svn)) remote branch &key rebase)
+  "Update from remote"
+  (declare (ignore rebase))
   (uiop:run-program (list "svn" "update" branch)))
 
-(defmethod vc-fetch ((backend svn-backend) &key remote all tags prune)
+(defmethod version-control-fetch ((backend (eql :svn)) &key remote all tags prune)
+  "Update working copy"
+  (declare (ignore remote all tags prune))
   (uiop:run-program (list "svn" "update")))
 
-(defmethod vc-remote-add ((backend svn-backend) name url)
-  (uiop:run-program (list "svn" "remote" "add" name url)))
+(defmethod version-control-remote-add ((backend (eql :svn)) name url)
+  "Add svn remote"
+  (uiop:run-program (list "svn" "propset" "svn:externals" name url ".")))
 
-(defmethod vc-remote-list ((backend svn-backend))
-  (ignore-errors 
-    (uiop:run-program (list "svn" "info" "--show-item" "url") :output :string)))
+(defmethod version-control-remote-list ((backend (eql :svn)))
+  "List svn information"
+  (uiop:run-program (list "svn" "info" "--show-item" "url") :output :string))
 
-(defmethod vc-submodule-add ((backend svn-backend) url path &key branch)
-  (declare (ignore url path branch))
-  (error "Submodules not natively supported in SVN"))
+(defmethod version-control-submodule-add ((backend (eql :svn)) url path &key branch)
+  "Add svn:externals (closest equivalent to submodules)"
+  (declare (ignore branch))
+  (uiop:run-program (list "svn" "propset" "svn:externals" path url ".")))
 
-(defmethod vc-submodule-update ((backend svn-backend) &key init recursive remote)
+(defmethod version-control-submodule-update ((backend (eql :svn)) &key init recursive remote)
+  "Update externals"
   (declare (ignore init recursive remote))
-  (error "Submodules not natively supported in SVN"))
+  (uiop:run-program (list "svn" "update")))
 
-(defmethod vc-submodule-status ((backend svn-backend))
-  (declare (ignore backend))
-  (error "Submodules not natively supported in SVN"))
+(defmethod version-control-submodule-status ((backend (eql :svn)))
+  "Check externals status"
+  (uiop:run-program (list "svn" "status" "--show-ipc") :output :string))
 
-(defmethod vc-stash ((backend svn-backend) action &rest args)
+(defmethod version-control-stash ((backend (eql :svn)) action &rest args)
+  "SVN doesn't have native stashing - use shelve or revert"
   (declare (ignore action args))
-  (error "Stashing not natively supported in SVN"))
+  (error "Stashing not natively supported in SVN. Use shelving or revert."))
 
-(defmethod vc-tag ((backend svn-backend) &key list create delete annotate)
-  (declare (ignore list create delete annotate))
-  (uiop:run-program (list "svn" "copy" "HEAD" "tags/new-tag")))
+(defmethod version-control-tag ((backend (eql :svn)) &key list create delete annotate)
+  "SVN uses tags as branches"
+  (cond
+    (list (ignore-errors (uiop:run-program (list "svn" "list" "svn://trunk/tags") :output :string)))
+    (create (uiop:run-program (list "svn" "copy" "HEAD" (format nil "svn://trunk/tags/~a" create))))
+    (delete (uiop:run-program (list "svn" "delete" (format nil "svn://trunk/tags/~a" delete))))
+    (annotate (uiop:run-program (list "svn" "copy" "HEAD" (format nil "svn://trunk/tags/~a" annotate)
+                                      "-m" "Annotated tag")))))
 
-(defmethod vc-config-get ((backend svn-backend) key &key global local)
+(defmethod version-control-config-get ((backend (eql :svn)) key &key global local)
+  "Get svn config"
   (declare (ignore global local))
   (uiop:run-program (list "svn" "config" "get" (format nil "~a" key)) :output :string))
 
-(defmethod vc-config-set ((backend svn-backend) key value &key global local)
+(defmethod version-control-config-set ((backend (eql :svn)) key value &key global local)
+  "Set svn config"
   (declare (ignore global local))
   (uiop:run-program (list "svn" "config" "set" (format nil "~a" key) value)))
 
-(defmethod vc-user-name ((backend svn-backend) &key global)
+(defmethod version-control-user-name ((backend (eql :svn)) &key global)
+  "Get svn user name"
   (declare (ignore global))
   (uiop:run-program (list "svn" "config" "get" "user-name") :output :string))
 
-(defmethod vc-user-email ((backend svn-backend) &key global)
+(defmethod version-control-user-email ((backend (eql :svn)) &key global)
+  "Get svn user email"
   (declare (ignore global))
   (uiop:run-program (list "svn" "config" "get" "user-email") :output :string))
 
-(defmethod vc-set-user ((backend svn-backend) name email &key global)
+(defmethod version-control-set-user ((backend (eql :svn)) name email &key global)
+  "Set svn user name and email"
   (declare (ignore global))
   (uiop:run-program (list "svn" "config" "set" "user-name" name))
   (uiop:run-program (list "svn" "config" "set" "user-email" email)))

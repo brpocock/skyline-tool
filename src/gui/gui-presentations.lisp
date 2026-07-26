@@ -27,8 +27,7 @@
 (defgeneric resource-to-text (resource stream)
   (:documentation "Write RESOURCE as plain text to STREAM for human reading."))
 
-(defgeneric open-resource-preview (resource)
-  (:documentation "Open a read-only preview window for RESOURCE."))
+
 
 ;; 
 ;; JSON Export/Import Infrastructure
@@ -38,7 +37,7 @@
   "Export RESOURCE to JSON file at FILEPATH."
   (let ((json (resource-to-json resource)))
     (with-open-file (stream filepath :direction :output :if-exists :supersede
-                                    :if-does-not-exist :create)
+                                     :if-does-not-exist :create)
       (write-string (cl-json:encode-json-to-string json) stream))))
 
 (defun import-resource-from-json-file (filepath class)
@@ -81,15 +80,17 @@ Used by importers to materialize the actual file from a portable JSON export."
 ;; PostScript Export Infrastructure
 ;; 
 
-(defun export-resource-to-ps-file (resource filepath &key title author)
+(defun export-resource-to-ps-file (resource filepath
+                                   &key title (author (user-real-name)) (last-updated (local-time:now)))
   "Export RESOURCE to PostScript file at FILEPATH with proper headers/footers."
-  (with-open-file (ps filepath :direction :output :if-exists :supersede :external-format :utf-8)
+  (let* ((ps2pdf (uiop:run-program (list "ps2pdf" "-" filepath) :input :stream :output nil))
+         (ps (uiop:process-info-input ps2pdf)))
     (write-ps-font-encodings ps)
     (write-ps-docinfo ps title author (user-homedir-pathname))
-    (resource-to-postscript resource ps :title title :author author)
+    (resource-to-postscript resource ps :title title :author author :last-updated last-updated)
     (write-ps-page-footer ps 1 1 title
-                          (format-timestring nil (get-universal-time) :format '(:year "-" :month "-" :day " " :hour ":" :min))
-                          (user-homedir-pathname)
+                          (format-timestring nil last-updated :format '(:year "-" :month "-" :day " " :hour ":" :min))
+                          author
                           (machine-instance)))
   filepath)
 
@@ -177,8 +178,7 @@ Used by importers to materialize the actual file from a portable JSON export."
         (when filepath
           (export-resource-to-ps-file resource filepath
                                       :title (game-resource-title resource)
-                                      :author (user-homedir-pathname))
-          (format t "~&Exported to ~a~%" filepath))))))
+                                      :author (user-homedir-pathname)))))))
 
 (clim:define-command (com-preview-export-text :command-table resource-preview-menu-bar
                                               :menu t :name t) ()
@@ -187,37 +187,25 @@ Used by importers to materialize the actual file from a portable JSON export."
     (when resource
       (let ((filepath (error "Gnome Save as window must be used here")))
         (when filepath
-          (export-resource-to-text-file resource filepath)
-          (format t "~&Exported to ~a~%" filepath))))))
+          (export-resource-to-text-file resource filepath))))))
 
 (clim:define-command (com-preview-print :command-table resource-preview-menu-bar
-                                         :menu t :name t) ()
+                                        :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
          (resource (inspector-resource frame)))
     (when resource
       (let* ((ps-filepath (merge-pathnames
-                            (format nil "/tmp/~a-print.ps" (game-resource-title resource))
-                            (uiop:getcwd)))
+                           (format nil "/tmp/~a-print.ps" (game-resource-title resource))
+                           (uiop:getcwd)))
              (pdf-filepath (merge-pathnames
-                             (format nil "/tmp/~a-print.pdf" (game-resource-title resource))
-                             (uiop:getcwd))))
+                            (format nil "/tmp/~a-print.pdf" (game-resource-title resource))
+                            (uiop:getcwd))))
         (export-resource-to-ps-file resource ps-filepath
                                     :title (game-resource-title resource)
                                     :author (user-homedir-pathname))
         (uiop:run-program (list "ps2pdf" ps-filepath pdf-filepath) :output nil)
-        (uiop:run-program (list "lp" pdf-filepath) :output nil)
-        (format t "~&Sent to printer~%")))))
+        (uiop:run-program (list "lp" pdf-filepath) :output nil)))))
 
-;; 
-;; Open Functions
-;; 
-
-(defmethod open-resource-preview (resource)
-  "Open a read-only preview window for RESOURCE."
-  (clim:run-frame-top-level
-   (clim:make-application-frame 'resource-preview
-                                :resource resource
-                                :view-mode :reading)))
 
 ;; 
 ;; JSON Export/Import Infrastructure
@@ -228,7 +216,7 @@ Used by importers to materialize the actual file from a portable JSON export."
 (defgeneric write-resource-ps-content (resource ps)
   (:documentation "Write the main content of RESOURCE to PostScript stream PS."))
 
-(defmethod resource-to-postscript ((resource game-resource) ps &key title author)
+(defmethod resource-to-postscript ((resource game-resource) ps &key title author last-updated)
   (declare (ignore author))
   (write-ps-docinfo ps title "Skyline-Tool" (user-homedir-pathname))
   (write-ps-font-encodings ps)
@@ -236,8 +224,9 @@ Used by importers to materialize the actual file from a portable JSON export."
   (write-resource-ps-content resource ps)
   (format ps "~%%% End resource content~%")
   (write-ps-page-footer ps 1 1 title
-                        (format-timestring nil (get-universal-time) :format '(:year "-" :month "-" :day " " :hour ":" :min))
-                        (user-homedir-pathname)
+                        (format-timestring nil last-updated
+                                           :format '(:year "-" :month "-" :day " " :hour ":" :min))
+                        (user-real-name)
                         (machine-instance)
                         1 1))
 
@@ -626,7 +615,39 @@ Base91 provides ~23% overhead vs base64's 33%."
   (write-resource-common-ps resource ps)
   (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
   (format ps "56 560 moveto~%")
-  (format ps "(Moniker: ~a) show~%" (escape-ps-string (game-asset-moniker resource))))
+  (format ps "(BLOB: ~a) show~%" (escape-ps-string (game-asset-moniker resource)))
+  (format ps "showpage~%")
+  ;; Landscape page with palette colors
+  (format ps "<< /PageSize [792 612] >> setpagedevice~%")
+  (format ps "56 480 moveto~%")
+  (format ps "/Helvetica-Bold findfont 14 scalefont setfont~%")
+  (format ps "(Palette Colors) show~%")
+  (format ps "56 460 moveto~%")
+  (format ps "/Helvetica findfont 10 scalefont setfont~%")
+  (let* ((xcf-path (game-resource-full-path resource))
+         (png-path (make-output-path resource :png)))
+    (unless (probe-file png-path)
+      (build-target png-path))
+    (when (probe-file png-path)
+      (let* ((png-data (error "unimplemented"))
+             (palette (png->palette (png-read:image-data png-data)
+                                    (png-read:transparency png-data)))
+             (num-colors (min 16 (array-dimension palette 0))))
+        (dotimes (i num-colors)
+          (let* ((color (aref palette i))
+                 (r (nth 0 color))
+                 (g (nth 1 color))
+                 (b (nth 2 color)))
+            (format ps "~d ~d moveto~%" 56 (+ 440 (* i 10)))
+            (format ps "[##] P~dC~d: (~a) ~$~d~%" i i
+                    (format-color-name r g b) r))))))
+  ;; PDF footer with proper headers and footers
+  (format ps "showpage~%")
+  (format ps "%--- Footer ---%~%")
+  (format ps "0 0 moveto~%")
+  (format ps "/Times-Roman findfont 8 scalefont setfont~%")
+  (format ps "(Skyline-Tool for Phantasia 7800 | ~a | Page ~d) show~%"
+          (escape-ps-string (game-asset-moniker resource)) 1))
 
 (defmethod write-resource-ps-content ((resource game-resource-boat) ps)
   (write-resource-common-ps resource ps)

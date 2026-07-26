@@ -24,13 +24,13 @@
 
 (defun get-current-user (backend)
   "Get current user identifier for BACKEND"
-  (or (vc-user-name (make-git-backend))
+  (or (version-control-user-name (make-git-backend))
       (username backend)
       "unknown"))
 
 (defun default-issue-tracker ()
   "Return the configured issue tracker for the current project"
-  (let ((config (load-vc-config)))
+  (let ((config (load-version-control-config)))
     (ecase (getf config :issue-tracker)
       (:github (make-github-client))
       (:gitlab (make-gitlab-client))
@@ -121,14 +121,14 @@
                               (slugify (issue-title issue))))
          (git (skyline-tool.version-control:make-git-backend)))
     ;; Check if branch exists
-    (let ((branches (skyline-tool.version-control:vc-branch git :list t)))
+    (let ((branches (skyline-tool.version-control:version-control-branch git :list t)))
       (unless (member branch-name branches :test #'string-equal)
         ;; Create new branch from current HEAD
-        (skyline-tool.version-control:vc-branch git :create branch-name)))
+        (skyline-tool.version-control:version-control-branch git :create branch-name)))
     ;; Checkout the branch
-    (skyline-tool.version-control:vc-checkout git branch-name)
+    (skyline-tool.version-control:version-control-checkout git branch-name)
     ;; Store issue reference in config
-    (setf (gethash :linked-issue *vc-config*) (issue-id issue))
+    (setf (gethash :linked-issue *version-control-config*) (issue-id issue))
     (format t "Switched to branch ~a linked with issue ~a~%" branch-name (issue-id issue))))
 
 (defun slugify (string)
@@ -172,7 +172,7 @@
         (clim:formatting-cell (stream)
           (format stream "~a" (funcall field issue)))))
     ;; Branch link status
-    (let ((linked-branch (gethash :linked-issue *vc-config*)))
+    (let ((linked-branch (gethash :linked-issue *version-control-config*)))
       (clim:formatting-row (stream)
         (clim:formatting-cell (stream :align-x :right) (write-string "Linked Branch:" stream))
         (clim:formatting-cell (stream)

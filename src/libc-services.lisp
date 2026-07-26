@@ -30,10 +30,12 @@
           :port (when (plusp port) port)
           :protocol (when proto-ptr (cffi:foreign-string-to-lisp proto-ptr))
           :aliases (when aliases-ptr
-                      (loop for alias-ptr = aliases-ptr then (cffi:inc-pointer alias-ptr (cffi:foreign-type-size :pointer))
-                            for alias = (cffi:mem-ref alias-ptr :pointer)
-                            while (not (cffi:null-pointer-p alias))
-                            collect (cffi:foreign-string-to-lisp alias))))))
+                     (loop for alias-ptr = aliases-ptr
+                             then (cffi:inc-pointer alias-ptr
+                                                    (cffi:foreign-type-size :pointer))
+                           for alias = (cffi:mem-ref alias-ptr :pointer)
+                           while (not (cffi:null-pointer-p alias))
+                           collect (cffi:foreign-string-to-lisp alias))))))
 
 (defun get-service-port (service-name protocol)
   "Get the port number for a given service by name using libc getservbyname.

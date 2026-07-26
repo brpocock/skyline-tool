@@ -99,7 +99,7 @@ asset is an error and such code will always be rejected.
    (psg-tone :initarg :psg-tone :accessor game-resource-instrument-psg-tone)))
 
 (defclass game-resource-item (game-resource-from-collective-file)
-  (   (item-id :initarg :item-id :reader game-resource-item-id)
+  ((item-id :initarg :item-id :reader game-resource-item-id)
    (name :initarg :name :accessor game-resource-item-name :initform nil)
    (equippable-p :initarg :equippable-p :accessor game-resource-item-equippable-p :initform nil)
    (equipment-slot :initarg :slot :accessor game-resource-item-equipment-slot :initform nil)
@@ -152,10 +152,12 @@ asset is an error and such code will always be rejected.
    (memo :initarg :memo :accessor game-resource-character-memo :initform nil)
    (equipment :initarg :equipment :accessor game-resource-character-equipment)
    (shield :initarg :shield :accessor game-resource-character-shield)
-   (crowns :initarg :crowns :accessor game-resource-character-crowns)
-   (arrows :initarg :arrows :accessor game-resource-character-arrows)
-   (potions :initarg :potions :accessor game-resource-character-potions)
-   (chalice :initarg :chalice :accessor game-resource-character-chalice)))
+    (crowns :initarg :crowns :accessor game-resource-character-crowns)
+    (arrows :initarg :arrows :accessor game-resource-character-arrows)
+    (potions :initarg :potions :accessor game-resource-character-potions)
+    (chalice :initarg :chalice :accessor game-resource-character-chalice)
+    (faction :initarg :faction :accessor game-resource-character-faction :initform 0)
+    (flags :initarg :flags :accessor game-resource-character-flags :initform 0)))
 
 (defclass game-resource-translation (game-resource-from-file) ())
 (defclass game-resource-phonetic-dictionary (game-resource-translation)
@@ -234,13 +236,13 @@ asset is an error and such code will always be rejected.
   (:documentation "Present right-margin content for reference presentation (e.g. D/P/A, asset ID).")
   
   (:method ((resource game-resource) stream)
-    (let ((vc-status (vc-file-status (or (game-resource-full-path resource)
+    (let ((version-control-status (version-control-file-status (or (game-resource-full-path resource)
                                          (game-resource-collective-path resource)))))
       (format stream "~a~%" (game-resource-locator resource))
       (game-resource-present-build-checkboxes resource stream)
-      (when vc-status
+      (when version-control-status
         (let ((*standard-output* stream))
-          (present-vc-status-icon vc-status))))))
+          (present-version-control-status-icon version-control-status))))))
 
 (defmethod game-resource-locator ((resource game-resource))
   ;; For file-based resources without asset IDs, generate a unique hex ID from pathnames
@@ -338,7 +340,7 @@ asset is an error and such code will always be rejected.
           (builds (if (typep resource 'game-resource-asset)
                       (game-resource-builds resource)
                       nil))
-          (vc-status (vc-file-status (or (game-resource-full-path resource)
+          (version-control-status (version-control-file-status (or (game-resource-full-path resource)
                                          (game-resource-collective-path resource)))))
       (clim:formatting-table (stream)
         (clim:formatting-row (stream)
@@ -374,12 +376,12 @@ asset is an error and such code will always be rejected.
               (format stream "Builds: "))
             (clim:formatting-cell (stream :align-x :left)
               (format stream "~{~a~^, ~}" builds))))
-        (when vc-status
+        (when version-control-status
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream :align-x :right)
               (format stream "VC Status: "))
             (clim:formatting-cell (stream :align-x :left)
-              (princ vc-status stream))))))))
+              (princ version-control-status stream))))))))
 
 (defgeneric present-editing (resource stream)
   (:documentation "Present resource in editing context with tabular layout: labels on left, editing gadgets on right.")
@@ -387,8 +389,8 @@ asset is an error and such code will always be rejected.
     (let ((display-name (game-resource-title resource))
           (kind (game-resource-kind resource))
           (locator (game-resource-locator resource))
-          (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                         (game-resource-collective-path resource)))))
+          (version-control-status (version-control-file-status (or (game-resource-full-path resource)
+                                                                   (game-resource-collective-path resource)))))
       (clim:formatting-table (stream)
         ;; Name (editable)
         (clim:formatting-row (stream)
@@ -427,12 +429,12 @@ asset is an error and such code will always be rejected.
               (format stream "Builds: "))
             (clim:formatting-cell (stream :align-x :left)
               (format stream "~{~a~^, ~}" (game-resource-builds resource)))))
-        (when vc-status
+        (when version-control-status
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream :align-x :right)
               (format stream "VC Status: "))
             (clim:formatting-cell (stream :align-x :left)
-              (princ vc-status stream))))))))
+              (princ version-control-status stream))))))))
 
 (defun game-resource-to-json (resource)
   "Convert resource to JSON for detail view."

@@ -726,7 +726,8 @@ Example: bin/skyline-tool --port Intv ~a ?"
          (*publisher* (assocdr :*publisher project-data))
          (*machine* (machine-number-from-tag (make-keyword (string-upcase port-label))))
          (*sound* (assocdr :*sound project-data))
-         (*common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) nil)))
+          (*common-palette* (mapcar (lambda (entry) (intern (string (car entry))))
+                                    (or (assocdr :*common-palette project-data) nil)))
          (*default-skin-color* (assocdr :*default-skin-color project-data))
          (*default-hair-color* (assocdr :*default-hair-color project-data))
          (*default-clothes-color* (assocdr :*default-clothes-color project-data)))
@@ -735,10 +736,37 @@ Example: bin/skyline-tool --port Intv ~a ?"
 (defun run-for-port (port-label &rest subcommand)
   (load-project.json (lambda ()
                        (format *trace-output* "~&Running for port: ~a" port-label)
-                       (destructuring-bind (verb &rest args) subcommand
-                         (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-                           (apply fun args)
-                           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))
+                       (let* ((explicit-region
+                                (loop for args on subcommand
+                                      for token = (car args)
+                                      when (or (string-equal token "--region")
+                                               (string-equal token "-r"))
+                                        do (let ((region-arg (cadr args)))
+                                             (return (string-case (string-upcase region-arg)
+                                                       ("NTSC" :ntsc)
+                                                       ("PAL" :pal)
+                                                       ("SECAM" :secam)
+                                                       ("INTERNAL" :internal)
+                                                       (otherwise
+                                                        (error "Invalid region: ~a. Use NTSC, PAL, SECAM, or INTERNAL"
+                                                               region-arg)))))
+                                      finally (return nil)))
+                              (*region* (or explicit-region *region*))
+                              (filtered
+                                (let ((skip nil))
+                                  (loop for token in subcommand
+                                        if skip
+                                          do (setf skip nil)
+                                        else
+                                          if (or (string-equal token "--region")
+                                                 (string-equal token "-r"))
+                                            do (setf skip t)
+                                          else
+                                            collect token))))
+                         (destructuring-bind (verb &rest args) filtered
+                           (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+                             (apply fun args)
+                             (error "Command not recognized: '~a' (try 'help')" verb)))))
                      port-label))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)

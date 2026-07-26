@@ -503,7 +503,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/color-hair (color hair)
     (declare (ignore hair))
     (list 'hair color))
-
+  
   (defun stage/color-skin (color skin)
     (declare (ignore skin))
     (list 'skin color))
@@ -713,9 +713,10 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                      '(:up))))))
         (with-input-from-file (input json-path)
           (let ((data (json:decode-json-from-source input)))
-            (mapcar #'intern (or (cdr (assoc :*common-palette data))
-                                 (cdr (assoc :|*CommonPalette| data))
-                                 (cdr (assoc :common-palette data)) ()))))))
+            (mapcar (lambda (entry) (intern (string (car entry))))
+                    (or (cdr (assoc :*common-palette data))
+                        (cdr (assoc :|*CommonPalette| data))
+                        (cdr (assoc :common-palette data)) ()))))))
 (eval (let ((terminals (concatenate 'list +stage-direction-words+
                                     '(number quoted actor variable)
                                     *common-palette*)))
@@ -3083,13 +3084,6 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
   (format t "~% ( ~s ) do-dialogue"
           text))
 
-(defun dialogue-format-token-string (format-token)
-  (ecase format-token
-    (:speakjet "SJ")
-    (:intellivoice "IV")
-    (:minifont "MF")
-    (:branch "BR")))
-
 (defun dialogue-hash (text format)
   (let ((intro (format nil "~{~a~}"
                        (mapcar #'string-capitalize
@@ -3454,8 +3448,8 @@ code for the game's scripting engine.
 (defmethod output-actor-value (actor (column (eql :character-equipment)))
   (format nil "~10t.byte Equip~a" (pascal-case (or (getf actor :equipment) "None"))))
 
-(defmethod output-actor-value (actor (column (eql :character-armor-class)))
-  (format nil "~10t.byte ~3d" (or (getf actor :armor-class) 10)))
+(defmethod output-actor-value (actor (column (eql :character-armor)))
+  (format nil "~10t.byte ~3d" (or (getf actor :ac) 10)))
 
 (defmethod output-actor-value (actor (column (eql :character-inventory)))
   (format nil "~10t.dword 0, 0"))
@@ -3534,7 +3528,7 @@ code for the game's scripting engine.
                     character-skin-color character-hair-color
                     character-clothes-color character-head character-body
                     character-shield character-equipment
-                    character-armor-class character-crowns
+                    character-armor character-crowns
                     character-arrows character-potions
                     character-character-i-d character-speech-pitch
                     character-speech-bend character-speech-speed
