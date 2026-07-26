@@ -3,24 +3,22 @@
 
 (in-package :skyline-tool)
 
+;; Presentation types for BLOB resources
 (clim:define-presentation-type game-resource-blob-reference ())
-
 (clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-reference)))
   (typep object 'game-resource-blob))
 
 (clim:define-presentation-type game-resource-blob-editable ())
-
 (clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-editable)))
   (typep object 'game-resource-blob))
 
 (clim:define-presentation-type game-resource-blob-viewing ())
-
-(clim:define-presentation-method clim:presentation-typep
-    (object (type (eql 'game-resource-blob-viewing)))
+(clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-blob-viewing)))
   (typep object 'game-resource-blob))
 
+;; Reference presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob)
-                                               (type game-resource-blob-reference) stream view &key)
+                                                (type game-resource-blob-reference) stream view &key)
   (declare (ignore view))
   (clim:formatting-table (stream)
     (clim:formatting-row (stream)
@@ -28,20 +26,18 @@
         (format stream "~3%"))
       (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
         (game-resource-present-icon resource stream))
-      (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-height 150)
-        (clim:with-text-face (stream :bold)
-          (game-resource-present-title resource stream))
-        (format stream "~%~5t")
+      (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
         (clim:with-text-size (stream :larger)
           (clim:with-text-face (stream :bold)
             (game-resource-present-title resource stream)))
         (format stream "~%~5t")
         (clim:with-text-size (stream :smaller)
           (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
-            (game-resource-present-subheading resource stream))))))
-  (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
-    (game-resource-present-right-margin resource stream)))
+            (game-resource-present-subheading resource stream))))
+      (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
+        (game-resource-present-right-margin resource stream)))))
 
+;; Editable presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-editable) stream view &key)
   (declare (ignore view))
   (clim:formatting-table (stream)
@@ -57,6 +53,7 @@
          :validator #'validate-minifont-name
          :max-length 20)))))
 
+;; Viewing presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-viewing) stream view &key)
   (declare (ignore view))
   (clim:surrounding-output-with-border (stream :shape :rounded)

@@ -403,7 +403,41 @@ Color: [##]                     # color swatch -> palette color picker menu
                                                      (game-resource-title resource)
                                                      *game-title* (machine-directory-name)))))
 
-;; Tab display function
+;; Tab bar display
+(defgeneric display-tab-bar (pane frame))
+
+(defmethod display-tab-bar ((pane clim:application-pane) (frame character-inspector-frame))
+  "Draw custom tab bar with rounded corners and styling for Character Inspector."
+  (let* ((tabs '(:identity :appearance :equipment :speech))
+         (tab-labels '("Identity" "Appearance" "Equipment" "Speech"))
+         (n (length tabs))
+         (width (or (clim:bounding-rectangle-width (clim:sheet-region pane)) 400))
+         (height 30)
+         (tab-width (/ width n))
+         (corner-radius 5))
+    (loop for tab in tabs
+          for label in tab-labels
+          for i from 0
+          for left = (* i tab-width)
+          for right = (+ left tab-width)
+          for selected = (eq tab (frame-current-tab frame))
+          do (clim:with-drawing-options (pane
+                                          :ink (if selected
+                                                 (clim:make-gray-color 0) ; black for selected
+                                                 (clim:make-gray-color 0.75))) ; 75% gray for unselected
+               (clim:draw-rectangle pane left 0 right height
+                                    :filled t
+                                    :corner-radii (list corner-radius corner-radius corner-radius corner-radius)))
+          ;; Draw label text
+          (let* ((text-x (if selected
+                           (+ left 5) ; slight inset for selected
+                           (+ left 10))) ; 5px offset for unselected
+                 (text-y 8))
+            (clim:with-drawing-options (pane
+                                        :ink (if selected
+                                               (clim:make-gray-color 1) ; white text on black
+                                               (clim:make-gray-color 0))) ; black text on gray
+              (clim:draw-text pane label text-x text-y))))))
 (defmethod display-current-tab ((frame character-inspector-frame) pane)
   "Display the current tab based on frame-current-tab slot."
   (let* ((resource (frame-resource frame))
@@ -511,26 +545,30 @@ Color: [##]                     # color swatch -> palette color picker menu
 (clim:define-presentation-type game-resource-character-viewing ()
   :inherit-from 'game-resource-viewing)
 
-(clim:define-presentation-method ((resource game-resource-character) stream)
-    (clim:with-output-as-presentation (stream resource 'game-resource-character-reference)
-      (clim:formatting-table (stream)
-        (clim:formatting-row (stream)
-          (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
-            (format stream "~3%"))
-          (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
-            (game-resource-present-icon resource stream))
-          (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
-            (clim:with-text-size (stream :larger)
-              (clim:with-text-face (stream :bold)
-                (game-resource-present-title resource stream)))
-            (format stream "~%~5t")
-            (clim:with-text-size (stream :smaller)
-              (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
-                (game-resource-present-subheading resource stream))))
-          (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
-            (game-resource-present-right-margin resource stream))))))
+;; Reference Presentation for Character Resources
+(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-reference)) stream view &key)
+  (declare (ignore view))
+  (clim:with-output-as-presentation (stream resource 'game-resource-character-reference)
+    (clim:formatting-table (stream)
+      (clim:formatting-row (stream)
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
+          (format stream "~3%"))
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
+          (game-resource-present-icon resource stream))
+        (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
+          (clim:with-text-size (stream :larger)
+            (clim:with-text-face (stream :bold)
+              (game-resource-present-title resource stream)))
+          (format stream "~%~5t")
+          (clim:with-text-size (stream :smaller)
+            (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
+              (game-resource-present-subheading resource stream))))
+        (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
+          (game-resource-present-right-margin resource stream))))))
 
-(clim:define-presentation-method clim:present (resource (type (eql 'game-resource-character-viewing)) stream &key)
+;; Viewing Presentation - READ-ONLY display of character resources
+(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-viewing)) stream view &key)
+  (declare (ignore view))
   (clim:formatting-table (stream)
     (clim:formatting-row (stream)
       (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
@@ -602,7 +640,7 @@ Color: [##]                     # color swatch -> palette color picker menu
       (clim:formatting-cell (stream :align-x :right) (format stream "Memo: "))
       (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-memo resource))))))
 
-(defmethod clim:present (resource (type (eql 'game-resource-character-editable)) stream &key)
+(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-editable)) stream view &key)
   (let ((frame clim:*application-frame*))
     (display-current-tab frame stream))
   (let* ((name (game-resource-character-name resource))
@@ -628,7 +666,7 @@ Color: [##]                     # color swatch -> palette color picker menu
          (speech-bend (game-resource-character-speech-bend resource))
          (speech-color (game-resource-character-speech-color resource))
          (nicks (game-resource-character-nicks resource))
-         (memo (game-resource-character-memo resource)))
+         (memo (game-resource-character-memo resource))) 
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
         (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
@@ -661,6 +699,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :current-value gender
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-gender resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -672,6 +711,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value max-hp
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-hp resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -683,6 +723,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 255
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-max-hp resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -694,6 +735,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 20
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-ac resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -705,6 +747,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 9999
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-crowns resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -716,6 +759,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 255
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-arrows resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -727,6 +771,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 99
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-potions resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -736,17 +781,9 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :value chalice
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-chalice resource) value)
-                            (publish-resource-changed resource)))))
-      (body (game-resource-character-body resource))
-      (equipment (game-resource-character-equipment resource))
-      (shield (game-resource-character-shield resource))
-      (speech-pitch (game-resource-character-speech-pitch resource))
-      (speech-speed (game-resource-character-speech-speed resource))
-      (speech-bend (game-resource-character-speech-bend resource))
-      (speech-color (game-resource-character-speech-color resource))
-      (nicks (game-resource-character-nicks resource))
-      (memo (game-resource-character-memo resource)))
+                            (publish-resource-changed resource))))))
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
         (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
@@ -779,6 +816,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :current-value gender
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-gender resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -790,6 +828,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value max-hp
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-hp resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -801,6 +840,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 255
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-max-hp resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -812,6 +852,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 20
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-ac resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -823,6 +864,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 9999
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-crowns resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -834,6 +876,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 255
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-arrows resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -845,6 +888,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 99
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-potions resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -854,6 +898,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :value chalice
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-chalice resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -862,20 +907,27 @@ Color: [##]                     # color swatch -> palette color picker menu
           (clim:make-pane 'clim::menu-button
                           :value hair-color
                           :menu-items (lambda (stream)
+                                        (declare (ignore stream))
                                         (let ((colors (assocdr :*common-palette *project.json*)))
                                           (clim:menu-choose
                                            (loop for color in colors
+                                                 with p = 0
+                                                 for c = 0 then (if (> c 2)
+                                                                    (prog1 0 (incf p))
+                                                                    (1+ c))
+                                                 for i = (+ c (* p 3))
                                                  for (name r g b) = color
                                                  collect
                                                  (list (format nil "[#~2,'0x~2,'0x~2,'0x] ~a"
                                                                r g b (title-case (string name)))
-                                                       :command (lambda ()
-                                                                  (error "unimplemented")))
-                                                 :value i :current-p (= i hair-color))))
-                                        :echo-callback
-                                        (lambda (item stream)
-                                          (setf (game-resource-character-hair-color resource) (clim:gadget-value item))
-                                          (publish-resource-changed resource))))))
+                                                       :value i
+                                                       :current-p (= i hair-color)
+                                                       :command
+                                                       (lambda (item stream)
+                                                         (declare (ignore stream))
+                                                         (setf (game-resource-character-hair-color resource)
+                                                               (clim:gadget-value item))
+                                                         (publish-resource-changed resource))))))))))
       (clim:formatting-row (stream)
         (clim:formatting-cell (stream :align-x :right) (format stream "Skin Color: "))
         (clim:formatting-cell (stream :align-x :left)
@@ -889,6 +941,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 15
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-clothes-color resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -936,6 +989,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 15
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-speech-pitch resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -947,6 +1001,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 10
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-speech-speed resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -958,6 +1013,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :max-value 2
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-speech-bend resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -968,6 +1024,7 @@ Color: [##]                     # color swatch -> palette color picker menu
                           :current-value speech-color
                           :callback
                           (lambda (pane value)
+                            (declare (ignore pane))
                             (setf (game-resource-character-speech-color resource) value)
                             (publish-resource-changed resource)))))
       (clim:formatting-row (stream)
@@ -1119,11 +1176,10 @@ Color: [##]                     # color swatch -> palette color picker menu
   (let* ((frame clim:*application-frame*)
          (resource (frame-resource frame))
          (path (prompt-save-pathname (format nil "~a.txt" (game-resource-title resource))
-                                     :type "txt")))
+                                     (list :dir (game-resource-kind resource) :text))))
     (when path
       (with-open-file (s path :direction :output :if-exists :supersede :external-format :utf-8)
-        (format s "~a" (character-to-text resource)))
-      (clim-simple-echo:run-in-simple-echo (lambda () (format t "~&Exported character as text to ~a~%" path))))))
+        (princ (character-to-text resource) s)))))
 
 (clim:define-command (com-character-save-json :command-table clim-internals::global-command-table :menu t :name t)
     ()
@@ -1132,7 +1188,7 @@ Color: [##]                     # color swatch -> palette color picker menu
   (let* ((frame clim:*application-frame*)
          (resource (frame-resource frame))
          (path (prompt-save-pathname (format nil "~a.json" (game-resource-title resource))
-                                     :type "json")))
+                                     (list :dir (game-resource-kind resource) :json))))
     (when path
       (with-open-file (s path :direction :output :if-exists :supersede :external-format :utf-8)
         (json:encode-json (character-to-plist resource) s))
@@ -1145,15 +1201,15 @@ Color: [##]                     # color swatch -> palette color picker menu
   "Export character as PDF via PostScript"
   (let* ((frame clim:*application-frame*)
          (resource (frame-resource frame))
-         (ps-path (prompt-save-pathname (format nil "~a.ps" (game-resource-title resource))
-                                        :type "ps")))
-    (when ps-path
-      (with-open-file (s ps-path :direction :output :if-exists :supersede :external-format :utf-8)
-        (format s "~a" (character-to-postscript resource)))
-      (let ((pdf-path (make-pathname :type "pdf" :defaults ps-path)))
-        (ignore-errors
-         (uiop:run-program (list "ps2pdf" (namestring ps-path) (namestring pdf-path)) :output nil)))
-      (clim-simple-echo:run-in-simple-echo (lambda () (format t "~&Exported character as PDF to ~a~%" pdf-path))))))
+         (pdf-path (prompt-save-pathname (format nil "~a.pdf" (game-resource-title resource))
+                                         (list :dir (game-resource-kind resource) :pdf))))
+    (when pdf-path
+      (uiop:run-program (list "ps2pdf" :input (character-to-postscript resource)
+                              pdf-path))
+      (xdg-open pdf-path))))
+
+(defun xdg-open (&rest args)
+  (uiop:run-program (append (list "xdg-open") args)))
 
 ;; AtariVox integration
 

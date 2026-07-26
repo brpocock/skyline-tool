@@ -47,54 +47,34 @@
                   (make-string (* 48 48 3 2) :initial-element #\9))))))
 
 ;; PostScript/PDF generation functions
-(defun write-ps-header-icon (ps)
+(defun write-ps-header-icon (ps icon)
   "Write PostScript code to draw the Skyline-Tool icon as a 48×48 RGB bitmap.
    Falls back to a dark gray rectangle if icon data is empty or invalid."
-  (let ((icon-path (asdf:system-relative-pathname :skyline-tool "../Tools/skyline-tool-icon-64.png")))
-    (if (probe-file icon-path)
-        (ignore-errors
-          (let* ((png (png-read:read-png-file (namestring icon-path)))
-                 (w (png-read:width png)) (h (png-read:height png))
-                 (data (png-read:image-data png))
-                 (dims (array-dimensions data))
-                 (rgb (make-array (list w h 3) :element-type '(unsigned-byte 8))))
-            (dotimes (y h)
-              (dotimes (x w)
-                (if (= (length dims) 3)
-                    (setf (aref rgb x y 0) (aref data x y 0)
-                          (aref rgb x y 1) (aref data x y 1)
-                          (aref rgb x y 2) (aref data x y 2))
-                    (let ((idx (aref data x y)))
-                      (when idx
-                        (setf (aref rgb x y 0) idx
-                              (aref rgb x y 1) idx
-                              (aref rgb x y 2) idx))))))
-            (write-ps-image ps rgb w h 48 48)
-            t))
-        (format ps "gsave
-   0.3 0.3 0.3 setrgbcolor
-   0 0 48 48 rectfill
-   grestore~%"))))
+  (let* ((png (png-read:read-png-file icon))
+         (width (png-read:width png)) (height (png-read:height png))
+         (data (png-read:image-data png)))
+    (write-ps-image ps data width height 77 48)
+    t))
 
-(defun write-ps-docinfo (ps title creator author)
+(defun write-ps-docinfo (ps resource)
   "Write PDF Document Info (DSC comments + pdfmark) for ps2pdf."
-  (format ps "%%%%Title: ~a~%" (escape-ps-string title))
-  (when creator
-    (format ps "%%%%Creator: ~a~%" (escape-ps-string creator)))
+  (format ps "%%%%Title: ~a~%" (escape-ps-string (game-resource-title resource)))
   (when author
-    (format ps "%%%%Author: ~a~%" (escape-ps-string author)))
-  (format ps "[ /Title (~a) /Creator (~a) /Author (~a) /DOCINFO pdfmark~%"
-          (escape-ps-string title) (escape-ps-string (or creator ""))
-          (escape-ps-string (or author ""))))
+    (format ps "%%%%Author: ~a~%" (escape-ps-string (user-real-name))))
+  (format ps "[ /Title (~a) /Creator (Skyline-Tool v~a) /Author (~a) /DOCINFO pdfmark~%"
+          (escape-ps-string (game-resource-title resource))
+          (escape-ps-string (asdf:component-version (asdf:find-system :skyline-tool)))
+          (escape-ps-string (user-real-name))))
 
-(defun write-ps-header-bar (ps title-text date-str author game-title &optional page-num total-pages)
+(defun write-ps-header-bar (ps title &key icon)
   "Write PDF header bar: icon at top-left, document title in navy blue centered on page.
-   Header is positioned 3/4\" (54pt) from page top. No page number."
+   
+Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
   (declare (ignore date-str author page-num total-pages game-title))
   (format ps "gsave
    56 738 translate
  ")
-  (write-ps-header-icon ps)
+  (when icon (write-ps-header-icon ps icon))
   (format ps "
    /Times-Roman-ISOLatin1 findfont 18 scalefont setfont
    0.0 0.0 0.3 setrgbcolor
@@ -265,9 +245,8 @@
     (format ps "{ currentfile ~d string readhexstring pop } image~%" bpr)
     (format ps "~a~%" hex)))
 
-(defun write-ps-page-footer (ps page-num total-pages
-                             title-text date-str author
-                             &optional hostname)
+(defun write-ps-page-footer (ps
+                             &key page pages last-updated)
   "Write PDF page footer with proper formatting.
    Layout:
      | < Icon >  | Skyline-Tool for _Phantasia_ 7800                                                              |              |
@@ -276,14 +255,15 @@
    Skyline-Tool in 12pt Bold Times-Roman Royal Blue, 'for' 10.5pt Times-Roman black,
    Game-Title in 12pt Italic Times-Roman Navy Blue, machine-dir in 10.5pt Times-Roman Navy Blue
    Date/author/host/site in 75% gray 8pt, page number right-aligned."
-  (let* ((site (ignore-errors (short-site-name)))
-         (machine (or (ignore-errors (machine-directory-name)) ""))
-         (date-part (escape-ps-string date-str))
-         (author-part (escape-ps-string author))
-         (host-part (when hostname (escape-ps-string hostname)))
-         (site-part (escape-ps-string (or site "")))
-         (game-title (escape-ps-string title-text))
-         (machine-dir (escape-ps-string machine)))
+  (let* ((site (first (remove-if #'null (list (long-site-name) (short-site-name) ""))))
+         (date-part (escape-ps-string (local-time:format-timestring
+                                       '(:year "-" :month "-" :day
+                                         " "
+                                         :hour ":" :minute)
+                                       last-updated)))
+         (site-part (escape-ps-string (if (emptyp site)
+                                          ""
+                                          (format nil " at ~a" site)))))
     ;; Icon spanning both rows (48x48 at y=54, translates to 54-102 range)
     (format ps "gsave 56 54 translate~%")
     (write-ps-header-icon ps)
@@ -303,21 +283,25 @@
     (format ps "currentpoint pop 2 add 0 moveto~%")
     (format ps "/Times-Italic-ISOLatin1 findfont 12 scalefont setfont~%")
     (format ps "0.0 0.0 0.5 setrgbcolor~%")
-    (format ps "(~a) show~%" game-title)
+    (format ps "(~a) show~%" (escape-ps-string *game-title*))
     ;; machine-dir in 10.5pt Times-Roman, Navy Blue
     (format ps "currentpoint pop 2 add 0 moveto~%")
     (format ps "/Times-Roman-ISOLatin1 findfont 10.5 scalefont setfont~%")
     (format ps "0.0 0.0 0.5 setrgbcolor~%")
-    (format ps "(~a) show~%" machine-dir)
+    (format ps "(~a) show~%" (escape-ps-string (machine-directory-name)))
     (format ps "grestore~%")
     ;; Row 2: Date/author on host at site + page number (dark gray, 8pt)
     (format ps "gsave~%")
     (format ps "/Times-Roman-ISOLatin1 findfont 8 scalefont setfont~%")
     (format ps "0.25 0.25 0.25 setrgbcolor~%")
     (format ps "112 67.57 moveto~%")
-    (format ps "(~a~@[ --- ~a~]~@[ on ~a~]~@[ at ~a~]) show~%"
-            date-part author-part host-part site-part)
+    (format ps "(~a~@[ --- ~a~] on ~a ~a) show~%"
+            (escape-ps-string date-part)
+            (escape-ps-string (user-real-name))
+            (escape-ps-string (title-case (machine-instance)))
+            site-part)
     (format ps "556 67.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
-            page-num total-pages)
+            (escape-ps-string (format nil "~:d" page-num))
+            (escape-ps-string (format nil "~:d" total-pages)))
     (format ps "grestore~%")))

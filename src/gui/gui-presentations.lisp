@@ -8,12 +8,13 @@
 ;; Common Presentation Infrastructure
 ;; 
 
-(defun validate-json-version (json expected-version)
+(defun validate-json-version (json)
   "Validate JSON version against expected version, erroring if incompatible."
-  (let ((tool-version (gethash "skyline-tool" json)))
-    (unless (clojure->number= tool-version expected-version)
-      (error "Incompatible JSON version ~a (expected ~a). Resource import aborted."
-             tool-version expected-version))))
+  (let ((my-version (asdf:component-version (asdf:find-system :skyline-tool)))
+        (json-version (gethash "Skyline-Tool" json)))
+    (unless (version-dotted-triple->= my-version json-version)
+      (error "Incompatible JSON version ~a (this is ~a). Resource import aborted."
+             json-version my-version))))
 
 (defgeneric resource-to-json (resource)
   (:documentation "Convert RESOURCE to JSON-compatible object for export."))
@@ -44,7 +45,7 @@
   "Import RESOURCE of CLASS from JSON file at FILEPATH."
   (let ((json (cl-json:decode-json-from-string
                (uiop:read-file-string filepath))))
-    (validate-json-version json 0.6)
+    (validate-json-version json)
     (let ((resource (resource-from-json json class)))
       (restore-resource-content-from-json resource json)
       resource)))
@@ -61,9 +62,9 @@ Used by importers to materialize the actual file from a portable JSON export."
         (when (and data path)
           (ensure-directories-exist path)
           (with-open-file (stream path :direction :output
-                                  :element-type '(unsigned-byte 8)
-                                  :if-exists :supersede
-                                  :if-does-not-exist :create)
+                                       :element-type '(unsigned-byte 8)
+                                       :if-exists :supersede
+                                       :if-does-not-exist :create)
             (let ((bytes (decode-base91 data)))
               (write-sequence bytes stream))))))))
 
@@ -80,19 +81,15 @@ Used by importers to materialize the actual file from a portable JSON export."
 ;; PostScript Export Infrastructure
 ;; 
 
-(defun export-resource-to-ps-file (resource filepath
-                                   &key title (author (user-real-name)) (last-updated (local-time:now)))
+(defun export-resource-to-ps-file (resource filepath)
   "Export RESOURCE to PostScript file at FILEPATH with proper headers/footers."
   (let* ((ps2pdf (uiop:run-program (list "ps2pdf" "-" filepath) :input :stream :output nil))
          (ps (uiop:process-info-input ps2pdf)))
     (write-ps-font-encodings ps)
-    (write-ps-docinfo ps title author (user-homedir-pathname))
-    (resource-to-postscript resource ps :title title :author author :last-updated last-updated)
-    (write-ps-page-footer ps 1 1 title
-                          (format-timestring nil last-updated :format '(:year "-" :month "-" :day " " :hour ":" :min))
-                          author
-                          (machine-instance)))
-  filepath)
+    (write-ps-docinfo ps resource)
+    (resource-to-postscript resource ps)
+    (write-ps-page-footer ps :page 1 :pages 1 :last-updated last-updated)
+    filepath))
 
 (defun export-resource-to-text-file (resource filepath)
   "Export RESOURCE to plain text file at FILEPATH."
@@ -156,16 +153,16 @@ Used by importers to materialize the actual file from a portable JSON export."
                 (string-downcase (symbol-name (frame-view-mode frame))))))))
 
 (clim:define-command (com-preview-close :command-table resource-preview-menu-bar
-                                         :menu t :name t) ()
+                                        :menu t :name t) ()
   (clim:frame-exit clim:*application-frame*))
 
 (clim:define-command (com-preview-view-reference :command-table resource-preview-menu-bar
-                                                  :menu t :name t) ()
+                                                 :menu t :name t) ()
   (setf (frame-view-mode clim:*application-frame*) :reference)
   (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
 (clim:define-command (com-preview-view-reading :command-table resource-preview-menu-bar
-                                                :menu t :name t) ()
+                                               :menu t :name t) ()
   (setf (frame-view-mode clim:*application-frame*) :reading)
   (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
@@ -223,12 +220,8 @@ Used by importers to materialize the actual file from a portable JSON export."
   (format ps "~%%% Begin resource content~%")
   (write-resource-ps-content resource ps)
   (format ps "~%%% End resource content~%")
-  (write-ps-page-footer ps 1 1 title
-                        (format-timestring nil last-updated
-                                           :format '(:year "-" :month "-" :day " " :hour ":" :min))
-                        (user-real-name)
-                        (machine-instance)
-                        1 1))
+  (write-ps-page-footer ps :page 1 :pages 1 
+                           :last-updated last-updated))
 
 (defgeneric write-resource-text-content (resource stream)
   (:documentation "Write human-readable text representation of RESOURCE to STREAM."))
@@ -244,7 +237,7 @@ Used by importers to materialize the actual file from a portable JSON export."
 ;; Layout:
 ;;   {Icon} | Title (red if missing from builds) | Locator
 ;;   | Subheading (75% gray, smaller) | Build checkboxes for assets
-;;   | VC/issue indicators bottom-right
+;;   | VERSION-CONTROL/issue indicators bottom-right
 ;; 
 
 (defun present-resource-reference (stream resource)
@@ -282,7 +275,7 @@ Used as the default display for all resource types in inspectors and listings."
                 (format stream "[~a] Build"
                         (if (plusp (game-resource-builds resource))
                             "✓" " ")))))
-          ;; Right margin: locator / VC status / issue indicators
+          ;; Right margin: locator / VERSION-CONTROL status / issue indicators
           (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
             (game-resource-present-right-margin resource stream)))))))
 
@@ -300,7 +293,7 @@ Used as the default display for all resource types in inspectors and listings."
   (:documentation "Present the subheading line for RESOURCE on STREAM."))
 
 (defgeneric game-resource-present-right-margin (resource stream)
-  (:documentation "Present right-margin info (locator, VC, issues) for RESOURCE on STREAM."))
+  (:documentation "Present right-margin info (locator, VERSION-CONTROL, issues) for RESOURCE on STREAM."))
 
 (defmethod game-resource-present-icon ((resource game-resource) stream)
   "Default icon - shows a bullet character."
@@ -315,21 +308,21 @@ Used as the default display for all resource types in inspectors and listings."
   (format stream "~a" (game-resource-kind resource)))
 
 (defmethod game-resource-present-right-margin ((resource game-resource) stream)
-  "Default right margin: shows locator and VC status."
+  "Default right margin: shows locator and VERSION-CONTROL status."
   (let ((locator (ignore-errors (game-resource-locator resource)))
-        (vc-status (ignore-errors
-                    (vc-file-status (or (game-resource-full-path resource)
-                                        (game-resource-collective-path resource))))))
+        (version-control-status (ignore-errors
+                                 (version-control-file-status (or (game-resource-full-path resource)
+                                                                  (game-resource-collective-path resource))))))
     (when locator
       (clim:with-drawing-options (stream :ink clim:+black+)
         (clim:with-text-face (stream :roman)
           (clim:with-text-size (stream :smaller)
             (format stream "~a" locator))))
       (format stream "~%"))
-    (when vc-status
+    (when version-control-status
       (clim:with-drawing-options (stream :ink +dark-gray+)
         (clim:with-text-size (stream :smaller)
-          (format stream "VC: ~a" vc-status))))))
+          (format stream "VERSION-CONTROL: ~a" version-control-status))))))
 
 ;; 
 ;; Helper Functions for Common Fields
@@ -339,26 +332,27 @@ Used as the default display for all resource types in inspectors and listings."
   "Write common resource fields to PS stream."
   (let ((title (game-resource-title resource))
         (kind (game-resource-kind resource))
-        (vc-status (vc-file-status (or (game-resource-full-path resource)
-                                       (game-resource-collective-path resource)))))
+        (version-control-status (version-control-file-status (or (game-resource-full-path resource)
+                                                                 (game-resource-collective-path resource)))))
     (format ps "/Times-Roman-ISOLatin1 findfont 14 scalefont setfont~%")
     (format ps "56 600 moveto~%")
     (format ps "0.0 0.0 0.0 setrgbcolor~%")
     (format ps "(~a) show~%" (escape-ps-string title))
     (format ps "56 580 moveto~%")
     (format ps "(Kind: ~a) show~%" (escape-ps-string kind))
-    (when vc-status
+    (when version-control-status
       (format ps "56 540 moveto~%")
-      (format ps "(VC Status: ~a) show~%" (escape-ps-string vc-status)))))
+      (format ps "(VERSION-CONTROL Status: ~a) show~%" (escape-ps-string version-control-status)))))
 
 (defun write-resource-common-text (resource stream)
   "Write common resource fields to text stream."
   (format stream "Title: ~a~%" (game-resource-title resource))
   (format stream "Kind: ~a~%" (game-resource-kind resource))
-  (let ((vc-status (vc-file-status (or (game-resource-full-path resource)
-                                       (game-resource-collective-path resource)))))
-    (when vc-status
-      (format stream "VC Status: ~a~%" vc-status))))
+  (let ((version-control-status
+          (version-control-file-status (or (game-resource-full-path resource)
+                                           (game-resource-collective-path resource)))))
+    (when version-control-status
+      (format stream "Version Control Status: ~a~%" version-control-status))))
 
 ;; 
 ;; resource-to-json methods for all concrete resource classes
@@ -617,37 +611,34 @@ Base91 provides ~23% overhead vs base64's 33%."
   (format ps "56 560 moveto~%")
   (format ps "(BLOB: ~a) show~%" (escape-ps-string (game-asset-moniker resource)))
   (format ps "showpage~%")
-  ;; Landscape page with palette colors
+  ;; FIXME: missing page with palette swatches
+  ;; Landscape page with image centered
   (format ps "<< /PageSize [792 612] >> setpagedevice~%")
   (format ps "56 480 moveto~%")
   (format ps "/Helvetica-Bold findfont 14 scalefont setfont~%")
   (format ps "(Palette Colors) show~%")
   (format ps "56 460 moveto~%")
   (format ps "/Helvetica findfont 10 scalefont setfont~%")
-  (let* ((xcf-path (game-resource-full-path resource))
-         (png-path (make-output-path resource :png)))
+  (let* ((xcf-path (first (game-resource-pathnames resource)))
+         (png-path (make-pathname :defaults xcf-path :type "png")))
     (unless (probe-file png-path)
       (build-target png-path))
     (when (probe-file png-path)
-      (let* ((png-data (error "unimplemented"))
-             (palette (png->palette (png-read:image-data png-data)
-                                    (png-read:transparency png-data)))
-             (num-colors (min 16 (array-dimension palette 0))))
-        (dotimes (i num-colors)
-          (let* ((color (aref palette i))
-                 (r (nth 0 color))
-                 (g (nth 1 color))
-                 (b (nth 2 color)))
-            (format ps "~d ~d moveto~%" 56 (+ 440 (* i 10)))
-            (format ps "[##] P~dC~d: (~a) ~$~d~%" i i
-                    (format-color-name r g b) r))))))
-  ;; PDF footer with proper headers and footers
-  (format ps "showpage~%")
-  (format ps "%--- Footer ---%~%")
-  (format ps "0 0 moveto~%")
-  (format ps "/Times-Roman findfont 8 scalefont setfont~%")
-  (format ps "(Skyline-Tool for Phantasia 7800 | ~a | Page ~d) show~%"
-          (escape-ps-string (game-asset-moniker resource)) 1))
+      (let* ((png-data (png-read:read-png-file png-path))
+             (image (png->palette (png-read:image-data png-data)
+                                  (png-read:transparency png-data))))
+        (dotimes (y (array-dimension image 1))
+          (dotimes (x (array-dimension image 0))
+            (let* ((color (aref image x y)))
+              (destructuring-bind (r g b) (palette->rgb color)
+                (format ps "~d ~d ~d setrgbcolor~%" (/ r 255.0) (/ g 255.0) (/ b 255.0))
+                (format ps "56 ~d 8 8 rectfill~%" y)))))))
+    ;; FIXME: Incorrect footer contents
+    (format ps "showpage~%")
+    (format ps "0 0 moveto~%")
+    (format ps "/Times-Roman findfont 8 scalefont setfont~%")
+    (format ps "(Skyline-Tool for Phantasia 7800 | ~a | Page ~d) show~%"
+            (escape-ps-string (game-asset-moniker resource)) 1)))
 
 (defmethod write-resource-ps-content ((resource game-resource-boat) ps)
   (write-resource-common-ps resource ps)
