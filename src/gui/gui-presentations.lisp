@@ -178,12 +178,93 @@ Used by importers to materialize the actual file from a portable JSON export."
 (clim:define-command (com-preview-export-text :command-table resource-preview-menu-bar
                                               :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
+         (resource (frame-resource frame)))
     (when resource
       (let ((filepath (prompt-save-pathname (format nil "~a.txt" (game-resource-title resource))
                                             (list :dir (game-resource-kind resource) :text))))
         (when filepath
           (export-resource-to-text-file resource filepath))))))
+
+;; Printing command - pipes directly to lpr or IPP server
+(clim:define-command (com-preview-print :command-table resource-preview-menu-bar
+                                        :menu t :name t) ()
+  (let* ((frame clim:*application-frame*)
+         (resource (frame-resource frame)))
+    (when resource
+      (let ((printer (or (get-default-printer)
+                         (prompt-choose-printer))))
+        (if (ipp-printer-p printer)
+            ;; Pipe directly to IPP server
+            (pipe-to-ipp printer resource)
+            ;; Pipe directly to local lpr
+            (pipe-to-lpr printer resource))))))
+
+;; Helper: pipe PostScript directly to lpr via stdin
+(defun pipe-to-lpr (printer resource)
+  "Pipe RESOURCE's PostScript directly to lpr command via stdin stream."
+  (let* ((ps-proc (uiop:run-program 
+                   (list "lpr" "-P" printer "-o" "fit-to-page")
+                   :input :stream :output nil :error-output nil))
+         (ps-stream (uiop:process-info-input ps-proc)))
+    (write-ps-font-encodings ps-stream)
+    (write-ps-docinfo ps-stream resource "Skyline-Tool")
+    (format ps-stream "~%%% Begin resource content~%")
+    (write-resource-ps-content resource ps-stream)
+    (format ps-stream "~%%% End resource content~%")
+    (close ps-stream)
+    (uiop:process-wait ps-proc)))
+
+;; Helper: pipe PostScript directly to IPP server via Drakma (streamed, no buffering)
+(defun pipe-to-ipp (printer resource)
+  "Pipe RESOURCE's PostScript directly to IPP server via Drakma without buffering."
+  (let* ((ipp-url (format nil "http://~a:631/printers/~a"
+                          (ipp-host printer) (ipp-name printer)))
+         (ipp-stream (make-stream-output-stream)))
+    ;; Write PS content directly to IPP stream
+    (write-ps-font-encodings ipp-stream)
+    (write-ps-docinfo ipp-stream resource "Skyline-Tool")
+    (format ipp-stream "~%%% Begin resource content~%")
+    (write-resource-ps-content resource ipp-stream)
+    (format ipp-stream "~%%% End resource content~%")
+    ;; Send stream directly to IPP via Drakma
+    (drakma:post-request ipp-url 
+                         :content ipp-stream
+                         :headers `(("Content-Type" . "application/postscript"))))))
+
+;; Helper: get default printer or prompt user
+(defun get-default-printer ()
+  "Return default printer name from CUPS or LPD configuration."
+  (or (uiop: getenv "LPDEST")
+      (uiop: getenv "PRINTER")
+      "default"))
+
+;; Helper: prompt user to choose printer
+(defun prompt-choose-printer ()
+  "Prompt user to select a printer from discovered IPP printers or local lpr queue."
+  (let ((printers (discover-printers)))
+    (if printers
+        (first printers)  ; In real implementation, show selection dialog
+        (get-default-printer))))
+
+;; Helper: discover available printers
+(defun discover-printers ()
+  "Discover available IPP printers via DNS-SD or local CUPS queue."
+  (append (discover-ipp-printers)
+          (discover-local-printers)))
+
+;; Helper: discover IPP printers via DNS-SD
+(defun discover-ipp-printers ()
+  "Return list of IPP printer names discovered via Avahi DNS-SD."
+  (when (probe-file "/etc/resolv.conf")
+    (uiop:run-program '("avahi-browse" "-t" "_ipp._tcp" "-l")
+                      :output :line :error-output nil)))
+
+;; Helper: discover local printers from CUPS
+(defun discover-local-printers ()
+  "Return list of local printer names from CUPS lpstat command."
+  (when (probe-file "/usr/bin/lpstat")
+    (uiop:run-program '("lpstat" "-p")
+                      :output :line :error-output nil)))
 
 
 ;; 

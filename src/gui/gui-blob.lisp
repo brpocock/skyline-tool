@@ -79,11 +79,18 @@
           :label "Name:"
          :validator #'validate-blob-name
          :max-length 200)))
-    ;; Build indicators row
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :left)
-        (format stream "Builds: ")
-        ))))
+;; Build indicators row
+(clim:formatting-row (stream)
+  (clim:formatting-cell (stream :align-x :left)
+    (format stream "Builds: "))
+  (clim:formatting-cell (stream :align-x :left)
+    (when (game-resource-build-demo-p resource)
+      (format stream "✓ Demo "))
+    (when (game-resource-build-public-p resource)
+      (format stream "✓ Public "))
+    (let ((publisher (game-resource-publisher-name resource)))
+      (when publisher
+        (format stream "✓ ~a " publisher))))))
 
 ;; Viewing presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-viewing) stream view &key)

@@ -18,6 +18,24 @@
 (clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-instrument-viewing)))
   (typep object 'game-resource-instrument))
 
+(clim:define-application-frame instrument-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
+  ()
+  (:menu-bar instrument-inspector-menu-bar)
+  (:panes
+   (editor-pane :application :display-function 'display-resource-inspector
+                             :height 300 :width 400
+                             :scroll-bars :vertical)
+   (search-bar :application :display-function (lambda (pane frame) (error "search"))
+                            :height 30 :width 400
+                            :scroll-bars nil)
+   (project-bar :application :display-function (lambda (pane frame) (error "search"))
+                             :height 30 :width 400
+                             :scroll-bars nil))
+  (:layouts (default (clim:vertically () editor-pane))
+            (search (clim:vertically () editor-pane search-bar))
+            (project (clim:vertically () editor-pane  project-bar))
+            (search+project (clim:vertically () editor-pane search-bar project-bar))))
+
 (defmethod present-reference ((resource game-resource-instrument) stream)
   (clim:with-output-as-presentation (stream resource 'game-resource-instrument-reference)
     (clim:formatting-table (stream)
@@ -313,24 +331,6 @@
   (error "Saving orchestration not implemented - edit Source/Tables/Orchestration.ods directly")
   nil)
 
-;; Instrument inspector frame
-(clim:define-application-frame instrument-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
-  ()
-  (:menu-bar instrument-inspector-menu-bar)
-  (:panes
-   (editor-pane :application :display-function 'display-resource-inspector
-                             :height 300 :width 400
-                             :scroll-bars :vertical)
-   (search-bar :application :display-function (lambda (pane frame) (error "search"))
-                            :height 30 :width 400
-                            :scroll-bars nil)
-   (project-bar :application :display-function (lambda (pane frame) (error "search"))
-                             :height 30 :width 400
-                             :scroll-bars nil))
-  (:layouts (default (clim:vertically () editor-pane))
-            (search (clim:vertically () editor-pane search-bar))
-            (project (clim:vertically () editor-pane  project-bar))
-            (search+project (clim:vertically () editor-pane search-bar project-bar))))
 
 (clim:define-command-table instrument-inspector-help-menu
   :menu (("How to Edit Instruments..." :command com-help-for-window)

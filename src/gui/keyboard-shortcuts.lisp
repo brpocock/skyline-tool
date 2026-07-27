@@ -4,15 +4,16 @@
 ;;;
 ;;; Modifier mapping:
 ;;; - Gnome: :control (shown as ^)
-;;;
-;;; - macOS: :meta (shown  as ⌘, represents Command key)  :alt (shown as
-;;;                      ⌥, represents Option key) and :control (shown as ^)
-;;;
+;;; - macOS: :meta (shown as ⌘, represents Command key) and :alt (shown as ⌥, represents Option key) and :control (shown as ^)
 ;;; - Emacs: :control and :meta (shown as C- and M-)
 
 (in-package :skyline-tool)
 
-;;; Sun keys support
+(require 'esa)
+
+;; Use ESA's set-key for proper multi-key chord handling
+
+;; Sun keys support
 (clim:define-command (com-sun-stop :command-table clim-internals::global-command-table) ()
   "Sun key: Stop/cancel/abort."
   (com-stop-build))
@@ -152,13 +153,18 @@
   "Delete character forward."
   (error "unimplemented"))
 
-;;; Helper function to bind a key to a command in the global command table
+;; Helper function to bind a key to a command in the global command table
 (defun bind-key (key modifier command)
   "Bind KEY with MODIFIER to COMMAND in the global command table."
   (let ((gct 'clim-internals::global-command-table))
     (clim:add-keystroke-to-command-table gct :keystroke (list key modifier) command)))
 
-;;; Define key bindings for each theme
+;; Helper to bind ESA multi-key chords properly
+(defun bind-esa-chord (keys command)
+  "Bind a multi-key chord sequence using ESA's proper set-key mechanism."
+  (esa:set-key command 'clim-internals::global-command-table keys))
+
+;; Define key bindings for each theme
 (defun apply-gnome-bindings ()
   "Apply Gnome-style key bindings using :control modifier."
   ;; Quit application
@@ -302,33 +308,6 @@
 (defun apply-emacs-bindings ()
   "Apply Emacs style key bindings using :control and :meta modifiers.
    Emacs uses C- for Control, M- for Meta as per user specification."
-  ;; Note: We cannot bind multi-key chords like C-x C-c directly with CLIM's
-  ;; single keystroke binding system. We will bind what we can with single keys
-  ;; and leave complex chords as TODO for future implementation.
-  ;; 
-  ;; From the user's table, we implement the single-key equivalents where possible:
-  ;;   Information/Help: C-h
-  ;;   Find: C-s
-  ;;   Undo: C-_
-  ;;   Cut: C-w
-  ;;   Copy: M-w
-  ;;   Paste: C-y
-  ;;   Preferences: C-,
-  ;;   Stop/cancel/abort: C-.
-  ;;   Escape: Esc
-  ;;   Zoom in: C-+
-  ;;   Zoom out: C--
-  ;;   Reset zoom: C-0
-  ;;   Cursor navigation: as specified for both macOS and Emacs mode
-  ;;   Help keys: C-/ C-? M-/ M-? C-h M-h <f1>
-  ;;   Build: F5, M-Return, Execute
-  ;;
-  ;; For multi-key chords like C-x C-c (quit), C-x k (close window), C-x i (open),
-  ;; C-x h (select all), C-x C-s (save), C-x t (duplicate), C-x b (switch),
-  ;; C-x C-f (new file) we cannot implement them directly with this simple binding system.
-  ;; These would require prefix key handling which is beyond scope.
-  ;; We leave them as TODO.
-  
   ;; Information/Help
   (bind-key #\h :control 'com-help-for-window)
   ;; Find
@@ -376,8 +355,15 @@
   ;; Tab switching: M-<, M->
   (bind-key #\< :meta 'com-tab-prev)
   (bind-key #\> :meta 'com-tab-next)
-  ;; C-x prefix key for Emacs-style chords
-  (bind-key #\x :control 'handle-emacs-prefix-key))
+  ;; C-x prefix chords using ESA for proper multi-key sequence support
+  (bind-esa-chord '((#\x :control) (#\c :control)) 'com-quit-skyline-tool)
+  (bind-esa-chord '((#\x :control) (#\k :control)) 'com-close-frame)
+  (bind-esa-chord '((#\x :control) (#\i :control)) 'com-import-file)
+  (bind-esa-chord '((#\x :control) (#\h :control)) 'com-select-all)
+  (bind-esa-chord '((#\x :control) (#\s :control)) 'com-save-default)
+  (bind-esa-chord '((#\x :control) (#\t :control)) 'com-duplicate)
+  (bind-esa-chord '((#\x :control) (#\b :control)) 'com-switch-location)
+  (bind-esa-chord '((#\x :control) (#\f :control)) 'com-new-resource))
 
 ;;; Apply platform-appropriate default only when preferences are missing.
 ;;; This default is used as fallback; it does NOT overwrite existing preferences.
