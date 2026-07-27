@@ -1,10 +1,13 @@
 ;;; Skyline-Tool src/gui/gui-character.lisp
-;;; Character Inspector with full CLIM integration
+;;;; Copyright © 2026 Interworldly Adventuring, LLC
 
-
+(in-package :skyline-tool)
 #|
 
+### BEGIN ### NO ALTERATIONS PERMITTED ###
+
 ### IN-LINE REQUIREMENTS MUST NOT BE ALTERED NOR REMOVED
+
 
 ### WINDOW OVERALL
 
@@ -18,7 +21,7 @@
 [OPTIONAL Project Bar  ]
 
 ### TAB BAR
-__________   ____________   ___________   ________
+ __________   ____________   ___________   ________
 / Identity \ / Appearance \ / Equipment \ / Speech \
 |          | |            | |           | |        |
 ### IDENTITY TAB
@@ -28,10 +31,10 @@ Name:  ____________ (__/12)          # Name field allowing 12 minifont bytes
 # if the name contains characters that cannot be represented an error appears here
 # on the line beneath the name
 
-Gender: <> Male (he)
-<> Female (she)
-<> Indefinite (they)
-<> Impersonal (it)
+Gender: <> Masculine (he)
+        <> Feminine (she)
+        <> Indefinite (they)
+        <> Impersonal (it)
 
 Home: __________________________
 
@@ -119,10 +122,10 @@ Body: ___                                 # number 0 - 255, usually zero
 #### FOR HUMAN ####
 
 Head: [ Head 1  - ]
-[ Head 2    ]
-[ Head 3    ]
-...
-[ Head 10   ]
+      [ Head 2    ]
+      [ Head 3    ]
+        ...
+      [ Head 10   ]
 
 Body: [ Robe  - ]
 [ Tunic   ]
@@ -265,300 +268,102 @@ Color: [##]                     # color swatch -> palette color picker menu
 ### UNDER THE MAIN  EDITING PANE THERE MAY BE AN  OPTIONAL Project Pane ;
 ### AS IS COMMON TO ALL INSPECTORS (VC/issues)
 
+### Below the following pipe-sharp sequence the code begins ###
+### END of NO ALTERATIONS PERMITTED section ###
+
 |#
 
+;; Eventbus types for character inspector
+(define-constant +character-inspector-event-types+
+  '(:character-data-changed :equipment-changed :appearance-changed :speech-changed
+    :inventory-changed :keys-changed :stats-changed :flags-changed)
+  :test 'equalp)
 
-(in-package :skyline-tool)
+;; Dynamic equipment/shield/appearance names loaded from data
+(defun get-equipment-names ()
+  "Load equipment names from ODS or cached data"
+  (let ((items (load-item-list)))
+    (mapcar (lambda (n) (cons n (format nil "Equipment: ~a" n))) items)))
 
-;; Per-resource save-as menu for Character Inspector
-(clim:define-command-table character-save-as-menu
-  :menu (("Text..." :command com-character-save-text)
-         ("JSON..." :command com-character-save-json)
-         ("PDF..." :command com-character-save-pdf)))
+(defun get-shield-names ()
+  "Load shield names from ODS or cached data"
+  (let ((items (load-item-list)))
+    (mapcar (lambda (n) (cons n (format nil "Shield: ~a" n)))
+            (remove-if-not (lambda (n) (search "shield" n :test #'char-equal)) items))))
 
-(clim:define-command-table character-file-menu
-  :menu (("New..." :command com-character-new)
-         ("Import..." :command com-character-import)
-         (nil :divider :line)
-         ("Save" :command com-character-save)
-         ("Version" :menu inspector-version-control-menu)
-         ("Save as" :menu character-save-as-menu)
-         (nil :divider :line)
-         ("Print to" :menu inspector-print-to-menu)
-         ("Send to" :menu inspector-send-to-menu)
-         (nil :divider :line)
-         ("Close" :command com-close-frame)))
+(defun get-armor-names ()
+  "Load armor names from ODS or cached data"
+  (let ((items (load-item-list)))
+    (mapcar (lambda (n) (cons n (format nil "Armor: ~a" n)))
+            (remove-if-not (lambda (n) (search "armor" n :test #'char-equal)) items))))
 
-(clim:define-command-table character-edit-menu
-  :menu (("Cut" :command com-cut)
-         ("Copy" :command com-copy)
-         ("Paste" :command com-paste)
-         (nil :divider :line)
-         ("Find..." :command com-find)))
+(defun get-decal-kinds ()
+  "Load decal kinds from data"
+  (loop for (l . v) in (list
+                        (cons "Player" "DecalKindPlayer")
+                        (cons "Human" "DecalKindHuman")
+                        (cons "Earl" "DecalKindEarl")
+                        (cons "Captain" "DecalKindCaptain")
+                        (cons "Princess" "DecalKindPrincess")
+                        (cons "Elder" "DecalKindElder")
+                        (cons "Nefertem" "DecalKindNefertem")
+                        (cons "Vizier" "DecalKindVizier")
+                        (cons "Sentinel" "DecalKindSentinel")
+                        (cons "Sailor" "DecalKindSailor")
+                        (cons "Enemy" "DecalKindEnemy")
+                        (cons "Block1" "DecalKindBlock1")
+                        (cons "Block2" "DecalKindBlock2")
+                        (cons "Block3" "DecalKindBlock3")
+                        (cons "Block4" "DecalKindBlock4"))
+        collect (cons l v)))
 
-(clim:define-command-table character-view-menu
-  :menu (("☐ Editable" :command com-inspector-toggle-view :name t)
-         (nil :divider :line)
-         ("☑ Project Pane" :command com-toggle-project-pane :name t)))
+(defun get-available-colors ()
+  "Get available palette colors for skin/hair/clothes"
+  (append +atari-ntsc-color-names+ +atari-pal-color-names+))
 
-(clim:define-command-table character-run-menu
-  :menu (("Build" :menu inspector-build-menu)
-         ("Region" :menu inspector-region-menu)
-         (nil :divider :line)
-         ("Export to AtariVox..." :command com-character-export-atari-vox)))
+;; Event publishing helper for inspector state changes
+(defun publish-character-change (frame event-type &key data)
+  "Publish character state change event"
+  (publish event-type :payload (list* :frame frame :character (frame-npc frame)
+                                      :prototype (frame-prototype frame) data)))
 
-(clim:define-command-table character-help-menu
-  :menu (("How to Manage Characters..." :command com-help-for-window)
-         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
-         ("Skyline-Tool Scripting Guide..." :command com-open-fountain-manual)
-         (nil :divider :line)
-         ("About Skyline-Tool..." :command com-about-skyline-tool)))
+;; Subscribe frame to character changes
+(defun subscribe-character-events (frame)
+  "Subscribe inspector frame to character update events"
+  (dolist (event-type +character-inspector-event-types+)
+    (subscribe event-type
+               (lambda (event)
+                 (declare (ignore event))
+                 (when (typep frame 'character-inspector-frame)
+                   (clim:redisplay-frame-panes frame :force-p t)))))
+  frame)
 
-(clim:define-command-table character-menu-bar
-  :menu (("Character" :menu character-file-menu)
-         ("Edit" :menu character-edit-menu)
-         ("Run" :menu character-run-menu)
-         ("View" :menu character-view-menu)
-         ("Help" :menu character-help-menu)))
+(defun unsubscribe-character-events (frame)
+  "Unsubscribe inspector frame from character update events"
+  (dolist (event-type +character-inspector-event-types+)
+    (unsubscribe event-type
+                 (lambda (event)
+                   (declare (ignore event))
+                   (when (typep frame 'character-inspector-frame)
+                     (clim:redisplay-frame-panes frame :force-p t))))))
 
-;; Tabbed interface for Character Inspector
-(clim:define-application-frame character-inspector-frame (gui-inspector-frame clim:standard-application-frame)
-  ((resource :initarg :resource :reader frame-resource)
-   (current-tab :initarg :current-tab :accessor frame-current-tab :initform :identity))
-  (:menu-bar character-menu-bar)
-  (:panes
-   (tab-bar :application :display-function 'display-tab-bar
-                         :height 30 :width 400
-                         :scroll-bars nil)
-   (main-pane :application
-              :display-function 'display-character-inspector
-              :height 700 :width 400
-              :scroll-bars :vertical)
-   (find-bar :application :display-function 'display-find-bar
-                          :height 30 :width 400
-                          :scroll-bars nil)
-   (project-bar :application :display-function 'display-project-bar
-                             :height 30 :width 400
-                             :scroll-bars nil))
-  (:layouts
-   (default (clim:vertically () tab-bar main-pane))
-   (searching (clim:vertically () tab-bar main-pane find-bar))
-   (searching+project (clim:vertically () tab-bar main-pane find-bar project-bar))
-   (project (clim:vertically () tab-bar main-pane project-bar)))
-  (:icon (skyline-tool-icon :resource :character))
-  (:pretty-name "Character Inspector"))
 
-(defmethod initialize-instance :after ((frame character-inspector-frame) &key)
-  (call-next-method)
-  (subscribe :resource-changed
-             (lambda (event)
-               (declare (ignore event))
-               (ignore-errors (clim:redisplay-frame-panes frame :force-p t)))))
-
-;; Tab switching commands
-(clim:define-command (com-switch-to-identity :command-table clim-internals::global-command-table
-                                                :menu t :name t)
-  ()
-  (let ((frame clim:*application-frame*))
-    (when frame
-      (setf (frame-current-tab frame) :identity)
-      (clim:redisplay-frame-panes frame :force-p t))))
-
-(clim:define-command (com-switch-to-appearance :command-table clim-internals::global-command-table
-                                                :menu t :name t)
-  ()
-  (let ((frame clim:*application-frame*))
-    (when frame
-      (setf (frame-current-tab frame) :appearance)
-      (clim:redisplay-frame-panes frame :force-p t))))
-
-(clim:define-command (com-switch-to-equipment :command-table clim-internals::global-command-table
-                                               :menu t :name t)
-  ()
-  (let ((frame clim:*application-frame*))
-    (when frame
-      (setf (frame-current-tab frame) :equipment)
-      (clim:redisplay-frame-panes frame :force-p t))))
-
-(clim:define-command (com-switch-to-speech :command-table clim-internals::global-command-table
-                                            :menu t :name t)
-  ()
-  (let ((frame clim:*application-frame*))
-    (when frame
-      (setf (frame-current-tab frame) :speech)
-      (clim:redisplay-frame-panes frame :force-p t))))
-
-(defun open-character-inspector (resource)
-  (open-resource-inspector (or resource
-                               (make-instance 'game-resource-character))
-                           :editing))
-
-(defmethod open-resource-inspector ((resource game-resource-character)
-                                    &optional (mode :editing))
-  (clim:run-frame-top-level
-   (clim:make-application-frame 'character-inspector-frame
-                                :resource resource
-                                :view-mode mode
-                                :pretty-name (format nil "~a — ~a ~a"
-                                                     (game-resource-title resource)
-                                                     *game-title* (machine-directory-name)))))
-
-;; Tab bar display
-(defgeneric display-tab-bar (pane frame))
-
-(defmethod display-tab-bar ((pane clim:application-pane) (frame character-inspector-frame))
-  "Draw custom tab bar with rounded corners and styling for Character Inspector."
-  (let* ((tabs '(:identity :appearance :equipment :speech))
-         (tab-labels '("Identity" "Appearance" "Equipment" "Speech"))
-         (n (length tabs))
-         (width (or (clim:bounding-rectangle-width (clim:sheet-region pane)) 400))
-         (height 30)
-         (tab-width (/ width n))
-         (corner-radius 5))
-    (loop for tab in tabs
-          for label in tab-labels
-          for i from 0
-          for left = (* i tab-width)
-          for right = (+ left tab-width)
-          for selected = (eq tab (frame-current-tab frame))
-          do (clim:with-drawing-options (pane
-                                          :ink (if selected
-                                                 (clim:make-gray-color 0) ; black for selected
-                                                 (clim:make-gray-color 0.75))) ; 75% gray for unselected
-               (clim:draw-rectangle pane left 0 right height
-                                    :filled t
-                                    :corner-radii (list corner-radius corner-radius corner-radius corner-radius)))
-          ;; Draw label text
-          (let* ((text-x (if selected
-                           (+ left 5) ; slight inset for selected
-                           (+ left 10))) ; 5px offset for unselected
-                 (text-y 8))
-            (clim:with-drawing-options (pane
-                                        :ink (if selected
-                                               (clim:make-gray-color 1) ; white text on black
-                                               (clim:make-gray-color 0))) ; black text on gray
-              (clim:draw-text pane label text-x text-y))))))
-(defmethod display-current-tab ((frame character-inspector-frame) pane)
-  "Display the current tab based on frame-current-tab slot."
-  (let* ((resource (frame-resource frame))
-         (tab (frame-current-tab frame))
-         (*standard-output* pane))
-    (when resource
-      (ecase tab
-        (:identity (display-identity-tab frame pane))
-        (:appearance (display-appearance-tab frame pane))
-        (:equipment (display-equipment-tab frame pane))
-        (:speech (display-speech-tab frame pane))))))
-
-;; Tab content display methods - READING mode (read-only)
-(defmethod display-appearance-tab (frame pane)
-  (let ((resource (frame-resource frame)))
-    (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Hair Color: "))
-        (clim:formatting-cell (pane :align-x :left)
-          (destructuring-bind (name r g b)
-              (elt *common-palette* (game-resource-character-hair-color resource))
-            (print-wide-pixel (rgb->palette r g b) pane)
-            (format pane "  ~a" (title-case (string name))))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Skin Color: "))
-        (clim:formatting-cell (pane :align-x :left)
-          (destructuring-bind (name r g b)
-              (elt *common-palette* (game-resource-character-skin-color resource))
-            (print-wide-pixel (rgb->palette r g b) pane)
-            (format pane "  ~a" (title-case (string name))))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Clothes Color: "))
-        (clim:formatting-cell (pane :align-x :left)
-          (destructuring-bind (name r g b)
-              (elt *common-palette* (game-resource-character-clothes-color resource))
-            (print-wide-pixel (rgb->palette r g b) pane)
-            (format pane "  ~a" (title-case (string name))))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Head: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-head resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Body: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-body resource)))))))
-
-(defmethod display-equipment-tab (frame pane)
-  (let ((resource (frame-resource frame)))
-    (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Equipment: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-equipment resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Shield: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-shield resource)))))))
-
-;; Identity tab - read-only display
-(defmethod display-identity-tab ((frame character-inspector-frame) pane)
-  (let ((resource (frame-resource frame)))
-    (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Name: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-name resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "ID: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~d" (game-resource-character-id resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Decal: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-decal resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Gender: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-gender resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Home: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (or (game-resource-character-home resource) "None"))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Comments: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-memo resource)))))))
-
-;; Speech tab - read-only display
-(defmethod display-speech-tab ((frame character-inspector-frame) pane)
-  (let ((resource (frame-resource frame)))
-    (clim:formatting-table (pane)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Speech Pitch: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-speech-pitch resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Speech Speed: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-speech-speed resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Speech Bend: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-speech-bend resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Speech Color: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "[~2,'0X]" (game-resource-character-speech-color resource))))
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Nicks: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-nicks resource)))))))
-
-;; Presentation types
 (clim:define-presentation-type game-resource-character-reference ()
-  :inherit-from 'game-resource-reference)
+  :inherit-from 'game-resource-character)
 
-(clim:define-presentation-type game-resource-character-editable ()
-  :inherit-from 'game-resource-editable)
-
-(clim:define-presentation-type game-resource-character-viewing ()
-  :inherit-from 'game-resource-viewing)
-
-;; Reference Presentation for Character Resources
-(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-reference)) stream view &key)
-  (declare (ignore view))
-  (clim:with-output-as-presentation (stream resource 'game-resource-character-reference)
+(defmethod present-reference ((resource game-resource-character) stream)
+  (clim:with-output-as-presentation
+      (stream resource 'game-resource-character-reference)
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
+        ;; Left Column: Icon (3 lines high, 4.8 line-heights wide)
         (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 0)
           (format stream "~3%"))
         (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 125)
           (game-resource-present-icon resource stream))
         (clim:formatting-cell (stream :align-x :left :align-y :top :min-height 90 :min-width 150)
-          (clim:with-text-size (stream :larger)
-            (clim:with-text-face (stream :bold)
-              (game-resource-present-title resource stream)))
+          (clim:with-text-face (stream :bold)
+            (game-resource-present-title resource stream))
           (format stream "~%~5t")
           (clim:with-text-size (stream :smaller)
             (clim:with-drawing-options (stream :ink (clim:make-gray-color 0.75))
@@ -566,740 +371,368 @@ Color: [##]                     # color swatch -> palette color picker menu
         (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
           (game-resource-present-right-margin resource stream))))))
 
-;; Viewing Presentation - READ-ONLY display of character resources
-(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-viewing)) stream view &key)
-  (declare (ignore view))
+(defmethod open-resource-inspector ((resource game-resource-character) &optional (mode :editing))
+  (declare (ignore mode))
+  (let ((name (game-resource-title resource)))
+    (open-character-inspector (or name "Unknown"))))
+
+(defmethod present-reading ((resource game-resource-character) stream)
   (clim:formatting-table (stream)
     (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-name resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "ID: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d" (game-resource-character-id resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Decal: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-decal resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Gender: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-gender resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "HP: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d / ~d" (game-resource-character-hp resource) (game-resource-character-max-hp resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "AC: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d" (game-resource-character-ac resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Crowns: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d" (game-resource-character-crowns resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Arrows: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d" (game-resource-character-arrows resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Potions: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~d" (game-resource-character-potions resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Chalice: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-chalice resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Hair Color: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "[~2,'0X]" (game-resource-character-hair-color resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Skin Color: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "[~2,'0X]" (game-resource-character-skin-color resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Clothes Color: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "[~2,'0X]" (game-resource-character-clothes-color resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Head: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-head resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Body: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-body resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Equipment: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-equipment resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Shield: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-shield resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Speech Pitch: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-speech-pitch resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Speech Speed: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-speech-speed resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Speech Bend: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-speech-bend resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Speech Color: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "[~2,'0X]" (game-resource-character-speech-color resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Nicks: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-nicks resource))))
-    (clim:formatting-row (stream)
-      (clim:formatting-cell (stream :align-x :right) (format stream "Memo: "))
-      (clim:formatting-cell (stream :align-x :left) (format stream "~a" (game-resource-character-memo resource))))))
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Title: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (format stream "~a" (game-resource-title resource))))))
 
-(clim:define-presentation-method clim:present ((resource game-resource-character) (type (eql 'game-resource-character-editable)) stream view &key)
-  (let ((frame clim:*application-frame*))
-    (display-current-tab frame stream))
-  (let* ((name (game-resource-character-name resource))
-         (char-id (game-resource-character-id resource))
-         (decal (game-resource-character-decal resource))
-         (gender (game-resource-character-gender resource))
-         (hp (game-resource-character-hp resource))
-         (max-hp (game-resource-character-max-hp resource))
-         (ac (game-resource-character-ac resource))
-         (crowns (game-resource-character-crowns resource))
-         (arrows (game-resource-character-arrows resource))
-         (potions (game-resource-character-potions resource))
-         (chalice (game-resource-character-chalice resource))
-         (hair-color (game-resource-character-hair-color resource))
-         (skin-color (game-resource-character-skin-color resource))
-         (clothes-color (game-resource-character-clothes-color resource))
-         (head (game-resource-character-head resource))
-         (body (game-resource-character-body resource))
-         (equipment (game-resource-character-equipment resource))
-         (shield (game-resource-character-shield resource))
-         (speech-pitch (game-resource-character-speech-pitch resource))
-         (speech-speed (game-resource-character-speech-speed resource))
-         (speech-bend (game-resource-character-speech-bend resource))
-         (speech-color (game-resource-character-speech-color resource))
-         (nicks (game-resource-character-nicks resource))
-         (memo (game-resource-character-memo resource))) 
+(defmethod present-editing ((resource game-resource-character) stream)
+  (let* ((character resource))
     (clim:formatting-table (stream)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value name
-                          :activation-callback
-                          (lambda (pane)
-                            (let ((new-value (clim:gadget-value pane)))
-                              (when (validate-minifont-name new-value 12)
-                                (setf (game-resource-character-name resource) new-value)
-                                (publish-resource-changed resource)))))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "ID: "))
-        (clim:formatting-cell (stream :align-x :left) (format stream "~d (read-only)" char-id)))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Decal: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value decal
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-decal resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Gender: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:radio-box-pane
-                          :items '(:male :female :other)
-                          :current-value gender
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-gender resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "HP: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value hp
-                          :min-value 0
-                          :max-value max-hp
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-hp resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Max HP: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value max-hp
-                          :min-value 1
-                          :max-value 255
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-max-hp resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "AC: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value ac
-                          :min-value -10
-                          :max-value 20
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-ac resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Crowns: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value crowns
-                          :min-value 0
-                          :max-value 9999
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-crowns resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Arrows: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value arrows
-                          :min-value 0
-                          :max-value 255
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-arrows resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Potions: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value potions
-                          :min-value 0
-                          :max-value 99
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-potions resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Chalice: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:check-box-pane
-                          :value chalice
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-chalice resource) value)
-                            (publish-resource-changed resource))))))
-    (clim:formatting-table (stream)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Name: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value name
-                          :activation-callback
-                          (lambda (pane)
-                            (let ((new-value (clim:gadget-value pane)))
-                              (when (validate-minifont-name new-value 12)
-                                (setf (game-resource-character-name resource) new-value)
-                                (publish-resource-changed resource)))))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "ID: "))
-        (clim:formatting-cell (stream :align-x :left) (format stream "~d (read-only)" char-id)))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Decal: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value decal
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-decal resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Gender: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:radio-box-pane
-                          :items '(:male :female :other)
-                          :current-value gender
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-gender resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "HP: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value hp
-                          :min-value 0
-                          :max-value max-hp
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-hp resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Max HP: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value max-hp
-                          :min-value 1
-                          :max-value 255
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-max-hp resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "AC: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value ac
-                          :min-value -10
-                          :max-value 20
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-ac resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Crowns: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value crowns
-                          :min-value 0
-                          :max-value 9999
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-crowns resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Arrows: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value arrows
-                          :min-value 0
-                          :max-value 255
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-arrows resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Potions: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value potions
-                          :min-value 0
-                          :max-value 99
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-potions resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Chalice: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:check-box-pane
-                          :value chalice
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-chalice resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Hair Color: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim::menu-button
-                          :value hair-color
-                          :menu-items (lambda (stream)
-                                        (declare (ignore stream))
-                                        (let ((colors (assocdr :*common-palette *project.json*)))
-                                          (clim:menu-choose
-                                           (loop for color in colors
-                                                 with p = 0
-                                                 for c = 0 then (if (> c 2)
-                                                                    (prog1 0 (incf p))
-                                                                    (1+ c))
-                                                 for i = (+ c (* p 3))
-                                                 for (name r g b) = color
-                                                 collect
-                                                 (list (format nil "[#~2,'0x~2,'0x~2,'0x] ~a"
-                                                               r g b (title-case (string name)))
-                                                       :value i
-                                                       :current-p (= i hair-color)
-                                                       :command
-                                                       (lambda (item stream)
-                                                         (declare (ignore stream))
-                                                         (setf (game-resource-character-hair-color resource)
-                                                               (clim:gadget-value item))
-                                                         (publish-resource-changed resource))))))))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Skin Color: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (error "unimplemented")))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Clothes Color: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value clothes-color
-                          :min-value 0
-                          :max-value 15
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-clothes-color resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Head: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value head
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-head resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Body: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value body
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-body resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Equipment: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value equipment
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-equipment resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Shield: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value shield
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-shield resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Speech Pitch: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value speech-pitch
-                          :min-value 0
-                          :max-value 15
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-speech-pitch resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Speech Speed: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value speech-speed
-                          :min-value 0
-                          :max-value 10
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-speech-speed resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Speech Bend: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:slider-pane
-                          :value speech-bend
-                          :min-value -2
-                          :max-value 2
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-speech-bend resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Speech Color: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:radio-box-pane
-                          :items '(:white :red :green :blue :yellow :cyan :magenta)
-                          :current-value speech-color
-                          :callback
-                          (lambda (pane value)
-                            (declare (ignore pane))
-                            (setf (game-resource-character-speech-color resource) value)
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Nicks: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value nicks
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-nicks resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource)))))
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right) (format stream "Memo: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (clim:make-pane 'clim:text-field-pane
-                          :value memo
-                          :activation-callback
-                          (lambda (pane)
-                            (setf (game-resource-character-memo resource) (clim:gadget-value pane))
-                            (publish-resource-changed resource))))))))
+      (dolist (header headers)
+        (clim:formatting-row (stream)
+          (clim:formatting-cell (stream) (clim:with-text-face (stream :bold) header))
+          (clim:formatting-cell (stream)
+            (let* ((value (assoc header values :test #'string-equal))
+                   (gadget-value (if value (cdr value) "")))
+              (insert-gadget stream
+                             :label nil
+                             :variable gadget-value
+                             :activation-callback
+                             (lambda (gadget)
+                               (setf (cdr (assoc header values :test #'string-equal))
+                                     (clim:gadget-value gadget))
+                               (save-character-to-ods character ods-path values))))))))))
 
-(defun character-to-plist (resource)
-  "Convert character resource to plist for JSON export."
-  (list :name (game-resource-character-name resource)
-        :id (game-resource-character-id resource)
-        :decal (game-resource-character-decal resource)
-        :gender (game-resource-character-gender resource)
-        :hp (game-resource-character-hp resource)
-        :max-hp (game-resource-character-max-hp resource)
-        :ac (game-resource-character-ac resource)
-        :crowns (game-resource-character-crowns resource)
-        :arrows (game-resource-character-arrows resource)
-        :potions (game-resource-character-potions resource)
-        :chalice (game-resource-character-chalice resource)
-        :hair-color (game-resource-character-hair-color resource)
-        :skin-color (game-resource-character-skin-color resource)
-        :clothes-color (game-resource-character-clothes-color resource)
-        :head (game-resource-character-head resource)
-        :body (game-resource-character-body resource)
-        :equipment (game-resource-character-equipment resource)
-        :shield (game-resource-character-shield resource)
-        :speech-pitch (game-resource-character-speech-pitch resource)
-        :speech-speed (game-resource-character-speech-speed resource)
-        :speech-bend (game-resource-character-speech-bend resource)
-        :speech-color (game-resource-character-speech-color resource)
-        :nicks (game-resource-character-nicks resource)
-        :memo (game-resource-character-memo resource)))
+;;; Character Inspector — Single-Character Inspector
+;;; Opens from All Resources context menu. Uses existing infrastructure
+;;; for data loading (item-chooser, fountain) and drawing (misc-graphics).
 
-(defun character-to-text (resource)
-  "Convert character resource to plain text."
-  (with-output-to-string (s)
-    (format s "~&Character: ~a~%" (game-resource-character-name resource))
-    (format s "ID: ~d~%" (game-resource-character-id resource))
-    (format s "Decal: ~a~%" (game-resource-character-decal resource))
-    (format s "Gender: ~a~%" (game-resource-character-gender resource))
-    (format s "HP: ~d / ~d~%" (game-resource-character-hp resource) (game-resource-character-max-hp resource))
-    (format s "AC: ~d~%" (game-resource-character-ac resource))
-    (format s "Crowns: ~d~%" (game-resource-character-crowns resource))
-    (format s "Arrows: ~d~%" (game-resource-character-arrows resource))
-    (format s "Potions: ~d~%" (game-resource-character-potions resource))
-    (format s "Chalice: ~a~%" (game-resource-character-chalice resource))
-    (format s "Hair Color: ~a~%" (game-resource-character-hair-color resource))
-    (format s "Skin Color: ~a~%" (game-resource-character-skin-color resource))
-    (format s "Clothes Color: ~a~%" (game-resource-character-clothes-color resource))
-    (format s "Head: ~a~%" (game-resource-character-head resource))
-    (format s "Body: ~a~%" (game-resource-character-body resource))
-    (format s "Equipment: ~a~%" (game-resource-character-equipment resource))
-    (format s "Shield: ~a~%" (game-resource-character-shield resource))
-    (format s "Speech Pitch: ~a~%" (game-resource-character-speech-pitch resource))
-    (format s "Speech Speed: ~a~%" (game-resource-character-speech-speed resource))
-    (format s "Speech Bend: ~a~%" (game-resource-character-speech-bend resource))
-    (format s "Speech Color: ~a~%" (game-resource-character-speech-color resource))
-    (format s "Nicks: ~a~%" (game-resource-character-nicks resource))
-    (format s "Memo: ~a~%" (game-resource-character-memo resource))))
+(in-package :skyline-tool)
 
-(defun character-to-postscript (resource)
-  "Convert character resource to PostScript."
-  (with-output-to-string (s)
-    (format s "%%!PS-Adobe-3.0~%")
-    (format s "%%Title: ~a~%" (game-resource-character-name resource))
-    (format s "%%Creator: Skyline-Tool~%")
-    (format s "%%Pages: 1~%")
-    (format s "%%EndComments~%")
-    (format s "/Helvetica findfont 12 scalefont setfont~%")
-    (format s "72 720 moveto~%")
-    (format s "(Character: ~a) show~%" (game-resource-character-name resource))
-    (format s "72 700 moveto~%")
-    (format s "(ID: ~d) show~%" (game-resource-character-id resource))
-    (format s "72 680 moveto~%")
-    (format s "(HP: ~d / ~d) show~%" (game-resource-character-hp resource) (game-resource-character-max-hp resource))
-    (format s "72 660 moveto~%")
-    (format s "(AC: ~d) show~%" (game-resource-character-ac resource))
-    (format s "72 640 moveto~%")
-    (format s "(Crowns: ~d) show~%" (game-resource-character-crowns resource))
-    (format s "72 620 moveto~%")
-    (format s "(Arrows: ~d) show~%" (game-resource-character-arrows resource))
-    (format s "72 600 moveto~%")
-    (format s "(Potions: ~d) show~%" (game-resource-character-potions resource))
-    (format s "72 580 moveto~%")
-    (format s "(Chalice: ~a) show~%" (game-resource-character-chalice resource))
-    (format s "72 560 moveto~%")
-    (format s "(Equipment: ~a) show~%" (game-resource-character-equipment resource))
-    (format s "72 540 moveto~%")
-    (format s "(Shield: ~a) show~%" (game-resource-character-shield resource))
-    (format s "72 520 moveto~%")
-    (format s "(Speech Pitch: ~a) show~%" (game-resource-character-speech-pitch resource))
-    (format s "72 500 moveto~%")
-    (format s "(Speech Speed: ~a) show~%" (game-resource-character-speech-speed resource))
-    (format s "72 480 moveto~%")
-    (format s "(Speech Bend: ~a) show~%" (game-resource-character-speech-bend resource))
-    (format s "72 460 moveto~%")
-    (format s "(Speech Color: ~a) show~%" (game-resource-character-speech-color resource))
-    (format s "showpage~%")))
+(defun bitset->indices (bytes)
+  "Convert a list of BYTES to a list of set bit indices (0-63)."
+  (loop for byte across (coerce bytes 'vector) for offset from 0 by 8
+        append (loop for bit from 0 below 8
+                     when (logbitp bit byte) collect (+ offset bit))))
 
-;; Save commands with atomic replacement
-(defun write-character-atomically (resource)
-  "Write character resource atomically using temp file + rename."
-  (let ((path (first (game-resource-pathnames resource))))
-    (when path
-      (uiop/stream:with-temporary-file (:stream temp-stream :pathname temp-path
-                                        :direction :output)
-        (write-resource-to-stream resource temp-stream)
-        (uiop:rename-file-overwriting-target temp-path path))
-      (publish :resource-changed :payload resource)
-      path)))
+(defun %set-bit (bytes index value)
+  "Return a fresh copy of BYTES with bit INDEX set to VALUE (t/nil)."
+  (let* ((byte-pos (floor index 8)) (bit-pos (mod index 8))
+                                    (result (copy-list bytes)))
+    (when (< byte-pos (length result))
+      (setf (elt result byte-pos)
+            (if value (logior (elt result byte-pos) (ash 1 bit-pos))
+                (logand (elt result byte-pos) (lognot (ash 1 bit-pos))))))
+    (coerce result 'list)))
 
-(defun write-resource-to-stream (resource stream)
-  "Write character resource data to stream in ODS-compatible format."
-  ;; This would write to the ODS format used by NPCStats.ods
-  ;; For now, emit a simple text representation
-  (format stream "~a" (character-to-text resource)))
+(defun %test-atarivox (pitch speed bend phrase)
+  (when *atarivox-port* (ignore-errors (close *atarivox-port*)) (setf *atarivox-port* nil))
+  (let ((stream (second (find-atarivox-serial-port))))
+    (setf *atarivox-port* stream)
+    (when pitch (write-byte 22 *atarivox-port*) (write-byte pitch *atarivox-port*))
+    (when speed (write-byte 21 *atarivox-port*) (write-byte speed *atarivox-port*))
+    (when bend (write-byte 23 *atarivox-port*) (write-byte bend *atarivox-port*))
+    (speech-speak phrase :atarivox)
+    t))
 
-(clim:define-command (com-character-save :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  ()
-  "Save the character resource"
+(clim:define-presentation-type char-cmd () :inherit-from 'symbol :description "Character inspector command")
+
+(defclass tab-friendly-mixin ()
+  ((current-tab :initarg :current-tab :accessor frame-current-tab :initform nil))
+  (:documentation "Mixin for inspector frames with tabbed interfaces."))
+
+(defgeneric frame-tab-list (frame)
+  (:documentation "Return the list of tab keywords for this inspector frame."))
+
+(defgeneric switch-to-tab (frame tab)
+  (:documentation "Switch FRAME to TAB and redisplay."))
+
+(defmethod switch-to-tab ((frame tab-friendly-mixin) tab)
+  (setf (frame-current-tab frame) tab)
+  (clim:redisplay-frame-panes frame :force-p t))
+
+(clim:define-application-frame character-inspector-frame
+    (tab-friendly-mixin resource-inspector-mixin clim:standard-application-frame)
+  ((test-phrase :accessor frame-test-phrase)
+   (%show-search-bar :initform nil :accessor frame-show-search-bar)
+   (%show-project-bar :initform nil :accessor frame-show-project-bar))
+  (:panes
+   (tab-bar :application :display-function 'display-tab-bar :height 30 :width 400 :scroll-bars nil)
+   (identity-pane :application :display-function 'display-identity-tab :height 600 :width 400 :scroll-bars :vertical)
+   (appearance-pane :application :display-function 'display-appearance-tab :height 600 :width 400 :scroll-bars :vertical)
+   (equipment-pane :application :display-function 'display-equipment-tab :height 600 :width 400 :scroll-bars :vertical)
+   (speech-pane :application :display-function 'display-speech-tab :height 600 :width 400 :scroll-bars :vertical)
+   (search-bar :application :display-function 'display-search-bar :height 30 :width 400 :scroll-bars nil)
+   (project-bar :application :display-function 'display-project-bar :height 30 :width 400 :scroll-bars nil))
+   (:layouts
+    (default (clim:vertically ()
+               tab-bar
+               (ecase (frame-current-tab clim:*application-frame*)
+                 (:identity identity-pane)
+                 (:appearance appearance-pane)
+                 (:equipment equipment-pane)
+                 (:speech speech-pane))
+               search-bar
+               project-bar))
+    (:menu-bar char-inspector-menu-bar)))
+
+(defmethod frame-tab-list ((frame character-inspector-frame))
+  '(:identity :appearance :equipment :speech))
+
+(defmethod initialize-instance :after ((frame character-inspector-frame) &key)
+  (call-next-method)
+  (subscribe-to-tab-events frame))
+
+(defun subscribe-to-tab-events (frame)
+  "Subscribe to eventbus events for tab changes and data updates."
+  (subscribe :character-data-changed
+             (lambda (event)
+               (declare (ignore event))
+               (ignore-errors (clim:redisplay-frame-panes frame :force-p t)))))
+
+;; Tab bar display - clean outlines, no fills, clickable
+(defmethod display-tab-bar ((pane clim:application-pane) (frame character-inspector-frame))
+  "Draw tab bar with rounded corner outlines. Each tab is a clickable presentation."
+  (let* ((tabs '(:identity :appearance :equipment :speech))
+         (labels '("Identity" "Appearance" "Equipment" "Speech"))
+         (n (length tabs))
+         (width (or (clim:bounding-rectangle-width (clim:sheet-region pane)) 780))
+         (height 30)
+         (tab-width (/ width n))
+         (corner 5))
+    (loop for tab in tabs for label in labels for i from 0
+          for left = (* i tab-width) for right = (+ left tab-width)
+          for sel = (eq tab (frame-current-tab frame))
+          do (clim:with-drawing-options (pane :ink (if sel (clim:make-gray-color 0) (clim:make-gray-color 0.5))
+                                           :stroke-width 2 :filled nil)
+               (clim:draw-rectangle pane left 0 right height
+                                    :corner-radii (list corner corner corner corner)))
+              (clim:with-output-as-presentation (pane tab 'char-cmd :background-mode :transparent)
+                (clim:draw-text pane label (clim:make-point (+ left 7) 10))))))
+
+(defmethod display-search-bar ((pane clim:application-pane) (frame character-inspector-frame))
+  "Search bar placeholder — search functionality to be implemented."
+  (declare (ignore pane frame))
+  (cerror "Continue anyway" "search-bar stub: not yet implemented"))
+
+(defmethod display-project-bar ((pane clim:application-pane) (frame character-inspector-frame))
+  "Project bar placeholder — project context to be implemented."
+  (declare (ignore pane frame))
+  (cerror "Continue anyway" "project-bar stub: not yet implemented"))
+
+(clim:define-command (com-tab-select :command-table clim-internals::global-command-table
+                                     :menu nil :name t)
+    ((tab-symbol 'symbol :gesture :select))
+  "Switch to the clicked tab in the Character Inspector."
   (let ((frame clim:*application-frame*))
-    (when frame
-      (let ((resource (frame-resource frame)))
-        (when resource
-          (write-character-atomically resource)
-          (clim-simple-echo:run-in-simple-echo
-           (lambda () (format t "~&Saved ~a~%" (game-resource-title resource)))))))))
-
-(clim:define-command (com-character-save-text :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  ()
-  "Export character as plain text"
-  (let* ((frame clim:*application-frame*)
-         (resource (frame-resource frame))
-         (path (prompt-save-pathname (format nil "~a.txt" (game-resource-title resource))
-                                     (list :dir (game-resource-kind resource) :text))))
-    (when path
-      (with-open-file (s path :direction :output :if-exists :supersede :external-format :utf-8)
-        (princ (character-to-text resource) s)))))
-
-(clim:define-command (com-character-save-json :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  ()
-  "Export character as JSON"
-  (let* ((frame clim:*application-frame*)
-         (resource (frame-resource frame))
-         (path (prompt-save-pathname (format nil "~a.json" (game-resource-title resource))
-                                     (list :dir (game-resource-kind resource) :json))))
-    (when path
-      (with-open-file (s path :direction :output :if-exists :supersede :external-format :utf-8)
-        (json:encode-json (character-to-plist resource) s))
-      (clim-simple-echo:run-in-simple-echo
-       (lambda () (format t "~&Exported character as JSON to ~a~%" path))))))
-
-(clim:define-command (com-character-save-pdf :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  ()
-  "Export character as PDF via PostScript"
-  (let* ((frame clim:*application-frame*)
-         (resource (frame-resource frame))
-         (pdf-path (prompt-save-pathname (format nil "~a.pdf" (game-resource-title resource))
-                                         (list :dir (game-resource-kind resource) :pdf))))
-    (when pdf-path
-      (uiop:run-program (list "ps2pdf" :input (character-to-postscript resource)
-                              pdf-path))
-      (xdg-open pdf-path))))
-
-(defun xdg-open (&rest args)
-  (uiop:run-program (append (list "xdg-open") args)))
-
-;; AtariVox integration
+    (when (typep frame 'tab-friendly-mixin)
+      (switch-to-tab frame tab-symbol))))
 
 
-(defun parse-usb-serial-port (line)
-  "Parse a lsusb line for serial port path."
-  (let ((pos (search "/dev/" line)))
-    (when pos
-      (let ((end (or (position #\Space line :start pos) (length line))))
-        (subseq line pos end)))))
+(clim:define-command-table char-inspector-save-as-menu
+  :menu (("Text..." :command com-char-save-text) ("JSON..." :command com-char-save) ("PDF..." :command com-char-save-pdf)))
 
-(defun send-to-atari-vox (port byte-array)
-  "Send byte array to AtariVox on specified serial port."
-  (handler-case
-      (uiop:with-temporary-file (:stream s :pathname p :direction :output
-                                 :element-type '(unsigned-byte 8))
-        (write-sequence byte-array s)
-        (finish-output s)
-        (uiop:run-program (list "cat" p ">" port) :input nil :output nil :error-output nil))
-    (error (e)
-      (format *error-output* "~&Failed to send to AtariVox on ~a: ~a~%" port e)
-      nil)))
+(clim:define-command-table char-inspector-print-to-menu :menu ())
 
-(defun read-speech-text ()
-  "Read speech text from a CLIM text input pane."
-  (error "unimplemented"))
+(clim:define-command-table char-inspector-file-menu
+  :menu (("New..." :command com-char-new) ("Import from JSON..." :command com-char-import-json)
+                                          ("Duplicate..." :command com-char-duplicate) (nil :divider :line)
+                                          ("Save As" :menu char-inspector-save-as-menu) ("Print To" :menu char-inspector-print-to-menu)
+                                          (nil :divider :line) ("Close" :command com-char-close)))
 
-(defun choose-serial-port (ports)
-  "Present available serial ports via CLIM input gadget and return selected port."
-  (let ((selected (first ports)))
-    (dolist (p ports)
-      (format t "  ~a~%" p))
-    (format t "Select port: ")
-    (let ((choice (error "unimplemented")))
-      (when (find choice ports :test 'equal)
-        (setf selected choice)))
-    selected))
+(clim:define-command-table char-inspector-edit-menu
+  :menu (("Edit HP..." :command com-char-edit-hp) ("Edit Crowns..." :command com-char-edit-crowns)
+                                                  ("Edit Arrows..." :command com-char-edit-arrows) ("Edit Potions..." :command com-char-edit-potions)
+                                                  ("Edit Kind..." :command com-char-edit-kind)
+                                                  ("Edit Skin Color..." :command com-char-edit-skin) ("Edit Hair Color..." :command com-char-edit-hair)
+                                                  ("Edit Clothes Color..." :command com-char-edit-clothes)
+                                                  ("Edit Speech Color..." :command com-char-edit-speech-color)
+                                                  ("Edit Voice Pitch..." :command com-char-edit-pitch) ("Edit Voice Speed..." :command com-char-edit-speed)
+                                                  ("Edit Voice Bend..." :command com-char-edit-bend)
+                                                  ("Edit Weapon..." :command com-char-edit-weapon) ("Edit Shield..." :command com-char-edit-shield)
+                                                  ("Edit Armor..." :command com-char-edit-armor)))
 
-(defun encode-speech-for-atari-vox (text &key pitch speed bend volume)
-  (error "implementation was destroyed by an idiot robot"))
+(clim:define-command-table char-inspector-voice-menu
+  :menu (("Test on AtariVox..." :command com-char-test-atarivox :keystroke (#\t :control))))
 
-(clim:define-command (com-character-export-atari-vox
-                      :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  ()
-  "Export current speech to AtariVox via serial port"
-  (let* ((resource (frame-resource clim:*application-frame*))
-         (ports (available-serial-ports))
-         (byte-array (when (and resource ports)
-                       (let* ((port (error "unimplemented"))
-                              (text (error "unimplemented"))
-                              (pitch (game-resource-character-speech-pitch resource))
-                              (speed (game-resource-character-speech-speed resource))
-                              (bend (game-resource-character-speech-bend resource))
-                              (volume (error "unimplemented"))
-                              (bytes (encode-speech-for-atari-vox text
-                                                                  :pitch pitch
-                                                                  :speech speed
-                                                                  :bend bend
-                                                                  :volume volume)))
-                         (when (and port text)
-                           (when (send-to-atari-vox port bytes)
-                             (clim-simple-echo:run-in-simple-echo (lambda () (format t "~&Sent ~d bytes to AtariVox on ~a~%" (length bytes) port)))))))))))
+(clim:define-command-table char-inspector-help-menu
+  :menu (("How to Edit Characters..." :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide..." :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
+         (nil :divider :line) ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
-(clim:define-command (com-character-new :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  (open-character-inspector nil))
+(clim:define-command-table char-inspector-menu-bar
+  :menu (("File" :menu char-inspector-file-menu) ("Edit" :menu char-inspector-edit-menu)
+                                                 ("Voice" :menu char-inspector-voice-menu) ("Help" :menu char-inspector-help-menu)))
 
-;; Import command (stub)
-(clim:define-command (com-character-import :command-table clim-internals::global-command-table :menu t :name t)
-    ()
-  (clim-simple-echo:run-in-simple-echo (lambda () (format t "~&Import functionality not yet implemented~%"))))
+(defmacro with-char-data ((npc proto all-items all-keys) &body body)
+  `(let* ((,npc (frame-npc clim:*application-frame*))
+          (,proto (frame-prototype clim:*application-frame*))
+          (,all-items (or (frame-all-items clim:*application-frame*) (load-item-list)))
+          (,all-keys (or (frame-all-keys clim:*application-frame*) (load-key-list))))
+     ,@body))
 
-(defmethod game-resource-action-menu ((resource game-resource-character))
-  (list (make-menu-item "Inspect..." (lambda () (open-character-inspector resource)))))
 
-(defun validate-minifont-name (name max-bytes)
-  "Validate that NAME encodes to MAX-BYTES or fewer in minifont.
-Signals an error if the name is too long."
-  (let* ((encoded (unicode->minifont name))
-         (len (length encoded)))
-    (<= len max-bytes)))
 
-(define-condition minifont-name-too-long (error)
-  ((name :initarg :name :reader error-name)
-   (encoded-length :initarg :encoded-length :reader error-encoded-length)
-   (max-length :initarg :max-length :reader error-max-length))
-  (:report (lambda (condition stream)
-             (format stream "Name ~a encodes to ~d bytes (max ~d)"
-                     (error-name condition)
-                     (error-encoded-length condition)
-                     (error-max-length condition)))
-   (:documentation "Signalled when a minifont name exceeds the byte limit.")))
+(defmethod display-inspector-content ((frame character-inspector-frame) pane)
+  (display-left frame pane)
+  (display-right frame pane))
+
+(defun display-left (frame pane)
+  (clim:window-clear pane)
+  (with-char-data (npc proto all-items all-keys)
+    (unless npc (format pane "~&Character not found in NPCStats.ods.") (return-from display-left))
+    (let ((name (npc-val npc :name (proto-val proto :|CharacterName| "?")))
+          (class (npc-val npc :class (proto-val proto :|Class| "?")))
+          (char-id (npc-val npc :character-id 0))
+          (hp (npc-val npc :hp (proto-val proto :|CharacterHP| 0)))
+          (max-hp (proto-val proto :|CharacterMaxHP| (npc-val npc :hp 0)))
+          (ac (npc-val npc :ac (proto-val proto :|CharacterArmorClass| 0)))
+          (crowns (npc-val npc :crowns (proto-val proto :|CharacterCrowns| 0)))
+          (arrows (npc-val npc :arrows (proto-val proto :|CharacterArrows| 0)))
+          (potions (npc-val npc :potions (proto-val proto :|CharacterPotions| 0)))
+          (skin (%strip-prefix (npc-val npc :skin-color (proto-val proto :|CharacterSkinColor| "White"))))
+          (hair (%strip-prefix (npc-val npc :hair-color (proto-val proto :|CharacterHairColor| "Brown"))))
+          (clothes (%strip-prefix (npc-val npc :clothes-color (proto-val proto :|CharacterClothesColor| "Blue"))))
+          (speech (npc-val npc :speech-color "Gray"))
+          (pitch (npc-val npc :pitch (proto-val proto :|CharacterSpeechPitch| 96)))
+          (speed (npc-val npc :speed (proto-val proto :|CharacterSpeechSpeed| 114)))
+          (bend (npc-val npc :bend (proto-val proto :|CharacterSpeechBend| 5)))
+          (equip (npc-val npc :equipment (proto-val proto :|CharacterEquipment| "EquipNone")))
+          (shield (npc-val npc :shield (proto-val proto :|CharacterShield| "ShieldNoShield")))
+          (kind-str (let ((dk (proto-val proto :|CharacterDecalKind| "DecalKindEnemy")))
+                      (or (npc-val npc :kind) (and dk (subseq (string dk) 9))))))
+      (clim:with-text-face (pane :bold) (clim:with-text-size (pane :large) (format pane "~a~%" name)))
+      (format pane "Class: ~a  " class)
+      (clim:with-output-as-presentation (pane :kind 'char-cmd :background-mode :transparent)
+        (format pane "Kind: ~a" kind-str))
+      (format pane "  ID: ~d~%~%" char-id)
+      (format pane "~&HP: ~d / ~d     AC: ~d~%" hp (max hp max-hp) ac)
+      (format pane "~&Crowns: ~d  Arrows: ~d  Potions: ~d~%~%" crowns arrows potions)
+      (clim:with-text-face (pane :bold) (format pane "Appearance"))
+      (format pane "~&  Skin: ") (print-wide-pixel 0 pane :unit 8)
+      (clim:with-output-as-presentation (pane :skin 'char-cmd :background-mode :transparent)
+        (format pane " ~a" skin))
+      (format pane "~&  Hair: ") (print-wide-pixel 0 pane :unit 8)
+      (clim:with-output-as-presentation (pane :hair 'char-cmd :background-mode :transparent)
+        (format pane " ~a" hair))
+      (format pane "~&  Clothes: ") (print-wide-pixel 0 pane :unit 8)
+      (clim:with-output-as-presentation (pane :clothes 'char-cmd :background-mode :transparent)
+        (format pane " ~a" clothes))
+      (format pane "~2%")
+      (clim:with-text-face (pane :bold) (format pane "Speech"))
+      (format pane "~&  ")
+      (print-clim-color 0 pane)
+      (clim:with-output-as-presentation (pane :speech-color 'char-cmd :background-mode :transparent)
+        (format pane " ~a" speech))
+      (clim:with-output-as-presentation (pane :pitch 'char-cmd :background-mode :transparent)
+        (format pane "  Pitch: ~d" pitch))
+      (clim:with-output-as-presentation (pane :speed 'char-cmd :background-mode :transparent)
+        (format pane "  Speed: ~d" speed))
+      (clim:with-output-as-presentation (pane :bend 'char-cmd :background-mode :transparent)
+        (format pane "  Bend: ~d" bend))
+      (format pane "~&")
+      (clim:with-output-as-presentation (pane :test-atarivox 'char-cmd :background-mode :transparent)
+        (format pane "[Test on AtariVox]"))
+      (format pane "~2%")
+      (clim:with-text-face (pane :bold) (format pane "Inventory"))
+      (format pane "~& Equipped ")
+      (clim:with-output-as-presentation (pane :equip 'char-cmd :background-mode :transparent)
+        (format pane "Item: ~a" (or (car (rassoc equip +equipment-names+ :test #'string-equal)) (%strip-prefix equip))))
+      (format pane "~&  Equipped ")
+      (clim:with-output-as-presentation (pane :shield 'char-cmd :background-mode :transparent)
+        (format pane "Shield: ~a" (or (car (rassoc shield +shield-names+ :test #'string-equal)) (%strip-prefix shield))))
+      (format pane "~&  Worn ")
+      (clim:with-output-as-presentation (pane :armor 'char-cmd :background-mode :transparent)
+        (format pane "Armor: ~a" (or (and all-items (loop for n in all-items when (search "armor" n :test #'char-equal) return n)) "None")))
+      (format pane "~2%")
+      (clim:with-text-face (pane :bold) (format pane "In Bag"))
+      (let* ((inv-bytes (proto-val proto :|CharacterInventory| '(0 0 0 0 0 0 0 0)))
+             (indices (bitset->indices (coerce inv-bytes 'list))))
+        (if indices (dolist (idx indices)
+                      (let ((n (if (< idx (length all-items)) (elt all-items idx) (format nil "#~d" idx))))
+                        (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" n))))
+            (format pane "~&  (empty)")))
+      (format pane "~2%")
+      (clim:with-text-face (pane :bold) (format pane "Keys"))
+      (let* ((key-bytes (proto-val proto :|CharacterKeys| '(0 0 0 0)))
+             (indices (bitset->indices (coerce key-bytes 'list))))
+        (if indices (dolist (idx indices)
+                      (let ((n (if (< idx (length all-keys)) (elt all-keys idx) (format nil "Key #~d" idx))))
+                        (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" n))))
+            (format pane "~&  (none)")))
+      (format pane "~%")
+      (when proto (format pane "~&~%(~a)" (proto-val proto :|Class| "?"))))))
+
+(defun display-right (frame pane)
+  (clim:window-clear pane)
+  (with-char-data (npc proto all-items all-keys)
+    (unless npc (return-from display-right))
+    (clim:with-text-face (pane :bold) (format pane "Available~%"))
+    (let* ((inv-bytes (proto-val proto :|CharacterInventory| '(0 0 0 0 0 0 0 0)))
+           (owned (bitset->indices (coerce inv-bytes 'list))))
+      (if all-items
+          (let ((count 0))
+            (loop for name across (coerce all-items 'vector) for idx from 0 unless (find idx owned)
+                  do (when (< count 30) (incf count)
+                           (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" name))))
+            (when (< count (length all-items)) (format pane "~&  ... and ~d more" (- (length all-items) count))))
+          (format pane "~&  (no items loaded)")))
+    (format pane "~2%")
+    (clim:with-text-face (pane :bold) (format pane "Keys~%"))
+    (let* ((key-bytes (proto-val proto :|CharacterKeys| '(0 0 0 0)))
+           (owned (bitset->indices (coerce key-bytes 'list))))
+      (if all-keys
+          (loop for name across (coerce all-keys 'vector) for idx from 0 unless (find idx owned)
+                do (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" name)))
+          (format pane "~&  (no keys loaded)")))
+    (format pane "~%")))
+
+(clim:define-command (com-char-test-atarivox :menu t :name t) ()
+  (let* ((char (frame-character frame))) 
+    (let ((pitch (game-resource-character-voice-pitch char))
+          (speed (game-resource-character-voice-speed char))
+          (bend (game-resource-character-voice-bend char))
+          (phrase (frame-test-phrase frame)))
+      (when phrase (setf (frame-test-phrase frame) phrase) (%test-atarivox pitch speed bend phrase)))))
+
+(clim:define-command (com-char-close :menu t :name t) ()
+  (let ((frame clim:*application-frame*)) (when (typep frame 'character-inspector-frame) (clim:frame-exit frame))))
+
+(defun populate-char-print-menu (&optional frame)
+  (declare (ignore frame))
+  (let ((ct 'char-inspector-print-to-menu))
+    (ignore-errors (clim:remove-menu-item-from-command-table ct "No printers found")
+                   (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
+    (let ((printers (ignore-errors (discover-printers-with-names))))
+      (if printers 
+          (dolist (pair printers)
+            (let ((queue (car pair)) (display (cdr pair)))
+              (clim:add-menu-item-to-command-table ct display 
+                                                   :command `(com-char-print-to ,queue ,display) :after :end)))
+          (clim:add-menu-item-to-command-table ct "Default Printer (lpr)" 
+                                               :command 'com-char-print-to-default :after :end))))
+  (unless (fboundp 'com-char-print-to)
+    (clim:define-command (com-char-print-to :command-table clim-internals::global-command-table :menu nil :name t)
+        ((queue-name 'string) (display-name 'string))
+      (declare (ignore display-name)) (%char-print-to-printer queue-name)))
+  (unless (fboundp 'com-char-print-to-default)
+    (clim:define-command (com-char-print-to-default :command-table clim-internals::global-command-table :menu nil :name t)
+        ()
+      (%char-print-to-printer nil))))
+
+(defun open-character-inspector (character-resource)
+  "Open the Character Inspector for a CHARACTER-RESOURCE.
+If CHARACTER-RESOURCE is NIL, open with a new, blank character"
+  (let* ((name (or (game-resource-name character-resource) ""))
+         (all-items (load-item-list)) ; FIXME: listen to eventbus
+         (all-keys (load-key-list)) ; FIXME: listen to eventbus
+         (frame (clim:make-application-frame 'character-inspector-frame
+                                             :resource character-resource
+                                             :pretty-name (format nil "~a — ~a ~a" 
+                                                                  name *game-title* (machine-directory-name))
+                                             :all-items all-items
+                                             :all-keys all-keys
+                                             :width 800 :height 800)))
+    (clim:run-frame-top-level frame)))
+
+

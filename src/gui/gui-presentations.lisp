@@ -22,7 +22,7 @@
 (defgeneric resource-from-json (json class)
   (:documentation "Create a RESOURCE instance of CLASS from JSON object."))
 
-(defgeneric resource-to-postscript (resource stream &key title author)
+(defgeneric resource-to-postscript (resource stream)
   (:documentation "Write RESOURCE as PostScript to STREAM with proper headers/footers."))
 
 (defgeneric resource-to-text (resource stream)
@@ -81,14 +81,13 @@ Used by importers to materialize the actual file from a portable JSON export."
 ;; PostScript Export Infrastructure
 ;; 
 
-(defun export-resource-to-ps-file (resource filepath)
-  "Export RESOURCE to PostScript file at FILEPATH with proper headers/footers."
+(defun export-resource-to-pdf-file (resource filepath)
+  "Export RESOURCE to a PDF file at FILEPATH with proper headers/footers."
   (let* ((ps2pdf (uiop:run-program (list "ps2pdf" "-" filepath) :input :stream :output nil))
          (ps (uiop:process-info-input ps2pdf)))
     (write-ps-font-encodings ps)
     (write-ps-docinfo ps resource)
     (resource-to-postscript resource ps)
-    (write-ps-page-footer ps :page 1 :pages 1 :last-updated last-updated)
     filepath))
 
 (defun export-resource-to-text-file (resource filepath)
@@ -169,39 +168,22 @@ Used by importers to materialize the actual file from a portable JSON export."
 (clim:define-command (com-preview-export-pdf :command-table resource-preview-menu-bar
                                              :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
+         (resource (frame-resource frame)))
     (when resource
-      (let ((filepath (error "Gnome Save As dialog must be used here")))
+      (let ((filepath (prompt-save-pathname (format nil "~a.pdf" (game-resource-title resource))
+                                            (list :dir (game-resource-kind resource) :pdf))))
         (when filepath
-          (export-resource-to-ps-file resource filepath
-                                      :title (game-resource-title resource)
-                                      :author (user-homedir-pathname)))))))
+          (export-resource-to-pdf-file resource filepath))))))
 
 (clim:define-command (com-preview-export-text :command-table resource-preview-menu-bar
                                               :menu t :name t) ()
   (let* ((frame clim:*application-frame*)
          (resource (inspector-resource frame)))
     (when resource
-      (let ((filepath (error "Gnome Save as window must be used here")))
+      (let ((filepath (prompt-save-pathname (format nil "~a.txt" (game-resource-title resource))
+                                            (list :dir (game-resource-kind resource) :text))))
         (when filepath
           (export-resource-to-text-file resource filepath))))))
-
-(clim:define-command (com-preview-print :command-table resource-preview-menu-bar
-                                        :menu t :name t) ()
-  (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame)))
-    (when resource
-      (let* ((ps-filepath (merge-pathnames
-                           (format nil "/tmp/~a-print.ps" (game-resource-title resource))
-                           (uiop:getcwd)))
-             (pdf-filepath (merge-pathnames
-                            (format nil "/tmp/~a-print.pdf" (game-resource-title resource))
-                            (uiop:getcwd))))
-        (export-resource-to-ps-file resource ps-filepath
-                                    :title (game-resource-title resource)
-                                    :author (user-homedir-pathname))
-        (uiop:run-program (list "ps2pdf" ps-filepath pdf-filepath) :output nil)
-        (uiop:run-program (list "lp" pdf-filepath) :output nil)))))
 
 
 ;; 
@@ -213,15 +195,12 @@ Used by importers to materialize the actual file from a portable JSON export."
 (defgeneric write-resource-ps-content (resource ps)
   (:documentation "Write the main content of RESOURCE to PostScript stream PS."))
 
-(defmethod resource-to-postscript ((resource game-resource) ps &key title author last-updated)
-  (declare (ignore author))
-  (write-ps-docinfo ps title "Skyline-Tool" (user-homedir-pathname))
+(defmethod resource-to-postscript ((resource game-resource) ps)
+  (write-ps-docinfo ps resource)
   (write-ps-font-encodings ps)
   (format ps "~%%% Begin resource content~%")
   (write-resource-ps-content resource ps)
-  (format ps "~%%% End resource content~%")
-  (write-ps-page-footer ps :page 1 :pages 1 
-                           :last-updated last-updated))
+  (format ps "~%%% End resource content~%"))
 
 (defgeneric write-resource-text-content (resource stream)
   (:documentation "Write human-readable text representation of RESOURCE to STREAM."))
@@ -401,9 +380,6 @@ Base91 provides ~23% overhead vs base64's 33%."
 (defmethod resource-to-json ((resource game-resource-song))
   (call-next-method))
 
-(defmethod resource-to-json ((resource game-resource-blob))
-  (call-next-method))
-
 (defmethod resource-to-json ((resource game-resource-boat))
   (call-next-method))
 
@@ -475,13 +451,6 @@ Base91 provides ~23% overhead vs base64's 33%."
 
 (defmethod resource-from-json (json (class (eql 'game-resource-song)))
   (make-instance 'game-resource-song
-                 :moniker (gethash "moniker" json)
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
-
-(defmethod resource-from-json (json (class (eql 'game-resource-blob)))
-  (make-instance 'game-resource-blob
                  :moniker (gethash "moniker" json)
                  :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
                            (gethash "kind" json))

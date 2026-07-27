@@ -10,36 +10,28 @@
 (defun validate-minifont-name (name &optional (max-length 20))
   "Validate that NAME contains only minifont characters and respects length limits.
    Returns (VALUES valid-p error-indicator)"
-  (let ((len (length (unicode->minifont name)))
-        (invalid-chars nil))
-    (when (> len max-length)
-      (values nil :too-long))
+  (let ((invalid-chars nil))
     (dolist (char (coerce name 'list))
       (unless (find char +all-minifont-chars+ :test #'char-equal)
         (push char invalid-chars)))
-    (if invalid-chars
-        (values nil (cons :invalid-chars invalid-chars))
-        (values t nil))))
+    (when invalid-chars
+      (return-from validate-minifont-name
+        (values nil (format nil "Unacceptable characters: ~{ ~c~:*~:@c~^  ~}"
+                            invalid-chars)))))
+  (let* ((minifonted (unicode->minifont name))
+         (len (length minifonted)))
+    (when (> len max-length)
+      (return-from validate-minifont-name
+        (values nil (format nil "Too long, would be truncated to “~a”"
+                            (minifont->unicode minifonted)))))))
 
-(defun validate-blob-name (name &optional (max-length 200))
-  "Validate that NAME is PascalCase and consists of Unicode alphanumeric characters.
-   Returns (VALUES valid-p error-indicator)"
-  (cond
-    ((= (length name) 0)
-     (values nil :too-short))
-    ((> (length name) max-length)
-     (values nil :too-long))
-    ((and (> (length name) 1) (not (char-equal (elt name 0) (char-upcase (elt name 0)))))
-     (values nil :not-pascalcase))
-    ((not (every #'alphanumericp (coerce name 'list)))
-     (values nil :invalid-characters))
-    (t (values t nil))))
-
-(defun validate-asset-name (name &optional (max-length 200))
+(defun validate-file-name (name &optional (max-length 200))
   "Validate that NAME consists of Unicode alphanumeric characters, 1-200 long.
-   Used for Map, Song, Object-Prototype, Script, and BLOB resource names.
+   Used for filenames.
    Returns (VALUES valid-p error-indicator)"
   (cond
+    ((null name)
+     (values nil :nil))
     ((= (length name) 0)
      (values nil :too-short))
     ((> (length name) max-length)
@@ -53,7 +45,8 @@
   (declare (ignore new-name))
   (error "Renaming assets is not currently supported for resource: ~a" (game-resource-title resource)))
 
-(defun insert-gadget (stream &key label variable presentation-type activation-callback)
+(defun insert-gadget (stream &key label variable
+                                  presentation-type activation-callback)
   "Insert a text-field gadget into STREAM with initial value VARIABLE.
 LABEL is an optional label string displayed before the field.
 PRESENTATION-TYPE is currently ignored (text fields don't use presentations).
@@ -65,8 +58,8 @@ Returns the gadget."
       (format stream "~a " label)))
   (let ((gadget (clim:with-output-as-gadget (stream)
                   (clim:make-pane 'clim:text-field
-                                 :value (or variable "")
-                                 :activate-callback activation-callback))))
+                                  :value (or variable "")
+                                  :activate-callback activation-callback))))
     gadget))
 
 (defun insert-button (stream &key label activation-callback)
@@ -76,8 +69,8 @@ Returns the gadget."
   (clim:with-output-as-gadget (stream)
     (clim:make-pane 'clim:push-button
                     :label (or label "Button")
-                    :activate-callback (lambda (g)
-                                         (declare (ignore g))
+                    :activate-callback (lambda (gadget)
+                                         (declare (ignore gadget))
                                          (funcall activation-callback)))))
 
 ;; Gadget geometry accessors
@@ -90,43 +83,50 @@ Returns the gadget."
 (defun gadget-top (gadget)
   (clim:bounding-rectangle-min-y (clim:bounding-rectangle gadget)))
 
+(defun gadget-bottom (gadget)
+  (clim:bounding-rectangle-max-y (clim:bounding-rectangle gadget)))
+
 ;; Full-featured editing gadget with validation feedback.
 ;; GETTER takes resource and returns current value.
 ;; SETTER takes resource and new-value to set it.
 ;; Returns the gadget.
-(defun interactive-editing-gadget-with-validation (stream resource getter setter
-                                                   &key (label nil)
+(defun interactive-editing-gadget-with-validation (stream resource
+                                                   &key getter setter
+                                                        (label nil)
                                                         (validator #'validate-minifont-name)
                                                         (max-length 20)
                                                         (callback nil))
-  (let* ((current-value (funcall getter resource))
-         (gadget (insert-gadget stream
-                                :label label
-                                :variable current-value
-                                :activation-callback
-(lambda (gadget)
-                                  (let ((new-value (clim:gadget-value gadget)))
-                                    (multiple-value-bind (valid-p _error)
-                                        (funcall validator new-value max-length)
-                                      (declare (ignore _error))
-                                      (if valid-p
-                                          (progn
-                                            (funcall setter resource new-value)
-                                            (when callback
-                                              (funcall callback resource new-value)))
-                                          (progn
-                                            (clim:with-drawing-options (stream :ink :red :line-width 2)
-                                              (clim:draw-line* stream
-                                                               (gadget-left gadget)
-                                                               (+ (gadget-top gadget) 10)
-                                                               (gadget-right gadget)
-                                                               (+ (gadget-top gadget) 10))
-                                              (clim:draw-text* stream "✗"
-                                                               (+ (gadget-right gadget) 5) (gadget-top gadget))))))))))
-    gadget))
+  (let ((current-value (funcall getter resource)))
+    (insert-gadget stream
+                   :label label
+                   :variable current-value
+                   :activation-callback
+                   (lambda (gadget)
+                     (let ((new-value (clim:gadget-value gadget)))
+                       (multiple-value-bind (valid-p error)
+                           (funcall validator new-value max-length)
+                         (if valid-p
+                             (progn
+                               (funcall setter resource new-value)
+                               (when callback
+                                 (funcall callback resource new-value)))
+                             (progn
+                               (clim:with-drawing-options (stream :ink :red :line-width 2)
+                                 (clim:draw-line* stream
+                                                  (gadget-left gadget)
+                                                  (+ (gadget-bottom gadget) 3)
+                                                  (gadget-right gadget)
+                                                  (+ (gadget-bottom gadget) 3))
+                                 (clim:draw-text* stream "✗"
+                                                  (+ (gadget-left gadget) 5)
+                                                  (+ (gadget-bottom gadget) 7))
+                                 (clim:draw-text* stream error
+                                                  (+ (gadget-left gadget) 45)
+                                                  (+ (gadget-bottom gadget) 7)))))))))))
 
-(defun insert-combo-gadget-with-validation (stream resource accessor items
-                                            &key (label nil) (callback nil))
+(defun insert-combo-gadget-with-validation (stream resource
+                                            &key accessor items
+                                                 (label nil) (callback nil))
   "Insert a combo-box gadget with validation (selected item must be in ITEMS)."
   (let ((current-value (funcall accessor resource)))
     (insert-gadget stream
@@ -139,18 +139,6 @@ Returns the gadget."
                          (funcall accessor resource new-value)
                          (when callback
                            (funcall callback resource new-value))))))))
-
-(defun fixme-interactive-editing-gadget-with-validation (stream resource accessor)
-  "Backward-compatible shim for FIXME placeholder.
-   ACCESSOR is a symbol naming a generic function (e.g. 'game-resource-title).
-   Creates a proper interactive editing gadget with validation."
-  (interactive-editing-gadget-with-validation
-   stream resource
-   (lambda (r) (funcall accessor r))
-   (lambda (r v) (funcall (fdefinition `(setf ,accessor)) v r))
-   :label (string-downcase (symbol-name accessor))
-   :validator #'validate-minifont-name
-   :max-length 20))
 
 ;; Present editing with validation for game-resource-flag
 (defmethod present-editing :around ((resource game-resource-flag) stream)
@@ -212,10 +200,4 @@ Returns the gadget."
                   (clim:draw-text* stream "✗" 
                                    (+ (gadget-right gadget) 5) (gadget-top gadget)))))))))))
 
-;; Present editing for game-resource-item
-(defmethod present-editing :around ((resource game-resource-item) stream)
-  (let* ((item resource)
-         (ods-path (game-resource-collective-path item)))
-    (clim:formatting-table (stream)
-      (format stream "Item editing requires ODS integration - not yet implemented~%"))))
-)
+

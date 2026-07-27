@@ -71,8 +71,8 @@
       (clim:formatting-cell (stream :align-x :left)
         (interactive-editing-gadget-with-validation
          stream resource
-         (lambda (r) (game-resource-title r))
-         (lambda (r v) (setf (game-resource-title r) v))
+         :getter (lambda (r) (game-resource-title r))
+         :setter (lambda (r v) (setf (game-resource-title r) v))
          :label "Word:"
          :validator #'validate-asset-name
          :max-length 200)))
@@ -81,21 +81,21 @@
         (format stream "Phonetics: "))
       (clim:formatting-cell (stream :align-x :left)
         (insert-gadget stream :label nil
-                       :variable (game-translation-phonetics resource)
-                       :activation-callback
-                       (lambda (g)
-                         (setf (game-translation-phonetics resource)
-                               (clim:gadget-value g))))))
+                              :variable (game-translation-phonetics resource)
+                              :activation-callback
+                              (lambda (g)
+                                (setf (game-translation-phonetics resource)
+                                      (clim:gadget-value g))))))
     (clim:formatting-row (stream)
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Language: "))
       (clim:formatting-cell (stream :align-x :left)
         (insert-gadget stream :label nil
-                       :variable (game-translation-language resource)
-                       :activation-callback
-                       (lambda (g)
-                         (setf (game-translation-language resource)
-                               (clim:gadget-value g))))))
+                              :variable (game-translation-language resource)
+                              :activation-callback
+                              (lambda (g)
+                                (setf (game-translation-language resource)
+                                      (clim:gadget-value g))))))
     (clim:formatting-row (stream)
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Kind: "))
@@ -170,11 +170,6 @@
              (lambda (event)
                (declare (ignore event))
                (ignore-errors (clim:redisplay-frame-panes frame :force-p t)))))
-
-(defun open-atari-vox-dictionary-inspector (resource)
-  (open-resource-inspector (or resource (make-instance 'game-resource-atari-vox-dictionary
-                                                        :kind "AtariVox Dictionary"
-                                                        :moniker "AtariVox Dictionary/SpeakJet.dic")) :editing))
 
 (defmethod open-resource-inspector ((resource game-resource-atari-vox-dictionary) &optional (mode :editing))
   (clim:run-frame-top-level
@@ -289,18 +284,10 @@
     (when frame (clim:frame-exit frame))))
 
 ;; Open AtariVox dictionary inspector
-(defun open-atari-vox-dictionary-inspector (&optional (path "Source/Tables/SpeakJet.dic"))
+(defun open-atari-vox-dictionary-inspector (&optional resource)
   "Open the AtariVox Dictionary Inspector."
-  (let* ((full (merge-pathnames path (uiop:getcwd)))
-         (entries (load-atari-vox-dictionary full))
-         (resource (make-instance 'game-resource-phonetic-dictionary
-                                  :moniker "AtariVox Dictionary"
-                                 
-                                  :full-path (when (probe-file full) (truename full))))
-         (fm (clim:find-frame-manager))
+  (let* ((fm (clim:find-frame-manager))
          (frame (clim:make-application-frame 'atari-vox-dictionary-inspector-frame
                                              :resource resource
-                                             :path full
-                                             :entries entries
                                              :frame-manager fm)))
     (clim:run-frame-top-level frame)))

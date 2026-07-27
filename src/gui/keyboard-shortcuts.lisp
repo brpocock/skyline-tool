@@ -4,7 +4,10 @@
 ;;;
 ;;; Modifier mapping:
 ;;; - Gnome: :control (shown as ^)
-;;; - macOS: :meta (shown as ⌘, represents Command key)
+;;;
+;;; - macOS: :meta (shown  as ⌘, represents Command key)  :alt (shown as
+;;;                      ⌥, represents Option key) and :control (shown as ^)
+;;;
 ;;; - Emacs: :control and :meta (shown as C- and M-)
 
 (in-package :skyline-tool)
@@ -76,6 +79,26 @@
   "New tab / switch tab."
   (error "unimplemented"))
 
+(clim:define-command (com-tab-prev :command-table clim-internals::global-command-table) ()
+  "Switch to previous tab in the current inspector."
+  (let ((frame clim:*application-frame*))
+    (when (and frame (typep frame 'tab-friendly-mixin))
+      (let* ((tabs (frame-tab-list frame))
+             (current (frame-current-tab frame))
+             (pos (position current tabs)))
+        (when (and tabs pos)
+          (switch-to-tab frame (elt tabs (mod (1- pos) (length tabs)))))))))
+
+(clim:define-command (com-tab-next :command-table clim-internals::global-command-table) ()
+  "Switch to next tab in the current inspector."
+  (let ((frame clim:*application-frame*))
+    (when (and frame (typep frame 'tab-friendly-mixin))
+      (let* ((tabs (frame-tab-list frame))
+             (current (frame-current-tab frame))
+             (pos (position current tabs)))
+        (when (and tabs pos)
+          (switch-to-tab frame (elt tabs (mod (1+ pos) (length tabs)))))))))
+
 (clim:define-command (com-switch-location :command-table clim-internals::global-command-table) ()
   "Switch location / go to resource/buffer/file by name/id."
   (com-open-go-to))
@@ -133,7 +156,7 @@
 (defun bind-key (key modifier command)
   "Bind KEY with MODIFIER to COMMAND in the global command table."
   (let ((gct 'clim-internals::global-command-table))
-    (clim:add-keystroke-to-command-table gct (list key modifier) command)))
+    (clim:add-keystroke-to-command-table gct :keystroke (list key modifier) command)))
 
 ;;; Define key bindings for each theme
 (defun apply-gnome-bindings ()
@@ -202,7 +225,9 @@
   (bind-key :f5 :none 'com-run-make)
   (bind-key #\Return :meta 'com-run-make)
   (bind-key :execute :none 'com-run-make)
-  )
+  ;; Tab switching: C-PgUp, C-PgDn
+  (bind-key :prior :control 'com-tab-prev)
+  (bind-key :next :control 'com-tab-next))
 
 (defun apply-macos-bindings ()
   "Apply macOS style key bindings using :meta modifier (Command key).
@@ -253,14 +278,14 @@
   ;; Reset zoom
   (bind-key #\0 :meta 'com-zoom-reset)
   ;; Cursor navigation (as specified: works in both macOS and Emacs mode)
-  (bind-key #\a :meta 'com-beginning-of-line)
-  (bind-key #\e :meta 'com-end-of-line)
-  (bind-key #\b :meta 'com-backward-char)
-  (bind-key #\f :meta 'com-forward-char)
-  (bind-key #\p :meta 'com-previous-line)
-  (bind-key #\n :meta 'com-next-line)
-  (bind-key #\h :meta 'com-delete-backward)
-  (bind-key #\d :meta 'com-delete-forward)
+  (bind-key #\a :control 'com-beginning-of-line)
+  (bind-key #\e :control 'com-end-of-line)
+  (bind-key #\b :control 'com-backward-char)
+  (bind-key #\f :control 'com-forward-char)
+  (bind-key #\p :control 'com-previous-line)
+  (bind-key #\n :control 'com-next-line)
+  (bind-key #\h :control 'com-delete-backward)
+  (bind-key #\d :control 'com-delete-forward)
   ;; Help keys
   (bind-key #\/ :meta 'com-help-for-window)
   (bind-key #\? :meta 'com-help-for-window)
@@ -269,7 +294,10 @@
   ;; Build key
   (bind-key :f5 :none 'com-run-make)
   (bind-key #\Return :meta 'com-run-make)
-  (bind-key :execute :none 'com-run-make))
+  (bind-key :execute :none 'com-run-make)
+  ;; Tab switching: M-PgUp, M-PgDn
+  (bind-key :prior :meta 'com-tab-prev)
+  (bind-key :next :meta 'com-tab-next))
 
 (defun apply-emacs-bindings ()
   "Apply Emacs style key bindings using :control and :meta modifiers.
@@ -300,7 +328,7 @@
   ;; C-x C-f (new file) we cannot implement them directly with this simple binding system.
   ;; These would require prefix key handling which is beyond scope.
   ;; We leave them as TODO.
-
+  
   ;; Information/Help
   (bind-key #\h :control 'com-help-for-window)
   ;; Find
@@ -344,7 +372,12 @@
   ;; Build key
   (bind-key :f5 :none 'com-run-make)
   (bind-key #\Return :meta 'com-run-make)
-  (bind-key :execute :none 'com-run-make))
+  (bind-key :execute :none 'com-run-make)
+  ;; Tab switching: M-<, M->
+  (bind-key #\< :meta 'com-tab-prev)
+  (bind-key #\> :meta 'com-tab-next)
+  ;; C-x prefix key for Emacs-style chords
+  (bind-key #\x :control 'handle-emacs-prefix-key))
 
 ;;; Apply platform-appropriate default only when preferences are missing.
 ;;; This default is used as fallback; it does NOT overwrite existing preferences.

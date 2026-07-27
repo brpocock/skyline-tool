@@ -303,6 +303,7 @@ Tracker URL: ____________________________________________________ ;
 ;;;; Frame definition
 (clim:define-application-frame preferences-inspector-frame (clim:standard-application-frame)
   ((dirty :initform nil :accessor frame-dirty)
+   (current-tab :initform :accessibility :accessor frame-current-tab)
    ;; Paper section
    (paper-size-box :initform nil :accessor paper-size-box)
    (paper-size-radio :initform nil :accessor paper-size-radio)
@@ -352,6 +353,13 @@ Tracker URL: ____________________________________________________ ;
    (p2p-max-port-field :initform nil :accessor p2p-max-port-field)
    (p2p-pubkey-algo-field :initform nil :accessor p2p-pubkey-algo-field)
    (p2p-auto-start-checkbox :initform nil :accessor p2p-auto-start-checkbox)
+   ;; Accessibility section
+   (accessibility-theme-box :initform nil :accessor accessibility-theme-box)
+   (accessibility-theme-radio :initform nil :accessor accessibility-theme-radio)
+   (accessibility-shortcut-box :initform nil :accessor accessibility-shortcut-box)
+   (accessibility-shortcut-radio :initform nil :accessor accessibility-shortcut-radio)
+   (accessibility-latitude-field :initform nil :accessor accessibility-latitude-field)
+   (accessibility-longitude-field :initform nil :accessor accessibility-longitude-field)
    (watcher-thread :initform nil :accessor prefs-watcher-thread))
   (:menu-bar preferences-inspector-menu-bar)
   (:icon (skyline-tool-icon :resource :preferences))
@@ -470,15 +478,20 @@ Tracker URL: ____________________________________________________ ;
 
 (clim:define-command (com-preferences-save-text :command-table clim-internals::global-command-table
                                                 :menu t :name t) ()
-  (let* ((frame clim:*application-frame*)
-         (path (prompt-save-pathname "preferences.txt" :default-name "preferences.txt")))
+  (let* ((path (prompt-save-pathname "Preferences.txt" (list :dir :preferences :text))))
     (when path
       (with-open-file (s path :direction :output :if-exists :supersede)
         (format s "Preferences — ~a (~a)~%"
                 (title-case (if (boundp '*game-title*) *game-title* "Game"))
                 (machine-directory-name))
-        (loop for (k v) on *prefs-cache* by #'cddr
-              do (format s "  ~s: ~s~%" k v))))))
+        (labels ((recurse-keys (set &optional (indent 0))
+                   (loop for (k v) on set by #'cddr
+                         do (if (consp v)
+                                (progn
+                                  (format s "~vt ~s: ..." indent k)
+                                  (recurse-keys v (+ 2 indent)))
+                                (format s "~vt  ~s: ~s~%" indent k v)))))
+          (recurse-keys *prefs-cache*))))))
 
 (clim:define-command (com-preferences-save-json :command-table clim-internals::global-command-table
                                                 :menu t :name t) ()
@@ -549,11 +562,52 @@ Tracker URL: ____________________________________________________ ;
       (uiop:run-program (list "xdg-open" (namestring guide-path)) :output nil))))
 
 (clim:define-command (com-open-scripting-guide :command-table clim-internals::global-command-table
-                                               :menu t :name t) ()
-  (let ((guide-path (asdf:system-relative-pathname :skyline-tool
-                                                   "../Source/Documentation/FountainScripting.md")))
-    (when (probe-file guide-path)
-      (uiop:run-program (list "xdg-open" (namestring guide-path)) :output nil))))
+                                                :menu t :name t) ()
+   (let ((guide-path (asdf:system-relative-pathname :skyline-tool
+                                                    "../Source/Documentation/FountainScripting.md")))
+     (when (probe-file guide-path)
+       (uiop:run-program (list "xdg-open" (namestring guide-path)) :output nil))))
+
+;;;; Tab switching commands
+(clim:define-command (com-switch-to-accessibility :command-table clim-internals::global-command-table
+                                                 :menu t :name t)
+  ()
+  (let ((frame clim:*application-frame*))
+    (when frame
+      (setf (frame-current-tab frame) :accessibility)
+      (clim:redisplay-frame-panes frame :force-p t))))
+
+(clim:define-command (com-switch-to-printing :command-table clim-internals::global-command-table
+                                             :menu t :name t)
+  ()
+  (let ((frame clim:*application-frame*))
+    (when frame
+      (setf (frame-current-tab frame) :printing)
+      (clim:redisplay-frame-panes frame :force-p t))))
+
+(clim:define-command (com-switch-to-network :command-table clim-internals::global-command-table
+                                            :menu t :name t)
+  ()
+  (let ((frame clim:*application-frame*))
+    (when frame
+      (setf (frame-current-tab frame) :network)
+      (clim:redisplay-frame-panes frame :force-p t))))
+
+(clim:define-command (com-switch-to-version-control :command-table clim-internals::global-command-table
+                                                    :menu t :name t)
+  ()
+  (let ((frame clim:*application-frame*))
+    (when frame
+      (setf (frame-current-tab frame) :version-control)
+      (clim:redisplay-frame-panes frame :force-p t))))
+
+(clim:define-command (com-switch-to-issue-tracking :command-table clim-internals::global-command-table
+                                                   :menu t :name t)
+  ()
+  (let ((frame clim:*application-frame*))
+    (when frame
+      (setf (frame-current-tab frame) :issue-tracking)
+      (clim:redisplay-frame-panes frame :force-p t))))
 
 ;;;; Presentation types for right-click context menus
 (clim:define-presentation-type preferences-section ())
@@ -643,7 +697,6 @@ Tracker URL: ____________________________________________________ ;
                                               (when w
                                                 (setf (get-pref '(:paper :width)) w)
                                                 (setf (get-pref '(:paper :height)) h))
-                                              (save-preferences-now frame)
                                               (clim:redisplay-frame-panes frame :force-p t))))))
       (make-full-width-row pane (clim:note-gadget-activated box pane))
       
@@ -704,7 +757,6 @@ Tracker URL: ____________________________________________________ ;
           (clim:note-gadget-activated (paper-height-field frame) pane))
 
         ;; === Sharing Services Tab ===
-        (clim:formatting-table (pane :name "sharing-tab"))
         (make-section-header pane "Sharing Services")
         (unless (lan-sharing-checkbox frame)
           (setf (lan-sharing-checkbox frame)
@@ -744,7 +796,6 @@ Tracker URL: ____________________________________________________ ;
         (make-full-width-row pane (clim:note-gadget-activated (music-sharing-checkbox frame) pane))
 
         ;; === P2P Sharing Tab === (User clarified: should be called "LAN Sharing")
-        (clim:formatting-table (pane :name "p2p-tab"))
         (make-section-header pane "LAN Sharing")
         (unless (p2p-enabled-checkbox frame)
           (setf (p2p-enabled-checkbox frame)

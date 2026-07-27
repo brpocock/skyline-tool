@@ -55,23 +55,21 @@
    Returns DEFAULT (default NIL) if KEY is not found."
   (unless *prefs-cache*
     (setf *prefs-cache* (load-prefs)))
-  (if *prefs-cache*
-      (getf *prefs-cache* key default)
-      default))
+  (labels ((descend (plist key)
+             (if (and (consp key) (< 1 (length key)))
+                 (if (consp (getf plist key '#:nothing))
+                     (descend plist (rest key))
+                     (prog1
+                         default
+                       (setf (getf plist key) nil)))
+                 (getf plist (if (consp key)
+                                 (first key)
+                                 key)
+                       default))))
+    (descend *prefs-cache* key)))
 
-(defun set-pref (key value)
-  "Set a preference value, update the cache, and save the file.
-   Publishes :build-changed / :region-changed / :preference-change
-   on the eventbus so all windows can react."
-  (unless *prefs-cache*
-    (setf *prefs-cache* (load-prefs)))
-  (setf (getf *prefs-cache* key) value)
-  (save-prefs *prefs-cache*)
-  (publish :preference-change :payload (list key value))
-  (case key
-    (:build (publish :build-changed :payload value))
-    (:region (publish :region-changed :payload value)))
-  value)
+(defun (setf get-pref) (value key)
+  (error "implementation deleted"))
 
 (defvar *last-save-directory* nil
   "Last directory used by prompt-save-pathname for Save As dialogs.")

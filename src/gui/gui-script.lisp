@@ -38,19 +38,19 @@
          (game-resource-present-right-margin resource stream)))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-script) (type game-resource-script-editable) stream view &key)
-   (declare (ignore view))
-   (clim:formatting-table (stream)
-      (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-x :right)
-          (format stream "Title: "))
-        (clim:formatting-cell (stream :align-x :left)
-          (interactive-editing-gadget-with-validation
-           stream resource
-           (lambda (r) (game-resource-title r))
-           (lambda (r v) (setf (game-resource-title r) v))
-           :label "Title:"
-           :validator #'validate-asset-name
-           :max-length 200)))))
+  (declare (ignore view))
+  (clim:formatting-table (stream)
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :right)
+        (format stream "Title: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (interactive-editing-gadget-with-validation
+         stream resource
+         :getter (lambda (r) (game-resource-title r))
+         :setter (lambda (r v) (setf (game-resource-title r) v))
+         :label "Title:"
+         :validator #'validate-asset-name
+         :max-length 200)))))
 
 (clim:define-presentation-method clim:present ((resource game-resource-script) (type game-resource-script-viewing) stream view &key)
   (declare (ignore view))
@@ -65,12 +65,6 @@
 
 (defmethod present-reference ((resource game-resource-script) stream)
   (clim:present resource 'game-resource-script-reference :stream stream))
-
-(defun open-script-inspector (resource)
-  (open-resource-inspector (or resource
-                                (make-instance 'game-resource-script
-                                  :kind "Script"
-                                  :moniker "Scripts/new-script.sky")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-script))
   (list
@@ -143,9 +137,8 @@
 
 (defun open-script-inspector (resource)
   (open-resource-inspector (or resource
-                               (make-instance 'game-resource-script
-                                              :kind "Script"
-                                              :moniker "Scripts/new-script.sky")) :editing))
+                               (make-instance 'game-resource-script))
+                           :editing))
 
 (defmethod open-resource-inspector ((resource game-resource-script) &optional (mode :editing))
   (clim:run-frame-top-level

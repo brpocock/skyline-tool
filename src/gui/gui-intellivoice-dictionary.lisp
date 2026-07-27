@@ -61,11 +61,11 @@
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Word: "))
       (clim:formatting-cell (stream :align-x :left)
-        (interactive-editing-gadget-with-validation
-         stream resource
-         (lambda (r) (game-resource-title r))
-         (lambda (r v) (setf (game-resource-title r) v))
-         :label "Word:"
+(interactive-editing-gadget-with-validation
+          stream resource
+          :getter (lambda (r) (game-resource-title r))
+          :setter (lambda (r v) (setf (game-resource-title r) v))
+          :label "Word:"
          :validator #'validate-asset-name
          :max-length 200)))
     (clim:formatting-row (stream)

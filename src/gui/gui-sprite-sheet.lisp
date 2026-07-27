@@ -65,11 +65,9 @@
       (clim:formatting-cell (stream :align-x :left)
         (interactive-editing-gadget-with-validation
          stream resource
-         (lambda (r) (game-resource-title r))
-         (lambda (r v) (setf (game-resource-title r) v))
-         :label "Name:"
-         :validator #'validate-asset-name
-         :max-length 200)))
+         :getter (lambda (r) (game-resource-title r))
+         :setter (lambda (r v) (setf (game-resource-title r) v))
+         :label "Name:")))
     (clim:formatting-row (stream)
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Kind: "))
@@ -90,13 +88,13 @@
 
 (defmethod open-resource-inspector ((resource game-resource-sprite-sheet) &optional (mode :editing))
   (declare (ignore mode))
-  (let ((fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
-        (frame (clim:make-application-frame 'sprite-sheet-inspector-frame
-                                            :resource (or resource (make-instance 'game-resource-sprite-sheet))
-                                            :pretty-name (format nil "~a — ~a ~a"
-                                                                 (game-resource-title resource)
-                                                                 *game-title* (machine-directory-name))
-                                            :frame-manager fm)))
+  (let* ((fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
+         (frame (clim:make-application-frame 'sprite-sheet-inspector-frame
+                                             :resource (or resource (make-instance 'game-resource-sprite-sheet))
+                                             :pretty-name (format nil "~a — ~a ~a"
+                                                                  (game-resource-title resource)
+                                                                  *game-title* (machine-directory-name))
+                                             :frame-manager fm)))
     (clim:run-frame-top-level frame)))
 
 (defmethod game-resource-action-menu ((resource game-resource-sprite-sheet))
@@ -107,18 +105,6 @@
                      (uiop:run-program
                       (list "gimp" (truename (first (game-resource-pathnames resource))))
                       :output nil :ignore-error-status t)))))
-
-
-;;; Skyline-Tool src/gui/sprite-sheet-inspector.lisp
-;;; Copyright © 2026 Interworldly Adventuring, LLC
-
-(in-package :skyline-tool)
-
-(clim:define-application-frame sprite-sheet-inspector-frame (gui-inspector-frame clim:standard-application-frame)
-  ((frame-resource :accessor frame-resource :initform nil))
-  (:menu-bar sprite-sheet-menu-bar)
-  (:icon (skyline-tool-icon :resource :sprite-sheet))
-  (:pretty-name "Sprite Sheet Inspector"))
 
 (defmethod initialize-instance :after ((frame sprite-sheet-inspector-frame) &key)
   (call-next-method)
@@ -281,7 +267,7 @@
 ;; --- Presentation types ---
 
 (clim:define-presentation-type sprite-entry-presentation ()
-  :inherit-from 'sprite-entry)
+  :inherit-from 'string)
 
 (clim:define-presentation-type sprite-thumbnail-presentation ()
   :inherit-from 'string)
@@ -295,8 +281,8 @@
   (:menu-bar sprite-sheet-inspector-menu-bar)
   (:panes
    (display-pane :application :display-function 'display-sprite-sheet
-                 :height 600 :width 750
-                 :scroll-bars :vertical)
+                              :height 600 :width 750
+                              :scroll-bars :vertical)
    (interactor :interactor :height 80 :width 750))
   (:layouts
    (default (clim:vertically () display-pane interactor))))
@@ -350,36 +336,19 @@
   (let* ((png-rel (sprite-entry-filename sprite))
          (dir (make-pathname :defaults art-path :name nil :type nil))
          (png-path (merge-pathnames (make-pathname :name (pathname-name png-rel)
-                                                    :type "png") dir))
+                                                   :type "png") dir))
          (key (namestring png-path)))
     (or (gethash key *sprite-thumbnail-cache*)
         (when (probe-file png-path)
-          (handler-case
-              (let* ((png (png-read:read-png-file key))
-                     (w (png-read:width png))
-                     (h (png-read:height png))
-                     (data (png-read:image-data png))
-                     (dims (array-dimensions data))
-                     (bpp (if (= (length dims) 3) (third dims) 3))
-                     (rgb (make-array (list w h 3) :element-type '(unsigned-byte 8))))
-                (dotimes (y h)
-                  (dotimes (x w)
-                    (if (= (length dims) 3)
-                        (progn
-                          (setf (aref rgb x y 0) (aref data x y 0)
-                                (aref rgb x y 1) (aref data x y 1)
-                                (aref rgb x y 2) (aref data x y 2)))
-                        ;; Paletted image — use pixel value as gray
-                        (let ((idx (aref data x y)))
-                          (when idx
-                            (setf (aref rgb x y 0) idx
-                                  (aref rgb x y 1) idx
-                                  (aref rgb x y 2) idx))))))
-                (let ((result (list w h rgb)))
-                  (setf (gethash key *sprite-thumbnail-cache*) result)
-                  result))
-            (error () nil)))
-        (progn (setf (gethash key *sprite-thumbnail-cache*) nil) nil))))
+          (let* ((png (png-read:read-png-file key))
+                 (width (png-read:width png))
+                 (height (png-read:height png))
+                 (data (png-read:image-data png))
+                 (dims (array-dimensions data)))
+            (let ((result (list width height data)))
+              (cerror "fuck it, move on" "This is not a thumbnail, this is the whole file")
+              (setf (gethash key *sprite-thumbnail-cache*) result)
+              result))))))
 
 (defun draw-sprite-thumbnail (pane sprite art-path x y scale)
   "Draw a scaled thumbnail of SPRITE at (x, y) in PANE."
@@ -461,148 +430,126 @@
             (emit-clim-progress-bar pane pct :width 60 :height 8)
             (terpri pane)
             (incf row)))
-      ;; Budget summary
-      (format pane "~%")
-      (multiple-value-bind (cx cy) (clim:stream-cursor-position pane)
-        (declare (ignore cx))
-        (clim:draw-rectangle* pane 2 cy
-                               (- (clim:bounding-rectangle-width (clim:sheet-region pane)) 2)
-                               (+ cy 2)
-                               :filled t :ink (clim:make-gray-color 0.8)))
-      (format pane "~&")
-      (clim:with-text-face (pane :bold)
-        (format pane "  Total: ~6d bytes  Budget: ~6d  " total-bytes total-budget))
-      (emit-clim-progress-bar pane (/ (min total-bytes total-budget) (max total-budget 1))
-                              :width 200 :height 16)
-      (format pane "  (~d%)"
-              (round (* 100 (min 1 (/ total-bytes (max total-budget 1))))))
-      (format pane "~&  Click a sprite name to open in GIMP; click a row to edit.")))
+        ;; Budget summary
+        (format pane "~%")
+        (multiple-value-bind (cx cy) (clim:stream-cursor-position pane)
+          (declare (ignore cx))
+          (clim:draw-rectangle* pane 2 cy
+                                (- (clim:bounding-rectangle-width (clim:sheet-region pane)) 2)
+                                (+ cy 2)
+                                :filled t :ink (clim:make-gray-color 0.8)))
+        (format pane "~&")
+        (clim:with-text-face (pane :bold)
+          (format pane "  Total: ~6d bytes  Budget: ~6d  " total-bytes total-budget))
+        (emit-clim-progress-bar pane (/ (min total-bytes total-budget) (max total-budget 1))
+                                :width 200 :height 16)
+        (format pane "  (~d%)"
+                (round (* 100 (min 1 (/ total-bytes (max total-budget 1))))))
+        (format pane "~&  Click a sprite name to open in GIMP; click a row to edit.")))
 
-;; --- Commands ---
+    ;; --- Commands ---
 
-(clim:define-command (com-save-sprite-sheet :menu t :name t) ()
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
-         (path (and frame (frame-path frame)))
-         (sprites (and frame (frame-sprites frame))))
-    (when (and path sprites)
-      (save-art-file path sprites)
-      (setf (frame-dirty frame) nil)
-      (format *query-io* "~&Saved ~a~%" (namestring path)))))
+    (clim:define-command (com-save-sprite-sheet :menu t :name t) ()
+      (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+             (path (and frame (frame-path frame)))
+             (sprites (and frame (frame-sprites frame))))
+        (when (and path sprites)
+          (save-art-file path sprites)
+          (setf (frame-dirty frame) nil))))
 
-(clim:define-command (com-close-sprite-sheet-inspector :menu t :name t) ()
-  (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
-    (when frame
-      (when (frame-dirty frame)
-        (unless (run-confirm-dialog "Unsaved changes. Close anyway?" :title "Confirm Close")
-          (return-from com-close-sprite-sheet-inspector)))
-      (clim:frame-exit frame))))
+    (clim:define-command (com-close-sprite-sheet-inspector :menu t :name t) ()
+      (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
+        (when frame
+          (when (frame-dirty frame)
+            (unless (run-confirm-dialog "Unsaved changes. Close anyway?" :title "Confirm Close")
+              (return-from com-close-sprite-sheet-inspector)))
+          (clim:frame-exit frame))))
 
-(clim:define-command (com-add-sprite :menu t :name t) ()
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
-         (sprites (and frame (frame-sprites frame))))
-    (when frame
-      (let* ((fields `((:name :filename :label "Filename: " :value "NewSprite.png" :type string)
-                      (:name :mode :label "Mode: " :value "160B" :type string)
-                      (:name :width :label "Width: " :value 8 :type integer)
-                      (:name :height :label "Height: " :value 16 :type integer)))
-             (result (run-multi-field-input-dialog "Add new sprite:" fields :title "Add Sprite")))
-        (when result
-          (let ((filename (cdr (assoc :filename result)))
-                (mode (cdr (assoc :mode result)))
-                (width (cdr (assoc :width result)))
-                (height (cdr (assoc :height result))))
-            (push (make-sprite-entry
-                   :filename filename
-                   :name (pathname-name filename)
-                   :mode mode
-                   :width width
-                   :height height)
-                  sprites)
-            (setf (frame-sprites frame) (sort sprites #'string-lessp :key #'sprite-entry-name)
-                  (frame-dirty frame) t)
-            (clim:redisplay-frame-panes frame :force-p t)))))))
+    (clim:define-command (com-add-sprite :menu t :name t) ()
+      (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+             (sprites (and frame (frame-sprites frame))))
+        (when frame
+          (let* ((fields `((:name :filename :label "Filename: " :value "NewSprite.png" :type string)
+                           (:name :mode :label "Mode: " :value "160B" :type string)
+                           (:name :width :label "Width: " :value 8 :type integer)
+                           (:name :height :label "Height: " :value 16 :type integer)))
+                 (result (run-multi-field-input-dialog "Add new sprite:" fields :title "Add Sprite")))
+            (when result
+              (let ((filename (cdr (assoc :filename result)))
+                    (mode (cdr (assoc :mode result)))
+                    (width (cdr (assoc :width result)))
+                    (height (cdr (assoc :height result))))
+                (push (make-sprite-entry
+                       :filename filename
+                       :name (pathname-name filename)
+                       :mode mode
+                       :width width
+                       :height height)
+                      sprites)
+                (setf (frame-sprites frame) (sort sprites #'string-lessp :key #'sprite-entry-name)
+                      (frame-dirty frame) t)
+                (clim:redisplay-frame-panes frame :force-p t)))))))
 
-(clim:define-command (com-delete-sprite :menu t :name t)
-    ((sprite 'sprite-entry-presentation :gesture :select))
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
-         (sprites (and frame (frame-sprites frame))))
-    (when (and frame sprites)
-      (setf (frame-sprites frame) (remove sprite sprites :test #'equalp)
-            (frame-dirty frame) t)
-      (clim:redisplay-frame-panes frame :force-p t))))
+    (clim:define-command (com-delete-sprite :menu t :name t)
+        ((sprite 'sprite-entry-presentation :gesture :select))
+      (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+             (sprites (and frame (frame-sprites frame))))
+        (when (and frame sprites)
+          (setf (frame-sprites frame) (remove sprite sprites :test #'equalp)
+                (frame-dirty frame) t)
+          (clim:redisplay-frame-panes frame :force-p t))))
 
-(clim:define-command (com-edit-sprite :command-table clim-internals::global-command-table
-                                      :menu nil :name t)
-    ((sprite 'sprite-entry-presentation :gesture :select))
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
-         (sprites (and frame (frame-sprites frame)))
-         (pos (and sprites (position sprite sprites :test #'equalp))))
-    (when pos
-      (let* ((old (elt sprites pos))
-             (fields `((:name :filename :label "Filename: " :value ,(sprite-entry-filename old) :type string)
-                       (:name :mode :label "Mode: " :value ,(sprite-entry-mode old) :type string)
-                       (:name :width :label "Width: " :value ,(sprite-entry-width old) :type integer)
-                       (:name :height :label "Height: " :value ,(sprite-entry-height old) :type integer)))
-             (result (run-multi-field-input-dialog "Edit sprite:" fields :title "Edit Sprite")))
-        (when result
-          (let ((filename (cdr (assoc :filename result)))
-                (mode (cdr (assoc :mode result)))
-                (width (cdr (assoc :width result)))
-                (height (cdr (assoc :height result))))
-            (setf (elt (frame-sprites frame) pos)
-                  (make-sprite-entry
-                   :filename filename
-                   :name (pathname-name filename)
-                   :mode mode
-                   :width width
-                   :height height))
-            (setf (frame-dirty frame) t)
-            (clim:redisplay-frame-panes frame :force-p t)))))))
+    (clim:define-command (com-edit-sprite :command-table clim-internals::global-command-table
+                                          :menu nil :name t)
+        ((sprite 'sprite-entry-presentation :gesture :select))
+      (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+             (sprites (and frame (frame-sprites frame)))
+             (pos (and sprites (position sprite sprites :test #'equalp))))
+        (when pos
+          (let* ((old (elt sprites pos))
+                 (fields `((:name :filename :label "Filename: " :value ,(sprite-entry-filename old) :type string)
+                           (:name :mode :label "Mode: " :value ,(sprite-entry-mode old) :type string)
+                           (:name :width :label "Width: " :value ,(sprite-entry-width old) :type integer)
+                           (:name :height :label "Height: " :value ,(sprite-entry-height old) :type integer)))
+                 (result (run-multi-field-input-dialog "Edit sprite:" fields :title "Edit Sprite")))
+            (when result
+              (let ((filename (cdr (assoc :filename result)))
+                    (mode (cdr (assoc :mode result)))
+                    (width (cdr (assoc :width result)))
+                    (height (cdr (assoc :height result))))
+                (setf (elt (frame-sprites frame) pos)
+                      (make-sprite-entry
+                       :filename filename
+                       :name (pathname-name filename)
+                       :mode mode
+                       :width width
+                       :height height))
+                (setf (frame-dirty frame) t)
+                (clim:redisplay-frame-panes frame :force-p t)))))))
 
-;; --- Open sprite in GIMP ---
+    ;; --- Open sprite in GIMP ---
 
-(clim:define-command (com-open-sprite-in-gimp :command-table clim-internals::global-command-table
-                                               :menu nil :name t)
-    ((sprite-name 'sprite-thumbnail-presentation :gesture :select))
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
-         (path (and frame (frame-path frame)))
-         (xcf (and path (xcf-path-from-sprite path
-                                              (make-sprite-entry :name sprite-name))))
-         (png (and path (png-path-from-sprite path
-                                              (make-sprite-entry :name sprite-name))))
-         (target (cond ((and xcf (probe-file xcf)) xcf)
-                       ((and png (probe-file png)) png)
-                       (t nil))))
-    (if target
-        (let ((choices (clim:menu-choose
-                        (list (list "Open in GIMP" 'gimp)
-                              (list "Open Containing Folder" 'folder))
-                        :label (format nil "~a" sprite-name))))
-          (case choices
-            (gimp (uiop:run-program (list "gimp" (namestring (truename target)))
-                                     :output nil :ignore-error-status t))
-            (folder (uiop:run-program (list "xdg-open"
-                                            (namestring (art-directory-from-path path)))
-                                       :output nil :ignore-error-status t))))
-        (format *query-io* "~&Source file not found for ~a" sprite-name))))))
-
-;; --- Opening the inspector ---
-
-(defun open-sprite-sheet-inspector (path)
-  (let* ((sprites (load-art-file path))
-         (resource (make-instance 'game-resource-sprite-sheet
-                                  :moniker (pathname-name path)
-                                  :kind "Sprite Sheet"
-                                  :full-path (truename path)))
-         (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
-         (frame (clim:make-application-frame
-                  'sprite-sheet-inspector-frame
-                  :resource resource
-                  :path path
-                  :sprites sprites
-                  :frame-manager fm
-                  :pretty-name (format nil "Sprite Sheet: ~a" (pathname-name path))
-                  :width 800 :height 700)))
-    (clim-sys:make-process
-     (lambda () (clim:run-frame-top-level frame))
-     :name (format nil "Sprite Sheet Inspector: ~a" (pathname-name path)))))
+    (clim:define-command (com-open-sprite-in-gimp :command-table clim-internals::global-command-table
+                                                  :menu nil :name t)
+        ((sprite-name 'sprite-thumbnail-presentation :gesture :select))
+      (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+             (path (and frame (frame-path frame)))
+             (xcf (and path (xcf-path-from-sprite path
+                                                  (make-sprite-entry :name sprite-name))))
+             (png (and path (png-path-from-sprite path
+                                                  (make-sprite-entry :name sprite-name))))
+             (target (cond ((and xcf (probe-file xcf)) xcf)
+                           ((and png (probe-file png)) png)
+                           (t nil))))
+        (if target
+            (let ((choices (clim:menu-choose
+                            (list (list "Open in GIMP" 'gimp)
+                                  (list "Open Containing Folder" 'folder))
+                            :label (format nil "~a" sprite-name))))
+              (case choices
+                (gimp (uiop:run-program (list "gimp" (namestring (truename target)))
+                                        :output nil :ignore-error-status t))
+                (folder (uiop:run-program (list "xdg-open"
+                                                (namestring (art-directory-from-path path)))
+                                          :output nil :ignore-error-status t))))
+            (error "Source file not found for ~a" sprite-name))))))

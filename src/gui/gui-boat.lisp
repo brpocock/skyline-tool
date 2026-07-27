@@ -56,8 +56,7 @@
         (format stream "~d" (game-resource-boat-id resource))))))
 
 (defmethod present-editing ((resource game-resource-boat) stream)
-  (let ((name (game-resource-title resource))
-        (boat-class (game-resource-boat-class resource))
+  (let ((boat-class (game-resource-boat-class resource))
         (boat-id (game-resource-boat-id resource)))
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
@@ -66,8 +65,8 @@
         (clim:formatting-cell (stream :align-x :left)
           (interactive-editing-gadget-with-validation
            stream resource
-           (lambda (r) (game-resource-title r))
-           (lambda (r v) (setf (game-resource-title r) v))
+           :getter (lambda (r) (game-resource-title r))
+           :setter (lambda (r v) (setf (game-resource-title r) v))
            :label "Name:"
            :validator #'validate-minifont-name
            :max-length 20)))
@@ -146,7 +145,9 @@
          ("Run" :menu boat-run-menu)
          ("Help" :menu boat-help-menu)))
 
-(clim:define-application-frame boat-inspector-frame (gui-inspector-frame clim:standard-application-frame)
+(clim:define-application-frame boat-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
+  
+  
   ((resource :initarg :resource :reader frame-resource))
   (:menu-bar boat-menu-bar)
   (:icon (skyline-tool-icon :resource :inspector))
@@ -161,11 +162,8 @@
 
 (defun open-boat-inspector (resource)
   (open-resource-inspector (or resource
-                                (make-instance 'game-resource-boat
-                                  :id 0
-                                  :name "New Boat"
-                                  :boat-class "rowboat"
-                                  :notes "")) :editing))
+                               (make-instance 'game-resource-boat))
+                           :editing))
 
 (defmethod open-resource-inspector ((resource game-resource-boat) &optional (mode :editing))
   (clim:run-frame-top-level
@@ -233,24 +231,15 @@
                                            :notes (third b))))))
     (format *query-io* "~&Saved ~a~%" (namestring json-path))))
 
-(clim:define-application-frame boat-inspector-frame (resource-inspector-mixin clim:standard-application-frame)
-  ((boats :initarg :boats :accessor frame-boats)
-   (path :initarg :path :accessor frame-path))
-  (:menu-bar boat-inspector-menu-bar)
-  (:panes
-   (editor-pane :application :display-function 'display-boats
-                             :height 600 :width 600 :scroll-bars :vertical)
-   (interactor :interactor :height 80 :width 600))
-  (:layouts
-   (default (clim:vertically () editor-pane interactor))))
-
 (clim:define-command-table boat-inspector-file-menu
+  ;; FIXME
   :menu (("Save" :command com-boats-save)
          (nil :divider :line)
          ("Close" :command com-boats-close)))
 
 (clim:define-command-table boat-inspector-edit-menu
-  :menu (("Edit Boat..." :command com-boats-edit)))
+  ;; FIXME
+  :menu ())
 
 (clim:define-command-table boat-inspector-help-menu
   :menu (("How to Edit Boats..." :command com-help-for-window)
@@ -266,31 +255,6 @@
 
 (defmethod display-inspector-content ((frame boat-inspector-frame) pane)
   (display-boats frame pane))
-
-(defun display-boats (frame pane)
-  (clim:window-clear pane)
-  (format pane "~&  #  ~-30a  ~-20a  ~a~%" "Name" "Class" "Notes")
-  (format pane "  --  ~-30a  ~-20a  ~a~%" "----" "-----" "-----")
-  (loop for boat in (frame-boats frame)
-        for i from 0
-        do (destructuring-bind (name class notes) boat
-             (format pane "~&~3d  ~-30a  ~-20a  ~a~%" i name class notes))))
-
-(defun run-boat-inspector (boat &optional (path #p"Source/Tables/Boats.ods"))
-  "Open the boat editor window."
-  (let* ((boats (or (%load-boats-list path)
-                    (error "Can't load ~a" (enough-namestring path))))
-         (resource (make-instance 'game-resource-boat
-                                  :moniker (or boat "unknown")
-                                  ))
-         (fm (clim:find-frame-manager :port (or (clim:find-port) (clim:find-port :server-path :x))))
-         (frame (clim:make-application-frame
-                 'boat-inspector-frame
-                 :resource resource
-                 :pretty-name "Boat Editor"
-                 :boats boats :path path
-                 :frame-manager fm)))
-    (clim:run-frame-top-level frame)))
 
 (clim:define-command (com-boats-edit :command-table clim-internals::global-command-table
                                      :menu nil :name t)
@@ -318,9 +282,4 @@
 (clim:define-command (com-boats-close :menu t :name t) ()
   (let ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*)))
     (when frame (clim:frame-exit frame))))
-
-(defun open-boat-inspector (boat &key kind)
-  "Launcher entry point for the Boat Editor."
-  (declare (ignore kind))
-  (run-boat-inspector boat))
 
