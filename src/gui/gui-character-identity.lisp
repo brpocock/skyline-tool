@@ -3,6 +3,17 @@
 
 (in-package :skyline-tool)
 
+(defparameter *faction-bits*
+  '((#x80 . "Vizier's Forces")
+    (#x40 . "Loyalists")
+    (#x20 . "Villagers")
+    (#x10 . "Merfolk")
+    (#x08 . "(unused)")
+    (#x04 . "(unused)")
+    (#x02 . "(unused)")
+    (#x01 . "(unused)"))
+  "Bitmask entries for the eight faction selectors.")
+
 ;; Identity tab — dispatch read-only vs editing by frame-view-mode
 (defmethod display-identity-tab ((frame character-inspector-frame) pane)
   (ecase (frame-view-mode frame)
@@ -45,7 +56,7 @@
         (clim:formatting-cell (pane :align-x :right) (format pane "Course Prototype: "))
         (clim:formatting-cell (pane :align-x :left)
           (format pane "~a" (let ((p (game-resource-character-course-prototype resource)))
-                             (if (eq p 0) "Zeroes" (or p "Zeroes"))))))
+                              (if (eq p 0) "Zeroes" (or p "Zeroes"))))))
       ;; ── Hit Points section ──
       (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
       (clim:formatting-row (pane)
@@ -59,7 +70,19 @@
                 (max (game-resource-character-max-hp resource)))
             (format pane "~d.~2,'0d / ~d.~2,'0d max"
                     (ldb (byte 8 8) hp) (ldb (byte 8 0) hp)
-                    (ldb (byte 8 8) max) (ldb (byte 8 0) max))))))))
+                    (ldb (byte 8 8) max) (ldb (byte 8 0) max)))))
+      ;; ── Faction section ──
+      (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
+            (format pane "Faction"))))
+      (loop for (bit . name) in *faction-bits*
+            do (clim:formatting-row (pane)
+                 (clim:formatting-cell (pane :align-x :right)
+                   (format pane "~:[☐~;☑~]" (logtest bit (game-resource-character-faction resource))))
+                 (clim:formatting-cell (pane :align-x :left)
+                   (format pane "~a | $~2,'0x" name bit)))))))
 
 ;; Identity tab - editable display
 (defmethod display-identity-editing ((frame character-inspector-frame) pane)
@@ -234,5 +257,27 @@
                                   (setf (game-resource-character-max-hp resource)
                                         (parse-8.8 (clim:gadget-value gadget)))
                                   (publish-resource-changed resource)))))
-              (format pane " max"))))
+               (format pane " max"))))
+      ;; ── Faction section ──────────────────────────────────
+      (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
+            (format pane "Faction"))))
+      (let ((faction (game-resource-character-faction resource)))
+        (loop for (bit . name) in *faction-bits*
+              do (clim:formatting-row (pane)
+                   (clim:formatting-cell (pane :align-x :left)
+                     (clim:make-pane 'clim:toggle-button-pane
+                                     :value (logtest bit faction)
+                                     :label (format nil "~a | $~2,'0x" name bit)
+                                     :callback
+                                     (lambda (gadget value)
+                                       (if value
+                                           (setf (game-resource-character-faction resource)
+                                                 (logior (game-resource-character-faction resource) bit))
+                                           (setf (game-resource-character-faction resource)
+                                                 (logand (game-resource-character-faction resource)
+                                                         (lognot bit))))
+                                       (publish-resource-changed resource)))))))
       )))
