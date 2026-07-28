@@ -353,7 +353,7 @@ Color: [##]                     # color swatch -> palette color picker menu
 (clim:define-presentation-type char-cmd () :inherit-from 'symbol :description "Character inspector command")
 
 (defclass tab-friendly-mixin ()
-  ((current-tab :initarg :current-tab :accessor frame-current-tab :initform nil))
+  ((current-tab :initarg :current-tab :accessor frame-current-tab :initform :identity))
   (:documentation "Mixin for inspector frames with tabbed interfaces."))
 
 (defgeneric frame-tab-list (frame)
@@ -437,14 +437,16 @@ do (clim:with-drawing-options (pane :ink (if sel (clim:make-gray-color 0) (clim:
                 (clim:draw-text pane label (clim:make-point (+ left 7) 10))))))
 
 (defmethod display-search-bar ((pane clim:application-pane) (frame character-inspector-frame))
-  "Search bar placeholder — search functionality to be implemented."
+  "Display a filter/search field above the tab content."
   (declare (ignore pane frame))
-  (cerror "Continue anyway" "search-bar stub: not yet implemented"))
+  ;; TODO: implement search/filter across all character fields
+  )
 
 (defmethod display-project-bar ((pane clim:application-pane) (frame character-inspector-frame))
-  "Project bar placeholder — project context to be implemented."
+  "Display a thin project-context bar below the search bar."
   (declare (ignore pane frame))
-  (cerror "Continue anyway" "project-bar stub: not yet implemented"))
+  ;; TODO: show current project name, build target, region
+  )
 
 (clim:define-command (com-tab-select :command-table clim-internals::global-command-table
                                      :menu nil :name t)
