@@ -196,28 +196,27 @@
                  (max-int (ldb (byte 8 8) raw-max))
                  (max-frac (ldb (byte 8 0) raw-max)))
             (clim:horizontally (pane)
-              (clim:make-pane 'clim:text-field-pane
-                              :value (format nil "~d.~2,'0d" hp-int hp-frac)
-                              :activation-callback
-                              (lambda (gadget)
-                                (let* ((val (clim:gadget-value gadget))
-                                       (dot (position #\. val))
-                                       (int (parse-integer (subseq val 0 dot) :junk-allowed t))
-                                       (frac (if dot (parse-integer (subseq val (1+ dot)) :junk-allowed t) 0)))
+              (flet ((parse-8.8 (string)
+                       (let ((n (ignore-errors (read-from-string string))))
+                         (if (realp n)
+                             (let ((rounded (/ (round (* n 256)) 256.0)))
+                               (logior (ash (floor rounded) 8)
+                                       (round (* (- rounded (floor rounded)) 256))))
+                             0))))
+                (clim:make-pane 'clim:text-field-pane
+                                :value (format nil "~d.~2,'0d" hp-int hp-frac)
+                                :activation-callback
+                                (lambda (gadget)
                                   (setf (game-resource-character-hp resource)
-                                        (logior (ash (or int 0) 8) (or frac 0)))
-                                  (publish-resource-changed resource)))))
-              (format pane " / ")
-              (clim:make-pane 'clim:text-field-pane
-                              :value (format nil "~d.~2,'0d" max-int max-frac)
-                              :activation-callback
-                              (lambda (gadget)
-                                (let* ((val (clim:gadget-value gadget))
-                                       (dot (position #\. val))
-                                       (int (parse-integer (subseq val 0 dot) :junk-allowed t))
-                                       (frac (if dot (parse-integer (subseq val (1+ dot)) :junk-allowed t) 0)))
+                                        (parse-8.8 (clim:gadget-value gadget)))
+                                  (publish-resource-changed resource)))
+                (format pane " / ")
+                (clim:make-pane 'clim:text-field-pane
+                                :value (format nil "~d.~2,'0d" max-int max-frac)
+                                :activation-callback
+                                (lambda (gadget)
                                   (setf (game-resource-character-max-hp resource)
-                                        (logior (ash (or int 0) 8) (or frac 0)))
+                                        (parse-8.8 (clim:gadget-value gadget)))
                                   (publish-resource-changed resource)))))
               (format pane " max"))))
       ;; Memo text area (multi-line, scrollable)
