@@ -96,7 +96,7 @@
     (clim:formatting-cell (pane :align-x :left) (format pane "~d" (game-resource-character-id resource))))
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :right) (format pane "Decal: "))
-    (clim:formatting-cell (pane :align-x :left) (format pane "~a" (decal-display-name (game-resource-character-decal resource)))))
+    (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-decal resource))))
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :right) (format pane "Gender: "))
     (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-gender resource))))
@@ -203,13 +203,11 @@
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :right) (format pane "Decal Kind: "))
     (clim:formatting-cell (pane :align-x :left)
-      (clim:make-pane 'clim:option-pane
-                      :items (mapcar (lambda (k) (cons (decal-display-name k) k)) +decal-kinds+)
-                      :current-value (game-resource-character-decal resource)
-                      :callback
-                      (lambda (pane value)
-                        (declare (ignore pane))
-                        (setf (game-resource-character-decal resource) value)
+      (clim:make-pane 'clim:text-field-pane
+                      :value (game-resource-character-decal resource)
+                      :activation-callback
+                      (lambda (pane)
+                        (setf (game-resource-character-decal resource) (clim:gadget-value pane))
                         (publish-resource-changed resource))))))
 
 (defun display-identity-editing-gender (resource pane)
