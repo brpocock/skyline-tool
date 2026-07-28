@@ -102,7 +102,8 @@
 
 (define-constant +decal-kinds+
     '( :player :human :earl :captain :princess :elder :nefertem
-      :vizier :sentinel :sailor :block1 :block2 :block3 :block4 :enemy )
+      :vizier :sentinel :sailor :enemy
+      :block1 :block2 :block3 :block4 )
   :test 'equalp)
 
 (clim:define-presentation-type simple-animation-sequence-index () :inherit-from 'integer)
@@ -518,45 +519,42 @@
       (format stream "~&Saved ~a~%" pdf-pathname)
       (uiop:run-program (list "xdg-open" (namestring pdf-pathname)) :output nil :ignore-error-status t))))
 
-(defun %print-anim-seq-to-printer (printer-queue-name)
-  (let* ((seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
+(defun %print-anim-seq-to-printer (printer)
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (seq (anim-seq-editor-sequence *anim-seq-editor-frame*))
          (pdf-path (format nil "AnimationSequence-~d.pdf"
                            (simple-animation-sequence-index seq))))
     (unless (probe-file pdf-path)
       (format *query-io* "~&Generating PDF first...~%")
       (write-animation-sequence-pdf seq pdf-path *query-io*))
-    (format *query-io* "~&Printing to ~a...~%" printer-queue-name)
     (force-output *query-io*)
-    (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
-                      :output nil :ignore-error-status t)
-    (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))
+    (uiop:run-program (list "lp" "-d" queue pdf-path)
+                      :output nil :ignore-error-status t)))
 
 (defun populate-anim-seq-print-menu ()
   (ignore-errors
    (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu "No printers found")
-   (dolist (p (discover-printers))
+   (dolist (p (mapcar #'car *ipp-printer-registry*))
      (ignore-errors
       (clim:remove-menu-item-from-command-table 'print-animation-sequence-menu p))))
-  (let* ((printers (discover-printers-with-names)))
-    (if (null printers)
-        (clim:add-menu-item-to-command-table
-         'print-animation-sequence-menu "Default Printer (lpr)" :command
-         '(com-print-anim-seq-to-printer nil "Default Printer")
-                                                                :after :end)
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             'print-animation-sequence-menu display-name :command
-             `(com-print-anim-seq-to-printer ,queue-name ,display-name)
-             :after :end)))))
-  (unless (fboundp 'com-print-anim-seq-to-printer)
-    (clim:define-command (com-print-anim-seq-to-printer
-                          :command-table clim-internals::global-command-table
-                          :menu nil :name t)
-        ((queue-name 'string) (display-name 'string))
-      (declare (ignore display-name))
-      (%print-anim-seq-to-printer queue-name))))
+  (ensure-printer-scavenger-is-running)
+  (if (null *ipp-printer-registry*)
+      (clim:add-menu-item-to-command-table
+       'print-animation-sequence-menu "Default Printer (lpr)" :command
+       '(com-print-anim-seq-to-printer nil) :after :end)
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'print-animation-sequence-menu display :command
+           `(com-print-anim-seq-to-printer ,struct)
+           :after :end)))))
+
+(clim:define-command (com-print-anim-seq-to-printer
+                      :command-table clim-internals::global-command-table
+                      :menu nil :name t)
+    ((printer t))
+  (%print-anim-seq-to-printer printer))
 
 (defun populate-palette-menu ()
   (let ((palettes (ecase (simple-animation-sequence-write-mode
@@ -1971,39 +1969,38 @@ Called from note-sheet-grafted after the frame is connected to the display."
         (format *query-io* "~&Cancelled.~%"))))
 
 ;; --- Print To printer list for assignments frame ---
-(defun %print-assignments-to-printer (printer-queue-name)
-  (let* ((table-path (make-pathname :name "Animation" :type "ods"
+(defun %print-assignments-to-printer (printer)
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (table-path (make-pathname :name "Animation" :type "ods"
                                     :directory (list :relative "Source" "Tables"))))
     (save-all-animation-sequences)
-    (format *query-io* "~&Printing to ~a...~%" printer-queue-name)
-    (force-output *query-io*)
-    (uiop:run-program (list "lp" "-d" printer-queue-name (namestring table-path))
-                      :output nil :ignore-error-status t)
-    (format *query-io* "~&Sent assignment table to ~a.~%" printer-queue-name)))
+    (uiop:run-program (if queue (list "lp" "-d" queue (namestring table-path))
+                            (list "lp" (namestring table-path)))
+                      :output nil :ignore-error-status t)))
 
 (defun populate-assignments-print-menu ()
   (ignore-errors
    (clim:remove-menu-item-from-command-table 'print-assignments-menu "No printers found")
    (clim:remove-menu-item-from-command-table 'print-assignments-menu "Default Printer (lpr)")
-   (dolist (p (discover-printers))
+   (dolist (p (mapcar #'car *ipp-printer-registry*))
      (ignore-errors
       (clim:remove-menu-item-from-command-table 'print-assignments-menu p))))
-  (let* ((printers (discover-printers-with-names)))
-    (if (null printers)
-        (clim:add-menu-item-to-command-table
-         'print-assignments-menu "Default Printer (lpr)" :function
-         (lambda (g n)
-           (declare (ignore g n))
-           (%print-assignments-to-printer nil)))
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             'print-assignments-menu display-name :function
-             (lambda (gesture numeric-arg)
-               (declare (ignore gesture numeric-arg))
-               (%print-assignments-to-printer queue-name))
-             :after :end))))))
+  (ensure-printer-scavenger-is-running)
+  (if (null *ipp-printer-registry*)
+      (clim:add-menu-item-to-command-table
+       'print-assignments-menu "Default Printer (lpr)" :function
+       (lambda (g n)
+         (declare (ignore g n))
+         (%print-assignments-to-printer nil)))
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'print-assignments-menu display :function
+           (lambda (gesture numeric-arg)
+             (declare (ignore gesture numeric-arg))
+             (%print-assignments-to-printer struct))
+           :after :end)))))
 
 (define-anim-seq-assigns-frame-command (com-discover-printers-assigns :menu nil :name t) ()
   (populate-assignments-print-menu))
@@ -2594,9 +2591,6 @@ Called from note-sheet-grafted after the frame is connected to the display."
             nil)
            (t (< (simple-animation-sequence-index a)
                  (simple-animation-sequence-index b))))))))
-
-(eval-when (:load-toplevel)
-  (populate-anim-seq-print-menu))
 
 (defun compile-animation-sequences ()
   (format *trace-output* "~&Compiling animation sequence data …")
