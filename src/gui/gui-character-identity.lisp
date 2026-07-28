@@ -14,6 +14,17 @@
     (#x01 . "(unused)"))
   "Bitmask entries for the eight faction selectors.")
 
+(defparameter *character-flags-bits*
+  '((#x01 . "Enemy Walk On")
+    (#x02 . "(undefined)")
+    (#x04 . "(undefined)")
+    (#x08 . "(undefined)")
+    (#x10 . "(undefined)")
+    (#x20 . "(undefined)")
+    (#x40 . "(undefined)")
+    (#x80 . "(undefined)"))
+  "Bitmask entries for the eight character-flags selectors.")
+
 ;; Identity tab — dispatch read-only vs editing by frame-view-mode
 (defmethod display-identity-tab ((frame character-inspector-frame) pane)
   (ecase (frame-view-mode frame)
@@ -81,6 +92,18 @@
             do (clim:formatting-row (pane)
                  (clim:formatting-cell (pane :align-x :right)
                    (format pane "~:[☐~;☑~]" (logtest bit (game-resource-character-faction resource))))
+                 (clim:formatting-cell (pane :align-x :left)
+                   (format pane "~a | $~2,'0x" name bit))))
+      ;; ── Character Flags section ──
+      (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
+            (format pane "Character Flags"))))
+      (loop for (bit . name) in *character-flags-bits*
+            do (clim:formatting-row (pane)
+                 (clim:formatting-cell (pane :align-x :right)
+                   (format pane "~:[☐~;☑~]" (logtest bit (game-resource-character-flags resource))))
                  (clim:formatting-cell (pane :align-x :left)
                    (format pane "~a | $~2,'0x" name bit)))))))
 
@@ -181,6 +204,7 @@
                               :current-value class
                               :callback
                               (lambda (pane value)
+                                (declare (ignore pane))
                                 (setf (game-resource-character-course-class resource) value)
                                 (let ((valid (list-object-prototypes-for-class value)))
                                   (unless (or (eq (game-resource-character-course-prototype resource) 0)
@@ -213,8 +237,9 @@
                                       . t))
                             :current-value (if (eq current-proto 0) 0 t)
                             :callback
-                            (lambda (radio value)
-                              (if (eq value 0)
+                             (lambda (radio value)
+                               (declare (ignore radio))
+                               (if (eq value 0)
                                   (setf (game-resource-character-course-prototype resource) 0)
                                   (setf (game-resource-character-course-prototype resource)
                                         (clim:gadget-value dropdown)))
@@ -234,7 +259,7 @@
                  (raw-max (game-resource-character-max-hp resource))
                  (max-int (ldb (byte 8 8) raw-max))
                  (max-frac (ldb (byte 8 0) raw-max)))
-            (clim:horizontally (pane)
+            (clim:horizontally ()
               (flet ((parse-8.8 (string)
                        (let ((n (ignore-errors (read-from-string string))))
                          (if (realp n)
@@ -272,12 +297,36 @@
                                      :value (logtest bit faction)
                                      :label (format nil "~a | $~2,'0x" name bit)
                                      :callback
+                                      (lambda (gadget value)
+                                        (declare (ignore gadget))
+                                        (if value
+                                            (setf (game-resource-character-faction resource)
+                                                  (logior (game-resource-character-faction resource) bit))
+                                            (setf (game-resource-character-faction resource)
+                                                  (logand (game-resource-character-faction resource)
+                                                          (lognot bit))))
+                                        (publish-resource-changed resource)))))))
+      ;; ── Character Flags section ─────────────────────────────
+      (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
+            (format pane "Character Flags"))))
+      (let ((flags (game-resource-character-flags resource)))
+        (loop for (bit . name) in *character-flags-bits*
+              do (clim:formatting-row (pane)
+                   (clim:formatting-cell (pane :align-x :left)
+                     (clim:make-pane 'clim:toggle-button-pane
+                                     :value (logtest bit flags)
+                                     :label (format nil "~a | $~2,'0x" name bit)
+                                     :callback
                                      (lambda (gadget value)
+                                       (declare (ignore gadget))
                                        (if value
-                                           (setf (game-resource-character-faction resource)
-                                                 (logior (game-resource-character-faction resource) bit))
-                                           (setf (game-resource-character-faction resource)
-                                                 (logand (game-resource-character-faction resource)
+                                           (setf (game-resource-character-flags resource)
+                                                 (logior (game-resource-character-flags resource) bit))
+                                           (setf (game-resource-character-flags resource)
+                                                 (logand (game-resource-character-flags resource)
                                                          (lognot bit))))
                                        (publish-resource-changed resource)))))))
       )))
