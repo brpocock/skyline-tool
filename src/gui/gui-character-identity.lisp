@@ -120,6 +120,18 @@
                             (lambda (pane)
                               (setf (game-resource-character-home resource) (clim:gadget-value pane))
                               (publish-resource-changed resource))))))
+      ;; Memo / Comments text area (multi-line, scrollable)
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :right) (format pane "Comments: "))
+        (clim:formatting-cell (pane :align-x :left)
+          (let ((memo (game-resource-character-memo resource)))
+            (clim:make-pane 'clim:text-field-pane
+                            :value memo
+                            :scroll-bars :vertical
+                            :activation-callback
+                            (lambda (pane)
+                              (setf (game-resource-character-memo resource) (clim:gadget-value pane))
+                              (publish-resource-changed resource))))))
       ;; ── Movement section ──────────────────────────────────
       (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
       (clim:formatting-row (pane)
@@ -223,15 +235,4 @@
                                         (parse-8.8 (clim:gadget-value gadget)))
                                   (publish-resource-changed resource)))))
               (format pane " max"))))
-      ;; Memo text area (multi-line, scrollable)
-      (clim:formatting-row (pane)
-        (clim:formatting-cell (pane :align-x :right) (format pane "Memo: "))
-        (clim:formatting-cell (pane :align-x :left)
-          (let ((memo (game-resource-character-memo resource)))
-            (clim:make-pane 'clim:text-field-pane
-                            :value memo
-                            :scroll-bars :vertical
-                            :activation-callback
-                            (lambda (pane)
-                              (setf (game-resource-character-memo resource) (clim:gadget-value pane))
-                              (publish-resource-changed resource)))))))))
+      )))
