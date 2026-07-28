@@ -26,7 +26,7 @@
   "Bitmask entries for the eight character-flags selectors.")
 
 (defun decal-display-name (kind)
-  (string-capitalize (string-downcase (string kind))))
+  (title-case (string-downcase (string kind))))
 
 (defun parse-8.8-string (string)
   (let ((n (ignore-errors (read-from-string string))))
