@@ -367,8 +367,12 @@ Color: [##]                     # color swatch -> palette color picker menu
   (clim:redisplay-frame-panes frame :force-p t))
 
 (clim:define-command-table char-inspector-menu-bar
-  :menu (("File" :menu char-inspector-file-menu) ("Edit" :menu char-inspector-edit-menu)
-                                                 ("Voice" :menu char-inspector-voice-menu) ("Help" :menu char-inspector-help-menu)))
+  :menu (("File" :menu char-inspector-file-menu)
+         ("Edit" :menu char-inspector-edit-menu)
+         ("Run" :menu char-inspector-run-menu)
+         ("View" :menu char-inspector-view-menu)
+         ("Voice" :menu char-inspector-voice-menu)
+         ("Help" :menu char-inspector-help-menu)))
 
 (clim:define-application-frame character-inspector-frame
     (tab-friendly-mixin resource-inspector-mixin clim:standard-application-frame)
@@ -457,22 +461,36 @@ do (clim:with-drawing-options (pane :ink (if sel (clim:make-gray-color 0) (clim:
 (clim:define-command-table char-inspector-print-to-menu :menu ())
 
 (clim:define-command-table char-inspector-file-menu
-  :menu (("New..." :command com-char-new) ("Import from JSON..." :command com-char-import-json)
-                                          ("Duplicate..." :command com-char-duplicate) (nil :divider :line)
-                                          ("Save As" :menu char-inspector-save-as-menu) ("Print To" :menu char-inspector-print-to-menu)
-                                          (nil :divider :line) ("Close" :command com-char-close)))
+  :menu (("New..." :command com-char-new)
+         ("Import from JSON..." :command com-char-import-json)
+         ("Duplicate..." :command com-char-duplicate)
+         (nil :divider :line)
+         ("Save" :command com-save-resource)
+         ("Version" :menu inspector-vc-menu)
+         ("Save As" :menu char-inspector-save-as-menu)
+         ("Send to" :menu inspector-send-to-menu)
+         ("Print To" :menu char-inspector-print-to-menu)
+         (nil :divider :line)
+         ("Close" :command com-char-close)))
 
 (clim:define-command-table char-inspector-edit-menu
   :menu (("Edit HP..." :command com-char-edit-hp) ("Edit Crowns..." :command com-char-edit-crowns)
-                                                  ("Edit Arrows..." :command com-char-edit-arrows) ("Edit Potions..." :command com-char-edit-potions)
-                                                  ("Edit Kind..." :command com-char-edit-kind)
-                                                  ("Edit Skin Color..." :command com-char-edit-skin) ("Edit Hair Color..." :command com-char-edit-hair)
-                                                  ("Edit Clothes Color..." :command com-char-edit-clothes)
-                                                  ("Edit Speech Color..." :command com-char-edit-speech-color)
-                                                  ("Edit Voice Pitch..." :command com-char-edit-pitch) ("Edit Voice Speed..." :command com-char-edit-speed)
-                                                  ("Edit Voice Bend..." :command com-char-edit-bend)
-                                                  ("Edit Weapon..." :command com-char-edit-weapon) ("Edit Shield..." :command com-char-edit-shield)
-                                                  ("Edit Armor..." :command com-char-edit-armor)))
+                                                   ("Edit Arrows..." :command com-char-edit-arrows) ("Edit Potions..." :command com-char-edit-potions)
+                                                   ("Edit Kind..." :command com-char-edit-kind)
+                                                   ("Edit Skin Color..." :command com-char-edit-skin) ("Edit Hair Color..." :command com-char-edit-hair)
+                                                   ("Edit Clothes Color..." :command com-char-edit-clothes)
+                                                   ("Edit Speech Color..." :command com-char-edit-speech-color)
+                                                   ("Edit Voice Pitch..." :command com-char-edit-pitch) ("Edit Voice Speed..." :command com-char-edit-speed)
+                                                   ("Edit Voice Bend..." :command com-char-edit-bend)
+                                                   ("Edit Weapon..." :command com-char-edit-weapon) ("Edit Shield..." :command com-char-edit-shield)
+                                                   ("Edit Armor..." :command com-char-edit-armor)))
+
+(clim:define-command-table char-inspector-run-menu
+  :menu (("Run..." :command com-run-resource)))
+
+(clim:define-command-table char-inspector-view-menu
+  :menu (("Editable" :command com-inspector-toggle-view :toggle t)
+         ("Project Pane" :command com-toggle-project-pane :toggle t)))
 
 (clim:define-command-table char-inspector-voice-menu
   :menu (("Test on AtariVox..." :command com-char-test-atarivox :keystroke (#\t :control))))
