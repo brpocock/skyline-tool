@@ -21,7 +21,7 @@
 [OPTIONAL Project Bar  ]
 
 ### TAB BAR
- __________   ____________   ___________   ________
+__________   ____________   ___________   ________
 / Identity \ / Appearance \ / Equipment \ / Speech \
 |          | |            | |           | |        |
 ### IDENTITY TAB
@@ -32,9 +32,9 @@ Name:  ____________ (__/12)          # Name field allowing 12 minifont bytes
 # on the line beneath the name
 
 Gender: <> Masculine (he)
-        <> Feminine (she)
-        <> Indefinite (they)
-        <> Impersonal (it)
+<> Feminine (she)
+<> Indefinite (they)
+<> Impersonal (it)
 
 Home: __________________________
 
@@ -46,10 +46,13 @@ Comments:
 || ____________________________________________________________ ||
 || ____________________________________________________________ ||
 
-Course Class: [ $(Course Classes) - ]   ;
+Movement
+---------
+
+Course Class: [ $(Course Classes) - ]
 
 Prototype: <> Zeroes
-<> ___________________ (Choose...)   # String entry of symbol
+<> [ Object-Prototypes of class $(Course Class)  - ]
 
 Hit Points
 -----------
@@ -122,10 +125,10 @@ Body: ___                                 # number 0 - 255, usually zero
 #### FOR HUMAN ####
 
 Head: [ Head 1  - ]
-      [ Head 2    ]
-      [ Head 3    ]
-        ...
-      [ Head 10   ]
+[ Head 2    ]
+[ Head 3    ]
+...
+[ Head 10   ]
 
 Body: [ Robe  - ]
 [ Tunic   ]
@@ -275,78 +278,9 @@ Color: [##]                     # color swatch -> palette color picker menu
 
 ;; Eventbus types for character inspector
 (define-constant +character-inspector-event-types+
-  '(:character-data-changed :equipment-changed :appearance-changed :speech-changed
-    :inventory-changed :keys-changed :stats-changed :flags-changed)
+    '(:character-data-changed :equipment-changed :appearance-changed :speech-changed
+      :inventory-changed :keys-changed :stats-changed :flags-changed)
   :test 'equalp)
-
-;; Dynamic equipment/shield/appearance names loaded from data
-(defun get-equipment-names ()
-  "Load equipment names from ODS or cached data"
-  (let ((items (load-item-list)))
-    (mapcar (lambda (n) (cons n (format nil "Equipment: ~a" n))) items)))
-
-(defun get-shield-names ()
-  "Load shield names from ODS or cached data"
-  (let ((items (load-item-list)))
-    (mapcar (lambda (n) (cons n (format nil "Shield: ~a" n)))
-            (remove-if-not (lambda (n) (search "shield" n :test #'char-equal)) items))))
-
-(defun get-armor-names ()
-  "Load armor names from ODS or cached data"
-  (let ((items (load-item-list)))
-    (mapcar (lambda (n) (cons n (format nil "Armor: ~a" n)))
-            (remove-if-not (lambda (n) (search "armor" n :test #'char-equal)) items))))
-
-(defun get-decal-kinds ()
-  "Load decal kinds from data"
-  (loop for (l . v) in (list
-                        (cons "Player" "DecalKindPlayer")
-                        (cons "Human" "DecalKindHuman")
-                        (cons "Earl" "DecalKindEarl")
-                        (cons "Captain" "DecalKindCaptain")
-                        (cons "Princess" "DecalKindPrincess")
-                        (cons "Elder" "DecalKindElder")
-                        (cons "Nefertem" "DecalKindNefertem")
-                        (cons "Vizier" "DecalKindVizier")
-                        (cons "Sentinel" "DecalKindSentinel")
-                        (cons "Sailor" "DecalKindSailor")
-                        (cons "Enemy" "DecalKindEnemy")
-                        (cons "Block1" "DecalKindBlock1")
-                        (cons "Block2" "DecalKindBlock2")
-                        (cons "Block3" "DecalKindBlock3")
-                        (cons "Block4" "DecalKindBlock4"))
-        collect (cons l v)))
-
-(defun get-available-colors ()
-  "Get available palette colors for skin/hair/clothes"
-  (append +atari-ntsc-color-names+ +atari-pal-color-names+))
-
-;; Event publishing helper for inspector state changes
-(defun publish-character-change (frame event-type &key data)
-  "Publish character state change event"
-  (publish event-type :payload (list* :frame frame :character (frame-npc frame)
-                                      :prototype (frame-prototype frame) data)))
-
-;; Subscribe frame to character changes
-(defun subscribe-character-events (frame)
-  "Subscribe inspector frame to character update events"
-  (dolist (event-type +character-inspector-event-types+)
-    (subscribe event-type
-               (lambda (event)
-                 (declare (ignore event))
-                 (when (typep frame 'character-inspector-frame)
-                   (clim:redisplay-frame-panes frame :force-p t)))))
-  frame)
-
-(defun unsubscribe-character-events (frame)
-  "Unsubscribe inspector frame from character update events"
-  (dolist (event-type +character-inspector-event-types+)
-    (unsubscribe event-type
-                 (lambda (event)
-                   (declare (ignore event))
-                   (when (typep frame 'character-inspector-frame)
-                     (clim:redisplay-frame-panes frame :force-p t))))))
-
 
 (clim:define-presentation-type game-resource-character-reference ()
   :inherit-from 'game-resource-character)
@@ -373,8 +307,7 @@ Color: [##]                     # color swatch -> palette color picker menu
 
 (defmethod open-resource-inspector ((resource game-resource-character) &optional (mode :editing))
   (declare (ignore mode))
-  (let ((name (game-resource-title resource)))
-    (open-character-inspector (or name "Unknown"))))
+  (open-character-inspector resource))
 
 (defmethod present-reading ((resource game-resource-character) stream)
   (clim:formatting-table (stream)
@@ -385,28 +318,11 @@ Color: [##]                     # color swatch -> palette color picker menu
         (format stream "~a" (game-resource-title resource))))))
 
 (defmethod present-editing ((resource game-resource-character) stream)
-  (let* ((character resource))
-    (clim:formatting-table (stream)
-      (dolist (header headers)
-        (clim:formatting-row (stream)
-          (clim:formatting-cell (stream) (clim:with-text-face (stream :bold) header))
-          (clim:formatting-cell (stream)
-            (let* ((value (assoc header values :test #'string-equal))
-                   (gadget-value (if value (cdr value) "")))
-              (insert-gadget stream
-                             :label nil
-                             :variable gadget-value
-                             :activation-callback
-                             (lambda (gadget)
-                               (setf (cdr (assoc header values :test #'string-equal))
-                                     (clim:gadget-value gadget))
-                               (save-character-to-ods character ods-path values))))))))))
+  "Present character for editing — currently delegates to reference view."
+  (present-reference resource stream))
 
 ;;; Character Inspector — Single-Character Inspector
-;;; Opens from All Resources context menu. Uses existing infrastructure
-;;; for data loading (item-chooser, fountain) and drawing (misc-graphics).
-
-(in-package :skyline-tool)
+;;; Opens from All Resources context menu.
 
 (defun bitset->indices (bytes)
   "Convert a list of BYTES to a list of set bit indices (0-63)."
@@ -450,11 +366,13 @@ Color: [##]                     # color swatch -> palette color picker menu
   (setf (frame-current-tab frame) tab)
   (clim:redisplay-frame-panes frame :force-p t))
 
+(clim:define-command-table char-inspector-menu-bar
+  :menu (("File" :menu char-inspector-file-menu) ("Edit" :menu char-inspector-edit-menu)
+                                                 ("Voice" :menu char-inspector-voice-menu) ("Help" :menu char-inspector-help-menu)))
+
 (clim:define-application-frame character-inspector-frame
     (tab-friendly-mixin resource-inspector-mixin clim:standard-application-frame)
-  ((test-phrase :accessor frame-test-phrase)
-   (%show-search-bar :initform nil :accessor frame-show-search-bar)
-   (%show-project-bar :initform nil :accessor frame-show-project-bar))
+  ((test-phrase :accessor frame-test-phrase))
   (:panes
    (tab-bar :application :display-function 'display-tab-bar :height 30 :width 400 :scroll-bars nil)
    (identity-pane :application :display-function 'display-identity-tab :height 600 :width 400 :scroll-bars :vertical)
@@ -463,23 +381,28 @@ Color: [##]                     # color swatch -> palette color picker menu
    (speech-pane :application :display-function 'display-speech-tab :height 600 :width 400 :scroll-bars :vertical)
    (search-bar :application :display-function 'display-search-bar :height 30 :width 400 :scroll-bars nil)
    (project-bar :application :display-function 'display-project-bar :height 30 :width 400 :scroll-bars nil))
-   (:layouts
-    (default (clim:vertically ()
-               tab-bar
-               (ecase (frame-current-tab clim:*application-frame*)
-                 (:identity identity-pane)
-                 (:appearance appearance-pane)
-                 (:equipment equipment-pane)
-                 (:speech speech-pane))
-               search-bar
-               project-bar))
-    (:menu-bar char-inspector-menu-bar)))
+  (:layouts
+   (default (clim:vertically ()
+              tab-bar
+              (ecase (frame-current-tab clim:*application-frame*)
+                (:identity identity-pane)
+                (:appearance appearance-pane)
+                (:equipment equipment-pane)
+                (:speech speech-pane))
+              search-bar
+              project-bar))
+   (:menu-bar 'char-inspector-menu-bar)))
 
 (defmethod frame-tab-list ((frame character-inspector-frame))
   '(:identity :appearance :equipment :speech))
 
 (defmethod initialize-instance :after ((frame character-inspector-frame) &key)
   (call-next-method)
+  (populate-char-print-menu frame)
+  (subscribe :printer-list-changed
+             (lambda (event)
+               (declare (ignore event))
+               (populate-char-print-menu frame)))
   (subscribe-to-tab-events frame))
 
 (defun subscribe-to-tab-events (frame)
@@ -502,8 +425,8 @@ Color: [##]                     # color swatch -> palette color picker menu
     (loop for tab in tabs for label in labels for i from 0
           for left = (* i tab-width) for right = (+ left tab-width)
           for sel = (eq tab (frame-current-tab frame))
-          do (clim:with-drawing-options (pane :ink (if sel (clim:make-gray-color 0) (clim:make-gray-color 0.5))
-                                           :stroke-width 2 :filled nil)
+do (clim:with-drawing-options (pane :ink (if sel (clim:make-gray-color 0) (clim:make-gray-color 0.25))
+                                            :stroke-width 2 :filled nil)
                (clim:draw-rectangle pane left 0 right height
                                     :corner-radii (list corner corner corner corner)))
               (clim:with-output-as-presentation (pane tab 'char-cmd :background-mode :transparent)
@@ -560,165 +483,101 @@ Color: [##]                     # color swatch -> palette color picker menu
          ("Skyline-Tool Scripting Guide..." :command com-open-scripting-guide)
          (nil :divider :line) ("About Skyline-Tool..." :command com-about-skyline-tool)))
 
-(clim:define-command-table char-inspector-menu-bar
-  :menu (("File" :menu char-inspector-file-menu) ("Edit" :menu char-inspector-edit-menu)
-                                                 ("Voice" :menu char-inspector-voice-menu) ("Help" :menu char-inspector-help-menu)))
-
-(defmacro with-char-data ((npc proto all-items all-keys) &body body)
-  `(let* ((,npc (frame-npc clim:*application-frame*))
-          (,proto (frame-prototype clim:*application-frame*))
-          (,all-items (or (frame-all-items clim:*application-frame*) (load-item-list)))
-          (,all-keys (or (frame-all-keys clim:*application-frame*) (load-key-list))))
-     ,@body))
-
-
-
-(defmethod display-inspector-content ((frame character-inspector-frame) pane)
-  (display-left frame pane)
-  (display-right frame pane))
-
-(defun display-left (frame pane)
-  (clim:window-clear pane)
-  (with-char-data (npc proto all-items all-keys)
-    (unless npc (format pane "~&Character not found in NPCStats.ods.") (return-from display-left))
-    (let ((name (npc-val npc :name (proto-val proto :|CharacterName| "?")))
-          (class (npc-val npc :class (proto-val proto :|Class| "?")))
-          (char-id (npc-val npc :character-id 0))
-          (hp (npc-val npc :hp (proto-val proto :|CharacterHP| 0)))
-          (max-hp (proto-val proto :|CharacterMaxHP| (npc-val npc :hp 0)))
-          (ac (npc-val npc :ac (proto-val proto :|CharacterArmorClass| 0)))
-          (crowns (npc-val npc :crowns (proto-val proto :|CharacterCrowns| 0)))
-          (arrows (npc-val npc :arrows (proto-val proto :|CharacterArrows| 0)))
-          (potions (npc-val npc :potions (proto-val proto :|CharacterPotions| 0)))
-          (skin (%strip-prefix (npc-val npc :skin-color (proto-val proto :|CharacterSkinColor| "White"))))
-          (hair (%strip-prefix (npc-val npc :hair-color (proto-val proto :|CharacterHairColor| "Brown"))))
-          (clothes (%strip-prefix (npc-val npc :clothes-color (proto-val proto :|CharacterClothesColor| "Blue"))))
-          (speech (npc-val npc :speech-color "Gray"))
-          (pitch (npc-val npc :pitch (proto-val proto :|CharacterSpeechPitch| 96)))
-          (speed (npc-val npc :speed (proto-val proto :|CharacterSpeechSpeed| 114)))
-          (bend (npc-val npc :bend (proto-val proto :|CharacterSpeechBend| 5)))
-          (equip (npc-val npc :equipment (proto-val proto :|CharacterEquipment| "EquipNone")))
-          (shield (npc-val npc :shield (proto-val proto :|CharacterShield| "ShieldNoShield")))
-          (kind-str (let ((dk (proto-val proto :|CharacterDecalKind| "DecalKindEnemy")))
-                      (or (npc-val npc :kind) (and dk (subseq (string dk) 9))))))
-      (clim:with-text-face (pane :bold) (clim:with-text-size (pane :large) (format pane "~a~%" name)))
-      (format pane "Class: ~a  " class)
-      (clim:with-output-as-presentation (pane :kind 'char-cmd :background-mode :transparent)
-        (format pane "Kind: ~a" kind-str))
-      (format pane "  ID: ~d~%~%" char-id)
-      (format pane "~&HP: ~d / ~d     AC: ~d~%" hp (max hp max-hp) ac)
-      (format pane "~&Crowns: ~d  Arrows: ~d  Potions: ~d~%~%" crowns arrows potions)
-      (clim:with-text-face (pane :bold) (format pane "Appearance"))
-      (format pane "~&  Skin: ") (print-wide-pixel 0 pane :unit 8)
-      (clim:with-output-as-presentation (pane :skin 'char-cmd :background-mode :transparent)
-        (format pane " ~a" skin))
-      (format pane "~&  Hair: ") (print-wide-pixel 0 pane :unit 8)
-      (clim:with-output-as-presentation (pane :hair 'char-cmd :background-mode :transparent)
-        (format pane " ~a" hair))
-      (format pane "~&  Clothes: ") (print-wide-pixel 0 pane :unit 8)
-      (clim:with-output-as-presentation (pane :clothes 'char-cmd :background-mode :transparent)
-        (format pane " ~a" clothes))
-      (format pane "~2%")
-      (clim:with-text-face (pane :bold) (format pane "Speech"))
-      (format pane "~&  ")
-      (print-clim-color 0 pane)
-      (clim:with-output-as-presentation (pane :speech-color 'char-cmd :background-mode :transparent)
-        (format pane " ~a" speech))
-      (clim:with-output-as-presentation (pane :pitch 'char-cmd :background-mode :transparent)
-        (format pane "  Pitch: ~d" pitch))
-      (clim:with-output-as-presentation (pane :speed 'char-cmd :background-mode :transparent)
-        (format pane "  Speed: ~d" speed))
-      (clim:with-output-as-presentation (pane :bend 'char-cmd :background-mode :transparent)
-        (format pane "  Bend: ~d" bend))
-      (format pane "~&")
-      (clim:with-output-as-presentation (pane :test-atarivox 'char-cmd :background-mode :transparent)
-        (format pane "[Test on AtariVox]"))
-      (format pane "~2%")
-      (clim:with-text-face (pane :bold) (format pane "Inventory"))
-      (format pane "~& Equipped ")
-      (clim:with-output-as-presentation (pane :equip 'char-cmd :background-mode :transparent)
-        (format pane "Item: ~a" (or (car (rassoc equip +equipment-names+ :test #'string-equal)) (%strip-prefix equip))))
-      (format pane "~&  Equipped ")
-      (clim:with-output-as-presentation (pane :shield 'char-cmd :background-mode :transparent)
-        (format pane "Shield: ~a" (or (car (rassoc shield +shield-names+ :test #'string-equal)) (%strip-prefix shield))))
-      (format pane "~&  Worn ")
-      (clim:with-output-as-presentation (pane :armor 'char-cmd :background-mode :transparent)
-        (format pane "Armor: ~a" (or (and all-items (loop for n in all-items when (search "armor" n :test #'char-equal) return n)) "None")))
-      (format pane "~2%")
-      (clim:with-text-face (pane :bold) (format pane "In Bag"))
-      (let* ((inv-bytes (proto-val proto :|CharacterInventory| '(0 0 0 0 0 0 0 0)))
-             (indices (bitset->indices (coerce inv-bytes 'list))))
-        (if indices (dolist (idx indices)
-                      (let ((n (if (< idx (length all-items)) (elt all-items idx) (format nil "#~d" idx))))
-                        (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" n))))
-            (format pane "~&  (empty)")))
-      (format pane "~2%")
-      (clim:with-text-face (pane :bold) (format pane "Keys"))
-      (let* ((key-bytes (proto-val proto :|CharacterKeys| '(0 0 0 0)))
-             (indices (bitset->indices (coerce key-bytes 'list))))
-        (if indices (dolist (idx indices)
-                      (let ((n (if (< idx (length all-keys)) (elt all-keys idx) (format nil "Key #~d" idx))))
-                        (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" n))))
-            (format pane "~&  (none)")))
-      (format pane "~%")
-      (when proto (format pane "~&~%(~a)" (proto-val proto :|Class| "?"))))))
-
-(defun display-right (frame pane)
-  (clim:window-clear pane)
-  (with-char-data (npc proto all-items all-keys)
-    (unless npc (return-from display-right))
-    (clim:with-text-face (pane :bold) (format pane "Available~%"))
-    (let* ((inv-bytes (proto-val proto :|CharacterInventory| '(0 0 0 0 0 0 0 0)))
-           (owned (bitset->indices (coerce inv-bytes 'list))))
-      (if all-items
-          (let ((count 0))
-            (loop for name across (coerce all-items 'vector) for idx from 0 unless (find idx owned)
-                  do (when (< count 30) (incf count)
-                           (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" name))))
-            (when (< count (length all-items)) (format pane "~&  ... and ~d more" (- (length all-items) count))))
-          (format pane "~&  (no items loaded)")))
-    (format pane "~2%")
-    (clim:with-text-face (pane :bold) (format pane "Keys~%"))
-    (let* ((key-bytes (proto-val proto :|CharacterKeys| '(0 0 0 0)))
-           (owned (bitset->indices (coerce key-bytes 'list))))
-      (if all-keys
-          (loop for name across (coerce all-keys 'vector) for idx from 0 unless (find idx owned)
-                do (clim:with-output-as-presentation (pane idx 'integer :background-mode :transparent) (format pane "~&  ~a" name)))
-          (format pane "~&  (no keys loaded)")))
-    (format pane "~%")))
-
 (clim:define-command (com-char-test-atarivox :menu t :name t) ()
-  (let* ((char (frame-character frame))) 
-    (let ((pitch (game-resource-character-voice-pitch char))
-          (speed (game-resource-character-voice-speed char))
-          (bend (game-resource-character-voice-bend char))
+  (let* ((frame clim:*application-frame*)
+         (char (inspector-resource frame))) 
+    (let ((pitch (game-resource-character-speech-pitch char))
+          (speed (game-resource-character-speech-speed char))
+          (bend (game-resource-character-speech-bend char))
           (phrase (frame-test-phrase frame)))
       (when phrase (setf (frame-test-phrase frame) phrase) (%test-atarivox pitch speed bend phrase)))))
 
 (clim:define-command (com-char-close :menu t :name t) ()
   (let ((frame clim:*application-frame*)) (when (typep frame 'character-inspector-frame) (clim:frame-exit frame))))
 
+(clim:define-command (com-char-save-text :command-table clim-internals::global-command-table
+                                         :menu nil :name t)
+    ()
+  "Export character as plain text."
+  (let* ((frame clim:*application-frame*)
+         (resource (inspector-resource frame)))
+    (unless resource
+      (error "No character resource to export."))
+    (let ((path (prompt-save-pathname (format nil "~a.txt" (game-resource-title resource))
+                                      (list :dir (game-resource-kind resource) :text))))
+      (when path
+        (export-resource-to-text-file resource path)
+        (clim-simple-echo:run-in-simple-echo (lambda () (format t "Exported text to ~a" path)))))))
+
+(clim:define-command (com-char-save :command-table clim-internals::global-command-table
+                                    :menu nil :name t)
+    ()
+  "Export character as JSON."
+  (let* ((frame clim:*application-frame*)
+         (resource (inspector-resource frame)))
+    (unless resource
+      (error "No character resource to export."))
+    (let ((path (prompt-save-pathname (format nil "~a.sky.json" (game-resource-title resource))
+                                      (list :dir (game-resource-kind resource) :json))))
+      (when path
+        (export-resource-to-json-file resource path)
+        (clim-simple-echo:run-in-simple-echo (lambda () (format t "Exported JSON to ~a" path)))))))
+
+(clim:define-command (com-char-save-pdf :command-table clim-internals::global-command-table
+                                        :menu nil :name t)
+    ()
+  "Export character as PDF via direct PostScript streaming to ps2pdf."
+  (let* ((frame clim:*application-frame*)
+         (resource (inspector-resource frame)))
+    (unless resource
+      (error "No character resource to export."))
+    (let ((path (prompt-save-pathname (format nil "~a.pdf" (game-resource-title resource))
+                                      (list :dir (game-resource-kind resource) :pdf))))
+      (when path
+        (export-resource-to-pdf-file resource path)
+        (clim-simple-echo:run-in-simple-echo (lambda () (format t "Exported PDF to ~a" path)))))))
+
+(defun %char-print-to-printer (printer-name)
+  "Print the current character resource to PRINTER-NAME via direct PostScript streaming.
+If PRINTER-NAME is NIL, use the default printer."
+  (let* ((frame clim:*application-frame*)
+         (resource (when (typep frame 'character-inspector-frame)
+                     (inspector-resource frame))))
+    (unless resource
+      (error "No character resource to print."))
+    (let ((printer (or printer-name
+                       (cdar *ipp-printer-registry*))))
+      (if (typep printer 'ipp-printer)
+          (pipe-to-ipp printer resource)
+          (pipe-to-lpr printer resource))
+      (clim-simple-echo:run-in-simple-echo
+       (lambda () (format t "Sent ~a to printer ~a" (game-resource-title resource)
+                          (if (typep printer 'ipp-printer) (ipp-name printer) printer)))))))
+
 (defun populate-char-print-menu (&optional frame)
   (declare (ignore frame))
   (let ((ct 'char-inspector-print-to-menu))
-    (ignore-errors (clim:remove-menu-item-from-command-table ct "No printers found")
-                   (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
-    (let ((printers (ignore-errors (discover-printers-with-names))))
-      (if printers 
-          (dolist (pair printers)
-            (let ((queue (car pair)) (display (cdr pair)))
-              (clim:add-menu-item-to-command-table ct display 
-                                                   :command `(com-char-print-to ,queue ,display) :after :end)))
-          (clim:add-menu-item-to-command-table ct "Default Printer (lpr)" 
-                                               :command 'com-char-print-to-default :after :end))))
-  (unless (fboundp 'com-char-print-to)
-    (clim:define-command (com-char-print-to :command-table clim-internals::global-command-table :menu nil :name t)
-        ((queue-name 'string) (display-name 'string))
-      (declare (ignore display-name)) (%char-print-to-printer queue-name)))
-  (unless (fboundp 'com-char-print-to-default)
-    (clim:define-command (com-char-print-to-default :command-table clim-internals::global-command-table :menu nil :name t)
-        ()
-      (%char-print-to-printer nil))))
+    ;; Remove stale printer entries
+    (dolist (printer *ipp-printer-registry*)
+      (ignore-errors (clim:remove-menu-item-from-command-table
+                      ct (ipp-name (cdr printer)))))
+    (ignore-errors (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
+    (ensure-printer-scavenger-is-running)
+    (if *ipp-printer-registry*
+        (dolist (printer *ipp-printer-registry*)
+          (let* ((struct (cdr printer))
+                 (display (ipp-name struct)))
+            (clim:add-menu-item-to-command-table ct display
+                                                 :command `(com-char-print-to ,struct) :after :end)))
+        (clim:add-menu-item-to-command-table ct "Default Printer (lpr)"
+                                             :command 'com-char-print-to-default :after :end))))
+(clim:define-command (com-char-print-to :command-table clim-internals::global-command-table :menu nil :name t)
+    ((printer t))
+  (%char-print-to-printer printer))
+
+(clim:define-command (com-char-print-to-default :command-table clim-internals::global-command-table :menu nil :name t)
+    ()
+  (%char-print-to-printer nil))
 
 (defun open-character-inspector (character-resource)
   "Open the Character Inspector for a CHARACTER-RESOURCE.

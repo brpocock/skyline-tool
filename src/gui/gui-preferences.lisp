@@ -7,7 +7,24 @@
 Preferences Inspector documentation: Requirements. NO MODIFICATIONS permitted. ;
 
 Tab Bar
+ _______________   __________   _________   _________________   ________________
 / Accessibility \ / Printing \ / Network \ / Version Control \ / Issue Tracking \
+
+
+Accessibility Tab
+------------------
+
+Color Theme: [ Normal (Light)    - ]
+             [ Inverted (Dark)     ]
+             [ Sunrise/Sunset      ]
+             [ Desktop (Auto)      ]
+
+Sunrise/Sunset: ___° <> N <> S × ___° <> W <> E
+
+Keyboard Shortcuts Theme: [ Gnome        - ]
+                          [ macOS          ]
+                          [ Common (CDE)   ]
+                          [ Emacs          ]
 
 Printing Tab
 -------------
@@ -22,67 +39,77 @@ Paper Size: <> U.S. Letter              ;
                     [ pc   ]        [ pc   ]
                     [ in   ]        [ in   ]
                                         
-Network Tab                             ;
+Network Tab
 ------------
-[] LAN Resource Sharing                 ;
-[] Share "Dist/" Folder                 ;
-[] Share Music as Media Server          ;
-                                        ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-Version Control Tab                     ;
-Versioning                              ;
------------                             ;
-Version Control System: <> Git | git    ;
-<> Subversion | svn                     ;
-<> Bazaar | bzr                         ;
-<> Mercurial | hg                       ;
-<> Concurrent | cvs                     ;
-<> Revision Control | rcs               ;
-                                        ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-Git # Specific to the version control system in use ;
-----                                    ;
-User                                    ;
------                                   ;
-Name: ________________________          ;
-eMail: ________________________         ;
-Signing key:  Bruce-Robert Pocock <brpocock@interworldly.com>    - ;
----                                     ;
-Generate and publish a new key...       ;
-[] Sign Commits                         ;
-[] Sign Tags                            ;
-Tools                                   ;
-------                                  ;
-Merge:  meld -   [] Prompt first        ;
-Diff:   meld -   [] Prompt first        ;
-##( git difftool --tool-help first section of output only ) ;
-##( "may be set to one of the following:" options only ) ;
-##( do not list "valid, but not currently available" list ) ;
-Remotes                                 ;
---------                                ;
-| Remote        | URL                               | Fetch                               | ;
-|-----------------------------------------------------------------------------------------| ;
-| origin        | git@github.com:brpocock/Phantasia | +refs/heads/:refs/remotes/origin/ | ;
-( + )                                   ;
-Submodules                              ;
------------                             ;
-[] Skyline-Tool and Eightbol            ;
-[] Atari 7800 Tools                     ;
-[] Intellivision Tools                  ;
-Pushing                                 ;
---------                                ;
-[] When pushing, automatically set up new branches on remote ;
+[] LAN Resource Sharing
+[] Share "Dist/" Folder
+[] Share Music as Media Server
 
-[] When pulling, automatically  fast-forward only   - ;
+Version Control Tab
+--------------------
+Version Control System: <> Git              | git
+                        <> Bazaar           | bzr          
+                        <> Subversion       | svn      
+                        <> Mercurial        | hg        
+                        <> Concurrent       | cvs      
+                        <> Revision Control | rcs
 
-Default Branch: ___________                                              # main default ;
-                                        ; ; ; ; ; ; ; ; ; ; ; ; ; ;
-Issue Tracking Tab                      ;
-Issue Tracking                          ;
----------------                         ;
-Issue tracker kind: <> GitHub           ;
-<> GitLab                               ;
-<> Bugzilla                             ;
-Tracker URL: ____________________________________________________ ;
-( Sign in... )                          ;
+Git # Specific to the version control system in use
+----                                    
+
+User                   
+-----                  
+Name: $(user-real-name)
+eMail: ________________________  
+
+Signing key: [ Bruce-Robert Pocock <brpocock@interworldly.com>    - ]
+             [ ...                                                  ]
+                        (Generate and publish a new key...)
+
+[] Sign Commits                         
+[] Sign Tags
+
+Tools                                   
+------                                  
+Merge: [ meld - ]  [] Prompt first        
+Diff:  [ meld - ]  [] Prompt first        
+##( git difftool --tool-help first section of output only )
+##( "may be set to one of the following:" options only )
+##( do not list "valid, but not currently available" list )
+Remotes                                 
+--------                                
+|| Remote        | URL                               | Fetch                               ||
+||-----------------------------------------------------------------------------------------||
+|| origin        | git@github.com:brpocock/Phantasia | +refs/heads/:refs/remotes/origin/   || 
+( + )                                   
+Submodules                              
+-----------                             
+[] Skyline-Tool and Eightbol
+
+[] Atari 7800 Tools                     
+[] Intellivision Tools                  
+
+Pushing                                 
+--------                                
+[] When pushing, automatically set up new branches on remote 
+
+Pulling
+--------
+[] When pulling, automatically [ fast-forward only   - ]
+
+Default Branch: ___________         # main default
+                   
+Issue Tracking Tab 
+-------------------
+Issue tracker kind: <> GitHub           
+                    <> GitLab                               
+                    <> Bugzilla
+
+GitLab         # specific to each selection
+-------
+
+Tracker URL: ____________________________________________________ 
+                            ( Sign in... )                          
 |#
 
 ;; Preferences Inspector:
@@ -401,6 +428,12 @@ Tracker URL: ____________________________________________________ ;
                        do (clim:redisplay-frame-panes frame :force-p t)))))))
   ;; Populate dynamic menus
   (populate-print-menu 'preferences-print-to-menu)
+  ;; Subscribe to printer list changes for dynamic menu updates
+  (skyline-tool::subscribe :printer-list-changed
+              (lambda (event)
+                (declare (ignore event))
+                (populate-print-menu 'preferences-print-to-menu)
+                (clim:redisplay-frame-panes frame :force-p t)))
   ;; Subscribe to external preference-change events so other windows stay in sync
   (skyline-tool::subscribe :preference-change
               (lambda (event)
@@ -464,12 +497,12 @@ Tracker URL: ____________________________________________________ ;
 
 ;;;; Commands
 (clim:define-command (com-preferences-reset :command-table clim-internals::global-command-table
-                                             :menu t :name t) ()
-  (let ((confirmed (prompt-for-confirmation "Reset all preferences to defaults?")))
+                                            :menu t :name t) ()
+  (let ((confirmed (error "Reset all preferences to defaults?")))
     (when confirmed
       (setf *prefs-cache* (default-preferences))
       (setf (frame-dirty clim:*application-frame*) t)
-      (save-preferences-now clim:*application-frame*)
+      (setf (get-pref '(:internal :prefs :reset-by-user)) (get-universal-time))
       (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))
 
 (clim:define-command (com-close-frame :command-table clim-internals::global-command-table
@@ -495,8 +528,7 @@ Tracker URL: ____________________________________________________ ;
 
 (clim:define-command (com-preferences-save-json :command-table clim-internals::global-command-table
                                                 :menu t :name t) ()
-  (let* ((frame clim:*application-frame*)
-         (path (prompt-save-pathname "Preferences.json" '(:dir :preferences :json))))
+  (let* ((path (prompt-save-pathname "Preferences.json" '(:dir :preferences :json))))
     (when path
       (with-open-file (s path :direction :output :if-exists :supersede :external-format :utf-8)
         (json:encode-json
@@ -506,18 +538,17 @@ Tracker URL: ____________________________________________________ ;
 
 (clim:define-command (com-preferences-save-pdf :command-table clim-internals::global-command-table
                                                :menu t :name t) ()
-  (let* ((frame clim:*application-frame*)
-         (path (prompt-save-pathname "preferences.ps" :default-name "preferences.ps")))
+  (let* ((path (prompt-save-pathname "Preferences.pdf" '(:dir :preferences :pdf))))
     (when path
-      (with-open-file (s path :direction :output :if-exists :supersede)
-        (write-ps-header-bar s "Preferences" (format-timestring nil (get-universal-time))
-                             (user-homedir-pathname)
-                             (title-case (if (boundp '*game-title*) *game-title* "Game")))
+      (let ((ps-stream (uiop:run-program 
+                        (list "ps2pdf" "-" (namestring path))
+                        :input :stream
+                        :output nil
+                        :error-output nil)))
+        (write-ps-header-bar ps-stream "Preferences")
         (loop for (k v) on *prefs-cache* by #'cddr
-              do (format s "(~s: ~s) showpage show~%" k v))
-        (let ((pdf-path (make-pathname :type "pdf" :defaults path)))
-          (uiop:run-program (list "ps2pdf" (namestring path) (namestring pdf-path))
-                            :output nil))))))
+              do (format ps-stream "(~s: ~s) showpage show~%" k v))
+        (close ps-stream)))))
 
 (clim:define-command (com-cut :command-table clim-internals::global-command-table
                               :menu t :name t) ()
@@ -635,12 +666,6 @@ Tracker URL: ____________________________________________________ ;
          ("Reset to Default" :command com-preferences-reset-section)
          ("How to Manage..." :command com-help-for-window)))
 
-(clim:define-command (com-preferences-reset-section :command-table clim-internals::global-command-table
-                                                    :menu t :name t) ()
-  (setf *prefs-cache* (default-preferences))
-  (save-preferences-now clim:*application-frame*)
-  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
-
 ;;;; Display helpers
 (defmacro make-section-header (stream title)
   "Render a section heading in a formatting-table row."
@@ -726,7 +751,6 @@ Tracker URL: ____________________________________________________ ;
                                                               (round (convert-unit w old-unit new-unit) 1))
                                                         (setf (get-pref '(:paper :height))
                                                               (round (convert-unit h old-unit new-unit) 1)))))
-                                                  (save-preferences-now frame)
                                                   (clim:redisplay-frame-panes frame :force-p t))))))
           (make-full-width-row pane (clim:note-gadget-activated box pane))
 
@@ -739,8 +763,8 @@ Tracker URL: ____________________________________________________ ;
                                                         :activate-callback
                                                         (lambda (gadget value)
                                                           (declare (ignore gadget))
-                                                          (setf (get-pref '(:paper :width)) (parse-number value))
-                                                          (save-preferences-now frame))))))
+                                                          (setf (get-pref '(:paper :width))
+                                                                (parse-number value)))))))
           (clim:note-gadget-activated (paper-width-field frame) pane)
 
           (make-label-value-row pane "Height"
@@ -752,8 +776,7 @@ Tracker URL: ____________________________________________________ ;
                                                         :activate-callback
                                                         (lambda (gadget value)
                                                           (declare (ignore gadget))
-                                                          (setf (get-pref '(:paper :height)) (parse-number value))
-                                                          (save-preferences-now frame))))))
+                                                          (setf (get-pref '(:paper :height)) (parse-number value)))))))
           (clim:note-gadget-activated (paper-height-field frame) pane))
 
         ;; === Sharing Services Tab ===
@@ -767,7 +790,6 @@ Tracker URL: ____________________________________________________ ;
                                 (lambda (g v)
                                   (declare (ignore g))
                                   (setf (get-pref '(:lan-sharing :enabled)) v)
-                                  (save-preferences-now frame)
                                   (clim:redisplay-frame-panes frame :force-p t)))))
         (make-full-width-row pane (clim:note-gadget-activated (lan-sharing-checkbox frame) pane))
         (unless (dist-sharing-checkbox frame)
@@ -779,7 +801,6 @@ Tracker URL: ____________________________________________________ ;
                                 (lambda (g v)
                                   (declare (ignore g))
                                   (setf (get-pref '(:dist-sharing :enabled)) v)
-                                  (save-preferences-now frame)
                                   (clim:redisplay-frame-panes frame :force-p t)))))
         (make-full-width-row pane (clim:note-gadget-activated (dist-sharing-checkbox frame) pane))
         (unless (music-sharing-checkbox frame)
@@ -791,60 +812,342 @@ Tracker URL: ____________________________________________________ ;
                                 (lambda (g v)
                                   (declare (ignore g))
                                   (setf (get-pref '(:music-sharing :enabled)) v)
-                                  (save-preferences-now frame)
                                   (clim:redisplay-frame-panes frame :force-p t)))))
-        (make-full-width-row pane (clim:note-gadget-activated (music-sharing-checkbox frame) pane))
+        (make-full-width-row pane (clim:note-gadget-activated (music-sharing-checkbox frame) pane))))))
 
-        ;; === P2P Sharing Tab === (User clarified: should be called "LAN Sharing")
-        (make-section-header pane "LAN Sharing")
-        (unless (p2p-enabled-checkbox frame)
-          (setf (p2p-enabled-checkbox frame)
-                (clim:make-pane 'clim:check-box
-                                :label "Enable P2P Resource Sharing"
-                                :value (get-pref '(:p2p :enabled) nil)
-                                :value-changed-callback
-                                (lambda (g v)
-                                  (declare (ignore g))
-                                  (setf (get-pref '(:p2p :enabled)) v)
-                                  (save-preferences-now frame)
-                                  (clim:redisplay-frame-panes frame :force-p t)))))
-        (make-full-width-row pane (clim:note-gadget-activated (p2p-enabled-checkbox frame) pane))
-        (make-label-value-row pane "Advertised User Name"
-                              (unless (p2p-user-field frame)
-                                (setf (p2p-user-field frame)
+;;;; Tab bar display
+(defun inside-clim-rectangle-p (x y rect)
+  "Return T if point (x,y) is within RECT."
+  (and (<= (clim:rectangle-min-x rect) x (clim:rectangle-max-x rect))
+       (<= (clim:rectangle-min-y rect) y (clim:rectangle-max-y rect))))
+
+(defun find-frame-containing-pane (pane)
+  "Find the application frame containing PANE."
+  (let ((sheet pane))
+    (loop while sheet
+          do (when (typep sheet 'clim:application-frame)
+               (return sheet))
+             (setf sheet (clim:sheet-medium sheet)))
+    (when (typep sheet 'clim:application-frame)
+      sheet)))
+
+(defun tab-test (pane x y)
+  "Return T if point (x,y) is within a tab rectangle on the tab-bar pane."
+  (let ((frame (find-frame-containing-pane pane))
+        (rects (slot-value pane 'tab-rectangles-cache)))
+    (declare (ignore frame))
+    (when rects
+      (some (lambda (entry)
+              (destructuring-bind (tab rect) entry
+                (declare (ignore tab))
+                (when (and rect (inside-clim-rectangle-p x y rect))
+                  (return-from tab-test t))))
+            rects))))
+
+(defun tab-select (pane x y)
+  "Handle selection of a tab at point (x,y) on the tab-bar pane."
+  (let ((frame (find-frame-containing-pane pane))
+        (rects (slot-value pane 'tab-rectangles-cache)))
+    (when frame
+      (some (lambda (entry)
+              (destructuring-bind (tab rect) entry
+                (when (and rect (inside-clim-rectangle-p x y rect))
+                  (setf (frame-current-tab frame) tab)
+                  (clim:redisplay-frame-panes frame :force-p t)
+                  (return-from tab-select t))))
+            (reverse rects)))))
+
+(defgeneric display-tab-bar (pane frame))
+
+(defmethod display-tab-bar ((pane clim:application-pane) (frame preferences-inspector-frame))
+  "Draw custom tab bar with rounded corners and styling for Preferences Inspector."
+  (let* ((tabs '(:accessibility :printing :network :version-control :issue-tracking))
+         (tab-labels '("Accessibility" "Printing" "Network" "Version Control" "Issue Tracking"))
+         (n (length tabs))
+         (width (or (clim:bounding-rectangle-width (clim:sheet-region pane)) 400))
+         (height 30)
+         (tab-width (/ width n))
+         (corner-radius 5))
+    (loop for tab in tabs
+          for label in tab-labels
+          for i from 0
+          for left = (* i tab-width)
+          for right = (+ left tab-width)
+          for selected = (eq tab (frame-current-tab frame))
+          do (clim:with-drawing-options (pane
+                                         :ink (if selected
+                                                  (clim:make-gray-color 0)
+                                                  (clim:make-gray-color 0.75)))
+               (clim:draw-rectangle pane left 0 right (+ 20 height)
+                                    :filled t
+                                    :corner-radii (list corner-radius corner-radius
+                                                        corner-radius corner-radius)))
+             (let* ((text-x (if selected
+                                (+ left 5)
+                                (+ left 10)))
+                    (text-y 8))
+               (clim:with-drawing-options (pane
+                                           :ink (if selected
+                                                    (clim:make-gray-color 1)
+                                                    (clim:make-gray-color 0)))
+                 (clim:draw-text pane label (clim:make-point text-x text-y) :align-left :align-top)))))
+  
+;;;; Main display dispatcher
+  (defun display-preferences (frame pane)
+    "Dispatch to the current tab's display function based on frame-current-tab."
+    (let ((*standard-output* pane))
+      (ecase (frame-current-tab frame)
+        (:accessibility (display-accessibility-tab frame pane))
+        (:printing (display-printing-tab frame pane))
+        (:network (display-network-tab frame pane))
+        (:version-control (display-version-control-tab frame pane))
+        (:issue-tracking (display-issue-tracking-tab frame pane)))))
+
+;;;; Tab content display functions
+
+  (defun display-accessibility-tab (frame pane)
+    "Display the Accessibility tab content."
+    (make-section-header pane "Color Theme")
+    (let ((theme (get-pref '(:accessibility :theme) :desktop))
+          (box (clim:make-pane 'clim:radio-box)))
+      (setf (accessibility-theme-box frame) box)
+      (setf (accessibility-theme-radio frame)
+            (loop for (key label) in '((:normal "Normal (Light)")
+                                       (:inverted "Inverted (Dark)")
+                                       (:desktop "Desktop (Auto)")
+                                       (:sunrise "Sunrise/Sunset"))
+                  collect (clim:make-pane 'clim:toggle-button
+                                          :label label
+                                          :value (eq theme key)
+                                          :group box
+                                          :value-changed-callback
+                                          (lambda (gadget value)
+                                            (declare (ignore gadget))
+                                            (setf (get-pref '(:accessibility :theme)) value)
+                                            (clim:redisplay-frame-panes frame :force-p t)))))
+      (make-full-width-row pane (clim:note-gadget-activated box pane))
+      (when (member theme '(:sunrise :sunset))
+        (make-section-header pane "Sunrise/Sunset")
+        (make-label-value-row pane "Latitude"
+                              (unless (accessibility-latitude-field frame)
+                                (setf (accessibility-latitude-field frame)
                                       (clim:make-pane 'clim:text-field
-                                                      :value (or (get-pref '(:p2p :user) "") (user-full-name))
-                                                      :width 300
+                                                      :value (or (get-pref '(:accessibility :latitude) "")
+                                                                 "")
+                                                      :width 80
                                                       :activate-callback
                                                       (lambda (gadget value)
                                                         (declare (ignore gadget))
-                                                        (setf (get-pref '(:p2p :user)) value)
-                                                        (save-preferences-now frame))))))
-        (clim:note-gadget-activated (p2p-user-field frame) pane)
-        (make-label-value-row pane "Service Domain"
-                              (unless (p2p-domain-field frame)
-                                (setf (p2p-domain-field frame)
+                                                        (setf (get-pref '(:accessibility :latitude)) value)
+                                                        (clim:redisplay-frame-panes frame :force-p t))))))
+        (clim:note-gadget-activated (accessibility-latitude-field frame) pane)
+        (make-label-value-row pane "Longitude"
+                              (unless (accessibility-longitude-field frame)
+                                (setf (accessibility-longitude-field frame)
                                       (clim:make-pane 'clim:text-field
-                                                      :value (get-pref '(:p2p :domain) "local.")
-                                                      :width 200
+                                                      :value (or (get-pref '(:accessibility :longitude) "")
+                                                                 "")
+                                                      :width 80
                                                       :activate-callback
                                                       (lambda (gadget value)
                                                         (declare (ignore gadget))
-                                                        (setf (get-pref '(:p2p :domain)) value)
-                                                        (save-preferences-now frame))))))
-        (clim:note-gadget-activated (p2p-domain-field frame) pane)
-        (make-label-value-row pane "Network Interface"
-                              (unless (p2p-interface-field frame)
-                                (setf (p2p-interface-field frame)
-                                      (clim:make-pane 'clim:text-field
-                                                      :value (get-pref '(:p2p :interface) "eth0")
-                                                      :width 200
-                                                      :activate-callback
-                                                      (lambda (gadget value)
-                                                        (declare (ignore gadget))
-                                                        (error "truncated file")
-                                                        ))))))))
-  (error "truncated file"))
-;; Fix this to point to actual preferences inspector
-;; Currently it's a placeholder in src/gui/gui-preferences.lisp
-;; The preferences inspector is in src/gui/gui-preferences.lisp
+                                                        (setf (get-pref '(:accessibility :longitude)) value)
+                                                        (clim:redisplay-frame-panes frame :force-p t))))))
+        (clim:note-gadget-activated (accessibility-longitude-field frame) pane))))
+  (make-section-header pane "Keyboard Shortcuts")
+  (let ((shortcut-style (get-pref '(:accessibility :shortcut-style) :gnome)))
+    (let ((box (clim:make-pane 'clim:radio-box)))
+      (setf (accessibility-shortcut-box frame) box)
+      (setf (accessibility-shortcut-radio frame)
+            (loop for (key label) in '((:gnome "Gnome")
+                                       (:macos "macOS")
+                                       (:emacs "Emacs"))
+                  collect (clim:make-pane 'clim:toggle-button
+                                          :label label
+                                          :value (eq shortcut-style key)
+                                          :group box
+                                          :value-changed-callback
+                                          (lambda (gadget value)
+                                            (declare (ignore gadget))
+                                            (setf (get-pref '(:accessibility :shortcut-style)) value)
+                                            (clim:redisplay-frame-panes frame :force-p t)))))
+      (make-full-width-row pane (clim:note-gadget-activated box pane)))))
+
+(defun display-printing-tab (frame pane)
+  "Display the Printing tab content."
+  (make-section-header pane "Paper Size")
+  (let ((current-size (get-pref '(:paper :size) :us-letter)))
+    (let ((box (clim:make-pane 'clim:radio-box)))
+      (setf (paper-size-box frame) box)
+      (setf (paper-size-radio frame)
+            (loop for (key label w h) in +paper-sizes+
+                  collect (clim:make-pane 'clim:toggle-button
+                                          :label label
+                                          :value (eq current-size key)
+                                          :group box
+                                          :value-changed-callback
+                                          (lambda (g v)
+                                            (declare (ignore g))
+                                            (when v
+                                              (setf (get-pref '(:paper :size)) key)
+                                              (when w
+                                                (setf (get-pref '(:paper :width)) w)
+                                                (setf (get-pref '(:paper :height)) h))
+                                              (clim:redisplay-frame-panes frame :force-p t))))))
+      (make-full-width-row pane (clim:note-gadget-activated box pane))
+      (when (eq (get-pref '(:paper :size) :us-letter) :custom)
+        (make-section-header pane "Paper Unit")
+        (let* ((current-unit (get-pref '(:units :length) :mm))
+               (box (clim:make-pane 'clim:radio-box)))
+          (setf (paper-unit-box frame) box)
+          (setf (paper-unit-radio frame)
+                (loop for unit in '(:mm :cm :in :pt)
+                      collect (clim:make-pane 'clim:toggle-button
+                                              :label (string unit)
+                                              :value (eq current-unit unit)
+                                              :group box
+                                              :value-changed-callback
+                                              (lambda (g v)
+                                                (declare (ignore g))
+                                                (when v
+                                                  (let ((old-unit (get-pref '(:units :length)))
+                                                        (new-unit unit))
+                                                    (setf (get-pref '(:units :length)) new-unit)
+                                                    (let ((w (get-pref '(:paper :width)))
+                                                          (h (get-pref '(:paper :height))))
+                                                      (when (and w h)
+                                                        (setf (get-pref '(:paper :width))
+                                                              (round (convert-unit w old-unit new-unit) 1))
+                                                        (setf (get-pref '(:paper :height))
+                                                              (round (convert-unit h old-unit new-unit) 1)))))
+                                                  (clim:redisplay-frame-panes frame :force-p t))))))
+          (make-full-width-row pane (clim:note-gadget-activated box pane))
+          (make-label-value-row pane "Width"
+                                (unless (paper-width-field frame)
+                                  (setf (paper-width-field frame)
+                                        (clim:make-pane 'clim:text-field
+                                                        :value (format nil "~a" (get-pref '(:paper :width) 215.9))
+                                                        :width 80
+                                                        :activate-callback
+                                                        (lambda (gadget value)
+                                                          (declare (ignore gadget))
+                                                          (setf (get-pref '(:paper :width)) (parse-number value))
+                                                          (clim:redisplay-frame-panes frame :force-p t))))))
+          (clim:note-gadget-activated (paper-width-field frame) pane)
+          (make-label-value-row pane "Height"
+                                (unless (paper-height-field frame)
+                                  (setf (paper-height-field frame)
+                                        (clim:make-pane 'clim:text-field
+                                                        :value (format nil "~a" (get-pref '(:paper :height) 279.4))
+                                                        :width 80
+                                                        :activate-callback
+                                                        (lambda (gadget value)
+                                                          (declare (ignore gadget))
+                                                          (setf (get-pref '(:paper :height)) (parse-number value))
+                                                          (clim:redisplay-frame-panes frame :force-p t))))))
+          (clim:note-gadget-activated (paper-height-field frame) pane))))))
+
+(defun display-network-tab (frame pane)
+  "Display the Network tab content."
+  (make-section-header pane "Sharing Services")
+  (unless (lan-sharing-checkbox frame)
+    (setf (lan-sharing-checkbox frame)
+          (clim:make-pane 'clim:check-box
+                          :label "LAN Resource Sharing"
+                          :value (get-pref '(:lan-sharing :enabled) nil)
+                          :value-changed-callback
+                          (lambda (g v)
+                            (declare (ignore g))
+                            (setf (get-pref '(:lan-sharing :enabled)) v)
+                            (clim:redisplay-frame-panes frame :force-p t)))))
+  (make-full-width-row pane (clim:note-gadget-activated (lan-sharing-checkbox frame) pane))
+  (unless (dist-sharing-checkbox frame)
+    (setf (dist-sharing-checkbox frame)
+          (clim:make-pane 'clim:check-box
+                          :label "Share Dist/ Folder"
+                          :value (get-pref '(:dist-sharing :enabled) nil)
+                          :value-changed-callback
+                          (lambda (g v)
+                            (declare (ignore g))
+                            (setf (get-pref '(:dist-sharing :enabled)) v)
+                            (clim:redisplay-frame-panes frame :force-p t)))))
+  (make-full-width-row pane (clim:note-gadget-activated (dist-sharing-checkbox frame) pane))
+  (unless (music-sharing-checkbox frame)
+    (setf (music-sharing-checkbox frame)
+          (clim:make-pane 'clim:check-box
+                          :label "Share Music as Media Server"
+                          :value (get-pref '(:music-sharing :enabled) nil)
+                          :value-changed-callback
+                          (lambda (g v)
+                            (declare (ignore g))
+                            (setf (get-pref '(:music-sharing :enabled)) v)
+                            (clim:redisplay-frame-panes frame :force-p t)))))
+  (make-full-width-row pane (clim:note-gadget-activated (music-sharing-checkbox frame) pane))
+  (make-section-header pane "LAN Sharing")
+  (unless (p2p-enabled-checkbox frame)
+    (setf (p2p-enabled-checkbox frame)
+          (clim:make-pane 'clim:check-box
+                          :label "Enable P2P Resource Sharing"
+                          :value (get-pref '(:p2p :enabled) nil)
+                          :value-changed-callback
+                          (lambda (g v)
+                            (declare (ignore g))
+                            (setf (get-pref '(:p2p :enabled)) v)
+                            (clim:redisplay-frame-panes frame :force-p t)))))
+  (make-full-width-row pane (clim:note-gadget-activated (p2p-enabled-checkbox frame) pane))
+  
+  (make-label-value-row pane "Service Domain"
+                        (unless (p2p-domain-field frame)
+                          (setf (p2p-domain-field frame)
+                                (clim:make-pane 'clim:text-field
+                                                :value (get-pref '(:p2p :domain) "local.")
+                                                :width 200
+                                                :activate-callback
+                                                (lambda (gadget value)
+                                                  (declare (ignore gadget))
+                                                  (setf (get-pref '(:p2p :domain)) value))))))
+  (clim:note-gadget-activated (p2p-domain-field frame) pane)
+  (make-label-value-row pane "Advertised User Name"
+                        (unless (p2p-user-field frame)
+                          (setf (p2p-user-field frame)
+                                (clim:make-pane 'clim:text-field
+                                                :value (or (get-pref '(:p2p :user) "") (user-full-name))
+                                                :width 300
+                                                :activate-callback
+                                                (lambda (gadget value)
+                                                  (declare (ignore gadget))
+                                                  (setf (get-pref '(:p2p :user)) value)
+                                                  (clim:redisplay-frame-panes frame :force-p t))))))
+  (clim:note-gadget-activated (p2p-user-field frame) pane)
+  (make-label-value-row pane "Service Domain"
+                        (unless (p2p-domain-field frame)
+                          (setf (p2p-domain-field frame)
+                                (clim:make-pane 'clim:text-field
+                                                :value (get-pref '(:p2p :domain) "local.")
+                                                :width 200
+                                                :activate-callback
+                                                (lambda (gadget value)
+                                                  (declare (ignore gadget))
+                                                  (setf (get-pref '(:p2p :domain)) value)
+                                                  (clim:redisplay-frame-panes frame :force-p t))))))
+  (clim:note-gadget-activated (p2p-domain-field frame) pane)
+  (make-label-value-row pane "Network Interface"
+                        (unless (p2p-interface-field frame)
+                          (setf (p2p-interface-field frame)
+                                (clim:make-pane 'clim:text-field
+                                                :value (get-pref '(:p2p :interface) "eth0")
+                                                :width 200
+                                                :activate-callback
+                                                (lambda (gadget value)
+                                                  (declare (ignore gadget))
+                                                  (setf (get-pref '(:p2p :interface)) value)
+                                                  (clim:redisplay-frame-panes frame :force-p t))))))
+  (clim:note-gadget-activated (p2p-interface-field frame) pane))
+
+(defun display-version-control-tab (frame pane)
+  "Display the Version Control tab content."
+  (declare (ignore frame pane)))
+
+(defun display-issue-tracking-tab (frame pane)
+  "Display the Issue Tracking tab content."
+  (declare (ignore frame pane)))

@@ -21,7 +21,7 @@
 
 ;; Reference presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob)
-                                                (type game-resource-blob-reference) stream view &key)
+                                               (type game-resource-blob-reference) stream view &key)
   (declare (ignore view))
   (clim:formatting-table (stream)
     ;; Header row
@@ -43,6 +43,26 @@
             (game-resource-present-subheading resource stream))))
       (clim:formatting-cell (stream :align-x :right :align-y :top :min-height 90 :min-width 125)
         (game-resource-present-right-margin resource stream)))))
+
+;; Build selector check-box — shared across resource inspectors
+(defun %build-selector (stream label resource keyword slot-string)
+  (clim:with-output-as-gadget (stream)
+    (clim:make-pane 'clim:check-box
+                    :label label
+                    :value (not (null (game-asset-build-p resource keyword)))
+                    :value-changed-callback
+                    (lambda (g v)
+                      (declare (ignore g))
+                      (let ((builds (game-asset-builds resource)))
+                        (if v
+                            (unless (member slot-string builds :test 'string-equal)
+                              (setf (slot-value resource 'builds)
+                                    (append builds (list slot-string))))
+                            (setf (slot-value resource 'builds)
+                                  (remove slot-string builds :test 'string-equal :count 1))))
+                      (ignore-errors
+                       (clim:redisplay-frame-panes clim:*application-frame*
+                                                   :force-p t))))))
 
 ;; Editable presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob)
@@ -72,25 +92,23 @@
       (clim:formatting-cell (stream :align-x :right)
         (format stream "Name: "))
       (clim:formatting-cell (stream :align-x :left)
-(interactive-editing-gadget-with-validation
-          stream resource
-          :getter (lambda (r) (game-resource-title r))
-          :setter (lambda (r v) (setf (game-resource-title r) v))
-          :label "Name:"
-         :validator #'validate-blob-name
+        (interactive-editing-gadget-with-validation
+         stream resource
+         :getter (lambda (r) (game-resource-title r))
+         :setter (lambda (r v) (setf (game-resource-title r) v))
+         :label "Name:"
+         :validator #'validate-file-name
          :max-length 200)))
-;; Build indicators row
-(clim:formatting-row (stream)
-  (clim:formatting-cell (stream :align-x :left)
-    (format stream "Builds: "))
-  (clim:formatting-cell (stream :align-x :left)
-    (when (game-resource-build-demo-p resource)
-      (format stream "✓ Demo "))
-    (when (game-resource-build-public-p resource)
-      (format stream "✓ Public "))
-    (let ((publisher (game-resource-publisher-name resource)))
-      (when publisher
-        (format stream "✓ ~a " publisher))))))
+    ;; Build indicators row
+    (clim:formatting-row (stream)
+      (clim:formatting-cell (stream :align-x :left)
+        (format stream "Builds: "))
+      (clim:formatting-cell (stream :align-x :left)
+        (%build-selector stream "Demo" resource :demo "Demo")
+        (terpri stream)
+        (%build-selector stream "Public" resource :public "Public")
+        (terpri stream)
+        (%build-selector stream (string *publisher*) resource :publisher "AA")))))
 
 ;; Viewing presentation
 (clim:define-presentation-method clim:present ((resource game-resource-blob) (type game-resource-blob-viewing) stream view &key)
@@ -124,19 +142,22 @@
       (clim:formatting-cell (stream :align-x :left)
         (format stream "Builds: "))
       (clim:formatting-cell (stream :align-x :left)
-        (when (game-resource-build-high-res resource)
-          (format stream "✓ High-Res "))
-        (when (game-resource-build-compressed resource)
-          (format stream "✓ Compressed "))))
-    ;; Image preview
+        (when (game-asset-build-p resource :demo)
+          (format stream "✓ Demo "))
+        (when (game-asset-build-p resource :public)
+          (format stream "✓ Public "))
+        (when (game-asset-build-p resource :publisher)
+          (format stream "✓ ~a" *publisher*))))
+    ;; Image preview with region-adjusted palette
     (clim:formatting-row (stream)
       (clim:formatting-cell (stream :align-x :center :min-width 300)
         (let ((png-path (make-pathname :defaults (first (game-resource-pathnames resource)) :type "png")))
           (unless (probe-file png-path)
             (build-target png-path))
           (when (probe-file png-path)
-            (let ((png-data (png-read:read-png-file png-path)))
-              (clim-image stream (png->image png-data) :fit-to-width 300))))))))
+            (let* ((png (png-read:read-png-file png-path))
+                   (*region* (get-pref :region)))
+              (clim-image stream (png->image png) :fit-to-width 300))))))))
 
 (defmethod present-editing ((resource game-resource-blob) stream)
   (clim:present resource 'game-resource-blob-editable :stream stream))
@@ -149,9 +170,9 @@
 
 (defun open-blob-inspector (resource)
   (open-resource-inspector (or resource
-                                 (make-instance 'game-resource-blob
-                                                :full-path nil
-                                                :moniker "Blobs/new-blob.xcf")) :editing))
+                               (make-instance 'game-resource-blob
+                                              :full-path nil
+                                              :moniker "Blobs/new-blob.xcf")) :editing))
 
 (defmethod game-resource-action-menu ((resource game-resource-blob))
   (list
@@ -198,41 +219,47 @@
                            (gethash "kind" json))
                  :full-path (gethash "path" json)))
 
-  (defmethod write-resource-ps-content ((resource game-resource-blob) ps)
-    (write-resource-common-ps resource ps)
-    (format ps "/Times-Roman-ISOLatin1 findfont 10 scalefont setfont~%")
-    (format ps "56 560 moveto~%")
-    (format ps "(BLOB: ~a) show~%" (escape-ps-string (game-asset-moniker resource)))
-    (format ps "showpage~%")
-    (format ps "<< /PageSize [792 612] >> setpagedevice~%")
-    (format ps "56 480 moveto~%")
-    (format ps "/Helvetica-Bold findfont 14 scalefont setfont~%")
-    (format ps "(Palette Colors) show~%")
-    (format ps "56 460 moveto~%")
-    (format ps "/Helvetica findfont 10 scalefont setfont~%")
-    (let* ((xcf-path (first (game-resource-pathnames resource)))
-           (png-path (make-pathname :defaults xcf-path :type "png")))
-      (unless (probe-file png-path)
-        (build-target png-path))
-      (when (probe-file png-path)
-        (let* ((png-data (png-read:read-png-file png-path))
-               (palette (png->palette (png-read:image-data png-data)
-                                      (png-read:transparency png-data)))
-               (num-colors (min 16 (array-dimension palette 0))))
-          (dotimes (i num-colors)
-            (let* ((color (aref palette i))
-                   (r (nth 0 color))
-                   (g (nth 1 color))
-                   (b (nth 2 color))
-                   (y (+ 460 (* i 10))))
-              (format ps "~d ~d ~d setrgbcolor~%" r g b)
-              (format ps "56 ~d 10 10 rectfill~%" y)
-              (format ps "0 0 0 setrgbcolor~%")
-              (format ps "72 ~d moveto~%" (+ y 2))
-              (format ps "/Helvetica findfont 6 scalefont setfont~%")
-              (format ps "(~a) show~%" (format nil "[~2,'0x]" r)))))))
-    (format ps "showpage~%")
-    (format ps "0 0 moveto~%")
-    (format ps "/Times-Roman findfont 8 scalefont setfont~%")
-    (format ps "(Skyline-Tool for Phantasia 7800 | ~a | Page 1) show~%"
-            (escape-ps-string (game-asset-moniker resource))))
+(defun format-atari-color-name (register &optional (tv *region*))
+  (let* ((hue (ash register -4))
+         (keyword (atari-color-name hue tv))
+         (name (subseq (string keyword) 3)))
+    (format nil "~:(~a~) $~x" (string-downcase name) register)))
+
+(defmethod write-resource-ps-content ((resource game-resource-blob) ps)
+  (write-resource-common-ps resource ps)
+  (format ps "/plot-wide-pixel {  % x y r g b — fill 12×10 rect swatch at (x,y) with color
+    /b exch def /g exch def /r exch def /y exch def /x exch def
+    r g b setrgbcolor x y 12 10 rectfill
+} def~%")
+  (format ps "56 480 moveto /Helvetica-Bold findfont 14 scalefont setfont (Palette Colors) show~%")
+  (format ps "/Helvetica findfont 8 scalefont setfont~%")
+  (let* ((xcf-path (first (game-resource-pathnames resource)))
+         (png-path (make-pathname :defaults xcf-path :type "png")))
+    (unless (probe-file png-path)
+      (build-target png-path))
+    (when (probe-file png-path)
+      (let* ((*region* (get-pref :region))
+             (png (png-read:read-png-file png-path))
+             (indices (png->palette (png-read:image-data png)
+                                    (png-read:transparency png)))
+             (machine-pal (machine-palette))
+             (unique (remove-duplicates
+                      (loop for x below (array-dimension indices 0)
+                            nconc (loop for y below (array-dimension indices 1)
+                                        for idx = (aref indices x y)
+                                        when idx collect idx))))))
+      (let ((sorted (sort (subseq unique 0 (min 25 (length unique))) #'<)))
+        (loop for slot from 0
+              for reg in sorted
+              for y from 460 downto 0 by -12
+              for label = (if (zerop slot) "BACKGRND"
+                              (format nil "P~dC~d" (floor (1- slot) 3) (1+ (mod (1- slot) 3))))
+              for rgb = (nth reg machine-pal)
+              do (destructuring-bind (r g b) rgb
+                   (format ps "56 ~d moveto (~a) show~%" y label)
+                   (format ps "120 ~d ~f ~f ~f plot-wide-pixel~%"
+                           y (/ r 255.0) (/ g 255.0) (/ b 255.0))
+                   (format ps "140 ~d moveto (~a) show~%"
+                           (+ y 2)
+                           (escape-ps-string (format-atari-color-name reg))))))))
+  (format ps "showpage~%"))

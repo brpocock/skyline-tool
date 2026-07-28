@@ -72,40 +72,41 @@
       (format *query-io* "~&Saved to ~a~%" filename))))
 
 (clim:define-command (com-print-about-to-printer :command-table clim-internals::global-command-table
-                                                 :menu nil :name t)
-    ((frame clim:application-frame) (printer-name string))
+                                                  :menu nil :name t)
+    ((frame clim:application-frame) (printer t))
   (when (frame-pdf-function frame)
-    (let ((temp-ps (format nil "/tmp/about-~a.ps" (get-universal-time))))
+    (let ((temp-ps (format nil "/tmp/about-~a.ps" (get-universal-time)))
+          (queue (if (typep printer 'ipp-printer) (ipp-queue printer) "lpr")))
       (funcall (frame-pdf-function frame) temp-ps)
       (ensure-thumbnail-kernel)
       (lparallel:submit-task
        (lambda ()
-         (uiop:run-program (list "lp" "-d" printer-name temp-ps)
+         (uiop:run-program (list "lp" "-d" queue temp-ps)
                            :ignore-error-status t))))))
 
 
-;; Populate the About dialog's Print To menu with available printers.
-;; Each printer entry sends the About page to that specific printer queue
-;; via com-print-about-to-printer (rather than the shared com-print-to-specific
-;; used by resource inspectors, because the About dialog uses a different PDF
-;; generation path).
 (defun populate-about-print-to-menu ()
   "Populate the About dialog's Print To menu with discovered printers."
-  (let ((printers (ignore-errors (discover-printers-with-names))))
-    (if printers
-        (dolist (printer printers)
-          (let ((queue (car printer))
-                (display (cdr printer)))
-            (unless (ignore-errors (clim:find-menu-item 'about-print-to-menu display :errorp nil))
-              (clim:add-menu-item-to-command-table
-               'about-print-to-menu display
-               :command `(com-print-about-to-printer ,queue)
-               :after :end))))
-        (unless (ignore-errors (clim:find-menu-item 'about-print-to-menu "Default Printer (lpr)" :errorp nil))
+  (ensure-printer-scavenger-is-running)
+  ;; Remove stale printer entries
+  (dolist (printer *ipp-printer-registry*)
+    (ignore-errors (clim:remove-menu-item-from-command-table
+                    'about-print-to-menu (ipp-name (cdr printer)))))
+  (ignore-errors (clim:remove-menu-item-from-command-table
+                  'about-print-to-menu "Default Printer (lpr)"))
+  ;; Add current printer entries
+  (if *ipp-printer-registry*
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
           (clim:add-menu-item-to-command-table
-           'about-print-to-menu "Default Printer (lpr)"
-           :command '(com-print-about-to-printer "lpr")
-           :after :end)))))
+           'about-print-to-menu display
+           :command `(com-print-about-to-printer ,struct)
+           :after :end)))
+      (clim:add-menu-item-to-command-table
+       'about-print-to-menu "Default Printer (lpr)"
+       :command '(com-print-about-to-printer nil)
+       :after :end)))
 
 ;; --- About dialog frame and display ---
 
@@ -186,6 +187,7 @@ Layout:
     (subscribe :printer-list-changed
                (lambda (event)
                  (declare (ignore event))
+                 (populate-about-print-to-menu)
                  (ignore-errors
                   (clim:redisplay-frame-panes frame :force-p t))))
     (clim-sys:make-process

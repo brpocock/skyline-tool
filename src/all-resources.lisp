@@ -167,13 +167,19 @@
   (populate-print-menu 'printer-menu)
   (populate-send-to-menu 'p2p-sharing-menu)
   (let ((redisplay-fn (lambda (event)
-                        (declare (ignore event))
-                        (clim:redisplay-frame-panes frame :force-p t))))
+                         (declare (ignore event))
+                         (clim:redisplay-frame-panes frame :force-p t)))
+        (printer-fn (lambda (event)
+                      (declare (ignore event))
+                      (populate-print-menu 'printer-menu)
+                      (clim:redisplay-frame-panes frame :force-p t))))
     (dolist (event-type +resource-event-types+)
       (subscribe event-type redisplay-fn))
+    (subscribe :printer-list-changed printer-fn)
     (setf (frame-event-handles frame)
-          (mapcar (lambda (et) (cons et redisplay-fn))
-                  +resource-event-types+))))
+          (append (mapcar (lambda (et) (cons et redisplay-fn))
+                          +resource-event-types+)
+                  (list (cons :printer-list-changed printer-fn))))))
 
 (defmethod finalize-instance :after ((frame all-resources-frame))
   (dolist (pair (frame-event-handles frame))
@@ -380,13 +386,13 @@ ___________________________
                                              :menu t :name t) ()
   "Collapse all resource groups in All Resources."
   (dolist (k +all-resource-kinds+)
-    (set-pref (list :resources :group :open k) nil)))
+    (setf (get-pref (list :resources :group :open k)) nil)))
 
 (clim:define-command (com-resource-open-all :command-table clim-internals::global-command-table
                                             :menu t :name t) ()
   "Expand all resource groups in All Resources."
   (dolist (k +all-resource-kinds+)
-    (set-pref (list :resources :group :open k) t)))
+    (setf (get-pref (list :resources :group :open k)) t)))
 
 ;;  Migrated Launcher commands 
 
@@ -1050,7 +1056,7 @@ Assets.index with filesystem assets not yet indexed."
                                                 :menu t :name t)
     ((section 'resource-kind-header :gesture :select))
   (let ((current-state (get-pref (list :resources :section section) nil)))
-    (set-pref (list :resources :section section) (not current-state))
+    (setf (get-pref (list :resources :section section)) (not current-state))
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 (clim:define-command (com-section-header-menu :command-table clim-internals::global-command-table
@@ -1519,24 +1525,22 @@ When all three flags are set, the entry has no letters in Assets.index."
                :after :end)
             (clim:command-already-present ())))))))
 
-;; Commands for setting build — eventbus via set-pref
+;; Commands for setting build — eventbus via get-pref
 (clim:define-command (com-set-build-demo :command-table clim-internals::global-command-table
                                          :menu t :name t) ()
-  (set-pref :build "Demo")
+  (setf (get-pref :build) :Demo)
   (populate-build-menu)
-  (when (boundp 'clim:*application-frame*)
-    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
 (clim:define-command (com-set-build-public :command-table clim-internals::global-command-table
                                            :menu t :name t) ()
-  (set-pref :build "Public")
+  (setf (get-pref :build) :Public)
   (populate-build-menu)
-  (when (boundp 'clim:*application-frame*)
-    (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
+  (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
 (clim:define-command (com-set-build-publisher :command-table clim-internals::global-command-table
                                               :menu t :name t) ()
-  (set-pref :build "Publisher")
+  (setf (get-pref :build) :Publisher)
   (populate-build-menu)
   (when (boundp 'clim:*application-frame*)
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
@@ -1544,14 +1548,14 @@ When all three flags are set, the entry has no letters in Assets.index."
 ;; Commands for setting region — eventbus via set-pref
 (clim:define-command (com-set-region-ntsc :command-table clim-internals::global-command-table
                                           :menu t :name t) ()
-  (set-pref :region "NTSC")
+  (setf (get-pref :region) :NTSC)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
     (clim:redisplay-frame-panes clim:*application-frame* :force-p t)))
 
 (clim:define-command (com-set-region-pal :command-table clim-internals::global-command-table
                                          :menu t :name t) ()
-  (set-pref :region "PAL")
+  (setf (get-pref :region) :PAL)
   (publish :region-changed :payload :pal)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
@@ -1559,7 +1563,7 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (clim:define-command (com-set-region-secam :command-table clim-internals::global-command-table
                                            :menu t :name t) ()
-  (set-pref :region "SECAM")
+  (setf (get-pref :region) :SECAM)
   (publish :region-changed :payload :secam)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
@@ -1567,7 +1571,7 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (clim:define-command (com-set-region-internal :command-table clim-internals::global-command-table
                                               :menu t :name t) ()
-  (set-pref :region "Internal")
+  (setf (get-pref :region) :Internal)
   (publish :region-changed :payload :internal)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
@@ -1575,7 +1579,7 @@ When all three flags are set, the entry has no letters in Assets.index."
 
 (clim:define-command (com-set-region-hd :command-table clim-internals::global-command-table
                                         :menu t :name t) ()
-  (set-pref :region "Hd")
+  (setf (get-pref :region) :hd)
   (publish :region-changed :payload :hd)
   (populate-region-menu)
   (when (boundp 'clim:*application-frame*)
@@ -1991,23 +1995,23 @@ When all three flags are set, the entry has no letters in Assets.index."
   "Populate printer-menu with discovered printers for resource list printing."
   (ignore-errors
    (clim:remove-menu-item-from-command-table 'printer-menu "Default Printer (lpr)")
-   (dolist (p (ignore-errors (discover-printers)))
+   (dolist (p (mapcar #'car *ipp-printer-registry*))
      (ignore-errors
       (clim:remove-menu-item-from-command-table 'printer-menu p))))
-  (let* ((printers (ignore-errors (discover-printers-with-names))))
-    (if printers
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             'printer-menu display-name :command
-             `(com-print-resource-list ,queue-name ,display-name)
-             :after :end)))
-        (clim:add-menu-item-to-command-table
-         'printer-menu "Default Printer (lpr)"
-         :command
-         `(com-print-resource-list "lpr" "Default Printer")
-         :after :end))))
+  (ensure-printer-scavenger-is-running)
+  (if *ipp-printer-registry*
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'printer-menu display :command
+           `(com-print-resource-list ,struct)
+           :after :end)))
+      (clim:add-menu-item-to-command-table
+       'printer-menu "Default Printer (lpr)"
+       :command
+       '(com-print-resource-list nil)
+       :after :end)))
 
 (defun %generate-resource-list-text ()
   "Return a string of the resource list formatted by kind."
@@ -2034,9 +2038,9 @@ When all three flags are set, the entry has no letters in Assets.index."
 (clim:define-command (com-print-resource-list
                       :command-table clim-internals::global-command-table
                       :menu nil :name t)
-    ((printer-queue 'string) (display-name 'string))
-  (declare (ignore display-name))
-  (let* ((text (%generate-resource-list-text))
+    ((printer t))
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (text (%generate-resource-list-text))
          (lines (count #\Newline text))
          (total-pages (max 1 (ceiling lines (- 700 50))))
          (temp-ps (format nil "/tmp/resource-list-~a.ps" (get-universal-time)))
@@ -2067,7 +2071,6 @@ When all three flags are set, the entry has no letters in Assets.index."
     (uiop:run-program (list "ps2pdf" temp-ps temp-pdf)
                       :output nil :ignore-error-status t)
     (ignore-errors (delete-file temp-ps))
-    (uiop:run-program (list "lp" "-d" printer-queue temp-pdf)
+    (uiop:run-program (if queue (list "lp" "-d" queue temp-pdf) (list "lp" temp-pdf))
                       :output nil :ignore-error-status t)
-    (ignore-errors (delete-file temp-pdf))
-    (format *query-io* "~&Printed resource list to ~a~%" printer-queue)))
+    (ignore-errors (delete-file temp-pdf))))

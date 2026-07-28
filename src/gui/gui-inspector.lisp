@@ -158,19 +158,26 @@ Thread, and Project Inspectors as well.
 ;;
 
 (defun populate-print-menu (command-table)
-  (dolist (printer (ignore-errors (discover-printers-with-names)))
-    (let ((queue (car printer))
-          (display (cdr printer)))
-      (unless (ignore-errors (clim:find-menu-item command-table display :errorp nil))
-        (clim:add-menu-item-to-command-table
-         command-table display
-         :command `(com-print-to-specific ,queue)
-         :after :end))))
-  (unless (ignore-errors (clim:find-menu-item command-table "Default Printer (lpr)"))
-    (clim:add-menu-item-to-command-table
-     command-table "Default Printer (lpr)"
-     :command 'com-print-to-default
-     :after :end)))
+  (ensure-printer-scavenger-is-running)
+  ;; Remove stale printer entries
+  (dolist (printer *ipp-printer-registry*)
+    (ignore-errors (clim:remove-menu-item-from-command-table
+                    command-table (ipp-name (cdr printer)))))
+  (ignore-errors (clim:remove-menu-item-from-command-table
+                  command-table "Default Printer (lpr)"))
+  ;; Add current printer entries
+  (dolist (printer *ipp-printer-registry*)
+    (let* ((struct (cdr printer))
+           (display (ipp-name struct)))
+      (clim:add-menu-item-to-command-table
+       command-table display
+       :command `(com-print-to-specific ,struct)
+       :after :end)))
+  ;; Add default printer fallback
+  (clim:add-menu-item-to-command-table
+   command-table "Default Printer (lpr)"
+   :command 'com-print-to-default
+   :after :end))
 
 (defun populate-send-to-menu (command-table)
   "Populate COMMAND-TABLE with discovered p2p recipients via mDNS."
@@ -237,24 +244,31 @@ Call this when region targets change or on initial window creation."
   "Subscribe FRAME to resource change events for auto-redisplay.
 Returns the subscriber function for later cleanup with teardown-inspector-eventbus."
    (let* ((event-types '(:resource-added :resource-changed :resource-removed
-                         :resource-cache-dump :resource-scan-complete
-                         :printer-list-changed :region-changed))
-          (handler (lambda (event)
-                     (declare (ignore event))
-                     (ignore-errors
-                      (clim:redisplay-frame-panes frame :force-p t)))))
+                          :resource-cache-dump :resource-scan-complete
+                          :region-changed))
+          (redisplay-handler (lambda (event)
+                               (declare (ignore event))
+                               (ignore-errors
+                                (clim:redisplay-frame-panes frame :force-p t))))
+          (printer-handler (lambda (event)
+                             (declare (ignore event))
+                             (populate-print-menu 'inspector-print-to-menu)
+                             (ignore-errors
+                              (clim:redisplay-frame-panes frame :force-p t)))))
      (dolist (event-type event-types)
-       (subscribe event-type handler))
-     (setf (frame-eventbus-subscriber frame) (cons event-types handler))))
+       (subscribe event-type redisplay-handler))
+     (subscribe :printer-list-changed printer-handler)
+     (setf (frame-eventbus-subscriber frame)
+           (list event-types redisplay-handler printer-handler))))
 
 (defun teardown-inspector-eventbus (frame)
   "Remove FRAME's eventbus subscriptions."
   (let ((subscriber (frame-eventbus-subscriber frame)))
     (when subscriber
-      (let ((event-types (car subscriber))
-            (handler (cdr subscriber)))
+      (destructuring-bind (event-types redisplay-handler printer-handler) subscriber
         (dolist (event-type event-types)
-          (unsubscribe event-type handler)))
+          (unsubscribe event-type redisplay-handler))
+        (unsubscribe :printer-list-changed printer-handler))
       (setf (frame-eventbus-subscriber frame) nil))))
 
 ;; Standardized display functions for uniform 3-column layout
@@ -289,6 +303,7 @@ Returns the subscriber function for later cleanup with teardown-inspector-eventb
   "Initialize inspector frame: start printer discovery, watcher, and eventbus subscriptions."
   (ensure-printer-discovery-started)
   (setf (frame-watcher-thread frame) (start-file-watcher frame))
+  (populate-print-menu 'inspector-print-to-menu)
   (setup-inspector-eventbus frame))
 
 (defmethod finalize-instance :after ((frame gui-inspector-frame))
@@ -404,30 +419,27 @@ Returns the subscriber function for later cleanup with teardown-inspector-eventb
     (clim:redisplay-frame-panes frame :force-p t)))
 
 (clim:define-command (com-print-to-default :command-table clim-internals::global-command-table
-                                            :menu t :name t)
-     ()
-   (let* ((frame clim:*application-frame*)
-          (resource (inspector-resource frame)))
-     (when resource
-       (let ((printer (first (get-printer-list))))
-         (if printer
-             (progn
-               (print-to-printer resource printer)
-               (clim-simple-echo:run-in-simple-echo (lambda () (format t "Printing ~a to ~a..." (game-resource-title resource) printer)))
-               (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))))
+                                           :menu t :name t)
+    ()
+  (let* ((frame clim:*application-frame*)
+         (resource (inspector-resource frame)))
+    (when resource
+      (pipe-to-lpr nil resource)
+      (clim-simple-echo:run-in-simple-echo
+       (lambda () (format t "Printing ~a to default printer..." (game-resource-title resource)))))))
 
 (clim:define-command (com-print-to-specific :command-table clim-internals::global-command-table
                                             :menu t :name t)
-    ()
+    ((printer t))
   (let* ((frame clim:*application-frame*)
-         (resource (inspector-resource frame))
-         (printers (get-printer-list)))
-    (if printers
-        (let* ((choice (error "CLIM:ACCEPT was used (which is not allowed)")))
-          (if (member choice printers :test #'string-equal)
-              (print-to-printer resource choice)
-              (clim-simple-echo:run-in-simple-echo (lambda () (format t "Invalid printer selected")))))
-        (clim-simple-echo:run-in-simple-echo (lambda () (format t "No printers found"))))))
+         (resource (inspector-resource frame)))
+    (when resource
+      (if (typep printer 'ipp-printer)
+          (pipe-to-ipp printer resource)
+          (pipe-to-lpr printer resource))
+      (clim-simple-echo:run-in-simple-echo
+       (lambda () (format t "Printing ~a to ~a..." (game-resource-title resource)
+                          (if (typep printer 'ipp-printer) (ipp-name printer) printer)))))))
 
 (clim:define-command (com-refresh-printers :command-table clim-internals::global-command-table
                                          :menu t :name t)
@@ -436,47 +448,54 @@ Returns the subscriber function for later cleanup with teardown-inspector-eventb
   (clim:redisplay-frame-panes clim:*application-frame* :force-p t))
 
 (defun print-to-printer (resource printer-name)
-  "Print RESOURCE to PRINTER-NAME by exporting to PostScript and sending to the printer."
-  (unless (find printer-name (get-printer-list) :test #'string-equal)
-    (error "Printer ~a not found. Available printers: ~a" printer-name (get-printer-list)))
-  (uiop:with-temporary-file (:stream stream :pathname temp-file)
-    (export-resource-to-ps-file resource temp-file
-                                :title (game-resource-title resource)
-                                :author (user-homedir-pathname))
-    (uiop:run-program (list "lp" "-d" printer-name (namestring temp-file)) :output nil)))
+  "Print RESOURCE to PRINTER-NAME via pipe-to-lpr.
+PRINTER-NAME can be a queue name string or nil for default printer."
+  (pipe-to-lpr printer-name resource))
 
-  (clim:define-command (com-run-resource :command-table clim-internals::global-command-table
+(clim:define-command (com-run-resource :command-table clim-internals::global-command-table
+                                       :menu t :name t)
+    ()
+  "Run the resource (e.g., compile, export)."
+  (error "Run not implemented for this type."))
+
+(clim:define-command (com-open-in-gimp :command-table clim-internals::global-command-table
+                                       :menu t :name t)
+    ()
+  "Open resource in GIMP."
+  (error "GIMP integration not implemented."))
+
+(clim:define-command (com-convert-to-png :command-table clim-internals::global-command-table
                                          :menu t :name t)
-      ()
-    "Run the resource (e.g., compile, export)."
-    (error "Run not implemented for this type."))
+    ()
+  "Convert resource to PNG."
+  (error "PNG conversion not implemented."))
 
-  (clim:define-command (com-open-in-gimp :command-table clim-internals::global-command-table
-                                         :menu t :name t)
-      ()
-    "Open resource in GIMP."
-    (error "GIMP integration not implemented."))
-
-  (clim:define-command (com-convert-to-png :command-table clim-internals::global-command-table
-                                           :menu t :name t)
-      ()
-    "Convert resource to PNG."
-    (error "PNG conversion not implemented."))
-
-  (clim:define-command (com-compile-to-source :command-table clim-internals::global-command-table
-                                              :menu t :name t)
-      ()
-    "Compile resource to source."
-    (error "Compilation not implemented."))
-
-  (clim:define-command (com-show-rom-budget :command-table clim-internals::global-command-table
+(clim:define-command (com-compile-to-source :command-table clim-internals::global-command-table
                                             :menu t :name t)
-      ()
-    "Show ROM budget by building the default target and opening the budget viewer."
-    (submit-task
-     (lambda ()
-       (build-target #p"Dist/7800/Phantasia.Demo.NTSC.a78")
-       (show-rom-budget)))))
+    ()
+  "Compile resource to source."
+  (error "Compilation not implemented."))
+
+(clim:define-command (com-show-rom-budget :command-table clim-internals::global-command-table
+                                          :menu t :name t)
+    ()
+  "Show ROM budget by building the default target and opening the budget viewer."
+  (submit-task
+   (lambda ()
+     (build-target (make-pathname :directory (list :relative "Dist" (machine-directory-name))
+                                  :name (format nil "~a.~a~a"
+                                                *game-title*
+                                                (ecase *build*
+                                                  (:demo "Demo")
+                                                  (:public "Public")
+                                                  (:publisher "AA" #| TODO |# ))
+                                                (case *region*
+                                                  (:ntsc ".NTSC")
+                                                  (:pal ".PAL")
+                                                  (:secam ".SECAM")
+                                                  (otherwise "")))
+                                  :type (emulator-binary-extension)))
+     (show-rom-budget))))
 
 ;; 
 ;; Frame lifecycle: start/stop watcher
