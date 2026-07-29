@@ -174,13 +174,11 @@
 ;; Friendly name generation using get-pref
 (defun generate-sharing-name (mode)
   "Generate friendly name based on get-pref format string"
-  (let ((format-str (get-pref (list :p2p mode))))
-    (when format-str
-      (format format-str
-              :user (user-real-name)
-              :game (game-title)
-              :machine (machine-instance)
-              :directory (machine-directory-name)))))
+  (format nil "~a on ~a — ~a ~a"
+          (user-real-name)
+          (machine-instance)
+          *game-title*
+          (machine-directory-name)))
 
 ;; mDNS service registration
 (defun advertise-sharing-service (mode port)

@@ -14,7 +14,7 @@
 (defun discover-skyline-tool-instances ()
   "Discover nearby Skyline-Tool instances using mDNS.
    Returns a list of (name . host:port) pairs."
-  (let ((services (ignore-errors (discover-skl-tool-instances))))
+  (let ((services (error "unimplemented")))
     (when services
       (loop for info in services
             collect (cons (getf info :name)

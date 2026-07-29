@@ -908,11 +908,6 @@ used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
              (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
           use))))
 
-(defun ansi-color-pixel (r g b)
-  "Return an ANSI color escape sequence for the given RGB components.
-The escape sequence resets after the character."
-  (format nil "~c[38;2;~d;~d;~dm" #\Escape (round r) (round g) (round b)))
-
 (defun find-nearest-palette-color (rgb-color)
   "Find the nearest Atari 2600 palette color to the given RGB color using DUFY.
 

@@ -67,6 +67,14 @@ JSON slot names (maintaining original capitalization)."
   (or (gethash name (ensure-object-prototype-index))
       (error "Unknown object prototype ~s (no Source/Objects/~a.json)" name name)))
 
+(defun list-object-prototypes-for-class (class-name &optional (root (uiop:getcwd)))
+  "Return list of prototype basenames in Source/Objects/ whose Class key matches CLASS-NAME.
+CLASS-NAME is a PascalCase class name string like \"MonkeyCourse\"."
+  (loop for file in (list-object-prototype-json-files root)
+        for prototype = (read-object-prototype-json file)
+        when (string= (getf prototype :|Class|) class-name)
+          collect (pathname-name file)))
+
 (defun json-slot-value (prototype slot-name)
   "Lookup SLOT-NAME in PROTOTYPE plist (case-insensitive)."
   (getf prototype slot-name))

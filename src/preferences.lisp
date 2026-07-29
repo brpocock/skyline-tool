@@ -95,7 +95,7 @@
 
 (defun set-paper-size (paper-name)
   "Set the paper size preference."
-  (set-pref :paper-size paper-name))
+  (setf (get-pref :paper-size) paper-name))
 
 (defun find-save-directory ()
   "Return the best default directory for Save As dialogs.
@@ -110,7 +110,7 @@
                   '("work/" "Work/" "Documents/" "./"))))))
 
 (defun prompt-save-pathname (default-name prefs-key)
-  "Prompt the user for a save pathname, trying zenity first then CLIM dialog.
+  "Prompt the user for a save pathname, using Zenity.
    DEFAULT-NAME is the suggested filename (e.g. \"Sequence-5.json\").
    PREFS-KEY is a keyword used to persist the chosen directory in preferences.
    Returns the chosen pathname, or NIL if cancelled."
@@ -128,6 +128,26 @@
         (let ((dir (make-pathname :name nil :type nil :defaults path)))
           (setf *last-save-directory* dir)
           (when prefs-key
-            (set-pref prefs-key (namestring dir))
-            (set-pref :last-save-directory (namestring dir)))
+            (setf (get-pref prefs-key) (namestring dir))
+            (setf (get-pref :last-save-directory) (namestring dir)))
+          path)))))
+
+(defun prompt-load-pathname (default-name prefs-key)
+  "Prompt the user for a load pathname,"
+  (let* ((dir (find-save-directory))
+         (default (merge-pathnames default-name dir)))
+    ;; Try zenity for native Gnome dialog
+    (let* ((out (string-trim +whitespace+
+                             (uiop:run-program
+                              (list "zenity" "--file-selection" "--save"
+                                    (format nil "--filename=~a" (namestring default))
+                                    "--title=Save As...")
+                              :output :string :ignore-error-status t)))
+           (path (when (and out (> (length out) 0)) (pathname out))))
+      (when path
+        (let ((dir (make-pathname :name nil :type nil :defaults path)))
+          (setf *last-save-directory* dir)
+          (when prefs-key
+            (setf (get-pref prefs-key) (namestring dir))
+            (setf (get-pref :last-save-directory) (namestring dir)))
           path)))))

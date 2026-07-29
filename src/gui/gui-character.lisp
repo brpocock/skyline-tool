@@ -341,8 +341,10 @@ Color: [##]                     # color swatch -> palette color picker menu
     (coerce result 'list)))
 
 (defun %test-atarivox (pitch speed bend phrase)
-  (when *atarivox-port* (ignore-errors (close *atarivox-port*)) (setf *atarivox-port* nil))
-  (let ((stream (second (find-atarivox-serial-port))))
+  (when *atarivox-port*
+    (ignore-errors (close *atarivox-port*))
+    (setf *atarivox-port* nil))
+  (let ((*atarivox-port* (second (find-atarivox-serial-port))))
     (setf *atarivox-port* stream)
     (when pitch (write-byte 22 *atarivox-port*) (write-byte pitch *atarivox-port*))
     (when speed (write-byte 21 *atarivox-port*) (write-byte speed *atarivox-port*))
@@ -376,7 +378,9 @@ Color: [##]                     # color swatch -> palette color picker menu
 
 (clim:define-application-frame character-inspector-frame
     (tab-friendly-mixin resource-inspector-mixin clim:standard-application-frame)
-  ((test-phrase :accessor frame-test-phrase))
+  ((current-action-selection :accessor frame-current-action-selection :initform :idle)
+   (key-names-cache :accessor frame-key-names-cache :initform nil)
+   test-phrase)
   (:panes
    (tab-bar :application :display-function 'display-tab-bar :height 30 :width 400 :scroll-bars nil)
    (identity-pane :application :display-function 'display-identity-tab :height 600 :width 400 :scroll-bars :vertical)
@@ -407,7 +411,14 @@ Color: [##]                     # color swatch -> palette color picker menu
              (lambda (event)
                (declare (ignore event))
                (populate-char-print-menu frame)))
-  (subscribe-to-tab-events frame))
+  (subscribe-to-tab-events frame)
+  (setf (frame-key-names-cache frame)
+        (let ((key-list (load-key-list)))
+          (coerce (loop for i from 0 below 32
+                        collect (if (< i (length key-list))
+                                    (game-resource-key-name (elt key-list i))
+                                    (format nil "Key ~d" (1+ i))))
+                  'vector))))
 
 (defun subscribe-to-tab-events (frame)
   "Subscribe to eventbus events for tab changes and data updates."

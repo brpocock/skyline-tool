@@ -5,20 +5,20 @@
 (defun skyline-tool-icon (&key (resource nil))
   "Return an icon pattern for CLIM frames.
    If RESOURCE is provided (a keyword), tries to load a resource-specific
-   icon (e.g. Tools/skyline-tool-icon-ANIMATION-SEQUENCE-EDITOR-128.png),
-   falling back to the generic skyline-tool icon."
-  (let* ((candidates (append
-                      (when resource
-                        (list (format nil "../Tools/skyline-tool-icon-~(~a~)-128.png" resource)
-                              (format nil "../Tools/skyline-tool-icon-~(~a~)-64.png" resource)))
-                      (list #p"../Tools/skyline-tool-icon-256.png"
-                            #p"../Tools/skyline-tool-icon-128.png"
-                            #p"../Tools/skyline-tool-icon-64.png")))
-         (existing (find-if (lambda (n) (probe-file (asdf:system-relative-pathname :skyline-tool n)))
-                            candidates)))
-    (when existing
-      (clim:make-pattern-from-bitmap-file
-       (asdf:system-relative-pathname :skyline-tool existing)))))
+   icon, falling back to the generic skyline-tool icon."
+  (labels ((try (prefix)
+             (let ((path (asdf:system-relative-pathname
+                          :skyline-tool
+                          (make-pathname
+                           :name (format nil "~a-icon"
+                                         (string-downcase (string prefix)))
+                           :type "png"
+                           :directory (list :relative "src" "icons")))))
+               (when (probe-file path)
+                 (return-from skyline-tool-icon
+                   (clim:make-pattern-from-bitmap-file path))))))
+    (when resource (try resource))
+    (try "skyline-tool")))
 
 (defvar *icon-hex-cache* nil
   "Cached hex-encoded RGB pixel data for the Skyline-Tool icon.")
@@ -59,8 +59,7 @@
 (defun write-ps-docinfo (ps resource)
   "Write PDF Document Info (DSC comments + pdfmark) for ps2pdf."
   (format ps "%%%%Title: ~a~%" (escape-ps-string (game-resource-title resource)))
-  (when author
-    (format ps "%%%%Author: ~a~%" (escape-ps-string (user-real-name))))
+  (format ps "%%%%Author: ~a~%" (escape-ps-string (user-real-name)))
   (format ps "[ /Title (~a) /Creator (Skyline-Tool v~a) /Author (~a) /DOCINFO pdfmark~%"
           (escape-ps-string (game-resource-title resource))
           (escape-ps-string (asdf:component-version (asdf:find-system :skyline-tool)))
@@ -70,7 +69,6 @@
   "Write PDF header bar: icon at top-left, document title in navy blue centered on page.
    
 Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
-  (declare (ignore date-str author page-num total-pages game-title))
   (format ps "gsave
    56 738 translate
  ")
@@ -80,7 +78,7 @@ Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
    0.0 0.0 0.3 setrgbcolor
    (~a) dup stringwidth pop 250 exch sub 0 moveto show
    grestore
- " (escape-ps-string title-text)))
+ " (escape-ps-string title)))
 
 (defun write-ps-footer (ps date-str author hostname game-title page-num total-pages)
   "Write PDF footer with two-row tabular layout:
@@ -98,7 +96,7 @@ Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
          (machine-dir (escape-ps-string machine)))
     ;; Draw icon spanning both rows (48pt tall at y=54..102)
     (format ps "gsave 56 54 translate~%")
-    (write-ps-header-icon ps)
+    (write-ps-header-icon ps (skyline-tool-icon))
     (format ps "grestore~%")
     ;; Row 1: Branding at y=96 baseline
     (format ps "gsave~%")
@@ -266,7 +264,7 @@ Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
                                           (format nil " at ~a" site)))))
     ;; Icon spanning both rows (48x48 at y=54, translates to 54-102 range)
     (format ps "gsave 56 54 translate~%")
-    (write-ps-header-icon ps)
+    (write-ps-header-icon ps (skyline-tool-icon))
     (format ps "grestore~%")
     ;; Row 1: Icon + Branding at y=96 baseline
     (format ps "gsave~%")
@@ -302,6 +300,6 @@ Header is positioned 3/4\" (54pt) from page top. (Page numbers in footer)"
             site-part)
     (format ps "556 67.57 moveto~%")
     (format ps "(Page ~d of ~d) dup stringwidth pop neg 0 rmoveto show~%"
-            (escape-ps-string (format nil "~:d" page-num))
-            (escape-ps-string (format nil "~:d" total-pages)))
+            (escape-ps-string (format nil "~:d" page))
+            (escape-ps-string (format nil "~:d" pages)))
     (format ps "grestore~%")))

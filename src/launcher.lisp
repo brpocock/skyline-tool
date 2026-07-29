@@ -1112,18 +1112,16 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
 (defun populate-rom-budget-print-to-menu ()
   (let ((ct (clim:find-command-table 'rom-budget-print-to-menu)))
     (when ct
-      ;; Remove existing "Default Printer (lpr)" if present to avoid COMMAND-ALREADY-PRESENT
       (ignore-errors (clim:remove-menu-item-from-command-table ct "Default Printer (lpr)"))
-      ;; Always add "Default Printer (lpr)" as the first item
       (clim:add-menu-item-to-command-table ct "Default Printer (lpr)"
         :command '(com-print-rom-budget-to-printer nil)
         :after :end)
-      ;; Add CUPS printers
-      (dolist (printer (discover-printers-with-names))
-        (let ((queue (car printer))
-              (display (cdr printer)))
+      (ensure-printer-scavenger-is-running)
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
           (clim:add-menu-item-to-command-table ct display
-            :command `(com-print-rom-budget-to-printer ,queue)
+            :command `(com-print-rom-budget-to-printer ,struct)
             :after :end))))))
   
   ;; --- ROM Budget commands ---
@@ -1173,12 +1171,12 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
                (format nil "ROM-Budget-~a-~a.pdf"
                        (rb-build frame) (string-downcase (rb-region frame)))))))
 
-(clim:define-command (com-print-rom-budget-to-printer :menu nil :name t) ((printer-name string))
-  (let ((temp-ps (format nil "/tmp/rom-budget-~a.ps" (get-universal-time))))
+(clim:define-command (com-print-rom-budget-to-printer :menu nil :name t) ((printer t))
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (temp-ps (format nil "/tmp/rom-budget-~a.ps" (get-universal-time))))
     (funcall (frame-pdf-function clim:*application-frame*) temp-ps)
-    (uiop:run-program (list "lp" "-d" printer-name temp-ps)
-                      :ignore-error-status t)
-    (format *query-io* "~&Sent to printer ~a~%" printer-name)))
+    (uiop:run-program (if queue (list "lp" "-d" queue temp-ps) (list "lp" temp-ps))
+                      :ignore-error-status t)))
 
 (clim:define-command (com-copy-rom-budget :menu nil :name t) ()
   (let ((frame clim:*application-frame*))

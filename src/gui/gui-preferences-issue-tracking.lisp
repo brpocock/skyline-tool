@@ -5,15 +5,15 @@
 
 (defun display-issue-tracking-tab (frame pane)
   "Display the Issue Tracking tab content"
-  (clim:formatting-table-pane (pane :name "issue-tracking-tab"))
   (make-section-header pane "Issue Tracking")
   (unless (issue-tracker-box frame)
     (setf (issue-tracker-box frame)
           (clim:make-pane 'clim:radio-box)))
   (setf (issue-tracker-radio frame)
-        (loop for (key label) in '((:github "GitHub")
-                                   (:gitlab "GitLab")
-                                   (:bugzilla "Bugzilla"))
+        (loop for (key label)
+                in '((:github "GitHub")
+                     (:gitlab "GitLab")
+                     (:bugzilla "Bugzilla"))
               collect (clim:make-pane 'clim:toggle-button
                                       :label label
                                       :value (eq (get-pref '(:issue-tracker :kind) :github) key)
@@ -23,7 +23,6 @@
                                         (declare (ignore g))
                                         (when v
                                           (setf (get-pref '(:issue-tracker :kind)) key)
-                                          (save-preferences-now frame)
                                           (clim:redisplay-frame-panes frame :force-p t))))))
   (make-full-width-row pane (clim:note-gadget-activated (issue-tracker-box frame) pane))
   (make-label-value-row pane "Tracker URL"
@@ -35,8 +34,7 @@
                                                 :activate-callback
                                                 (lambda (gadget value)
                                                   (declare (ignore gadget))
-                                                  (setf (get-pref '(:issue-tracker :url)) value)
-                                                  (save-preferences-now frame))))))
+                                                  (setf (get-pref '(:issue-tracker :url)) value))))))
   (clim:note-gadget-activated (tracker-url-field frame) pane)
   (make-full-width-row pane
                        (unless (sign-in-button frame)
@@ -46,5 +44,5 @@
                                                :activate-callback
                                                (lambda (gadget)
                                                  (declare (ignore gadget))
-                                                 (com-sign-in-to-issue-tracker frame)))))))
+                                                 (com-sign-in-to-issue-tracker frame))))))
   (clim:note-gadget-activated (sign-in-button frame) pane))

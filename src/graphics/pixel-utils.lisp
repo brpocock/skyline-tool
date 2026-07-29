@@ -66,7 +66,8 @@
           #\Escape (if foregroundp 38 48) (round r) (round g) (round b)))
 
 (defun ansi-color-pixel (r g b)
-  (format nil "~a~a██~c[0m" (ansi-color-rgb r g b)
+  (format nil "~a~a██~c[0m"
+          (ansi-color-rgb r g b)
           (ansi-color-rgb r g b nil)
           #\Escape))
 

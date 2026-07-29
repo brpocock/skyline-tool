@@ -29,21 +29,25 @@ Keyboard Shortcuts Theme: [ Gnome        - ]
 Printing Tab
 -------------
 
-Paper Size: <> U.S. Letter              ;
-            <> U.S. Legal                           ;
-            <> A4                                   ;
-            <> Custom                               ;
-               ____ [ mm - ] × ____ [ mm - ]
-                    [ cm   ]        [ cm   ]                     ;
-                    [ pt   ]        [ pt   ]
-                    [ pc   ]        [ pc   ]
-                    [ in   ]        [ in   ]
+Paper Size: <> U.S. Letter | 8.5 in × 11 in
+            <> U.S. Legal  | 8.5 in × 14 in
+            <> A4          | 9 in × 12 in                # probably wrong numbers
+            <> Custom      | ____ [ mm - ] × ____ [ mm - ]
+                                  [ cm   ]        [ cm   ] 
+                                  [ pt   ]        [ pt   ]
+                                  [ pc   ]        [ pc   ]
+                                  [ in   ]        [ in   ]
                                         
 Network Tab
 ------------
+
 [] LAN Resource Sharing
-[] Share "Dist/" Folder
+[] Share “Dist/” Folder
 [] Share Music as Media Server
+
+Local Domain: ________________                # default "local."
+
+Cryptographic Algorithm for Sharing: [ $(algos-list)    - ] # from Ironclad
 
 Version Control Tab
 --------------------
@@ -272,12 +276,12 @@ Tracker URL: ____________________________________________________
   "Convert VALUE from FROM-UNIT to TO-UNIT.
    Units: :mm, :cm, :in, :pt (points = 1/72 inch)."
   (let ((mm-per-unit
-           (case from-unit
-             (:mm 1)
-             (:cm 10)
-             (:in 25.4)
-             (:pt (/ 25.4 72))
-             (t 1)))
+          (case from-unit
+            (:mm 1)
+            (:cm 10)
+            (:in 25.4)
+            (:pt (/ 25.4 72))
+            (t 1)))
         (units-per-mm
           (case to-unit
             (:mm 1)
@@ -287,59 +291,24 @@ Tracker URL: ____________________________________________________
             (t 1))))
     (* value mm-per-unit units-per-mm)))
 
-(defun default-preferences ()
-  "Return a plist of default preferences."
-  `(:paper-size :us-letter
-    :paper-width 215.9
-    :paper-height 279.4
-    :units :mm
-    :lan-sharing-enabled nil
-    :dist-sharing-enabled nil
-    :music-sharing-enabled nil
-    :version-control-system "git"
-    :ssh-key ""
-    :gpg-key ""
-    :git-user ""
-    :git-email ""
-    :git-signing-key ""
-    :git-sign-commits nil
-    :git-sign-tags nil
-    :git-merge-tool "meld"
-    :git-merge-prompt nil
-    :git-diff-tool "meld"
-    :git-diff-prompt nil
-    :git-push-auto-setup nil
-    :git-pull-behavior "fast-forward"
-    :git-default-branch "main"
-    :git-submodule-skyline nil
-    :git-submodule-a7800 nil
-    :git-submodule-intellivision nil
-    :issue-tracker-kind "github"
-    :tracker-url ""
-    :p2p-enabled nil
-    :p2p-user ""
-    :p2p-domain "local."
-    :p2p-interface "eth0"
-    :p2p-advertise-interval 30
-    :p2p-discovery-interval 60
-    :p2p-min-port 50000
-    :p2p-max-port 60000
-    :p2p-pubkey-algo "ed25519"
-    :p2p-auto-start nil))
-
 ;;;; Frame definition
 (clim:define-application-frame preferences-inspector-frame (clim:standard-application-frame)
   ((dirty :initform nil :accessor frame-dirty)
    (current-tab :initform :accessibility :accessor frame-current-tab)
-   ;; Paper section
+   ;; Accessibility Section
+   (a11y-color :initform nil :accessor accessibility-color-theme-field)
+   (a11y-keybinds :initform nil :accessor accessibility-key-bindings-theme-field)
+   ;; Printing  section
    (paper-size-box :initform nil :accessor paper-size-box)
    (paper-size-radio :initform nil :accessor paper-size-radio)
    (paper-unit-box :initform nil :accessor paper-unit-box)
    (paper-unit-radio :initform nil :accessor paper-unit-radio)
    (paper-width-field :initform nil :accessor paper-width-field)
    (paper-height-field :initform nil :accessor paper-height-field)
-   ;; Sharing section
+   ;; Sharing section (p2p)
    (lan-sharing-checkbox :initform nil :accessor lan-sharing-checkbox)
+   (lan-domain-field :initform nil :accessor lan-domain-field)
+   (lan-pubkey-algo-field :initform nil :accessor lan-pubkey-algo-field)
    (dist-sharing-checkbox :initform nil :accessor dist-sharing-checkbox)
    (music-sharing-checkbox :initform nil :accessor music-sharing-checkbox)
    ;; VERSION-CONTROL section
@@ -348,7 +317,6 @@ Tracker URL: ____________________________________________________
    (ssh-key-field :initform nil :accessor ssh-key-field)
    (gpg-key-field :initform nil :accessor gpg-key-field)
    ;; Git-specific fields
-   (git-user-name-field :initform nil :accessor git-user-name-field)
    (git-user-email-field :initform nil :accessor git-user-email-field)
    (git-signing-key-field :initform nil :accessor git-signing-key-field)
    (git-sign-commits-checkbox :initform nil :accessor git-sign-commits-checkbox)
@@ -369,24 +337,18 @@ Tracker URL: ____________________________________________________
    (issue-tracker-radio :initform nil :accessor issue-tracker-radio)
    (tracker-url-field :initform nil :accessor tracker-url-field)
    (sign-in-button :initform nil :accessor sign-in-button)
-   ;; P2P Sharing section
-   (p2p-enabled-checkbox :initform nil :accessor p2p-enabled-checkbox)
-   (p2p-user-field :initform nil :accessor p2p-user-field)
-   (p2p-domain-field :initform nil :accessor p2p-domain-field)
-   (p2p-interface-field :initform nil :accessor p2p-interface-field)
-   (p2p-advertise-interval-field :initform nil :accessor p2p-advertise-interval-field)
-   (p2p-discovery-interval-field :initform nil :accessor p2p-discovery-interval-field)
-   (p2p-min-port-field :initform nil :accessor p2p-min-port-field)
-   (p2p-max-port-field :initform nil :accessor p2p-max-port-field)
-   (p2p-pubkey-algo-field :initform nil :accessor p2p-pubkey-algo-field)
-   (p2p-auto-start-checkbox :initform nil :accessor p2p-auto-start-checkbox)
    ;; Accessibility section
    (accessibility-theme-box :initform nil :accessor accessibility-theme-box)
    (accessibility-theme-radio :initform nil :accessor accessibility-theme-radio)
    (accessibility-shortcut-box :initform nil :accessor accessibility-shortcut-box)
    (accessibility-shortcut-radio :initform nil :accessor accessibility-shortcut-radio)
    (accessibility-latitude-field :initform nil :accessor accessibility-latitude-field)
+   (accessibility-latitude-ns-box :initform nil :accessor accessibility-latitude-ns-box)
+   (accessibility-latitude-ns-radio :initform nil :accessor accessibility-latitude-ns-radio)
    (accessibility-longitude-field :initform nil :accessor accessibility-longitude-field)
+   (accessibility-longitude-ew-box :initform nil :accessor accessibility-longitude-ew-box)
+   (accessibility-longitude-ew-radio :initform nil :accessor accessibility-longitude-ew-radio)
+   (accessibility-desktop-theme-cache :initform nil :accessor accessibility-desktop-theme-cache)
    (watcher-thread :initform nil :accessor prefs-watcher-thread))
   (:menu-bar preferences-inspector-menu-bar)
   (:icon (skyline-tool-icon :resource :preferences))
@@ -500,7 +462,7 @@ Tracker URL: ____________________________________________________
                                             :menu t :name t) ()
   (let ((confirmed (error "Reset all preferences to defaults?")))
     (when confirmed
-      (setf *prefs-cache* (default-preferences))
+      (setf *prefs-cache* nil)
       (setf (frame-dirty clim:*application-frame*) t)
       (setf (get-pref '(:internal :prefs :reset-by-user)) (get-universal-time))
       (clim:redisplay-frame-panes clim:*application-frame* :force-p t))))
@@ -699,7 +661,7 @@ Tracker URL: ____________________________________________________
          (format ,stream "~a" ,title)))))
 
 ;;;; Main display function - TABS IMPLEMENTATION
-(defun display-preferences (frame pane)
+(defun old%%display-preferences (frame pane)
   "Display the complete preferences interface using tabbed layout."
   
   ;; === Paper Size Tab ===
@@ -890,259 +852,146 @@ Tracker URL: ____________________________________________________
                                            :ink (if selected
                                                     (clim:make-gray-color 1)
                                                     (clim:make-gray-color 0)))
-                 (clim:draw-text pane label (clim:make-point text-x text-y) :align-left :align-top)))))
-  
+                 (clim:draw-text pane label (clim:make-point text-x text-y) :align-left :align-top))))))
+
 ;;;; Main display dispatcher
-  (defun display-preferences (frame pane)
-    "Dispatch to the current tab's display function based on frame-current-tab."
-    (let ((*standard-output* pane))
-      (ecase (frame-current-tab frame)
-        (:accessibility (display-accessibility-tab frame pane))
-        (:printing (display-printing-tab frame pane))
-        (:network (display-network-tab frame pane))
-        (:version-control (display-version-control-tab frame pane))
-        (:issue-tracking (display-issue-tracking-tab frame pane)))))
+(defun display-preferences (frame pane)
+  "Dispatch to the current tab's display function based on frame-current-tab."
+  (let ((*standard-output* pane))
+    (ecase (frame-current-tab frame)
+      (:accessibility (display-accessibility-tab frame pane))
+      (:printing (display-paper-size-tab frame pane))
+      (:network (display-network-tab frame pane))
+      (:version-control (display-version-control-tab frame pane))
+      (:issue-tracking (display-issue-tracking-tab frame pane)))))
 
-;;;; Tab content display functions
+;;;; Sunrise/Sunset calculation
+(defun degrees->radians (degrees)
+  "Convert DEGREES to radians."
+  (* degrees (/ pi 180.0d0)))
 
-  (defun display-accessibility-tab (frame pane)
-    "Display the Accessibility tab content."
-    (make-section-header pane "Color Theme")
-    (let ((theme (get-pref '(:accessibility :theme) :desktop))
-          (box (clim:make-pane 'clim:radio-box)))
-      (setf (accessibility-theme-box frame) box)
-      (setf (accessibility-theme-radio frame)
-            (loop for (key label) in '((:normal "Normal (Light)")
-                                       (:inverted "Inverted (Dark)")
-                                       (:desktop "Desktop (Auto)")
-                                       (:sunrise "Sunrise/Sunset"))
-                  collect (clim:make-pane 'clim:toggle-button
-                                          :label label
-                                          :value (eq theme key)
-                                          :group box
-                                          :value-changed-callback
-                                          (lambda (gadget value)
-                                            (declare (ignore gadget))
-                                            (setf (get-pref '(:accessibility :theme)) value)
-                                            (clim:redisplay-frame-panes frame :force-p t)))))
-      (make-full-width-row pane (clim:note-gadget-activated box pane))
-      (when (member theme '(:sunrise :sunset))
-        (make-section-header pane "Sunrise/Sunset")
-        (make-label-value-row pane "Latitude"
-                              (unless (accessibility-latitude-field frame)
-                                (setf (accessibility-latitude-field frame)
-                                      (clim:make-pane 'clim:text-field
-                                                      :value (or (get-pref '(:accessibility :latitude) "")
-                                                                 "")
-                                                      :width 80
-                                                      :activate-callback
-                                                      (lambda (gadget value)
-                                                        (declare (ignore gadget))
-                                                        (setf (get-pref '(:accessibility :latitude)) value)
-                                                        (clim:redisplay-frame-panes frame :force-p t))))))
-        (clim:note-gadget-activated (accessibility-latitude-field frame) pane)
-        (make-label-value-row pane "Longitude"
-                              (unless (accessibility-longitude-field frame)
-                                (setf (accessibility-longitude-field frame)
-                                      (clim:make-pane 'clim:text-field
-                                                      :value (or (get-pref '(:accessibility :longitude) "")
-                                                                 "")
-                                                      :width 80
-                                                      :activate-callback
-                                                      (lambda (gadget value)
-                                                        (declare (ignore gadget))
-                                                        (setf (get-pref '(:accessibility :longitude)) value)
-                                                        (clim:redisplay-frame-panes frame :force-p t))))))
-        (clim:note-gadget-activated (accessibility-longitude-field frame) pane))))
-  (make-section-header pane "Keyboard Shortcuts")
-  (let ((shortcut-style (get-pref '(:accessibility :shortcut-style) :gnome)))
-    (let ((box (clim:make-pane 'clim:radio-box)))
-      (setf (accessibility-shortcut-box frame) box)
-      (setf (accessibility-shortcut-radio frame)
-            (loop for (key label) in '((:gnome "Gnome")
-                                       (:macos "macOS")
-                                       (:emacs "Emacs"))
-                  collect (clim:make-pane 'clim:toggle-button
-                                          :label label
-                                          :value (eq shortcut-style key)
-                                          :group box
-                                          :value-changed-callback
-                                          (lambda (gadget value)
-                                            (declare (ignore gadget))
-                                            (setf (get-pref '(:accessibility :shortcut-style)) value)
-                                            (clim:redisplay-frame-panes frame :force-p t)))))
-      (make-full-width-row pane (clim:note-gadget-activated box pane)))))
+(defun radians->degrees (radians)
+  "Convert RADIANS to degrees."
+  (* radians (/ 180.0d0 pi)))
 
-(defun display-printing-tab (frame pane)
-  "Display the Printing tab content."
-  (make-section-header pane "Paper Size")
-  (let ((current-size (get-pref '(:paper :size) :us-letter)))
-    (let ((box (clim:make-pane 'clim:radio-box)))
-      (setf (paper-size-box frame) box)
-      (setf (paper-size-radio frame)
-            (loop for (key label w h) in +paper-sizes+
-                  collect (clim:make-pane 'clim:toggle-button
-                                          :label label
-                                          :value (eq current-size key)
-                                          :group box
-                                          :value-changed-callback
-                                          (lambda (g v)
-                                            (declare (ignore g))
-                                            (when v
-                                              (setf (get-pref '(:paper :size)) key)
-                                              (when w
-                                                (setf (get-pref '(:paper :width)) w)
-                                                (setf (get-pref '(:paper :height)) h))
-                                              (clim:redisplay-frame-panes frame :force-p t))))))
-      (make-full-width-row pane (clim:note-gadget-activated box pane))
-      (when (eq (get-pref '(:paper :size) :us-letter) :custom)
-        (make-section-header pane "Paper Unit")
-        (let* ((current-unit (get-pref '(:units :length) :mm))
-               (box (clim:make-pane 'clim:radio-box)))
-          (setf (paper-unit-box frame) box)
-          (setf (paper-unit-radio frame)
-                (loop for unit in '(:mm :cm :in :pt)
-                      collect (clim:make-pane 'clim:toggle-button
-                                              :label (string unit)
-                                              :value (eq current-unit unit)
-                                              :group box
-                                              :value-changed-callback
-                                              (lambda (g v)
-                                                (declare (ignore g))
-                                                (when v
-                                                  (let ((old-unit (get-pref '(:units :length)))
-                                                        (new-unit unit))
-                                                    (setf (get-pref '(:units :length)) new-unit)
-                                                    (let ((w (get-pref '(:paper :width)))
-                                                          (h (get-pref '(:paper :height))))
-                                                      (when (and w h)
-                                                        (setf (get-pref '(:paper :width))
-                                                              (round (convert-unit w old-unit new-unit) 1))
-                                                        (setf (get-pref '(:paper :height))
-                                                              (round (convert-unit h old-unit new-unit) 1)))))
-                                                  (clim:redisplay-frame-panes frame :force-p t))))))
-          (make-full-width-row pane (clim:note-gadget-activated box pane))
-          (make-label-value-row pane "Width"
-                                (unless (paper-width-field frame)
-                                  (setf (paper-width-field frame)
-                                        (clim:make-pane 'clim:text-field
-                                                        :value (format nil "~a" (get-pref '(:paper :width) 215.9))
-                                                        :width 80
-                                                        :activate-callback
-                                                        (lambda (gadget value)
-                                                          (declare (ignore gadget))
-                                                          (setf (get-pref '(:paper :width)) (parse-number value))
-                                                          (clim:redisplay-frame-panes frame :force-p t))))))
-          (clim:note-gadget-activated (paper-width-field frame) pane)
-          (make-label-value-row pane "Height"
-                                (unless (paper-height-field frame)
-                                  (setf (paper-height-field frame)
-                                        (clim:make-pane 'clim:text-field
-                                                        :value (format nil "~a" (get-pref '(:paper :height) 279.4))
-                                                        :width 80
-                                                        :activate-callback
-                                                        (lambda (gadget value)
-                                                          (declare (ignore gadget))
-                                                          (setf (get-pref '(:paper :height)) (parse-number value))
-                                                          (clim:redisplay-frame-panes frame :force-p t))))))
-          (clim:note-gadget-activated (paper-height-field frame) pane))))))
+(defun julian-day (year month day)
+  "Compute the Julian Day number for YEAR, MONTH, DAY."
+  (let* ((a (floor (* 14 (- month 12)) 10))
+         (y (+ year 4800 (- a)))
+         (m (+ month (* 12 a) (- 3))))
+    (+ day
+       (floor (+ (* 153 m) 2) 5)
+       (* 365 y)
+       (floor y 4)
+       (- (floor y 100))
+       (floor y 400)
+       (- 32045))))
 
-(defun display-network-tab (frame pane)
-  "Display the Network tab content."
-  (make-section-header pane "Sharing Services")
-  (unless (lan-sharing-checkbox frame)
-    (setf (lan-sharing-checkbox frame)
-          (clim:make-pane 'clim:check-box
-                          :label "LAN Resource Sharing"
-                          :value (get-pref '(:lan-sharing :enabled) nil)
-                          :value-changed-callback
-                          (lambda (g v)
-                            (declare (ignore g))
-                            (setf (get-pref '(:lan-sharing :enabled)) v)
-                            (clim:redisplay-frame-panes frame :force-p t)))))
-  (make-full-width-row pane (clim:note-gadget-activated (lan-sharing-checkbox frame) pane))
-  (unless (dist-sharing-checkbox frame)
-    (setf (dist-sharing-checkbox frame)
-          (clim:make-pane 'clim:check-box
-                          :label "Share Dist/ Folder"
-                          :value (get-pref '(:dist-sharing :enabled) nil)
-                          :value-changed-callback
-                          (lambda (g v)
-                            (declare (ignore g))
-                            (setf (get-pref '(:dist-sharing :enabled)) v)
-                            (clim:redisplay-frame-panes frame :force-p t)))))
-  (make-full-width-row pane (clim:note-gadget-activated (dist-sharing-checkbox frame) pane))
-  (unless (music-sharing-checkbox frame)
-    (setf (music-sharing-checkbox frame)
-          (clim:make-pane 'clim:check-box
-                          :label "Share Music as Media Server"
-                          :value (get-pref '(:music-sharing :enabled) nil)
-                          :value-changed-callback
-                          (lambda (g v)
-                            (declare (ignore g))
-                            (setf (get-pref '(:music-sharing :enabled)) v)
-                            (clim:redisplay-frame-panes frame :force-p t)))))
-  (make-full-width-row pane (clim:note-gadget-activated (music-sharing-checkbox frame) pane))
-  (make-section-header pane "LAN Sharing")
-  (unless (p2p-enabled-checkbox frame)
-    (setf (p2p-enabled-checkbox frame)
-          (clim:make-pane 'clim:check-box
-                          :label "Enable P2P Resource Sharing"
-                          :value (get-pref '(:p2p :enabled) nil)
-                          :value-changed-callback
-                          (lambda (g v)
-                            (declare (ignore g))
-                            (setf (get-pref '(:p2p :enabled)) v)
-                            (clim:redisplay-frame-panes frame :force-p t)))))
-  (make-full-width-row pane (clim:note-gadget-activated (p2p-enabled-checkbox frame) pane))
+(defun solar-declination (jd)
+  "Compute solar declination δ for Julian Day JD using simplified Meeus."
+  (let* ((n (- jd 2451545.0d0))
+         (l (+ 280.460d0 (* 0.9856474d0 n)))
+         (g (+ 357.528d0 (* 0.9856003d0 n)))
+         (g-rad (degrees->radians (mod g 360.0d0)))
+         (lambda-val (+ l (* 1.915d0 (sin g-rad)) (* 0.020d0 (sin (* 2 g-rad)))))
+         (lambda-rad (degrees->radians lambda-val))
+         (epsilon (degrees->radians 23.439d0))
+         (sin-dec (* (sin lambda-rad) (sin epsilon))))
+    (asin sin-dec)))
+
+(defun hour-angle-at-sunrise (latitude declination-jd)
+  (let* ((phi (degrees->radians latitude))
+         (cos-h0 (* (- (tan phi)) (tan (solar-declination declination-jd)))))
+    (cond
+      ((< cos-h0 -1.0d0) nil)
+      ((> cos-h0 1.0d0) nil)
+      (t (acos cos-h0)))))
   
-  (make-label-value-row pane "Service Domain"
-                        (unless (p2p-domain-field frame)
-                          (setf (p2p-domain-field frame)
-                                (clim:make-pane 'clim:text-field
-                                                :value (get-pref '(:p2p :domain) "local.")
-                                                :width 200
-                                                :activate-callback
-                                                (lambda (gadget value)
-                                                  (declare (ignore gadget))
-                                                  (setf (get-pref '(:p2p :domain)) value))))))
-  (clim:note-gadget-activated (p2p-domain-field frame) pane)
-  (make-label-value-row pane "Advertised User Name"
-                        (unless (p2p-user-field frame)
-                          (setf (p2p-user-field frame)
-                                (clim:make-pane 'clim:text-field
-                                                :value (or (get-pref '(:p2p :user) "") (user-full-name))
-                                                :width 300
-                                                :activate-callback
-                                                (lambda (gadget value)
-                                                  (declare (ignore gadget))
-                                                  (setf (get-pref '(:p2p :user)) value)
-                                                  (clim:redisplay-frame-panes frame :force-p t))))))
-  (clim:note-gadget-activated (p2p-user-field frame) pane)
-  (make-label-value-row pane "Service Domain"
-                        (unless (p2p-domain-field frame)
-                          (setf (p2p-domain-field frame)
-                                (clim:make-pane 'clim:text-field
-                                                :value (get-pref '(:p2p :domain) "local.")
-                                                :width 200
-                                                :activate-callback
-                                                (lambda (gadget value)
-                                                  (declare (ignore gadget))
-                                                  (setf (get-pref '(:p2p :domain)) value)
-                                                  (clim:redisplay-frame-panes frame :force-p t))))))
-  (clim:note-gadget-activated (p2p-domain-field frame) pane)
-  (make-label-value-row pane "Network Interface"
-                        (unless (p2p-interface-field frame)
-                          (setf (p2p-interface-field frame)
-                                (clim:make-pane 'clim:text-field
-                                                :value (get-pref '(:p2p :interface) "eth0")
-                                                :width 200
-                                                :activate-callback
-                                                (lambda (gadget value)
-                                                  (declare (ignore gadget))
-                                                  (setf (get-pref '(:p2p :interface)) value)
-                                                  (clim:redisplay-frame-panes frame :force-p t))))))
-  (clim:note-gadget-activated (p2p-interface-field frame) pane))
+(defun current-theme-from-sunrise-sunset (latitude longitude)
+  "Determine whether the current time is between sunrise and sunset.
+   Uses the observer's LATITUDE (in degrees) and LONGITUDE (in degrees).
+   Returns :NORMAL if it is daytime, :INVERTED if it is nighttime."
+  (multiple-value-bind (seconds minutes hours month-day month year week-day
+                        daylight-saving-p tz-offset)
+      (decode-universal-time (get-universal-time))
+    (declare (ignore week-day tz-offset))
+    (let* ((jd (julian-day year month month-day))
+           (hour (+ hours (if daylight-saving-p 1 0)
+                    (/ minutes 60.0d0)
+                    (/ seconds 3600.0d0)))
+           (n (- jd 2451545.0d0))
+           (j-star (/ n 36525.0d0))
+           (mean-solar-time (+ hour
+                               (- longitude 0.0d0)
+                               (* 24.0d0
+                                  (- n (floor n)))))
+           (decl (solar-declination jd))
+           (h0 (hour-angle-at-sunrise latitude decl)))
+      (if h0
+          (let* ((l0 (+ 280.460d0 (* 360.9856235d0 n)))
+                 (m (+ 357.528d0 (* 359.99050d0 j-star)))
+                 (m-rad (degrees->radians (mod m 360.0d0)))
+                 (c (+ (* 1.915d0 (sin m-rad))
+                       (* 0.020d0 (sin (* 2 m-rad)))))
+                 #+ () (sun-longitude (+ l0 c))
+                 #+ () (e (+ (* 0.01671d0 (cos m-rad))
+                             (- 0.0001d0)))
+                 (lambda-val (+ l0 c))
+                 (epsilon-rad (degrees->radians 23.439d0))
+                 #+ () (tan-half-epsilon (tan (/ epsilon-rad 2.0d0)))
+                 (right-ascension (/ (radians->degrees
+                                      (atan (* (tan (degrees->radians lambda-val))
+                                               (cos epsilon-rad))
+                                            1.0d0))
+                                     15.0d0))
+                 #+ () (j-transit (+ 2451545.0d0
+                                     (* 0.0009d0
+                                        (+ (* 360.0d0 (/ (+ (* 6.0d0 right-ascension)
+                                                            (* 24.0d0 n))
+                                                         360.0d0))
+                                           0.0d0))))
+                 (h0-degrees (radians->degrees h0))
+                 (lst (+ mean-solar-time (* 0.0057755183d0
+                                            (- l0 c (* right-ascension))))))
+            (if (and (>= lst (- right-ascension (/ h0-degrees 15.0d0)))
+                     (<= lst (+ right-ascension (/ h0-degrees 15.0d0))))
+                :normal
+                :inverted))
+          :normal))))
+
+(defun read-desktop-theme ()
+  "Read the current desktop theme from dbus.
+   Returns :NORMAL for light theme, :INVERTED for dark theme.
+   Falls back to :NORMAL if dbus is unavailable."
+  (handler-case
+      (let ((result (error "unimplemented")))
+        (cond
+          ((search "uint32 1" result) :inverted)
+          ((search "uint32 2" result) :inverted)
+          (t :normal)))
+    (error () :light)))
+
+(defun effective-color-theme (requested-theme frame)
+  "Determine the actual color theme to apply based on REQUESTED-THEME.
+   For :desktop, reads from dbus. For :sunrise, calculates from lat/long."
+  (declare (ignore frame))
+  (case requested-theme
+    (:desktop (read-desktop-theme))
+    (:sunrise
+     (let ((lat-str (get-pref '(:location :latitude) ""))
+           (lon-str (get-pref '(:location :longitude) "")))
+       (handler-case
+           (let ((lat (parse-number lat-str))
+                 (lon (parse-number lon-str))
+                 (lat-ns (get-pref '(:location :latitude-ns) "N"))
+                 (lon-ew (get-pref '(:location :longitude-ew) "E")))
+             (current-theme-from-sunrise-sunset
+              (if (string-equal lat-ns "S") (- lat) lat)
+              (if (string-equal lon-ew "W") (- lon) lon)))
+         (error ()
+           :normal))))
+    (:inverted :inverted)
+    (otherwise :normal)))
 
 (defun display-version-control-tab (frame pane)
   "Display the Version Control tab content."

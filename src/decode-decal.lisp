@@ -116,8 +116,9 @@
           (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t))))))
 
 
-(defun %print-decal-to-printer (printer-queue-name)
-  (let* ((frame *show-decal-frame*)
+(defun %print-decal-to-printer (printer)
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (frame *show-decal-frame*)
          (dump (decal-from-dump frame))
          (index (decal-index frame))
          (decal-mode (if (plusp (logand #x80 (aref dump (+ index (find-label-from-files "DecalFlags")))))
@@ -189,37 +190,37 @@
         (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                           :output nil :ignore-error-status t)
         (ignore-errors (delete-file ps-path))
-        (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+        (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
                           :output nil :ignore-error-status t)
-        (error "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
+        (error "Not yet implemented")))))
 
 (defun populate-decal-print-menu ()
   (ignore-errors
    (clim:remove-menu-item-from-command-table 'print-decal-menu "No printers found")
-   (dolist (p (ignore-errors (discover-printers)))
+   (dolist (p (ignore-errors (mapcar #'car *ipp-printer-registry*)))
      (ignore-errors
       (clim:remove-menu-item-from-command-table 'print-decal-menu p))))
-  (let* ((printers (ignore-errors (discover-printers-with-names))))
-    (if (null printers)
-        (clim:add-menu-item-to-command-table
-         'print-decal-menu "No printers found" :function
-         (lambda (g n)
-           (declare (ignore g n))
-           (error "~&No printers discovered.~%")))
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             'print-decal-menu display-name :command
-             `(com-print-decal-to-printer ,queue-name ,display-name)
-             :after :end)))))
+  (ensure-printer-scavenger-is-running)
+  (if (null *ipp-printer-registry*)
+      (clim:add-menu-item-to-command-table
+       'print-decal-menu "No printers found" :function
+       (lambda (g n)
+         (declare (ignore g n))
+         (error "No printers discovered.")))
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'print-decal-menu display :command
+           `(com-print-decal-to-printer ,struct)
+           :after :end))))
   (unless (fboundp 'com-print-decal-to-printer)
     (clim:define-command (com-print-decal-to-printer
                           :command-table clim-internals::global-command-table
                           :menu nil :name t)
-        ((queue-name 'string) (display-name 'string))
-      (declare (ignore display-name))
-      (error "~&Printing decal to ~a is not yet implemented.~%" queue-name))))
+        ((printer t))
+      (let ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer)))
+        (error "Printing decal to ~a is not yet implemented." queue)))))
 
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
 (clim:define-presentation-type decal-write-mode () :inherit-from 'symbol)

@@ -307,40 +307,34 @@ Returns the new thread."
   (cache-add-resource (game-resource-kind resource) resource)
   (publish-resource-added resource))
 
-(defun start-all-resources-scavengers (frame)
+(defun start-all-resources-scavengers ()
   "Start all resource scavenger threads."
-  (declare (ignore frame))
   (ensure-worker-journal)
   (let ((thread-id (thread-os-tid (current-thread)))
         (thread-name (thread-name (current-thread))))
     (journal:journaled (all-scavengers-start)
       :log-record *worker-journal*
       :args (list :thread (list :id thread-id :name thread-name)
-                        :operation "start"))
-    (ensure-thread-pool-kernel)
-    (dolist (scavenger '(start-item-scavenger
-                         start-boat-scavenger
-                         start-blob-scavenger
-                         start-character-scavenger
-                         start-script-scavenger
-                         start-song-scavenger
-                         start-map-scavenger
-                         start-tileset-scavenger
-                         start-sprite-sheet-scavenger
-                         start-routine-run-command-scavenger
-                         start-routine-forth-library-scavenger
-                         start-class-scavenger
-                         start-instrument-scavenger
-                         start-flag-scavenger
-                         start-key-scavenger
-                         start-atari-vox-dictionary-scavenger
-                         start-intellivoice-dictionary-scavenger
-                         start-object-prototype-scavenger
-                         start-phrasebook-scavenger
-                         start-translation-scavenger
-                         start-preferences-scavenger))
-      (submit-task scavenger))
-    (journal:journaled (all-scavengers-complete)
-      :log-record *worker-journal*
-      :args (list :thread (list :id thread-id :name thread-name)
-                        :operation "complete"))))
+                  :operation "start")
+      (dolist (scavenger '(start-item-scavenger
+                           start-boat-scavenger
+                           start-blob-scavenger
+                           start-character-scavenger
+                           start-script-scavenger
+                           start-song-scavenger
+                           start-map-scavenger
+                           start-tileset-scavenger
+                           start-sprite-sheet-scavenger
+                           start-routine-run-command-scavenger
+                           start-routine-forth-library-scavenger
+                           start-class-scavenger
+                           start-instrument-scavenger
+                           start-flag-scavenger
+                           start-key-scavenger
+                           start-atari-vox-dictionary-scavenger
+                           start-intellivoice-dictionary-scavenger
+                           start-object-prototype-scavenger
+                           start-phrasebook-scavenger
+                           start-translation-scavenger
+                           start-preferences-scavenger))
+        (submit-task scavenger)))))

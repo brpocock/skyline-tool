@@ -2063,31 +2063,31 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
     (warn "Tile set compiler: use compile-blob-intv or compile-tileset-intv-screen for Intellivision (~a)"
           (machine-long-name))
     (return-from compile-tileset))
-  (when (member *machine* '(1 2 8 16 20 88 2600 3010))
-    (warn "Tile set compiler not set up for ~a (~a); skipping"
-          *machine* (machine-long-name))
-    (return-from compile-tileset))
-  ;; MARIA platforms (7800, 5200, 400, 800, 7850, ...)
-  (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
-                                :name (format nil "Tileset.~a" (pathname-name pathname))
-                                :type "o")))
-    (ensure-directories-exist outfile)
-    (let* ((tileset (load-tileset pathname))
-           (width (floor (array-dimension (tileset-image tileset) 0) 8))
-           (palettes (extract-palettes (tileset-image tileset)))
-           (images (make-array (machine-tileset-size-tiles)))
-           (bytes (make-array (machine-tileset-size-bytes) :element-type '(unsigned-byte 8))))
-      (rip-tiles-from-tileset tileset images)
-      (when common-pathname
-        (rip-tiles-from-tileset (load-tileset common-pathname) images 64))
-      (dotimes (i (machine-tileset-size-tiles))
-        (rip-bytes-from-image (aref images i) palettes bytes i
-                              :x (mod i width) :y (floor i width)))
-      (print-mini-tile-map tileset)
-      (with-output-to-file (object outfile
-                                   :element-type '(unsigned-byte 8)
-                                   :if-exists :supersede)
-        (write-bytes bytes object)))))
+  (when (= 7800 *machine*)
+    (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
+                                  :name (format nil "Tileset.~a" (pathname-name pathname))
+                                  :type "o"))
+          (*region* (or *region* "NTSC"))) ;; FIXME — PAL
+      (ensure-directories-exist outfile)
+      (let* ((tileset (load-tileset pathname))
+             (width (floor (array-dimension (tileset-image tileset) 0) 8))
+             (palettes (extract-palettes (tileset-image tileset)))
+             (images (make-array (machine-tileset-size-tiles)))
+             (bytes (make-array (machine-tileset-size-bytes) :element-type '(unsigned-byte 8))))
+        (rip-tiles-from-tileset tileset images)
+        (when common-pathname
+          (rip-tiles-from-tileset (load-tileset common-pathname) images 64))
+        (dotimes (i (machine-tileset-size-tiles))
+          (rip-bytes-from-image (aref images i) palettes bytes i
+                                :x (mod i width) :y (floor i width)))
+        (print-mini-tile-map tileset)
+        (with-output-to-file (object outfile
+                                     :element-type '(unsigned-byte 8)
+                                     :if-exists :supersede)
+          (write-bytes bytes object)))))
+  (warn "Tile set compiler not set up for ~a (~a); skipping"
+        *machine* (machine-long-name))
+  (return-from compile-tileset))
 
 (defun ensure-byte (number)
   (coerce (round number) '(unsigned-byte 8)))

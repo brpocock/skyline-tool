@@ -9,9 +9,7 @@
   "The current color palette for instruments")
 
 
-;;; ------------------------------------------------------------
 ;;; SWATCH RENDERING
-;;; ------------------------------------------------------------
 
 (defun draw-region-swatches (pane color-index regions)
   "Draw a row of region swatches for COLOR-INDEX into PANE.
@@ -21,7 +19,7 @@
         (y-spacing 1))
     (dolist (region regions)
       (when-let ((palette (ignore-errors
-                            (palette-for-machine-and-region machine region))))
+                           (palette-for-machine-and-region machine region))))
         (when (< color-index (length palette))
           (destructuring-bind (r g b) (elt palette color-index)
             (let ((ink (make-rgb-color (/ r 255.0) (/ g 255.0) (/ b 255.0)))
@@ -34,9 +32,7 @@
     x))
 
 
-;;; ------------------------------------------------------------
 ;;; COLOR LEAF PANE FOR MENU-BAR SUB-MENUS
-;;; ------------------------------------------------------------
 
 (defclass menu-button-color-leaf-pane (clim-internals::menu-button-leaf-pane)
   ((color-index :initarg :color-index :initform 0
@@ -109,9 +105,7 @@
      :max-height +fill+)))
 
 
-;;; ------------------------------------------------------------
 ;;; COLOR CHOOSER POP-UP — menu-choose with region swatches
-;;; ------------------------------------------------------------
 
 (defvar *current-color* nil
   "Currently-selected palette index for ●/○ indicator.")
@@ -170,7 +164,7 @@ For >256 colors: RGB/HSL entry dialog."
         (when (and color-index (< color-index (length palette)))
           (destructuring-bind (r g b) (elt palette color-index)
             (let ((ink (make-rgb-color (/ r 255.0) (/ g 255.0) (/ b 255.0))))
-              (with-room-for-graphics (stream :height 12 :min-width 12)
+              (with-room-for-graphics (stream :height 12 :width 12)
                 (draw-rectangle* stream 0 0 12 12 :ink ink :filled t)
                 (draw-rectangle* stream 0 0 12 12 :ink +black+ :filled nil
                                  :line-thickness 1))

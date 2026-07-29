@@ -125,22 +125,22 @@ Signals an error for unknown asset types.
     ((or (equal kind$ "Flags")
          (equal kind$ "Flag"))
      :flags)
-((or (equal kind$ "Keys")
-          (equal kind$ "Key"))
-      :keys)
+    ((or (equal kind$ "Keys")
+         (equal kind$ "Key"))
+     :keys)
     ((or (equal kind$ "Translations")
-          (equal kind$ "Translation"))
-      :translations)
+         (equal kind$ "Translation"))
+     :translations)
     ((or (equal kind$ "Phonetic Dictionary")
-          (equal kind$ "AtariVox Dictionary"))
-       :atari-vox-dictionary)
+         (equal kind$ "AtariVox Dictionary"))
+     :atari-vox-dictionary)
     ((or (equal kind$ "IntelliVoice Dictionary"))
-       :intellivoice-dictionary)
+     :intellivoice-dictionary)
     ((or (equal kind$ "Magic Desk Dictionary"))
-       :magic-desk-dictionary)
+     :magic-desk-dictionary)
     ((or (equal kind$ "Phrasebooks")
-          (equal kind$ "Phrasebook"))
-       :phrasebook)
+         (equal kind$ "Phrasebook"))
+     :phrasebook)
     ((or (null kind$)
          (emptyp kind$))
      nil)
@@ -217,16 +217,16 @@ Returns the parsed asset information or NIL if line is empty/invalid."
                        "Could not find the asset ID for ~(~a~) \"~a\""
                        kind name)
                (if-let (existing (gethash id (gethash kind seen-ids)))
-                  (restart-case
-                          (error "Two ~(~a~)s (at least) have the same ID: \"~a\" and \"~a\"~:[ (both nil)~;~:* (both $~x)~]"
-                                kind existing name id)
-                         (reload-assets ()
-                           :report "Reload the assets to check for changed IDs"
-                           (setf *maps-ids* nil
-                                 *assets-list* nil
-                                 *asset-ids-seen* nil)
-                           (go top)))
-                  (setf (gethash id (gethash kind seen-ids)) name)))))
+                 (restart-case
+                     (error "Two ~(~a~)s (at least) have the same ID: \"~a\" and \"~a\"~:[ (both nil)~;~:* (both $~x)~]"
+                            kind existing name id)
+                   (reload-assets ()
+                     :report "Reload the assets to check for changed IDs"
+                     (setf *maps-ids* nil
+                           *assets-list* nil
+                           *asset-ids-seen* nil)
+                     (go top)))
+                 (setf (gethash id (gethash kind seen-ids)) name)))))
          (setf (gethash asset index-hash) builds)))))
 
 (defun read-assets-list (&optional (index-file #p"Source/Assets.index"))
@@ -982,9 +982,11 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
                machine-dir art-name art-path machine-dir))
       (7800 ; Atari 7800
        (format t "~%
+Source/Generated/~a/Assets/Art.~a.s ~
 Object/~a/Assets/Art.~a.NTSC.o Object/~a/Assets/Art.~a.PAL.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port 7800 --region PAL compile-art-7800 $@ $<"
+               machine-dir art-name
                machine-dir art-name machine-dir art-name art-path
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))
@@ -1039,36 +1041,64 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                 machine-dir (pathname-name pathname) machine-dir))))
 
 (defun makefile-contains-target-p (target)
-  (let* ((target-str (typecase target
-                       (pathname (enough-namestring target))
-                       (string target)
-                       (t (princ-to-string target))))
-         (target-prefix (concatenate 'string target-str ":"))
+  (let* ((target-string (typecase target
+                          (pathname (enough-namestring target))
+                          (string target)
+                          (t (princ-to-string target))))
+         (target-prefix (concatenate 'string target-string ":"))
          (makefiles (list #p"Source/Generated/7800/Makefile" 
                           #p"common.mak" 
                           (make-pathname :directory (list :relative "Source" "Build")
                                          :name (machine-directory-name) :type "mak")))
          (cpu-dir (cpu-directory-name)))
     (flet ((matches-p (line)
-             (or (eql 0 (search target-prefix line))
-                 ;; Match Source/Generated/${CPUDIR}/%Class.s pattern rule for any eightbol class
-                 (and (eql 0 (search "Source/Generated/" line))
-                      (search "Class.s:" line)
-                      (or (search (format nil "Generated/Classes/~a/" cpu-dir) line)
-                          (search "Generated/Classes/${CPUDIR}/" line))))))
-      (dolist (makefile makefiles)
+             (when-let (colon (position #\: line))
+               (or (eql 0 (search target-prefix line))
+                   ;; Match Source/Generated/${CPUDIR}/%Class.s pattern rule for any eightbol class
+                   (and (eql 0 (search "Source/Generated/" line))
+                        (search "Class.s:" line))
+                   (search (format nil "Generated/Classes/~a/" cpu-dir) line)
+                   (when-let (found (search target-string line))
+                     (< found colon))))))
+      (dolist (makefile makefiles nil)
         (when (probe-file makefile)
           (with-open-file (stream makefile :external-format :utf-8)
             (loop for line = (read-line stream nil nil)
                   while line
                   when (matches-p line)
-                    do (return-from makefile-contains-target-p t))))))
-    nil))
+                    do (return-from makefile-contains-target-p t))))))))
 
 (defun find-copybook (name)
   (make-pathname :directory (list :relative "Source" "Generated"
                                   (machine-directory-name) "Classes")
                  :name name :type "cpy"))
+
+(defun art-source-file (name)
+  "Find the .art source file for Art asset NAME (e.g. \"Art.Font\").
+Returns the pathname if found, NIL otherwise."
+  (when (eql 0 (search "Art." name))
+    (let ((stem (subseq name 4)))
+      (or (probe-file (make-pathname
+                        :directory (list :relative "Source" "Art"
+                                         (machine-directory-name))
+                        :name stem :type "art"))
+          (probe-file (make-pathname
+                        :directory (list :relative "Source" "Art")
+                        :name stem :type "art"))))))
+
+(defun generated-art-asset-p (pathname)
+  "True if PATHNAME is a generated Art asset .s file (e.g. Source/Generated/PORT/Assets/Art.Font.s)."
+  (and (string= (pathname-type pathname) "s")
+       (eql 0 (search "Art." (pathname-name pathname)))
+       (member "Assets" (pathname-directory pathname) :test #'string=)))
+
+(defun art-source-for-generated (generated-pathname)
+  "Find the .art source for a generated Art asset .s PATHNAME.
+Returns a list of (GENERATED-PATHNAME ART-SOURCE), or just (GENERATED-PATHNAME)."
+  (let ((art (art-source-file (pathname-name generated-pathname))))
+    (if art
+        (remove-duplicates (list generated-pathname art) :test #'equal)
+        (list generated-pathname))))
 
 (defun find-included-file (name &key cwd testp)
   "Find the pathname of an included source file NAME.
@@ -1096,47 +1126,49 @@ Returns the pathname of the found file, or signals an error if not found."
                                    :name name :type "cob")))
     (when (probe-file cobol-path)
       (return-from find-included-file cobol-path)))
-
+  
   (let ((generated-asset-pathname
           (make-pathname :directory (list :relative "Source" "Generated"
-				  (machine-directory-name) "Assets")
+ 				  (machine-directory-name) "Assets")
                          :name name :type "s")))
     (when (some (lambda (frag)
                   (eql 0 (search frag name)))
-                (list "Song." "Art." "Blob." "Script."))
-      (return-from find-included-file generated-asset-pathname)))
-  ;; EightBol-generated          class           assembly          (e.g.
-  ;; Source/Generated/Classes/6502/MummyCourseClass.s               from
-  ;; MummyCourse.cob)   When  NAME   ends   with   "Class",  check   for
-  ;; corresponding  .cob;   if  present,   use  eightbol   output  path.
-  ;; Return  path  relative  to  project  root  so  Makefile  deps  work
-  ;; regardless of project-root resolution.
-  (when (and (>= (length name) 5)
-             (string-equal (subseq name (- (length name) 5)) "Class"))
-    (let* ((cob-name (header-case (subseq name 0 (- (length name) 5))))
-           (cob-path (make-pathname :directory (list :relative "Source" "Classes")
-                                    :name cob-name :type "cob")))
-      (when (probe-file cob-path)
-        (return-from find-included-file
-          (make-pathname :directory (list :relative "Source" "Generated" "Classes"
-                                          (cpu-directory-name))
-                         :name name :type "s")))))
-  (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
-    (let ((possible-file (make-pathname :directory path :name name :type "s")))
-      (when (probe-file possible-file)
-        (return-from find-included-file possible-file))))
-  (let ((generated-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
-                         :name name :type "s")))
-    (when (skyline-tool-writes-p generated-pathname)
-      (return-from find-included-file generated-pathname))
-    (when (makefile-contains-target-p generated-pathname)
-      (return-from find-included-file generated-pathname)))
-  (error "Cannot find a possible source for included ~:[source~;test~] ~
+                (list "Song." "Blob." "Script."))
+      (return-from find-included-file generated-asset-pathname))
+     (when (art-source-file name)
+       (return-from find-included-file generated-asset-pathname)))
+    ;; EightBol-generated          class           assembly          (e.g.
+    ;; Source/Generated/Classes/6502/MummyCourseClass.s               from
+    ;; MummyCourse.cob)   When  NAME   ends   with   "Class",  check   for
+    ;; corresponding  .cob;   if  present,   use  eightbol   output  path.
+    ;; Return  path  relative  to  project  root  so  Makefile  deps  work
+    ;; regardless of project-root resolution.
+    (when (and (>= (length name) 5)
+               (string-equal (subseq name (- (length name) 5)) "Class"))
+      (let* ((cob-name (header-case (subseq name 0 (- (length name) 5))))
+             (cob-path (make-pathname :directory (list :relative "Source" "Classes")
+                                      :name cob-name :type "cob")))
+        (when (probe-file cob-path)
+          (return-from find-included-file
+            (make-pathname :directory (list :relative "Source" "Generated" "Classes"
+                                            (cpu-directory-name))
+                           :name name :type "s")))))
+    (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
+      (let ((possible-file (make-pathname :directory path :name name :type "s")))
+        (when (probe-file possible-file)
+          (return-from find-included-file possible-file))))
+    (let ((generated-pathname
+            (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
+                           :name name :type "s")))
+      (when (skyline-tool-writes-p generated-pathname)
+        (return-from find-included-file generated-pathname))
+      (when (makefile-contains-target-p generated-pathname)
+        (return-from find-included-file generated-pathname)))
+    (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~2,'0x~
 ~@[~&Current working directory: ~a~]~
 ~@[~&TestP: ~a~]"
-         testp name *bank* cwd testp))
+           testp name *bank* cwd testp))
 
 (defun find-included-binary-file (name)
   (when (search "StagehandHigh" name)
@@ -1230,6 +1262,9 @@ file ~a.s in bank $~2,'0x~
 	 (return-from recursive-read-deps
 	   (remove-duplicates (list* source-file eightbol-file copybooks)
 			  :test #'equal))))
+        ((generated-art-asset-p source-file)
+         (return-from recursive-read-deps
+           (art-source-for-generated source-file)))
         (t
          (error "Can't find “~a” and don't know how to make it~2%(~s)"
                 (enough-namestring source-file) source-file))))
@@ -3507,8 +3542,8 @@ Creates parent directories if needed; overwrites the output file."
                             (enough-namestring object-name))))))
     (format *trace-output* "~&~{~a~^ ~}" cmd)
     (uiop:run-program cmd
-                 :error-output error-stream
-                 :ignore-error-status t)))
+                      :error-output error-stream
+                      :ignore-error-status t)))
 
 (defun write-assembly-skeleton-for-size (tmp.s pathname)
   (format tmp.s ";;; Temporary rig to get size of “~a”" (enough-namestring pathname))

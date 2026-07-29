@@ -6,35 +6,27 @@
 
 ;; Git backend protocol implementations using EQL dispatch
 
-(defmethod version-control-backend ((backend (eql :git)) &key)
-  "Returns the backend identifier for Git"
-  :git)
-
 (defmethod version-control-name ((backend (eql :git)))
   "Return the name of the version control system"
-  "git")
+  "Git")
 
 (defmethod version-control-version ((backend (eql :git)))
   "Return the version string of git"
-  (or (ignore-errors
-        (uiop:run-program (list "git" "--version") :output :string))
-      "unknown"))
+  (uiop:run-program (list "git" "--version") :output :string))
 
 (defmethod version-control-available-p ((backend (eql :git)))
   "Check if git is available on the system"
   (ignore-errors
-    (zerop (uiop:run-program (list "git" "--version") :output nil))))
+   (zerop (uiop:run-program (list "git" "--version") :output nil))))
 
 (defmethod version-control-init ((backend (eql :git)) path &key)
   "Initialize a new git repository at PATH"
   (when (probe-file path)
-    (uiop:run-program (list "git" "init" path)))
-  (make-git-backend path))
+    (uiop:run-program (list "git" "init" path))))
 
 (defmethod version-control-clone ((backend (eql :git)) url path &key)
   "Clone repository from URL to PATH"
-  (uiop:run-program (list "git" "clone" url path))
-  (make-git-backend path))
+  (uiop:run-program (list "git" "clone" url path)))
 
 (defmethod version-control-status ((backend (eql :git)) path &key)
   "Return status of working tree as a plist"
@@ -106,13 +98,13 @@
 
 (defmethod version-control-log ((backend (eql :git)) path &key limit since until author)
   "Return commit log for PATH (or project if nil)"
-  (let ((base-path (or path (getf (version-control-config backend) :repo-path))))
+  (let ((base-path (or path #p".")))
     (let ((cmd (list "git" "-C" base-path "log" "--oneline")))
       (when limit (append cmd (list "-n" (write-to-string limit))))
       (when since (append cmd (list "--since" (write-to-string since))))
       (when until (append cmd (list "--until" (write-to-string until))))
       (when author (append cmd (list "--author" (write-to-string author))))
-      (let ((output (ignore-errors (uiop:run-program cmd :output :string))))
+      (let ((output (uiop:run-program cmd :output :string)))
         (when output (split-sequence #\newline output))))))
 
 (defmethod version-control-diff ((backend (eql :git)) path &key cached name-only)
@@ -121,7 +113,7 @@
     (when cached (push "--cached" cmd))
     (when name-only (push "--name-only" cmd))
     (when path (append cmd (list path)))
-    (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
+    (uiop:run-program (nreverse cmd) :output :string)))
 
 (defmethod version-control-difftool ((backend (eql :git)) path &key base target (tool "meld"))
   "Launch external diff tool for PATH or staged if BASE/TARGET"
@@ -129,7 +121,7 @@
     (when base (append cmd (list base)))
     (when target (append cmd (list target)))
     (when path (append cmd (list path)))
-    (uiop:run-program (nreverse cmd) :output nil :ignore-errors t)))
+    (uiop:run-program (nreverse cmd) :output nil)))
 
 (defmethod version-control-branch ((backend (eql :git)) &key list all create delete rename move)
   "Branch operations: list, create, delete, rename, or move"
@@ -140,9 +132,10 @@
       (delete (append cmd (list "-d" delete)))
       (rename (append cmd (list "-m" rename move)))
       (move (append cmd (list "-m" move))))
-    (let ((output (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
+    (let ((output (uiop:run-program (nreverse cmd) :output :string)))
       (when output
-        (mapcar 'string-trim (split-sequence #\newline output :remove-empty-subseqs t))))))
+        (mapcar (curry #'string-trim skyline-tool::+whitespace+)
+                (split-sequence #\newline output :remove-empty-subseqs t))))))
 
 (defmethod version-control-merge ((backend (eql :git)) source &key no-ff fast-forward)
   "Merge SOURCE into current branch"
@@ -169,7 +162,7 @@
       (:drop (push "drop" cmd))
       (:apply (push "apply" cmd)))
     (append cmd args)
-    (uiop:run-program cmd :output :string :ignore-errors t)))
+    (uiop:run-program cmd :output :string)))
 
 (defmethod version-control-tag ((backend (eql :git)) &key list create delete annotate)
   "Manage tags: list/create/delete/annotate"
@@ -177,7 +170,7 @@
     (cond
       (list (push "-l" cmd))
       (create (append cmd (list create))))
-    (uiop:run-program (nreverse cmd) :output :string :ignore-errors t)))
+    (uiop:run-program (nreverse cmd) :output :string)))
 
 (defmethod version-control-config-get ((backend (eql :git)) key &key global local)
   "Get config KEY value (global or local)"
@@ -185,7 +178,7 @@
     (when global (push "--global" cmd))
     (when local (push "--local" cmd))
     (push key cmd)
-    (ignore-errors (uiop:run-program (nreverse cmd) :output :string))))
+    (uiop:run-program (nreverse cmd) :output :string)))
 
 (defmethod version-control-config-set ((backend (eql :git)) key value &key global local)
   "Set config KEY to VALUE (global or local)"
@@ -194,7 +187,7 @@
     (when local (push "--local" cmd))
     (push key cmd)
     (push value cmd)
-    (uiop:run-program (nreverse cmd) :output nil :ignore-errors t)))
+    (uiop:run-program (nreverse cmd) :output nil)))
 
 (defmethod version-control-user-name ((backend (eql :git)) &key global)
   "Get user name from config"
@@ -215,7 +208,7 @@
 
 (defmethod version-control-remote-list ((backend (eql :git)))
   "List configured remotes"
-  (let ((output (ignore-errors (uiop:run-program (list "git" "remote") :output :string))))
+  (let ((output (uiop:run-program (list "git" "remote") :output :string)))
     (when output
       (split-sequence #\newline output :remove-empty-subseqs t))))
 
@@ -235,9 +228,5 @@
 
 (defmethod version-control-submodule-status ((backend (eql :git)))
   "Return submodule status"
-  (ignore-errors (uiop:run-program (list "git" "submodule" "status") :output :string)))
+  (uiop:run-program (list "git" "submodule" "status") :output :string))
 
-(defun make-git-backend (&optional (path (uiop:getcwd)))
-  "Create a Git backend instance for PATH"
-  (declare (ignore path))
-  'git-backend)

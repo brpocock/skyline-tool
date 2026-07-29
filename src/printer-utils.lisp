@@ -6,6 +6,16 @@
                                        'string)
   :test #'string-equal)
 
+(defstruct (ipp-printer (:conc-name ipp-))
+  "Printer representation with display name, host, port, and queue name."
+  (name "" :type string)
+  (host "" :type string)
+  (port 0 :type integer)
+  (queue "" :type string))
+
+(defvar *ipp-printer-registry* nil
+  "Alist mapping queue-name → ipp-printer struct.")
+
 (defvar *printer-cache* nil
   "Cached list of (queue-name . display-name) printer pairs, or NIL if no cache.")
 (defvar *printer-cache-time* 0
@@ -138,12 +148,29 @@
 ;; 
 ;; Background discovery thread
 ;; 
+(defun update-printer-registry-from-cache ()
+  "Rebuild *ipp-printer-registry* from the current printer cache.
+Converts each (queue-name . display-name) pair into an ipp-printer struct."
+  (setf *ipp-printer-registry* nil)
+  (dolist (printer (or *printer-cache* (ignore-errors (discover-printers-with-names))))
+    (let ((queue (if (consp printer) (car printer) printer))
+          (display (if (consp printer) (cdr printer) printer)))
+      (push (cons queue (make-ipp-printer :name display :host "localhost"
+                                           :port (get-cups-port) :queue queue))
+            *ipp-printer-registry*))))
+
+(defun ensure-printer-scavenger-is-running ()
+  "Ensure the printer registry is populated, starting discovery if needed."
+  (ensure-printer-discovery-started)
+  (update-printer-registry-from-cache))
+
 (defun printer-discovery-loop ()
-  "Loop that periodically discovers printers and publishes changes."
+  "Loop that periodically discovers printers, updates registry, and publishes changes."
   (loop while *printer-discovery-running-p*
         do (let ((new-list (ignore-errors (discover-printers-with-names))))
              (unless (equal new-list *printer-cache*)
                (setf *printer-cache* new-list)
+               (update-printer-registry-from-cache)
                (publish-printer-change new-list)))
            (sleep 5))) ; poll every 5 seconds
 
@@ -166,3 +193,7 @@
    Called when a printable window is opened."
   (unless *printer-discovery-running-p*
     (start-printer-discovery-thread)))
+
+(defun get-printer-list ()
+  "Return list of printer queue names from the registry."
+  (mapcar #'car *ipp-printer-registry*))

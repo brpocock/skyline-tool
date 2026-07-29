@@ -4,7 +4,7 @@
 (defmacro define-anim-seq-editor-frame-command ((name &rest options) args &body body)
   "Define a CLIM command for the anim-seq-editor-frame command table."
   `(clim:define-command (,name :command-table anim-seq-editor-frame ,@options)
-     ,args
+       ,args
      ,@body))
 
 (defvar *anim-seq-editor-frame* nil)
@@ -742,38 +742,38 @@ Called from note-sheet-grafted after the frame is connected to the display."
                            :name "Art.CharacterEffectsTiles" :type "o"))
                          (t (make-pathname
                              :directory (list :relative "Object" "7800" "Assets")
-                             :name (format nil "Art.~a" name)
+                             :name (format nil "Art.~a.NTSC" name)
                              :type "o")))
                        (make-pathname
                         :directory (list :relative "Object" "7800" "Assets")
                         :name (format nil "Tileset.~a" name)
                         :type "o")))
          (mem (make-array 4096 :element-type '(unsigned-byte 8))))
-(unless (probe-file obj-file)
+    (unless (probe-file obj-file)
       ;; Build the object file by running make in thread pool
       (format t "~&Building ~a...~%" (enough-namestring obj-file))
       (force-output)
-(lparallel:submit-task
-        (lambda ()
-          (uiop:run-program (list "make" "-j4" (namestring obj-file))
-                            :output :interactive
-                            :error-output :interactive
-                            :ignore-error-status t)))
+      (lparallel:submit-task
+       (lambda ()
+         (uiop:run-program (list "make" "-j4" (namestring obj-file))
+                           :output :interactive
+                           :error-output :interactive
+                           :ignore-error-status t)))
       (block
-           fixme-this-needs-to-be-asynchronous
-         (with-input-from-file
-             (bin obj-file
-                  :element-type '(unsigned-byte 8))
-           (loop for byte = (read-byte bin nil nil)
-                 for i from 0 below #x10000
-                 while byte
-                 do (setf (aref mem i) byte))))
+          fixme-this-needs-to-be-asynchronous
+        (with-input-from-file
+            (bin obj-file
+                 :element-type '(unsigned-byte 8))
+          (loop for byte = (read-byte bin nil nil)
+                for i from 0 below #x10000
+                while byte
+                do (setf (aref mem i) byte))))
       mem)))
 
 (defun read-palette-for-tile-sheet (tile-sheet-name palette-index &key write-mode)
   (let ((sprite-sheet-pathname (make-pathname :directory (list :relative "Source" "Art" tileset-name-reference)
-                                                      :name tile-sheet-name
-                                                      :type "art")))
+                                              :name tile-sheet-name
+                                              :type "art")))
     (unless (probe-file sprite-sheet-pathname)
       (error "Missing sprite sheet: ~a" (enough-namestring sprite-sheet-pathname)))
     (let* ((tileset (load-tileset sprite-sheet-pathname))
@@ -1975,7 +1975,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
                                     :directory (list :relative "Source" "Tables"))))
     (save-all-animation-sequences)
     (uiop:run-program (if queue (list "lp" "-d" queue (namestring table-path))
-                            (list "lp" (namestring table-path)))
+                          (list "lp" (namestring table-path)))
                       :output nil :ignore-error-status t)))
 
 (defun populate-assignments-print-menu ()
@@ -2097,7 +2097,7 @@ Called from note-sheet-grafted after the frame is connected to the display."
                   (clim:formatting-cell (pane)
                     (unless (eql printed-body body)
                       (format pane "~d." body)
-                      (when-let (name (find-name-for-body decal-kind body))
+                      (when-let (nguame (find-name-for-body decal-kind body))
                         (format pane " ~a" name))
                       (setf printed-body body)))
                   (clim:formatting-cell (pane)

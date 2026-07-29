@@ -3,11 +3,15 @@
 (defvar *event-bus* (noloop.eventbus:make-eventbus)
   "Global event bus instance using noloop.eventbus.")
 
-(defun publish (event-type &key payload)
+(defun publish (event-type &rest payload)
   "Publish an event to subscribers of EVENT-TYPE.
    EVENT-TYPE is a keyword identifying the event.
    PAYLOAD is an arbitrary plist containing event data."
-  (noloop.eventbus:emit *event-bus* event-type payload))
+  (if (eql :payload (first payload))
+      (noloop.eventbus:emit *event-bus* event-type (second payload))
+      (if (< 1 (length payload))
+          (noloop.eventbus:emit *event-bus* event-type (first payload))
+          (noloop.eventbus:emit *event-bus* event-type payload))))
 
 (defun subscribe (event-type subscriber)
   "Subscribe to EVENT-TYPE events.

@@ -3,29 +3,31 @@
 
 (in-package :skyline-tool)
 
-(defparameter *faction-bits*
-  '((#x80 . "Vizier's Forces")
-    (#x40 . "Loyalists")
-    (#x20 . "Villagers")
-    (#x10 . "Merfolk")
-    (#x08 . "(unused)")
-    (#x04 . "(unused)")
-    (#x02 . "(unused)")
-    (#x01 . "(unused)"))
-  "Bitmask entries for the eight faction selectors.")
+(define-constant +faction-bits+
+    '((#x80 . "Vizier's Forces")
+      (#x40 . "Loyalists")
+      (#x20 . "Villagers")
+      (#x10 . "Merfolk")
+      (#x08 . "(unused)")
+      (#x04 . "(unused)")
+      (#x02 . "(unused)")
+      (#x01 . "(unused)"))
+  :test 'equalp
+  :documentation "Bitmask entries for the eight faction selectors.")
 
-(defparameter *character-flags-bits*
-  '((#x01 . "Enemy Walk On")
-    (#x02 . "(undefined)")
-    (#x04 . "(undefined)")
-    (#x08 . "(undefined)")
-    (#x10 . "(undefined)")
-    (#x20 . "(undefined)")
-    (#x40 . "(undefined)")
-    (#x80 . "(undefined)"))
-  "Bitmask entries for the eight character-flags selectors.")
+(define-constant +character-flags-bits+
+    '((#x01 . "Enemy Walk On")
+      (#x02 . "(undefined)")
+      (#x04 . "(undefined)")
+      (#x08 . "(undefined)")
+      (#x10 . "(undefined)")
+      (#x20 . "(undefined)")
+      (#x40 . "(undefined)")
+      (#x80 . "(undefined)"))
+  :test 'equalp
+  :documentation "Bitmask entries for the eight character-flags selectors.")
 
-(defun decal-display-name (kind)
+(defun decal-kind->display-name (kind)
   (title-case (string-downcase (string kind))))
 
 (defun parse-8.8-string (string)
@@ -48,7 +50,6 @@
           (class-descendants-flat "Course" *class-bases*)))
 
 (defun display-bitmask-section (pane resource bits slot-name label)
-  (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :left)
       (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
@@ -57,9 +58,9 @@
     (loop for (bit . name) in bits
           do (clim:formatting-row (pane)
                (clim:formatting-cell (pane :align-x :left)
-                 (clim:make-pane 'clim:toggle-button-pane
+                 (clim:make-pane 'clim:check-box-pane
                                  :value (logtest bit mask)
-                                 :label (format nil "~a | $~2,'0x" name bit)
+                                 :label name
                                  :callback
                                  (lambda (gadget value)
                                    (declare (ignore gadget))
@@ -69,7 +70,9 @@
                                        (setf (slot-value resource slot-name)
                                              (logand (slot-value resource slot-name)
                                                      (lognot bit))))
-                                   (publish-resource-changed resource))))))))
+                                   (publish-resource-changed resource))))
+               (clim:formatting-cell (pane)
+                 (format nil "$~2,'0x" bit))))))
 
 ;; Identity tab — dispatch read-only vs editing by frame-view-mode
 (defmethod display-identity-tab ((frame character-inspector-frame) pane)
@@ -94,9 +97,6 @@
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :right) (format pane "ID: "))
     (clim:formatting-cell (pane :align-x :left) (format pane "~d" (game-resource-character-id resource))))
-  (clim:formatting-row (pane)
-    (clim:formatting-cell (pane :align-x :right) (format pane "Decal: "))
-    (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-decal resource))))
   (clim:formatting-row (pane)
     (clim:formatting-cell (pane :align-x :right) (format pane "Gender: "))
     (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-gender resource))))
@@ -144,7 +144,7 @@
     (clim:formatting-cell (pane :align-x :left)
       (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
         (format pane "Faction"))))
-  (loop for (bit . name) in *faction-bits*
+  (loop for (bit . name) in +faction-bits+
         do (clim:formatting-row (pane)
              (clim:formatting-cell (pane :align-x :right)
                (format pane "~:[☐~;☑~]" (logtest bit (game-resource-character-faction resource))))
@@ -157,7 +157,7 @@
     (clim:formatting-cell (pane :align-x :left)
       (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
         (format pane "Character Flags"))))
-  (loop for (bit . name) in *character-flags-bits*
+  (loop for (bit . name) in +character-flags-bits+
         do (clim:formatting-row (pane)
              (clim:formatting-cell (pane :align-x :right)
                (format pane "~:[☐~;☑~]" (logtest bit (game-resource-character-flags resource))))
@@ -170,28 +170,49 @@
     (clim:formatting-table (pane :multiple-columns t)
       (display-identity-editing-name resource pane)
       (display-identity-editing-id resource pane)
-      (display-identity-editing-decal resource pane)
       (display-identity-editing-gender resource pane)
       (display-identity-editing-home resource pane)
       (display-identity-editing-comments resource pane)
       (display-identity-editing-movement resource pane)
-      (display-identity-editing-course-class resource pane)
-      (display-identity-editing-course-prototype resource pane)
       (display-identity-editing-hit-points resource pane)
       (display-identity-editing-faction resource pane)
       (display-identity-editing-flags resource pane))))
 
+(defun validate-name-for-display (name)
+  "Validate NAME for minifont compatibility and length. Returns error indicator or NIL."
+  (let ((bad-chars
+         (remove-if (lambda (c) (find c +all-minifont-chars+ :test #'char-equal))
+                    (coerce name 'list))))
+    (when bad-chars
+      (return-from validate-name-for-display
+        (format nil "can't use: ~{~c~^, ~}" bad-chars))))
+  (let ((len (length (unicode->minifont name))))
+    (when (> len 12)
+      (return-from validate-name-for-display "too long"))))
+
 (defun display-identity-editing-name (resource pane)
-  (clim:formatting-row (pane)
-    (clim:formatting-cell (pane :align-x :right) (format pane "Name: "))
-    (clim:formatting-cell (pane :align-x :left)
-      (clim:make-pane 'clim:text-field-pane
-                      :value (game-resource-character-name resource)
-                      :value-changed-callback
-                      (lambda (gadget value)
-                        (declare (ignore gadget))
-                        (setf (game-resource-character-name resource) value)
-                        (publish-resource-changed resource))))))
+  (let* ((name (game-resource-character-name resource))
+         (error (validate-name-for-display name)))
+    (clim:formatting-row (pane)
+      (clim:formatting-cell (pane :align-x :right) (format pane "Name: "))
+      (clim:formatting-cell (pane :align-x :left)
+        (clim:make-pane 'clim:text-field-pane
+                        :value name
+                        :value-changed-callback
+                        (lambda (gadget value)
+                          (declare (ignore gadget))
+                          (setf (game-resource-character-name resource) value)
+                          (publish-resource-changed resource))))
+      (clim:formatting-cell (pane :align-x :left)
+        (format pane "~2d/12" (length (unicode->minifont name)))))
+    (when error
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :right) (format pane " "))
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:with-drawing-options (pane :ink clim:+red+)
+            (format pane "~a ~a"
+                    (if (string= error "too long") "🚫" "⛔")
+                    error)))))))
 
 (defun display-identity-editing-id (resource pane)
   (clim:formatting-row (pane)
@@ -243,61 +264,64 @@
     (clim:formatting-cell (pane :align-x :left)
       (clim:make-pane 'clim:text-field-pane
                       :value (game-resource-character-memo resource)
+                      :lines 6
                       :scroll-bars :vertical
-                      :activation-callback
-                      (lambda (pane)
-                        (setf (game-resource-character-memo resource) (clim:gadget-value pane))
+                      :value-changed-callback
+                      (lambda (gadget value)
+                        (declare (ignore gadget))
+                        (setf (game-resource-character-memo resource) value)
                         (publish-resource-changed resource))))))
 
 (defun display-identity-editing-movement (resource pane)
-  (clim:formatting-row (pane) (clim:formatting-cell (pane :align-x :left) (format pane " ")))
-  (clim:formatting-row (pane)
-    (clim:formatting-cell (pane :align-x :left)
-      (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
-        (format pane "Movement")))))
+  (clim:with-text-style (pane (clim:make-text-style :sans-serif :bold :larger))
+    (format pane "Movement"))
+  (display-identity-editing-course-class resource pane)
+  (display-identity-editing-course-prototype resource pane))
 
 (defun display-identity-editing-course-class (resource pane)
-  (clim:formatting-row (pane)
-    (clim:formatting-cell (pane :align-x :right) (format pane "Course Class: "))
-    (clim:formatting-cell (pane :align-x :left)
-      (clim:make-pane 'clim:option-pane
-                      :items (course-class-dropdown-items)
-                      :current-value (game-resource-character-course-class resource)
-                      :callback
-                      (lambda (pane value)
-                        (declare (ignore pane))
-                        (setf (game-resource-character-course-class resource) value)
-                        (let ((valid (list-object-prototypes-for-class value)))
-                          (unless (or (eq (game-resource-character-course-prototype resource) 0)
-                                      (member (game-resource-character-course-prototype resource)
-                                              valid :test #'string=))
-                            (setf (game-resource-character-course-prototype resource) 0)))
-                        (publish-resource-changed resource))))))
+  (clim:formatting-table (pane)
+    (clim:formatting-row (pane)
+      (clim:formatting-cell (pane :align-x :right) (format pane "Course Class: "))
+      (clim:formatting-cell (pane :align-x :left)
+        (clim:make-pane 'clim:option-pane
+                        :items (course-class-dropdown-items)
+                        :current-value (game-resource-character-course-class resource)
+                        :callback
+                        (lambda (pane value)
+                          (declare (ignore pane))
+                          (setf (game-resource-character-course-class resource) value)
+                          (let ((valid (list-object-prototypes-for-class value)))
+                            (unless (or (eq (game-resource-character-course-prototype resource) 0)
+                                        (member (game-resource-character-course-prototype resource)
+                                                valid :test #'string=))
+                              (setf (game-resource-character-course-prototype resource) 0)))
+                          (publish-resource-changed resource)))))))
 
 (defun display-identity-editing-course-prototype (resource pane)
   (let* ((class (game-resource-character-course-class resource))
          (dropdown (make-prototype-dropdown resource class))
          (current-proto (game-resource-character-course-prototype resource)))
-    (clim:formatting-row (pane)
-      (clim:formatting-cell (pane :align-x :right) (format pane "Course Prototype: "))
-      (clim:formatting-cell (pane :align-x :left)
-        (clim:make-pane 'clim:radio-box-pane
-                        :orientation :vertical
-                        :items `(("Zeroes" . 0)
-                                 (,(clim:horizontally ()
-                                     (clim:make-pane 'clim:label-pane
-                                                     :label (format nil "Object-Prototypes of class ~a:" class))
-                                     dropdown)
-                                  . t))
-                        :current-value (if (eq current-proto 0) 0 t)
-                        :callback
-                        (lambda (radio value)
-                          (declare (ignore radio))
-                          (if (eq value 0)
-                              (setf (game-resource-character-course-prototype resource) 0)
-                              (setf (game-resource-character-course-prototype resource)
-                                    (clim:gadget-value dropdown)))
-                          (publish-resource-changed resource)))))))
+    (clim:formatting-table (pane)
+      (clim:formatting-row (pane)
+        (clim:formatting-cell (pane :align-x :right) (format pane "Course Prototype: "))
+        (clim:formatting-cell (pane :align-x :left)
+          (clim:make-pane 'clim:radio-box-pane
+                          :orientation :vertical
+                          :items `(("Zeroes" . 0)
+                                   (,(clim:horizontally ()
+                                       (clim:make-pane 'clim:label-pane
+                                                       :label (format nil "Object-Prototypes of class ~a:" class))
+                                       dropdown)
+                                    . t))
+                          :current-value (if (eq current-proto 0) 0 t)
+                          :callback
+                          (lambda (radio value)
+                            (declare (ignore radio))
+                            (if (eq value 0)
+                                (setf (game-resource-character-course-prototype resource) 0)
+                                (setf (game-resource-character-course-prototype resource)
+                                      (clim:gadget-value dropdown)))
+                            (publish-resource-changed resource))))))))
 
 (defun make-prototype-dropdown (resource class)
   (let ((prototypes (list-object-prototypes-for-class class))

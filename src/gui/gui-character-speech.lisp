@@ -21,4 +21,4 @@
         (clim:formatting-cell (pane :align-x :left) (format pane "[~2,'0X]" (game-resource-character-speech-color resource))))
       (clim:formatting-row (pane)
         (clim:formatting-cell (pane :align-x :right) (format pane "Nicks: "))
-        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-nicks resource))))))
+        (clim:formatting-cell (pane :align-x :left) (format pane "~a" (game-resource-character-nicks resource)))))))

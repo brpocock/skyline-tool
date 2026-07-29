@@ -9,8 +9,6 @@
 
 (in-package :skyline-tool)
 
-(require 'esa)
-
 ;; Use ESA's set-key for proper multi-key chord handling
 
 ;; Sun keys support

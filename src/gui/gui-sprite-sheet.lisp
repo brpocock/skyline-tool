@@ -106,6 +106,19 @@
                       (list "gimp" (truename (first (game-resource-pathnames resource))))
                       :output nil :ignore-error-status t)))))
 
+(clim:define-application-frame sprite-sheet-inspector-frame (resource-inspector-mixin uniform-inspector-frame)
+  ((path :initarg :path :accessor frame-path)
+   (sprites :initform nil :accessor frame-sprites)
+   (dirty :initform nil :accessor frame-dirty))
+  (:menu-bar 'sprite-sheet-inspector-menu-bar)
+  (:panes
+   (display-pane :application :display-function 'display-sprite-sheet
+                              :height 600 :width 750
+                              :scroll-bars :vertical)
+   (interactor :interactor :height 80 :width 750))
+  (:layouts
+   (default (clim:vertically () display-pane interactor))))
+
 (defmethod initialize-instance :after ((frame sprite-sheet-inspector-frame) &key)
   (call-next-method)
   (subscribe :resource-changed
@@ -272,20 +285,6 @@
 (clim:define-presentation-type sprite-thumbnail-presentation ()
   :inherit-from 'string)
 
-;; --- Frame ---
-
-(clim:define-application-frame sprite-sheet-inspector-frame (resource-inspector-mixin uniform-inspector-frame)
-  ((path :initarg :path :accessor frame-path)
-   (sprites :initform nil :accessor frame-sprites)
-   (dirty :initform nil :accessor frame-dirty))
-  (:menu-bar sprite-sheet-inspector-menu-bar)
-  (:panes
-   (display-pane :application :display-function 'display-sprite-sheet
-                              :height 600 :width 750
-                              :scroll-bars :vertical)
-   (interactor :interactor :height 80 :width 750))
-  (:layouts
-   (default (clim:vertically () display-pane interactor))))
 
 ;; --- Command tables ---
 

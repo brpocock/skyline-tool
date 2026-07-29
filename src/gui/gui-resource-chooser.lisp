@@ -3,10 +3,8 @@
 
 (in-package :skyline-tool)
 
-;; ============================================================================
 ;; Group State Persistence
 ;; Groups default closed; state persists via preferences.
-;; ============================================================================
 
 (defvar *chooser-group-states* (make-hash-table :test 'equal)
   "Hash table mapping group paths (lists of strings) to their expanded/collapsed state.")
@@ -17,13 +15,12 @@
 (defun set-chooser-group-expanded-p (group-path expanded)
   (setf (gethash group-path *chooser-group-states*) expanded)
   (persist-chooser-group-states)
-  (dolist (frame (clim:frame-list-all-frames 'resource-chooser-frame))
+  (dolist (frame (clim-frame-list-all-frames 'resource-chooser-frame))
     (clim:redisplay-frame-panes frame :force-p t)))
 
 (defun persist-chooser-group-states ()
-  (set-pref :chooser-group-states
-            (loop for k being the hash-keys of *chooser-group-states*
-                  collect (cons k (gethash k *chooser-group-states*)))))
+  (loop for k being the hash-keys of *chooser-group-states*
+        do (setf (get-pref (list :group k)) (gethash k *chooser-group-states*))))
 
 (defun load-chooser-group-states ()
   (let ((saved (get-pref :chooser-group-states)))
@@ -32,9 +29,7 @@
       (dolist (pair saved)
         (setf (gethash (car pair) *chooser-group-states*) (cdr pair))))))
 
-;; ============================================================================
 ;; Resource-type proper name helpers
-;; ============================================================================
 
 (defun resource-type-name (class)
   (let ((name (string (class-name class))))
@@ -46,9 +41,7 @@
 (defun resource-type-icon-key (class)
   (intern (string-upcase (resource-type-name class)) :keyword))
 
-;; ============================================================================
 ;; Resource Chooser Frame
-;; ============================================================================
 
 (clim:define-application-frame resource-chooser-frame (gui-inspector-frame clim:standard-application-frame)
   ((resource-type :initarg :resource-type :reader chooser-resource-type)
@@ -69,42 +62,18 @@
    (default (clim:vertically () list-pane status-bar)))
   (:menu-bar chooser-menu-bar))
 
-;; ============================================================================
 ;; Menu Bar (mirrors inspector standard with build/region sync)
-;; ============================================================================
 
 (clim:define-command-table chooser-file-menu
   :menu (("New..." :command com-chooser-new-resource)
-         ("Import..." :command com-import-resource)
-         (nil :divider :line)
-         ("Save as" :menu chooser-save-as-menu)
-         ("Send to" :menu inspector-send-to-menu)
-         ("Print to" :menu inspector-print-to-menu)
          (nil :divider :line)
          ("Close" :command com-close-frame)))
 
-(clim:define-command-table chooser-save-as-menu
-  :menu (("JSON..." :command com-save-as-json)
-         ("Text..." :command com-save-as-text)
-         ("PDF..." :command com-save-as-pdf)))
-
 (clim:define-command-table chooser-edit-menu
-  :menu (("Cut" :command com-cut)
-         ("Copy" :command com-copy)
-         ("Paste" :command com-paste)
-         (nil :divider :line)
-         ("Find..." :command com-find)))
+  :menu (("Find..." :command com-find)))
 
 (clim:define-command-table chooser-view-menu
-  :menu (("[] Editable" :command com-inspector-toggle-view :toggle t)
-         (nil :divider :line)
-         ("[] Project Pane" :command com-toggle-project-pane :toggle t)))
-
-(clim:define-command-table chooser-run-menu
-  :menu (("Build" :menu resource-build-menu)
-         ("Region" :menu resource-region-menu)
-         (nil :divider :line)
-         ("Make" :menu resource-make-menu)))
+  :menu (("Project Pane" :command com-toggle-project-pane :toggle t)))
 
 (clim:define-command-table chooser-help-menu
   :menu (("How to Manage Resources..." :command com-help-for-window)
@@ -118,22 +87,18 @@
   :menu (("Resource" :menu chooser-file-menu)
          ("Edit" :menu chooser-edit-menu)
          ("View" :menu chooser-view-menu)
-         ("Run" :menu chooser-run-menu)
          ("Help" :menu chooser-help-menu)))
 
-;; ============================================================================
 ;; Frame Lifecycle
-;; ============================================================================
 
 (defmethod initialize-instance :after ((frame resource-chooser-frame) &key)
   (load-chooser-group-states)
-  (initialize-run-menus)
   (let ((type (chooser-resource-type frame)))
     (setf (clim:frame-pretty-name frame)
           (format nil "~a Chooser — Skyline-Tool"
                   (resource-type-name type)))
     (ignore-errors
-     (setf (clim:frame-icon frame)
+     (setf (frame-icon frame)
            (skyline-tool-icon :resource (resource-type-icon-key type)))))
   (setf (chooser-event-subscriptions frame)
         (setup-frame-eventbus-subscriptions
@@ -151,9 +116,7 @@
      :resource-cache-dump :resource-scan-complete)
    (chooser-event-subscriptions frame)))
 
-;; ============================================================================
 ;; Generic Functions (designed for any game-resource subclass)
-;; ============================================================================
 
 (defgeneric list-available-resources (frame)
   (:documentation "Return a filtered list of available Game-Resource objects."))
@@ -166,9 +129,7 @@ a resource or a nested (SUBGROUP-NAME . items)."))
 (defgeneric present-resource-in-chooser (resource stream)
   (:documentation "Present RESOURCE in the chooser list pane."))
 
-;; ============================================================================
 ;; Display Functions
-;; ============================================================================
 
 (defun display-resource-chooser-list (frame pane)
   (let* ((filter (chooser-filter-function frame))
@@ -178,25 +139,25 @@ a resource or a nested (SUBGROUP-NAME . items)."))
       (let ((groups (group-resources frame resources)))
         (labels ((present-group (group-path group-name items)
                    (let ((expanded-p (chooser-group-expanded-p group-path)))
-                      (clim:with-output-as-presentation
-                          (pane (format nil "~{~a~^/~}" group-path)
-                                'chooser-group-header)
-                         (clim:with-text-face (pane :bold)
-                           (format pane "~a ~a~%"
-                                   (if expanded-p "▾" "▸") ; spinner arrows
-                                   group-name)))
+                     (clim:with-output-as-presentation
+                         (pane (format nil "~{~a~^/~}" group-path)
+                               'chooser-group-header)
+                       (clim:with-text-face (pane :bold)
+                         (format pane "~a ~a~%"
+                                 (if expanded-p "▾" "▸") ; spinner arrows
+                                 group-name)))
                      (when expanded-p
                        (dolist (item items)
                          (if (consp item)
                              (present-group (append group-path (list (car item)))
-                                           (car item)
-                                           (cdr item))
+                                            (car item)
+                                            (cdr item))
                              (present-resource-in-chooser item pane))
                          (terpri pane))))))
           (dolist (top-group groups)
             (present-group (list (car top-group))
-                          (car top-group)
-                          (cdr top-group))))))))
+                           (car top-group)
+                           (cdr top-group))))))))
 
 (defun display-chooser-status (frame pane)
   (let* ((filter (chooser-filter-function frame))
@@ -206,9 +167,7 @@ a resource or a nested (SUBGROUP-NAME . items)."))
             (resource-type-name (chooser-resource-type frame))
             (length resources))))
 
-;; ============================================================================
 ;; Presentation Types and Click/Context-Menu Handling
-;; ============================================================================
 
 (clim:define-presentation-type chooser-group-header ())
 
@@ -253,12 +212,10 @@ a resource or a nested (SUBGROUP-NAME . items)."))
     (group-path)
   (list group-path))
 
-;; ============================================================================
 ;; Commands
-;; ============================================================================
 
 (clim:define-command (com-chooser-select-current :command-table clim-internals::global-command-table
-                                                :menu t :name t)
+                                                 :menu t :name t)
     ((resource 'chooser-resource))
   ()
   (let ((callback (chooser-selection-callback clim:*application-frame*)))
@@ -327,10 +284,8 @@ a resource or a nested (SUBGROUP-NAME . items)."))
                     type)))
     (open-resource-inspector (make-instance class) :mode :editing)))
 
-;; ============================================================================
 ;; Generic open-resource-chooser
 ;; Creates a chooser for any game-resource subclass, runs in its own thread.
-;; ============================================================================
 
 (defgeneric open-resource-chooser (resource-type &key filter-function selection-callback title)
   (:documentation
@@ -340,9 +295,9 @@ SELECTION-CALLBACK receives the chosen resource.
 TITLE overrides the default window title."))
 
 (defmethod open-resource-chooser (resource-type &key
-                                   (filter-function nil)
-                                   (selection-callback #'identity)
-                                   (title nil))
+                                                  (filter-function nil)
+                                                  (selection-callback #'identity)
+                                                  (title nil))
   (let* ((class (if (symbolp resource-type)
                     (find-class resource-type)
                     resource-type))
@@ -355,20 +310,18 @@ TITLE overrides the default window title."))
                  :selection-callback selection-callback
                  :pretty-name (format nil "~a — Skyline-Tool" frame-title))))
     (make-window-thread (format nil "Chooser: ~a" display-name)
-                       (lambda ()
-                         (clim:run-frame-top-level frame)))
+                        (lambda ()
+                          (clim:run-frame-top-level frame)))
     frame))
 
-;; ============================================================================
 ;; Resource-Listing Methods (cached from the global resource cache)
-;; ============================================================================
 
 (defmethod list-available-resources ((frame resource-chooser-frame))
   (let* ((type (chooser-resource-type frame))
          (class (if (symbolp type) (find-class type) type)))
     (loop for k being the hash-keys of *all-resources-cache*
           nconc (remove-if-not (lambda (r) (typep r class))
-                                  (gethash k *all-resources-cache*)))))
+                               (gethash k *all-resources-cache*)))))
 
 (defmethod group-resources ((frame resource-chooser-frame) resources)
   (let ((groups (make-hash-table :test 'equal)))
@@ -395,10 +348,8 @@ TITLE overrides the default window title."))
         (clim:with-text-face (stream :roman)
           (format stream "  [~a]" locator))))))
 
-;; ============================================================================
 ;; Convenience Constructors for Common Resource Types
 ;; Each runs in its own thread and supports event-bus live updates.
-;; ============================================================================
 
 (defun open-character-chooser (&key (callback #'identity) (title "Character Chooser"))
   (open-resource-chooser 'game-resource-character

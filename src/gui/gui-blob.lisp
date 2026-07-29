@@ -247,11 +247,11 @@
                       (loop for x below (array-dimension indices 0)
                             nconc (loop for y below (array-dimension indices 1)
                                         for idx = (aref indices x y)
-                                        when idx collect idx))))))
-      (let ((sorted (sort (subseq unique 0 (min 25 (length unique))) #'<)))
+                                        when idx collect idx))))
+             (sorted (sort (subseq unique 0 (min 25 (length unique))) #'<)))
         (loop for slot from 0
               for reg in sorted
-              for y from 460 downto 0 by -12
+              for y from 460 downto 0 by 12
               for label = (if (zerop slot) "BACKGRND"
                               (format nil "P~dC~d" (floor (1- slot) 3) (1+ (mod (1- slot) 3))))
               for rgb = (nth reg machine-pal)
@@ -261,5 +261,5 @@
                            y (/ r 255.0) (/ g 255.0) (/ b 255.0))
                    (format ps "140 ~d moveto (~a) show~%"
                            (+ y 2)
-                           (escape-ps-string (format-atari-color-name reg))))))))
-  (format ps "showpage~%"))
+                           (escape-ps-string (format-atari-color-name reg))))))
+      (format ps "showpage~%"))))

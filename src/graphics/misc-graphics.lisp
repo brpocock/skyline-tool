@@ -137,7 +137,6 @@
                                x-mob y-mob)))))
     (values mobs index)))
 
-
 (defun bit-pairs-to-art (byte)
   (check-type byte (integer 0 #xff))
   (let ((bit-pairs (format nil "~4,4,'0r" byte)))
@@ -162,42 +161,6 @@
   (let* ((binary (format nil "~8,'0b" byte))
          (blocks (bits-to-art binary)))
     (format nil "~%	.byte %~a	; ~a" binary blocks)))
-
-(defun pascal-case (string)
-  "Convert STRING to PascalCase by splitting on word boundaries.
-
-Each run of alphanumeric characters is capitalized and concatenated.
-Non-alphanumeric characters (spaces, periods, apostrophes) act as
-word separators.  CamelCase boundaries (lowercase followed by
-uppercase, e.g. @code{OrnassSShop}) are also split, so possessive
-names like @code{Ornass's Shop} normalize to @code{OrnassSShop}
-but already-correct PascalCase like @code{OrnassSShop} becomes
-@code{OrnassSshop} (undesired).  Callers should avoid applying this
-function to strings that are already in the correct form."
-  (let ((words (list))
-        (current (make-array 0 :element-type 'character :fill-pointer 0 :adjustable t)))
-    (flet ((emit-word ()
-             (when (plusp (length current))
-               (push (string-capitalize current) words)
-               (setf (fill-pointer current) 0))))
-      (loop for char across string
-            for prev = (if (plusp (length current))
-                           (char current (1- (length current)))
-                           nil)
-            do (cond
-                 ;; CamelCase boundary: lowercase immediately followed by uppercase
-                 ((and (upper-case-p char) prev (lower-case-p prev))
-                  (emit-word)
-                  (vector-push-extend char current))
-                 ((alpha-char-p char)
-                  (vector-push-extend char current))
-                 ((digit-char-p char)
-                  (vector-push-extend char current))
-                 (t
-                  (emit-word))))
-      (emit-word))
-    (reduce (lambda (a b) (concatenate 'string a b))
-            (nreverse words) :initial-value "")))
 
 (defun assembler-label-name (string)
   (let ((result (pascal-case string)))

@@ -351,10 +351,14 @@ Used when more sophisticated presentation methods are not available."
 
 ;;  Print To menu population 
 
-(defun %print-echo-to-printer (printer-queue-name)
-  "Print the current echo frame's content to PRINTER-QUEUE-NAME.
-   Uses frame-pdf-function if available, otherwise captured text."
-  (let* ((frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
+(defun %print-echo-to-printer (printer)
+  "Print the current echo frame's content to PRINTER.
+PRINTER can be an ipp-printer struct, a queue name string, or nil for default."
+  (let* ((queue (cond
+                 ((typep printer 'ipp-printer) (ipp-queue printer))
+                 ((stringp printer) printer)
+                 (t nil)))
+         (frame (and (boundp 'clim:*application-frame*) clim:*application-frame*))
          (pdf-fn (and frame (frame-pdf-function frame)))
          (base (format nil "EchoOutput-~d" (get-universal-time)))
          (ps-path (format nil "~a.ps" base))
@@ -365,10 +369,10 @@ Used when more sophisticated presentation methods are not available."
           (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                             :output nil :ignore-error-status t)
           (ignore-errors (delete-file ps-path))
-          (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+          (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
                             :output nil :ignore-error-status t)
           (ignore-errors (delete-file pdf-path))
-          (format *query-io* "~&Printed assets index to ~a~%" printer-queue-name))
+          (format *query-io* "~&Printed assets index to ~a~%" (or queue "default")))
         (let* ((text (and frame (frame-captured-text frame))))
           (unless (and text (stringp text) (plusp (length text)))
             (format *query-io* "~&No content to print.~%")
@@ -398,7 +402,7 @@ Used when more sophisticated presentation methods are not available."
             (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                               :output nil :ignore-error-status t)
             (ignore-errors (delete-file ps-path))
-            (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
+            (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
                               :output nil :ignore-error-status t)
             (ignore-errors (delete-file pdf-path)))))))
 
@@ -409,33 +413,28 @@ Used when more sophisticated presentation methods are not available."
   (declare (ignore frame))
   (ignore-errors
    (clim:remove-menu-item-from-command-table command-table "No printers found")
-   (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)")
-   (dolist (p (ignore-errors (discover-printers)))
-     (ignore-errors
-      (clim:remove-menu-item-from-command-table command-table p))))
-  (let* ((printers (ignore-errors (discover-printers-with-names))))
-    (if printers
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             command-table display-name :command
-             `(com-print-to-printer ,queue-name ,display-name)
-             :after :end)))
-        (clim:add-menu-item-to-command-table
-         command-table "Default Printer (lpr)" 
-         :command
-         `(com-print-to-printer "lpr" "Default Printer")
-         :after :end))
-    ;; Define the print command dynamically
-    
-    (unless (fboundp 'com-print-to-printer)
-      (clim:define-command (com-print-to-printer
-                            :command-table clim-internals::global-command-table
-                            :menu nil :name t)
-          ((queue-name 'string) (display-name 'string))
-        (declare (ignore display-name))
-        (%print-echo-to-printer queue-name)))))
+   (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)"))
+  (ensure-printer-scavenger-is-running)
+  (if *ipp-printer-registry*
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           command-table display :command
+           `(com-print-to-printer ,struct)
+           :after :end)))
+      (clim:add-menu-item-to-command-table
+       command-table "Default Printer (lpr)" 
+       :command
+       '(com-print-to-printer nil)
+       :after :end))
+  ;; Define the print command dynamically
+  (unless (fboundp 'com-print-to-printer)
+    (clim:define-command (com-print-to-printer
+                          :command-table clim-internals::global-command-table
+                          :menu nil :name t)
+        ((printer t))
+      (%print-echo-to-printer printer))))
 
 ;;  Run function 
 

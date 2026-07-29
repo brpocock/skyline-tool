@@ -177,33 +177,8 @@
                                       :element-type 'character
                                       :initial-contents byte))))
 
-(defun bit-pairs-to-art (byte)
-  (check-type byte (integer 0 #xff))
-  (let ((bit-pairs (format nil "~4,4,'0r" byte)))
-    (assert (every (lambda (char) (find char "0123")) bit-pairs))
-    (substitute
-     #\⬜ #\0
-     (substitute
-      #\🟥 #\1
-      (substitute
-       #\🟩 #\2
-       (substitute
-        #\🟦 #\3
-        (make-array 4 :element-type 'character
-                      :initial-contents bit-pairs)))))))
-
-(defun bytes-and-art (bytes)
-  (let* ((binary (mapcar (curry #'format nil "~2,8,'0r") bytes))
-         (blocks (mapcar #'bits-to-art binary)))
-    (format nil "~%	.byte ~{%~a~^, ~}	 ; ~{~a~^·~}" binary blocks)))
-
-(defun byte-and-art (byte)
-  (let* ((binary (format nil "~8,'0b" byte))
-         (blocks (bits-to-art binary)))
-    (format nil "~%	.byte %~a	; ~a" binary blocks)))
-
 (defun assembler-label-name (string)
-  (let ((result (cl-change-case:pascal-case string)))
+  (let ((result (pascal-case string)))
     (when (search "Brp" result)
       (setf result (cl-ppcre:regex-replace-all "Brp" result "BRP")))
     (when (search "Aa" result)
@@ -222,10 +197,6 @@
                              (mapcar #'bits-to-art (mapcar
                                                     (curry #'format nil "~8,'0b")
                                                     row-bytes))))))
-
-(defun pathname-base-name (pathname)
-  (subseq (pathname-name pathname)
-          0 (position #\. (pathname-name pathname))))
 
 (define-constant +atari-ntsc-color-names+
     '(COLGRAY COLYELLOW COLBROWN COLORANGE COLRED COLMAGENTA

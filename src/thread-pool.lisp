@@ -34,17 +34,11 @@
   (journal:journaled ((format nil "~a: ~a" (thread-name (current-thread)) condition)
                       :log-record *worker-journal*
                       :args (list :thread (current-thread)
-                                        :backtrace
-                                        (with-output-to-string (s)
-                                          (trivial-backtrace:print-backtrace condition
-                                                                             :output s :verbose t)))
+                                  :backtrace
+                                  (with-output-to-string (s)
+                                    (trivial-backtrace:print-backtrace condition
+                                                                       :output s :verbose t)))
                       :condition condition)))
-
-(defun ensure-thread-pool-kernel ()
-  "Start a kernel for lparallel with one thread per CPU core."
-  (ensure-worker-journal)
-  (unless lparallel:*kernel*
-    (lparallel:make-kernel (max 4 (cpu-count)) :name "skyline-tool")))
 
 (defclass task-queue ()
   ((head :accessor queue-head :initform nil)
@@ -88,7 +82,7 @@
 (defvar *pool-manager-thread* nil
   "Pool manager thread")
 
-(defun initialize-thread-pool ()
+(defun ensure-thread-pool ()
   "Initialize the global thread pool"
   (unless *global-thread-pool*
     (setf *global-thread-pool* (make-instance 'thread-pool :capacity 14))
@@ -139,7 +133,7 @@
   "Submit task FN to thread pool.
    Captures current dynamic bindings of *machine*, *game-title*,
    and *project.json* so worker threads inherit the project context."
-  (initialize-thread-pool)
+  (ensure-thread-pool)
   (let ((task (lambda ()
                 (let ((*machine* *machine*)
                       (*game-title* *game-title*)

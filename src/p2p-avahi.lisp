@@ -129,7 +129,7 @@
                                 :domain domain
                                 :user-data user-data))))
   (case event
-    ((+avahi-browser-new+)
+    ((#.+avahi-resolver-new+)
      (let ((resolver (avahi-service-resolver-new *avahi-client*
                                                  0 interface protocol
                                                  name type domain
@@ -169,8 +169,8 @@
        (when (cffi:pointerp txt)
          (loop for txt-ptr = txt then (avahi-string-list-get-next txt-ptr)
                while (cffi:pointerp txt-ptr)
-               do (let ((text (avahi-string-list-get-text txt-ptr)))
-                    (when (search "=" text)
+               do (when-let (text (the string (avahi-string-list-get-text txt-ptr)))
+                    (when (find #\= text)
                       (let ((kv (split-sequence:split-sequence #\= text)))
                         (push (cons (intern (string-upcase (first kv)) :keyword)
                                     (second kv))
@@ -211,7 +211,7 @@
                                                    :user-data user-data)))))))
 
 ;; Publish our own Skyline-Tool service
-(defun publish-skyline-tool-service (&key (port 7800) (domain "local."))
+(defun publish-skyline-tool-service (&key (domain "local."))
   "Publish Skyline-Tool resource discovery service via Avahi entry group."
   (unless *avahi-client*
     (error "Avahi client not initialized"))
@@ -245,7 +245,7 @@
                                                  "_skyline-tool-resource._tcp"
                                                  domain
                                                  "" ; default host
-                                                 port
+                                                 0 ; automatic port
                                                  (if txt-list
                                                      (let ((head (car txt-list)))
                                                        (let ((list head))
@@ -259,7 +259,7 @@
                             :log-record *worker-journal*
                             :args (list :thread (list :id (thread-os-tid (current-thread))
                                                       :name (thread-name (current-thread)))
-                                        :avahi (list :result result :port port :domain domain))))
+                                        :avahi (list :result result :domain domain))))
         (return-from publish-skyline-tool-service))
       
       ;; Commit changes
@@ -270,7 +270,7 @@
                               :args (list :thread (list :id (thread-os-tid (current-thread))
                                                         :name (thread-name (current-thread)))
                                           :avahi (list :commit-result commit-result
-                                                       :port port :domain domain)))))))))
+                                                       :domain domain)))))))))
 
 ;; Public API functions
 

@@ -1,3 +1,6 @@
+;;; Skyline-Tool src/game-resource.lisp
+;;;; Copyright © 2026 Interworldly Adventuring, LLC
+
 (in-package :skyline-tool)
 
 #|
@@ -51,10 +54,7 @@ asset is an error and such code will always be rejected.
 (defclass game-resource-asset (game-resource-from-file)
   ((moniker :initarg :moniker :reader game-asset-moniker :initform nil)
    (asset-id :initarg :asset-id :reader game-resource-asset-id :initform nil)
-   (builds :initarg :builds :reader game-resource-builds :initform nil)))
-
-(defmethod game-resource-builds ((resource game-resource))
-  nil)
+   (builds :initarg :builds :reader game-asset-builds :initform nil)))
 
 (defmethod game-resource-full-path ((resource game-resource))
   nil)
@@ -102,6 +102,9 @@ asset is an error and such code will always be rejected.
   ((item-id :initarg :item-id :reader game-resource-item-id)
    (name :initarg :name :accessor game-resource-item-name :initform nil)
    (equippable-p :initarg :equippable-p :accessor game-resource-item-equippable-p :initform nil)
+   (shield-p :initarg :shield-p :accessor game-resource-item-shield-p :initform nil)
+   (armor-p :initarg :armor-p :accessor game-resource-item-armor-p :initform nil)
+   (worn-p :initarg :worn-p :accessor game-resource-item-worn-p :initform nil)
    (equipment-slot :initarg :slot :accessor game-resource-item-equipment-slot :initform nil)
    (sound :initarg :sound :accessor game-resource-item-sound :initform nil)
    (entity-class :initarg :entity-class :accessor game-resource-item-entity-class :initform nil)
@@ -158,7 +161,11 @@ asset is an error and such code will always be rejected.
    (potions :initarg :potions :accessor game-resource-character-potions)
    (chalice :initarg :chalice :accessor game-resource-character-chalice)
    (faction :initarg :faction :accessor game-resource-character-faction :initform 0)
-   (flags :initarg :flags :accessor game-resource-character-flags :initform 0)))
+   (flags :initarg :flags :accessor game-resource-character-flags :initform 0)
+   (course-class :initarg :course-class :accessor game-resource-character-course-class :initform "Course")
+   (course-prototype :initarg :course-prototype :accessor game-resource-character-course-prototype :initform nil)
+   (keys :initarg :keys :accessor game-resource-character-keys :initform 0 :type 'bit-vector)
+   (inventory :initarg :inventory :accessor game-resource-character-inventory :initform 0 :type 'bit-vector)))
 
 (defclass game-resource-translation (game-resource-from-file) ())
 (defclass game-resource-phonetic-dictionary (game-resource-translation)
@@ -224,21 +231,25 @@ asset is an error and such code will always be rejected.
 
 (defgeneric game-resource-present-build-checkboxes (resource stream)
   (:documentation "Present D/P/A build checkboxes for asset resources.")
-  (:method ((resource game-resource) stream)
-    (terpri stream))
-  (:method ((resource game-resource-asset) stream)
-    (let ((builds (game-resource-builds resource)))
-      (format stream " [~:[☐~;☑~]D ~:[☐~;☑~]P ~:[☐~;☑~]A]"
-              (member "Demo" builds :test 'string-equal)
-              (member "Public" builds :test 'string-equal)
-              (member "AA" builds :test 'string-equal)))))
+  (:method ((asset game-resource-asset) stream)
+    (format stream " [~:[☐~;☑~]D ~:[☐~;☑~]P ~:[☐~;☑~]A]"
+            (game-asset-build-p asset :demo)
+            (game-asset-build-p asset :public)
+            (game-asset-build-p asset :publisher))))
+
+(defun game-asset-build-p (asset build)
+  (let ((builds (game-asset-builds asset)))
+    (ecase build
+      (:demo (member "Demo" builds :test 'string-equal))
+      (:public (member "Public" builds :test 'string-equal))
+      (:publisher (member "AA" builds :test 'string-equal)))))
 
 (defgeneric game-resource-present-right-margin (resource stream)
   (:documentation "Present right-margin content for reference presentation (e.g. D/P/A, asset ID).")
   
   (:method ((resource game-resource) stream)
     (let ((version-control-status (version-control-file-status (or (game-resource-full-path resource)
-                                         (game-resource-collective-path resource)))))
+                                                                   (game-resource-collective-path resource)))))
       (format stream "~a~%" (game-resource-locator resource))
       (game-resource-present-build-checkboxes resource stream)
       (when version-control-status
@@ -339,10 +350,10 @@ asset is an error and such code will always be rejected.
                         (game-resource-asset-id resource)
                         nil))
           (builds (if (typep resource 'game-resource-asset)
-                      (game-resource-builds resource)
+                      (game-asset-builds resource)
                       nil))
           (version-control-status (version-control-file-status (or (game-resource-full-path resource)
-                                         (game-resource-collective-path resource)))))
+                                                                   (game-resource-collective-path resource)))))
       (clim:formatting-table (stream)
         (clim:formatting-row (stream)
           (clim:formatting-cell (stream :align-x :right)
@@ -429,7 +440,7 @@ asset is an error and such code will always be rejected.
             (clim:formatting-cell (stream :align-x :right)
               (format stream "Builds: "))
             (clim:formatting-cell (stream :align-x :left)
-              (format stream "~{~a~^, ~}" (game-resource-builds resource)))))
+              (format stream "~{~a~^, ~}" (game-asset-builds resource)))))
         (when version-control-status
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream :align-x :right)
@@ -446,7 +457,7 @@ asset is an error and such code will always be rejected.
       (setf (gethash "path" obj) (game-resource-full-path resource)))
     (when (typep resource 'game-resource-asset)
       (setf (gethash "assetId" obj) (game-resource-asset-id resource))
-      (setf (gethash "builds" obj) (game-resource-builds resource)))
+      (setf (gethash "builds" obj) (game-asset-builds resource)))
     obj))
 
 (defun game-resource-to-postscript (resource)
@@ -473,8 +484,10 @@ asset is an error and such code will always be rejected.
 
 (defclass resource-inspector-mixin ()
   ((resource :initarg :resource :reader inspector-resource
-             :initform nil)
-   (view-mode :initform :reference :accessor frame-view-mode))
+              :initform nil)
+   (view-mode :initform :reference :accessor frame-view-mode)
+   (%show-search-bar-p :initform nil :accessor frame-show-search-bar-p)
+   (%show-project-bar-p :initform nil :accessor frame-show-project-bar-p))
   (:documentation "Mixin for inspector frames that edit a Game-Resource.
 Provides RESOURCE slot (accessed via INSPECTOR-RESOURCE) and VIEW-MODE slot.
 Each resource type specializes PRESENT-REFERENCE, PRESENT-DETAIL, and

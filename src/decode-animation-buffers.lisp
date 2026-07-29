@@ -436,9 +436,11 @@
 
 ;; Buffer menu stubs (defined after frame so define-anim-buffer-frame-command is available)
 (define-anim-buffer-frame-command (com-new-buffer :menu nil :name t) ()
-  (format *query-io* "~&New Buffer is not yet implemented.~%"))
+  (error "New Buffer is not yet implemented."))
+
 (define-anim-buffer-frame-command (com-import-buffer :menu nil :name t) ()
-  (format *query-io* "~&Import Buffer is not yet implemented.~%"))
+  (error "Import Buffer is not yet implemented."))
+
 (define-anim-buffer-frame-command (com-save-buffer :menu nil :name t) ()
   (let* ((frame *anim-buffer-frame*)
          (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
@@ -455,12 +457,11 @@
                                              :image-data rgb)))
             (zpng:write-png png path))
           (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
-          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t)))))
-(define-anim-buffer-frame-command (com-discover-printers-buffer :menu nil :name t) ()
-  (populate-buffer-print-menu))
+          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t))))))
 
-(defun %print-buffer-to-printer (printer-queue-name)
-  (let* ((frame *anim-buffer-frame*)
+(defun %print-buffer-to-printer (printer)
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (frame *anim-buffer-frame*)
          (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
          (dump (anim-buffer-from-dump frame))
          (mode (anim-buffer-mode frame))
@@ -510,43 +511,37 @@
         (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                           :output nil :ignore-error-status t)
         (ignore-errors (delete-file ps-path))
-        (uiop:run-program (list "lp" "-d" printer-queue-name pdf-path)
-                          :output nil :ignore-error-status t)
-        (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-queue-name)))))
+        (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
+                          :output nil :ignore-error-status t)))))
 
 (defun populate-buffer-print-menu ()
   (ignore-errors
     (clim:remove-menu-item-from-command-table 'print-buffer-menu "No printers found")
-    (dolist (p (discover-printers))
+    (dolist (p (mapcar #'car *ipp-printer-registry*))
       (ignore-errors
         (clim:remove-menu-item-from-command-table 'print-buffer-menu p))))
-  (let* ((printers (discover-printers-with-names)))
-    (if (null printers)
-        (clim:add-menu-item-to-command-table
-         'print-buffer-menu "No printers found" :function
-         (lambda (g n)
-           (declare (ignore g n))
-           (format *query-io* "~&No printers discovered.~%")))
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
-            (clim:add-menu-item-to-command-table
-             'print-buffer-menu display-name :command
-             `(com-print-buffer-to-printer ,queue-name ,display-name)
-             :after :end)))))
-  (unless (fboundp 'com-print-buffer-to-printer)
-    (clim:define-command (com-print-buffer-to-printer
-                          :command-table clim-internals::global-command-table
-                          :menu nil :name t)
-        ((queue-name 'string) (display-name 'string))
-      (declare (ignore display-name))
-      (handler-case
-          (let ((path (format nil "/tmp/animation-buffer-~d.ps"
-                              (get-universal-time))))
-            (%print-buffer-to-printer queue-name))
-        (error (e)
-          (format *query-io* "~&Print error: ~a~%" e))))))
+  (ensure-printer-scavenger-is-running)
+  (if (null *ipp-printer-registry*)
+      (clim:add-menu-item-to-command-table
+       'print-buffer-menu "No printers found" :function
+       (lambda (g n)
+         (declare (ignore g n))
+         (error "No printers discovered.")))
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'print-buffer-menu display :command
+           `(com-print-buffer-to-printer ,struct)
+           :after :end)))))
 
-(eval-when (:load-toplevel)
-  (populate-buffer-print-menu))
-)
+(clim:define-command (com-print-buffer-to-printer
+                      :command-table clim-internals::global-command-table
+                      :menu nil :name t)
+    ((printer t))
+  (handler-case
+      (%print-buffer-to-printer printer)
+    (error (e)
+      (format *query-io* "~&Print error: ~a~%" e))))
+
+

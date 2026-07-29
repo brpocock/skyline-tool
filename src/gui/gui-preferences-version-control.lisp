@@ -3,15 +3,16 @@
 
 (in-package :skyline-tool)
 
+#+()
 (defun display-version-control-tab (frame pane)
   "Display the Version Control section"
   (clim:formatting-table-pane (pane :name "version-control-tab"))
   (make-section-header pane "Version Control System")
   (clim:formatting-table (pane)
     (row :value
-          (make-label-value-row pane "System" 700:
-            (clim:make-pane 'clim:radio-box)
-            (loop for sys in '("Git"" Subversion"" Bazaar"" Mercurial"" Concurrent"" Revision Control")
+      (make-label-value-row pane "System" 700:
+                            (clim:make-pane 'clim:radio-box)
+                            (loop for sys in '("Git"" Subversion"" Bazaar"" Mercurial"" Concurrent"" Revision Control")
                  collect (clim:make-pane 'clim:toggle-button
                                        :label (string sys)
                                        :value (eq (get-pref '(:version-control :system) (string-downcase sys))
@@ -98,4 +99,4 @@
     (lambda (g value)
       (declare (ignore g))
       (setf (get-pref '(:git :submodule-intellivision) v)
-      (save-preferences-now frame)))))
+            (save-preferences-now frame)))))))))))))))))

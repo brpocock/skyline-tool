@@ -286,9 +286,10 @@
   (error "TODO: implement sending to printer"))
 
 ;; Print submenu populated at menu-display time
-(defun %print-text-to-lp (printer-name text)
-  "Convert TEXT to a PDF via ps2pdf and send it to PRINTER-NAME via lp."
-  (let* ((base (format nil "EchoOutput-~d" (get-universal-time)))
+(defun %print-text-to-lp (printer text)
+  "Convert TEXT to PDF via ps2pdf and send to PRINTER (ipp-printer struct, queue string, or nil)."
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (base (format nil "EchoOutput-~d" (get-universal-time)))
          (ps-path (format nil "~a.ps" base))
          (pdf-path (format nil "~a.pdf" base))
          (lines (count #\Newline text))
@@ -313,58 +314,45 @@
     (uiop:run-program (list "ps2pdf" ps-path pdf-path)
                       :output nil :ignore-error-status t)
     (ignore-errors (delete-file ps-path))
-    (uiop:run-program (list "lp" "-d" printer-name pdf-path)
+    (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
                       :output nil :ignore-error-status t)
-    (ignore-errors (delete-file pdf-path))
-    (format *query-io* "~&Sent ~a to ~a~%" pdf-path printer-name)))
+    (ignore-errors (delete-file pdf-path))))
 
 (defun %print-menu-populate (command-table)
   "Populate COMMAND-TABLE with menu items for each discovered CUPS printer.
    Shows display names in the menu, but sends to the queue name via lp."
-  ;; Remove old items from previous calls
   (ignore-errors
    (clim:remove-menu-item-from-command-table command-table "No printers found")
    (clim:remove-menu-item-from-command-table command-table "Default Printer (lpr)")
-   (dolist (p (discover-printers))
+   (dolist (p (mapcar #'car *ipp-printer-registry*))
      (ignore-errors
       (clim:remove-menu-item-from-command-table command-table p))))
-  ;; Refresh printer list (cache managed by discover-printers)
-  (let* ((queues (discover-printers))
-         (printers (when queues (discover-printers-with-names))))
-    (if (null printers)
+  (ensure-printer-scavenger-is-running)
+  (let ((text-fn (lambda ()
+                   (or (ignore-errors
+                        (when (boundp 'clim:*application-frame*)
+                          (typecase clim:*application-frame*
+                            (clim-simple-echo::simple-echo
+                             (clim-simple-echo::frame-captured-text clim:*application-frame*))
+                            (run-script-frame
+                             (format nil "Script: ~a"
+                                     (ignore-errors
+                                      (clim:frame-pretty-name clim:*application-frame*)))))))
+                       (format nil "Skyline-Tool print at ~a~%" (get-universal-time))))))
+    (if (null *ipp-printer-registry*)
         (clim:add-menu-item-to-command-table
          command-table "Default Printer (lpr)" :function
          (lambda (g n)
            (declare (ignore g n))
-           (%print-text-to-lp "lpr"
-                              (or (ignore-errors
-                                   (when (boundp 'clim:*application-frame*)
-                                     (typecase clim:*application-frame*
-                                       (clim-simple-echo::simple-echo
-                                        (clim-simple-echo::frame-captured-text clim:*application-frame*))
-                                       (run-script-frame
-                                        (format nil "Script: ~a"
-                                                (ignore-errors
-                                                 (clim:frame-pretty-name clim:*application-frame*)))))))
-                                  (format nil "Skyline-Tool print at ~a~%" (get-universal-time))))))
-        (dolist (pair printers)
-          (let ((queue-name (car pair))
-                (display-name (cdr pair)))
+           (%print-text-to-lp nil (funcall text-fn))))
+        (dolist (printer *ipp-printer-registry*)
+          (let* ((struct (cdr printer))
+                 (display (ipp-name struct)))
             (clim:add-menu-item-to-command-table
-             command-table display-name :function
+             command-table display :function
              (lambda (gesture numeric-arg)
                (declare (ignore gesture numeric-arg))
-               (%print-text-to-lp queue-name
-                                  (or (ignore-errors
-                                       (when (boundp 'clim:*application-frame*)
-                                         (typecase clim:*application-frame*
-                                           (clim-simple-echo::simple-echo
-                                            (clim-simple-echo::frame-captured-text clim:*application-frame*))
-                                           (run-script-frame
-                                            (format nil "Script: ~a"
-                                                    (ignore-errors
-                                                     (clim:frame-pretty-name clim:*application-frame*)))))))
-                                      (format nil "Skyline-Tool print at ~a~%" (get-universal-time)))))
+               (%print-text-to-lp struct (funcall text-fn)))
              :after :end))))))
 
 

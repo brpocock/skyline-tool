@@ -3,6 +3,34 @@
 
 (in-package :skyline-tool)
 
+
+#|
+
+REQUIREMENTS SECTION - DO NOT ALTER - DO NOT EDIT
+
+Boat Inspector
+---------------
+
+ID: $~2,'0x      Name: The “ _______________ ”
+
+Class: <> Sloop
+       <> Galleon
+       <> Launch
+       <> Rowboat*
+       <> Catamaran*
+
+ * indicates character-scale
+
+Notes:
+|| ____________________________________________________________ ||
+|| ____________________________________________________________ ||
+|| ____________________________________________________________ ||
+|| ____________________________________________________________ ||
+
+
+|#
+
+
 (clim:define-presentation-type game-resource-boat-reference ())
 
 (clim:define-presentation-method clim:presentation-typep (object (type (eql 'game-resource-boat-reference)))
