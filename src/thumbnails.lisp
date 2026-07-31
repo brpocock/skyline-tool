@@ -3,9 +3,9 @@
 (defun average-rgb-via-xyz (colors)
   "Average a list of RGB triples in CIE XYZ space, return (r g b).
 
-COLORS is a list of (r g b) triples, each component 0-255.
-Returns a single (r g b) triple with rounded integer components.
-An empty list produces black (0 0 0)."
+  COLORS is a list of (r g b) triples, each component 0-255.
+  Returns a single (r g b) triple with rounded integer components.
+  An empty list produces black (0 0 0)."
   (if (null colors)
       (list 0 0 0)
       (let ((n (length colors))
@@ -20,16 +20,16 @@ An empty list produces black (0 0 0)."
             (dufy:xyz-to-rgb (/ sum-x n) (/ sum-y n) (/ sum-z n))
           (list (max 0 (min 255 (round r)))
                 (max 0 (min 255 (round g)))
-                (max 0 (min 255 (round b))))))))
+                (max 0 (min 255 (round b)))))))))
 
 (defun region-pixel-colors (palette-pixels x y width height)
   "Collect pixel RGB colors from a rectangular region.
 
-PALETTE-PIXELS is a 2D array of palette indices or nil.
-X, Y are the top-left corner; WIDTH, HEIGHT is the region size.
-Transparent (nil) pixels are reported as black, so that images drawn
-against a transparent background still separate into light and dark
-quadrants.  Returns a list of (r g b) triples from the machine palette."
+  PALETTE-PIXELS is a 2D array of palette indices or nil.
+  X, Y are the top-left corner; WIDTH, HEIGHT is the region size.
+  Transparent (nil) pixels are reported as black, so that images drawn
+  against a transparent background still separate into light and dark
+  quadrants.  Returns a list of (r g b) triples from the machine palette."
   (let* ((machine-colors (machine-palette))
          (colors nil))
     (dotimes (v height)
@@ -43,8 +43,8 @@ quadrants.  Returns a list of (r g b) triples from the machine palette."
 (defun tile-pixel-colors (tile-image)
   "Collect all non-nil pixel RGB colors from a single tile.
 
-TILE-IMAGE is a 2D array of palette indices or nil.
-Returns a list of (r g b) triples from the machine palette."
+  TILE-IMAGE is a 2D array of palette indices or nil.
+  Returns a list of (r g b) triples from the machine palette."
   (let* ((w (array-dimension tile-image 0))
          (h (array-dimension tile-image 1))
          (machine-colors (machine-palette))
@@ -59,10 +59,10 @@ Returns a list of (r g b) triples from the machine palette."
 (defun tile-effective-rgb-colors (tile-image palette-table palette-index)
   "Collect RGB colors from TILE-IMAGE mapped through the effective palette.
 
-PALETTE-TABLE is an 8×4 array of machine palette indices
-\(from @code{extract-palettes}).  PALETTE-INDEX (0-7) is the tile's
-assigned palette.  Returns a list of (r g b) triples where each pixel
-is mapped to its nearest color within the effective palette."
+  PALETTE-TABLE is an 8×4 array of machine palette indices
+  \(from @code{extract-palettes}).  PALETTE-INDEX (0-7) is the tile's
+  assigned palette.  Returns a list of (r g b) triples where each pixel
+  is mapped to its nearest color within the effective palette."
   (let* ((machine-colors (machine-palette))
          (palette (loop for c below 4 collect (aref palette-table palette-index c)))
          (palette-rgbs (mapcar (lambda (idx) (nth idx machine-colors)) palette))
@@ -104,7 +104,7 @@ outside the cell)."
              (ne-light (rgb-hsl-lightness ne-avg))
              (se-light (rgb-hsl-lightness se-avg))
              (sw-light (rgb-hsl-lightness sw-avg)))
-        (values nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light)))))
+        (values nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light))))))
 
 (defun tileset-tile-count (tileset)
   "Number of complete tiles in TILESET, derived from image dimensions.
@@ -141,37 +141,7 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
             (floor w 8) (floor h 16))
     (multiple-value-bind (rw rh cols rows)
         (%compute-ansi-sizing w h)
-      (%print-thumbnail-cells image stream rw rh cols rows :ansi-p t))))
-
-(defun print-mini-blob-view (palette-pixels &optional (stream *trace-output*))
-  "Print a mini-blob (scaled-down) view of an image to STREAM.
-   
-   For 160A/B modes (width ≤ 160): each 8×16 pixel region → one pixel.
-   For 320A/B/C/D modes (width > 160): each 16×16 pixel region → one pixel.
-   
-  PALETTE-PIXELS is a 2D array of palette indices (from png->palette).
-  The bottom palette-strip row (if present) is included in the display."
-  (let* ((width (array-dimension palette-pixels 0))
-         (height (array-dimension palette-pixels 1))
-         (term-width (parse-integer (or (uiop:getenv "COLUMNS") "80") :junk-allowed t))
-         (region-w (if (> width 160) 16 8))
-         (region-h 16)
-         (image-cols (floor width region-w))
-         (image-rows (floor height region-h))
-         (cols (min term-width image-cols))
-         (rows image-rows))
-    (format stream "~&Mini-blob view (~D×~D regions, ~D×~Dpx each):~%"
-            cols rows region-w region-h)
-    (dotimes (ry rows)
-      (dotimes (rx cols)
-        (let ((sx (* rx region-w))
-              (sy (* ry region-h)))
-          (print-wide-pixel
-           (average-rgb-via-xyz
-            (region-pixel-colors palette-pixels sx sy region-w region-h))
-           stream))))
-    (terpri stream)
-    (finish-output stream)))
+      (%print-thumbnail-cells image stream rw rh cols rows :ansi-p t)))))
 
 (defun rgb-hsl-lightness (rgb)
   "Return HSL lightness (0.0-1.0) for RGB triple (r g b), each 0-255."
@@ -182,43 +152,6 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
             (dufy:rgb-to-hsl r g b)
           (declare (ignore h s))
           l))))
-
-(defun median-lightness (rgbs)
-  "Return median HSL lightness from list of RGB triples."
-  (let ((lights (sort (mapcar #'rgb-hsl-lightness rgbs) #'<)))
-    (elt lights (floor (length lights) 2))))
-
-(defun classify-sample-lightness (sample-rgb median)
-  "Return :light if SAMPLE-RGB lightness <= MEDIAN, else :dark."
-  (if (null sample-rgb)
-      :dark
-      (if (>= (rgb-hsl-lightness sample-rgb) median)
-          :light
-          :dark)))
-
-(defun compute-tile-character (nw-avg ne-avg se-avg sw-avg median-light)
-  "Given 4 quadrant averages and median lightness, return (values char fg-rgb bg-rgb).
-Uses 16 quadrant-drawing characters based on which quadrants are above/below median."
-  (let* ((nw-light (rgb-hsl-lightness nw-avg))
-         (ne-light (rgb-hsl-lightness ne-avg))
-         (se-light (rgb-hsl-lightness se-avg))
-         (sw-light (rgb-hsl-lightness sw-avg))
-         (bits (+ (if (> nw-light median-light) 8 0)
-                  (if (> ne-light median-light) 4 0)
-                  (if (> se-light median-light) 2 0)
-                  (if (> sw-light median-light) 1 0)))
-         (overall-avg (average-rgb-via-xyz (list nw-avg ne-avg se-avg sw-avg)))
-         (overall-light (rgb-hsl-lightness overall-avg))
-         (light-quads (remove-if-not (lambda (q) (> (rgb-hsl-lightness q) median-light))
-                                     (list nw-avg ne-avg se-avg sw-avg)))
-         (dark-quads (remove-if (lambda (q) (> (rgb-hsl-lightness q) median-light))
-                                (list nw-avg ne-avg se-avg sw-avg)))
-         (light-avg (average-rgb-via-xyz light-quads))
-         (dark-avg (average-rgb-via-xyz dark-quads))
-         (glyphs " ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█")
-         (fg (if (<= overall-light median-light) light-avg dark-avg))
-         (bg (if (<= overall-light median-light) dark-avg light-avg)))
-    (values (aref glyphs bits) fg bg)))
 
 (defun print-mini-map (width height gid-grid base-tileset decal-tileset
                        &optional (stream *trace-output*))
