@@ -25,3 +25,9 @@
   "Default clothes color")
 (defvar *build* :demo
   "Current build type: :demo, :public, :publisher")
+
+(define-constant +basic-dynamics-list+
+    `(*machine* *region* *project.json* *game-title* *build* *sound*
+                *part-number* *studio* *publisher* *common-palette* *default-skin-color*
+                *default-hair-color* *default-clothes-color*)
+  :test 'equalp)

@@ -473,28 +473,36 @@ About Skyline-Tool..
 
 (defun start-project-scavenger (&optional frame)
   "Start a background thread that monitors project files for changes."
-  (let ((project-path (uiop:getcwd))
-        (target-frame (or frame
-                          (and (boundp 'clim:*application-frame*)
-                               clim:*application-frame*))))
+  (let* ((project-path (uiop:getcwd))
+         (target-frame (or frame
+                           (and (boundp 'clim:*application-frame*)
+                                clim:*application-frame*)))
+         (vars +basic-dynamics-list+)
+         (vals (mapcar (lambda (sym)
+                         (if (boundp sym) (symbol-value sym) nil))
+                       vars)))
     (make-thread
      (lambda ()
-       (let ((last-mod 0))
-         (loop
-            (let ((cur-mod (ignore-errors (uiop:directory-files project-path))))
-              (when (and cur-mod (not (equal cur-mod last-mod)))
-                (setf last-mod cur-mod)
-                (when target-frame
-                  (clim:redisplay-frame-panes target-frame :force-p t))))
-            (sleep 1))))
-     :name "project-scavenger")))
+       (progv vars vals
+         (let ((last-mod 0))
+           (loop
+              (let ((cur-mod (ignore-errors (uiop:directory-files project-path))))
+                (when (and cur-mod (not (equal cur-mod last-mod)))
+                  (setf last-mod cur-mod)
+                  (when target-frame
+                    (clim:redisplay-frame-panes target-frame :force-p t))))
+              (sleep 1)))))
+     :name "Project Scavenger")))
 
 (defun open-project-inspector (&key (project *project.json*))
   "Open the project inspector window."
-  (clim:run-frame-top-level
-   (clim:make-application-frame 'project-inspector-frame
-                                :project project
-                                :view-mode :reference)))
+  (make-window-thread
+   "Project Inspector"
+   (lambda ()
+     (clim:run-frame-top-level
+      (clim:make-application-frame 'project-inspector-frame
+                                   :project project
+                                   :view-mode :reference)))))
 
 ;; 
 ;; SUBMIT/COMMAND FUNCTIONS

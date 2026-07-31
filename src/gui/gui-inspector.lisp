@@ -552,7 +552,6 @@ PRINTER-NAME can be a queue name string or nil for default printer."
 (defmethod open-resource-inspector ((resource game-resource) &optional (mode :editing))
   (declare (ignore mode))
   (error "Inspector not implemented for this resource type"))
-
 (defmethod open-resource-inspector :around ((resource game-resource) &optional (mode :editing))
   "Launch every inspector in its own thread so the calling frame stays responsive."
   (declare (ignore mode))

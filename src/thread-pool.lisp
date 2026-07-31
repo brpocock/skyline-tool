@@ -1,12 +1,5 @@
 (in-package :skyline-tool)
 
-;; Define preserved dynamics with earmuff naming and equalp test
-(define-constant */basic-dynamics-list/
-  `(*machine *region *project.json *game-title *build *sound
-    *part-number *studio *publisher *common-palette *default-skin-color
-    *default-hair-color *default-clothes-color)
-  :test 'equalp)
-
 (defvar *worker-journal* nil
   "Journal for thread pool worker errors and events.")
 
@@ -101,8 +94,7 @@
      :name (format nil "Background Worker +~2,'0d" i))))
 
 (defun thread-pool-worker-loop (pool)
-  "Main worker loop for the thread pool.
-   Workers suppress console output by redirecting streams to /dev/null."
+  "Main worker loop for the thread pool."
   (let* ((devnull (make-broadcast-stream))
          (*standard-output* devnull)
          (*error-output* devnull)
@@ -131,14 +123,16 @@
 
 (defun submit-task (fn)
   "Submit task FN to thread pool.
-   Captures current dynamic bindings of *machine*, *game-title*,
-   and *project.json* so worker threads inherit the project context."
+   Captures current dynamic bindings from +basic-dynamics-list+
+   so worker threads inherit the project context."
   (ensure-thread-pool)
-  (let ((task (lambda ()
-                (let ((*machine* *machine*)
-                      (*game-title* *game-title*)
-                      (*project.json* *project.json*))
-                  (funcall fn)))))
+  (let* ((vars +basic-dynamics-list+)
+         (vals (mapcar (lambda (sym)
+                         (if (boundp sym) (symbol-value sym) nil))
+                       vars))
+         (task (lambda ()
+                 (progv vars vals
+                   (funcall fn)))))
     (queue-push (pool-task-queue *global-thread-pool*) task)
     (pool-task-added *global-thread-pool*)))
 

@@ -1,7 +1,5 @@
 (in-package :skyline-tool)
 
-(defvar *region* :ntsc)
-
 (defmacro dovector ((var seq &optional retvar) &body body)
   `(loop for ,var across ,seq do (progn ,@body) finally (return (values ,retvar))))
 
@@ -626,7 +624,7 @@ Objects without any event properties are ignored."
           (tileset-gid tileset)
           (array-dimension (tile-attributes tileset) 0)))
 
-(defun load-tileset-image-for-machine (pathname$ &optional (*machine* *machine*))
+(defun load-tileset-image-for-machine (pathname$ &optional (machine *machine*))
   "Load tileset PNG for the current machine, with sensible fallbacks.
 
 For Atari vcs800 (@code{7850}), prefer @file{Hicolor/} first (matching TSX
@@ -637,7 +635,7 @@ lowercase port directory @file{vcs800/}. For all other machines, prefer
 fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
 @file{Tiles/}."
   (let* ((name (pathname-name pathname$)))
-    (load-tileset-image (if (member *machine* '(7850))
+    (load-tileset-image (if (find :hd (regions-for-machine machine))
                             (make-pathname :directory (list :relative "Source" "Maps" "Tiles"
                                                             "Hicolor")
                                            :name name :type "png")
@@ -649,12 +647,13 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
   (defun load-tileset-image (pathname)
     "Load the “sprite sheet” image for a tile set from PATHNAME"
     (when-let (cached (gethash (truename pathname) tileset-image-cache))
-      ;; fixme needs to check for file modification time
+      ;; FIXME needs to check for file modification time
       (return-from load-tileset-image cached))
     (format *trace-output* "~&Loading tileset image from “~a”…"
             (enough-namestring pathname))
     (setf (gethash (truename pathname) tileset-image-cache)
-          (let ((png (png-read:read-png-file pathname)))
+          (let ((png (png-read:read-png-file pathname))
+                (*region* (or *region* :ntsc)))
             (png->palette (png-read:image-data png) (png-read:transparency png))))))
 
 (defun extract-8×16-tiles (image)
@@ -1779,7 +1778,8 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
   (let ((canon-name (format nil "~a.~a"
                             (lastcar (pathname-directory pathname))
                             (pathname-name pathname)))
-        (xml (xmls:parse-to-list (alexandria:read-file-into-string pathname))))
+        (xml (xmls:parse-to-list (alexandria:read-file-into-string pathname)))
+        (*region* (or *region* :ntsc))) ; acceptable in this narrow use
     (assert (equal "map" (car xml)) ()
             "The XML header does not appear to be for a tiled map (TMX) file")
     (assert (equal "orthogonal" (xml-attr "orientation" (second xml))) ()
@@ -1872,9 +1872,9 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                   (array-dimension tile-grid 0)
                                   (array-dimension tile-grid 1)
                                   island-name tile-width))))
-              (dolist (tv '(:ntsc :pal))
+              (dolist (*region* '(:ntsc :pal))
                 (format *trace-output* "~&About to write map ~a for ~a… "
-                        (title-case canon-name) tv)
+                        (title-case canon-name) *region*)
                 (let* ((width (array-dimension tile-grid 0))
                        (height (array-dimension tile-grid 1))
                        (spawn-table (map-spawn-table prototypes-table))
@@ -1890,11 +1890,11 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                            :exits-table exits-table
                                            :animations-list animations-list
                                            :decals-animations-list decals-animations-list
-                                           :tv tv)
+                                           :tv *region*)
                           :base-name (concatenate 'string "Map."
                                                   canon-name
                                                   ".Data."
-                                                  (string-upcase tv)))))
+                                                  (string-upcase *region*)))))
                   (assert (<= (* width height) 1024))
                   (format *trace-output* "~2&Found grid of ~d×~d tiles, with ~
 ~r unique attribute~:p, ~r decal~:p (~r invisible), ~r unique exit~:p, ~
@@ -1906,12 +1906,12 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                           (length exits-table)
                           (length animations-list)
                           (length prototypes-table))
-                  (format *trace-output* "~&Ready to write binary output for ~a … " tv)
+                  (format *trace-output* "~&Ready to write binary output for ~a … " *region*)
                   (force-output *trace-output*)
                   (let ((outfile (make-pathname
                                   :name (format nil "Map.~a.~a.~a"
                                                 (last-elt (pathname-directory pathname))
-                                                (pathname-name pathname) tv)
+                                                (pathname-name pathname) *region*)
                                   :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                   :type "o"))
                         (offset 0))
@@ -2067,7 +2067,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
     (let ((outfile (make-pathname :directory `(:relative "Object" ,(machine-directory-name) "Assets")
                                   :name (format nil "Tileset.~a" (pathname-name pathname))
                                   :type "o"))
-          (*region* (or *region* "NTSC"))) ;; FIXME — PAL
+          (*region* (or *region* :ntsc))) ;; FIXME — PAL
       (ensure-directories-exist outfile)
       (let* ((tileset (load-tileset pathname))
              (width (floor (array-dimension (tileset-image tileset) 0) 8))
@@ -2085,8 +2085,6 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                                      :element-type '(unsigned-byte 8)
                                      :if-exists :supersede)
           (write-bytes bytes object)))))
-  (warn "Tile set compiler not set up for ~a (~a); skipping"
-        *machine* (machine-long-name))
   (return-from compile-tileset))
 
 (defun ensure-byte (number)

@@ -20,7 +20,7 @@
             (dufy:xyz-to-rgb (/ sum-x n) (/ sum-y n) (/ sum-z n))
           (list (max 0 (min 255 (round r)))
                 (max 0 (min 255 (round g)))
-                (max 0 (min 255 (round b)))))))))
+                (max 0 (min 255 (round b)))))))
 
 (defun region-pixel-colors (palette-pixels x y width height)
   "Collect pixel RGB colors from a rectangular region.

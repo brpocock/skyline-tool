@@ -1,102 +1,142 @@
-;; Version Control and Git Configuration Tab - Preferences Inspector
-;; Major version control system management and Git-specific settings
-
 (in-package :skyline-tool)
 
-#+()
-(defun display-version-control-tab (frame pane)
-  "Display the Version Control section"
-  (clim:formatting-table-pane (pane :name "version-control-tab"))
-  (make-section-header pane "Version Control System")
-  (clim:formatting-table (pane)
-    (row :value
-      (make-label-value-row pane "System" 700:
-                            (clim:make-pane 'clim:radio-box)
-                            (loop for sys in '("Git"" Subversion"" Bazaar"" Mercurial"" Concurrent"" Revision Control")
-                 collect (clim:make-pane 'clim:toggle-button
-                                       :label (string sys)
-                                       :value (eq (get-pref '(:version-control :system) (string-downcase sys))
-                                       :group (clim:make-pane 'clim:radio-box)
-                                       :value-changed-callback
-                                       (lambda (g v)
-                                         (declare (ignore g))
-                                         (setf (get-pref '(:version-control :system) (string-downcase v))
-                                         (save-preferences-now frame)
-                                         (clim:redisplay-frame-panes frame :force-p t)))))))
-  (make-section-header pane "Git Configuration")
-  (make-label-value-row pane "User" 700:
-    (clim:make-pane 'clim:composite-field :items 705:
-      ((:label-field clim:text-field :value (or (get-pref '(:git :user) "")))
-             (:value-field clim:text-field :value (or (get-pref '(:git :email) "")))
-             (:label-value "Email")
-             (:portal clim:button :label "Setup")
-      :callback (lambda (gadget)
-        (declare (ignore gadget))
-        (setf (get-pref '(:git :user) (get-value (gadget-label gadget)))
-        (setf (get-pref '(:git :email) (get-value-value gadget)))
-        (save-preferences-now frame)
-        (clim:redisplay-frame-panes frame :force-p t))))
-  (make-label-value-row pane "Signing Key" 700:
-    (clim:make-pane 'clim:right-click-menu :items 710:
-      (("Show Key..." :command com-show-key)
-       (("Manage Keys..." :command com-manage-keys)))
-  (make-label-value-row pane "Merge Tool" 700:
-    (clim:make-pane 'clim:text-field :value (get-pref '(:git :merge-tool) "meld")
-                    :value-changed-callback
-    (lambda (gadget value)
-      (declare (ignore gadget))
-      (setf (get-pref '(:git :merge-tool) value)
-      (save-preferences-now frame))
-    ))
-  (make-label-value-row pane "Diff Tool" 700:
-    (clim:make-pane 'clim:text-field :value (get-pref '(:git :diff-tool) "meld")
-                    :value-changed-callback
-    (lambda (gadget value)
-      (declare (ignore gadget))
-      (setf (get-pref '(:git :diff-tool) value)
-      (save-preferences-now frame))
-    ))
-  (make-label-value-row pane "Push Setup" 700:
-    (clim:make-pane 'clim:check-box :label "Auto Setup Remote")
-    :value-changed-callback
-    (lambda (g value)
-      (declare (ignore g))
-      (setf (get-pref '(:git :push-auto-setup) v)
-      (save-preferences-now frame))))
-  (make-label-value-row pane "Pull Behavior" 700:
-    (clim:make-pane 'clim:combo-box :items '("fast-forward"" merge")
-                    :value (get-pref '(:git :pull-behavior) "fast-forward")
-                    :value-changed-callback
-    (lambda (gadget value)
-      (declare (ignore gadget))
-      (setf (get-pref '(:git :pull-behavior) value)
-      (save-preferences-now frame))))
-  (make-label-value-row pane "Default Branch" 700:
-    (clim:make-pane 'clim:text-field :value (get-pref '(:git :default-branch) "main"))
-    :value-changed-callback
-    (lambda (gadget value)
-      (declare (ignore gadget))
-      (setf (get-pref '(:git :default-branch) value)
-      (save-preferences-now frame)))
-  (make-section-header pane "Submodules")
-  (make-label-value-row pane "Skyline Tool Module" 700:
-    (clim:make-pane 'clim:check-box :label "Enable")
-    :value-changed-callback
-    (lambda (g value)
-      (declare (ignore g))
-      (setf (get-pref '(:git :submodule-skyline) v)
-      (save-preferences-now frame)))
-  (make-label-value-row pane "A7800 Tools Module" 700:
-    (clim:make-pane 'clim:check-box :label "Enable")
-    :value-changed-callback
-    (lambda (g value)
-      (declare (ignore g))
-      (setf (get-pref '(:git :submodule-a7800) v)
-      (save-preferences-now frame)))
-  (make-label-value-row pane "Intellivision Tools Module" 700:
-    (clim:make-pane 'clim:check-box :label "Enable")
-    :value-changed-callback
-    (lambda (g value)
-      (declare (ignore g))
-      (setf (get-pref '(:git :submodule-intellivision) v)
-            (save-preferences-now frame)))))))))))))))))
+(defun make-version-control-tab-pane (frame)
+  (flet ((update-pref (key value)
+           (setf (get-pref key) value)
+           (clim:redisplay-frame-panes frame :force-p t)))
+    (let* ((current-vcs (get-pref '(:version-control :system) :git))
+           (vcs-buttons
+             (loop for (key label) in '((:git "Git") (:bzr "Bazaar")
+                                        (:svn "Subversion") (:hg "Mercurial")
+                                        (:cvs "Concurrent") (:rcs "Revision Control"))
+                   collect (clim:make-pane 'clim:toggle-button
+                                           :label (format nil "~a  | ~(~a~)" label key)
+                                           :id key
+                                           :indicator-type :one-of)))
+           (vcs-box
+             (clim:make-pane 'clim:radio-box :name :vcs-box
+                             :choices vcs-buttons
+                             :current-selection (find current-vcs vcs-buttons :key #'clim:gadget-id)
+                             :value-changed-callback
+                             (lambda (g v)
+                               (declare (ignore g))
+                               (when v (update-pref '(:version-control :system) (clim:gadget-id v)))))))
+      (clim:vertically (:name 'version-control-tab-pane :spacing 4)
+        (clim:labelling (:label "Version Control System"
+                         :text-style (clim:make-text-style nil :bold :larger))
+          vcs-box)
+        (clim:labelling (:label "User" :text-style (clim:make-text-style nil :bold :larger))
+          (clim:vertically (:spacing 2)
+            (clim:horizontally (:spacing 2)
+              (clim:labelling (:label "Name:"))
+              (clim:make-pane 'clim:text-field
+                              :value (get-pref '(:git :user) "")
+                              :width 300
+                              :activate-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :user) v))))
+            (clim:horizontally (:spacing 2)
+              (clim:labelling (:label "eMail:"))
+              (clim:make-pane 'clim:text-field
+                              :value (get-pref '(:git :email) "")
+                              :width 300
+                              :activate-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :email) v))))))
+        (clim:horizontally (:spacing 2)
+          (clim:labelling (:label "Signing key:"))
+          (clim:make-pane 'clim:option-pane
+                          :items (list (cons "None" nil))
+                          :value nil
+                          :value-changed-callback
+                          (lambda (g v) (declare (ignore g)) (update-pref '(:git :signing-key) v)))
+          (clim:make-pane 'clim:push-button
+                          :label "Generate and publish a new key…"
+                          :activate-callback (lambda (g) (declare (ignore g))
+                                              (com-generate-signing-key frame))))
+        (clim:make-pane 'clim:check-box
+                        :label "Sign Commits"
+                        :value (get-pref '(:git :sign-commits) nil)
+                        :value-changed-callback
+                        (lambda (g v) (declare (ignore g)) (update-pref '(:git :sign-commits) v)))
+        (clim:make-pane 'clim:check-box
+                        :label "Sign Tags"
+                        :value (get-pref '(:git :sign-tags) nil)
+                        :value-changed-callback
+                        (lambda (g v) (declare (ignore g)) (update-pref '(:git :sign-tags) v)))
+        (clim:labelling (:label "Tools" :text-style (clim:make-text-style nil :bold :larger))
+          (clim:vertically (:spacing 2)
+            (clim:horizontally (:spacing 2)
+              (clim:labelling (:label "Merge:"))
+              (clim:make-pane 'clim:option-pane
+                              :items (list (cons "meld" "meld") (cons "kdiff3" "kdiff3")
+                                           (cons "vimdiff" "vimdiff") (cons "emerge" "emerge"))
+                              :value (get-pref '(:git :merge-tool) "meld")
+                              :value-changed-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :merge-tool) v)))
+              (clim:make-pane 'clim:check-box
+                              :label "Prompt first"
+                              :value (get-pref '(:git :merge-prompt) nil)
+                              :value-changed-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :merge-prompt) v))))
+            (clim:horizontally (:spacing 2)
+              (clim:labelling (:label "Diff:"))
+              (clim:make-pane 'clim:option-pane
+                              :items (list (cons "meld" "meld") (cons "kdiff3" "kdiff3")
+                                           (cons "vimdiff" "vimdiff") (cons "emerge" "emerge"))
+                              :value (get-pref '(:git :diff-tool) "meld")
+                              :value-changed-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :diff-tool) v)))
+              (clim:make-pane 'clim:check-box
+                              :label "Prompt first"
+                              :value (get-pref '(:git :diff-prompt) nil)
+                              :value-changed-callback
+                              (lambda (g v) (declare (ignore g)) (update-pref '(:git :diff-prompt) v))))))
+        (clim:labelling (:label "Remotes" :text-style (clim:make-text-style nil :bold :larger))
+          (clim:vertically (:spacing 2)
+            (clim:labelling (:label (format nil "~25a  ~40@a  ~a" "Remote" "URL" "Fetch")))
+            (clim:labelling (:label (format nil "~25a  ~40@a  ~a"
+                                            "origin"
+                                            "git@github.com:brpocock/Phantasia"
+                                            "+refs/heads/:refs/remotes/origin/")))
+            (clim:make-pane 'clim:push-button :label "+"
+                            :activate-callback (lambda (g) (declare (ignore g))
+                                                (com-add-remote frame)))))
+        (clim:labelling (:label "Submodules" :text-style (clim:make-text-style nil :bold :larger))
+          (clim:vertically (:spacing 2)
+            (clim:make-pane 'clim:check-box
+                            :label "Skyline-Tool and Eightbol"
+                            :value (get-pref '(:git :submodule-skyline) t)
+                            :value-changed-callback
+                            (lambda (g v) (declare (ignore g)) (update-pref '(:git :submodule-skyline) v)))
+            (clim:make-pane 'clim:check-box
+                            :label "Atari 7800 Tools"
+                            :value (get-pref '(:git :submodule-a7800) nil)
+                            :value-changed-callback
+                            (lambda (g v) (declare (ignore g)) (update-pref '(:git :submodule-a7800) v)))
+            (clim:make-pane 'clim:check-box
+                            :label "Intellivision Tools"
+                            :value (get-pref '(:git :submodule-intellivision) nil)
+                            :value-changed-callback
+                            (lambda (g v) (declare (ignore g)) (update-pref '(:git :submodule-intellivision) v)))))
+        (clim:make-pane 'clim:check-box
+                        :label "When pushing, automatically set up new branches on remote"
+                        :value (get-pref '(:git :push-auto-setup) nil)
+                        :value-changed-callback
+                        (lambda (g v) (declare (ignore g)) (update-pref '(:git :push-auto-setup) v)))
+        (clim:horizontally (:spacing 2)
+          (clim:make-pane 'clim:check-box
+                          :label "When pulling, automatically"
+                          :value (get-pref '(:git :pull-automatically) nil)
+                          :value-changed-callback
+                          (lambda (g v) (declare (ignore g)) (update-pref '(:git :pull-automatically) v)))
+          (clim:make-pane 'clim:option-pane
+                          :items '(("fast-forward only" :ff-only) ("merge" :merge) ("rebase" :rebase))
+                          :value (get-pref '(:git :pull-behavior) :ff-only)
+                          :value-changed-callback
+                          (lambda (g v) (declare (ignore g)) (update-pref '(:git :pull-behavior) v))))
+        (clim:horizontally (:spacing 2)
+          (clim:labelling (:label "Default Branch:"))
+          (clim:make-pane 'clim:text-field
+                          :value (get-pref '(:git :default-branch) "main")
+                          :width 200
+                          :activate-callback
+                          (lambda (g v) (declare (ignore g)) (update-pref '(:git :default-branch) v))))))))

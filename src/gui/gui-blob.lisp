@@ -213,11 +213,12 @@
   (call-next-method))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-blob)))
-  (make-instance 'game-resource-blob
-                 :moniker (gethash "moniker" json)
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+   (make-instance 'game-resource-blob
+                  :moniker (gethash "moniker" json)
+                  :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
+                            (gethash "kind" json)
+                            'blob)
+                  :full-path (gethash "path" json)))
 
 (defun format-atari-color-name (register &optional (tv *region*))
   (let* ((hue (ash register -4))

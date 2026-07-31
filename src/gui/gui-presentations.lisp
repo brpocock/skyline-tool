@@ -487,117 +487,86 @@ Base91 provides ~23% overhead vs base64's 33%."
 ;; 
 
 (defmethod resource-from-json (json (class (eql 'game-resource-map)))
+  (error "unimplemented")
   (make-instance 'game-resource-map
-                 :moniker (gethash "moniker" json)
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+                 :moniker (gethash "moniker" json)))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-script)))
+  (error "unimplemented")
   (make-instance 'game-resource-script
-                 :moniker (gethash "moniker" json)
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+                 :moniker (gethash "moniker" json)))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-song)))
+  (error "unimplemented")
   (make-instance 'game-resource-song
-                 :moniker (gethash "moniker" json)
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+                 :moniker (gethash "moniker" json)))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-boat)))
-  (make-instance 'game-resource-boat
-                 :kind (gethash "kind" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-boat))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-instrument)))
-  (make-instance 'game-resource-instrument
-                 :kind (gethash "kind" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-instrument))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-item)))
-  (make-instance 'game-resource-item
-                 :kind (gethash "kind" json)))
+  (make-instance 'game-resource-item))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-flag)))
-  (make-instance 'game-resource-flag
-                 :kind (gethash "kind" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-flag))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-key)))
-  (make-instance 'game-resource-key
-                 :kind (gethash "kind" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-key))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-object-prototype)))
-  (make-instance 'game-resource-object-prototype
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-object-prototype))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-character)))
-  (make-instance 'game-resource-character
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-character))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-translation)))
-  (make-instance 'game-resource-translation
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-translation))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-atari-vox-dictionary)))
-  (make-instance 'game-resource-atari-vox-dictionary
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-atari-vox-dictionary))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-intellivoice-dictionary)))
-  (make-instance 'game-resource-intellivoice-dictionary
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-intellivoice-dictionary))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-phrasebook)))
-  (make-instance 'game-resource-phrasebook
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-phrasebook))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-class)))
-  (make-instance 'game-resource-class
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-class))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-tileset)))
-  (make-instance 'game-resource-tileset
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-tileset))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-sprite-sheet)))
-  (make-instance 'game-resource-sprite-sheet
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-sprite-sheet))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-routine)))
-  (make-instance 'game-resource-routine
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-routine))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-routine-forth-library)))
-  (make-instance 'game-resource-routine-forth-library
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-routine-forth-library))
 
 (defmethod resource-from-json (json (class (eql 'game-resource-routine-run-commands)))
-  (make-instance 'game-resource-routine-run-commands
-                 :kind (or (ignore-errors (kind-by-name (gethash "kind" json)))
-                           (gethash "kind" json))
-                 :full-path (gethash "path" json)))
+  (error "unimplemented")
+  (make-instance 'game-resource-routine-run-commands))
 
 ;; 
 ;; write-resource-ps-content methods for all concrete resource classes

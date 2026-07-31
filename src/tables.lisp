@@ -955,12 +955,15 @@ Concatenates lyrics from all voices in all parts, separated by newlines."
 (defun equipment-plist->game-resource (plist)
   "Convert an equipment index plist to a game-resource-item."
   (make-instance 'game-resource-item
-                
+                 
                  :collective-path #p"Source/Tables/EquipmentIndex.ods"
                  :offset (getf plist :index 0)
                  :item-id (getf plist :index 0)
                  :name (getf plist :item-name)
-                 :equippable-p (getf plist :equippable-p)
+                 :equippable (getf plist :equip)
+                 :shield (getf plist :shield)
+                 :armor (getf plist :armor)
+                 :worn (getf plist :worn)
                  :slot (getf plist :slot)
                  :sound (getf plist :sound)
                  :entity-class (getf plist :entity-class)

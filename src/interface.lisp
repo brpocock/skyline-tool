@@ -162,7 +162,7 @@ Loads @code{eightbol-test}, runs tests, exits the Lisp process
                      (clim-listener:run-listener :process-name "Skyline Tool REPL"
                                                  :package :skyline-tool))
                    :name "Skyline Tool REPL")
-      (replic:repl)))
+      (replic:repl )))
 
 (defvar *command-line* nil)
 

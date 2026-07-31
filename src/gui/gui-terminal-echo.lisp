@@ -465,12 +465,12 @@
     (present-vc-status-icon status)))
 
 (defun run-command-in-terminal-echo (command &key title)
-  (make-thread
+  (make-window-thread
+   (or title (format nil "Running command ~s" command))
    (lambda ()
      (let* ((fm (ignore-errors (clim:find-frame-manager :port (clim:find-port))))
             (frame (clim:make-application-frame 'terminal-echo-frame
                                                 :pretty-name title
                                                 :frame-manager fm)))
        (setf (frame-command frame) command)
-       (clim:run-frame-top-level frame)))
-   :name (or title (format nil "Running command ~s" command))))
+       (clim:run-frame-top-level frame)))))

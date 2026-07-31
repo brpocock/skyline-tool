@@ -9,8 +9,16 @@
 (defun make-window-thread (name function)
   "Create a named thread for running a window top-level.
 NAME is a string for the thread name.
-FUNCTION is a thunk that runs the window."
-  (make-thread function :name name))
+FUNCTION is a thunk that runs the window.
+Preserves +basic-dynamics-list+ bindings in the new thread."
+  (let* ((vars +basic-dynamics-list+)
+         (vals (mapcar (lambda (sym)
+                         (if (boundp sym) (symbol-value sym) nil))
+                       vars)))
+    (make-thread (lambda ()
+                   (progv vars vals
+                     (funcall function)))
+                 :name name)))
 
 (defun start-file-watcher (frame)
   "Start a background thread that monitors the resource's file for changes

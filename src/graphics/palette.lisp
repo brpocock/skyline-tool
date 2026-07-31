@@ -495,6 +495,9 @@ List of RGB color triples for the machine's palette
 @end table
 
 @xref{var:*machine*}, @xref{var:*region*}.")
+  (:method (machine (region null))
+    ;; serious error, halt now before it gets worse
+    (error "*REGION* is unset, can't determine palette"))
   (:method ((machine (eql 20)) (region (eql :ntsc)))
     (subseq +c64-palette+ 0 7))
   (:method ((machine (eql 200)) (region (eql :internal)))
@@ -880,33 +883,34 @@ May issue warnings for colors not in the palette
 @end table
 
 @xref{fun:find-nearest-in-palette}, @xref{fun:machine-palette}."
-  (check-type red (integer 0 #xff))
-  (check-type green (integer 0 #xff))
-  (check-type blue (integer 0 #xff))
-  (or (position (list red green blue) (machine-palette) :test 'equalp)
-      (destructuring-bind (r g b) (find-nearest-in-palette
-                                   (machine-palette) red green blue)
-        (check-type r (integer 0 #xff))
-        (check-type g (integer 0 #xff))
-        (check-type b (integer 0 #xff))
-        (let ((use (position (list r g b) (machine-palette) :test 'equalp)))
-          (incf (gethash (rgb->int r g b) *palette-warnings* 0))
-          (cond
-            ((and (> 100 (hash-table-count *palette-warnings*))
-                  (= 1 (gethash (rgb->int r g b) *palette-warnings*)))
-             (warn-once "Color not in ~a palette: ~@[~a~]#~2,'0X~2,'0X~2,'0X; ~
+  (let ((pal (machine-palette)))
+    (check-type red (integer 0 #xff))
+    (check-type green (integer 0 #xff))
+    (check-type blue (integer 0 #xff))
+    (or (position (list red green blue) pal :test 'equalp)
+        (destructuring-bind (r g b) (find-nearest-in-palette
+                                     pal red green blue)
+          (check-type r (integer 0 #xff))
+          (check-type g (integer 0 #xff))
+          (check-type b (integer 0 #xff))
+          (let ((use (position (list r g b) pal :test 'equalp)))
+            (incf (gethash (rgb->int r g b) *palette-warnings* 0))
+            (cond
+              ((and (> 100 (hash-table-count *palette-warnings*))
+                    (= 1 (gethash (rgb->int r g b) *palette-warnings*)))
+               (warn-once "Color not in ~a palette: ~@[~a~]#~2,'0X~2,'0X~2,'0X; ~
 used $~2,'0x (~@[~a~]#~2,'0X~2,'0X~2,'0X)"
-                        (machine-short-name)
-                        (when (tty-xterm-p)
-                          (ansi-color-pixel red green blue))
-                        red green blue
-                        use
-                        (when (tty-xterm-p)
-                          (ansi-color-pixel r g b))
-                        r g b))
-            ((= 100 (hash-table-count *palette-warnings*))
-             (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
-          use))))
+                          (machine-short-name)
+                          (when (tty-xterm-p)
+                            (ansi-color-pixel red green blue))
+                          red green blue
+                          use
+                          (when (tty-xterm-p)
+                            (ansi-color-pixel r g b))
+                          r g b))
+              ((= 100 (hash-table-count *palette-warnings*))
+               (warn-once "Over 100 colors not in palette, further warnings suppressed.")))
+            use)))))
 
 (defun find-nearest-palette-color (rgb-color)
   "Find the nearest Atari 2600 palette color to the given RGB color using DUFY.

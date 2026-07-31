@@ -114,13 +114,14 @@
   :inherit-from (clim-internals::global-command-table))
 
 (clim:define-application-frame about-skyline-tool-frame (clim-simple-echo::simple-echo)
-   ()
-   (:command-table (about-skyline-tool-commands))
-   (:panes (about-pane :application :height 500 :width 600
-                                        :display-function 'display-about-skyline-tool))
-   (:menu-bar about-menu-bar)
-   (:icon (skyline-tool::skyline-tool-icon :resource :about))
-   (:layouts (default about-pane)))
+  ()
+  (:command-table (about-skyline-tool-commands))
+  (:panes (about-pane :application :height 500 :width 600
+                                   :display-function 'display-about-skyline-tool
+                                   :scroll-bars nil))
+  (:menu-bar about-menu-bar)
+  (:icon (skyline-tool::skyline-tool-icon :resource :about))
+  (:layouts (default about-pane)))
 
 (defun display-about-skyline-tool (frame pane)
   "Display the About dialog contents with precise graphical presentation.
