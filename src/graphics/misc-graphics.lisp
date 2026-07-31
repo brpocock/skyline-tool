@@ -836,27 +836,47 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
           char char
           #\Escape))
 
-(defun %print-thumbnail-cells (palette-pixels stream region-w region-h cols rows
-                                &key ansi-p)
-  (dotimes (ry rows)
-    (dotimes (rx cols)
-      (let ((sx (* rx region-w))
-            (sy (* ry region-h)))
-        (multiple-value-bind (light dark light-count dark-count)
-            (%region->two-populations palette-pixels sx sy region-w region-h)
-          (if (null dark)
-              (if ansi-p
-                  (print-wide-pixel light stream)
-                  (princ "██" stream))
-              (let ((char (%darkness-char dark-count (+ light-count dark-count))))
-                (if ansi-p
-                    (%ansi-two-color-cell dark light char stream)
-                    (format stream "~c~c" char char)))))))
-    (terpri stream))
-  (finish-output stream))
+(defun %print-thumbnail-cells (palette-pixels stream
+                               region-w region-h cols rows
+                               &key ansi-p)
+  "Print a COLS × ROWS character-cell rendering of PALETTE-PIXELS.
+
+Each cell samples an evenly-divided pixel region.  The cell's fractional
+box is computed from the image dimensions and floored to integer pixel
+spans; every cell samples at least one pixel (cells overlap their
+neighbour's pixel only when there are more cells than pixels).  The
+REGION-W/REGION-H arguments are accepted for compatibility with older
+callers but are ignored; the boxes are derived from the image
+dimensions."
+  (declare (ignore region-w region-h))
+  (let ((width (array-dimension palette-pixels 0))
+        (height (array-dimension palette-pixels 1)))
+    (dotimes (ry rows)
+      (dotimes (rx cols)
+        (let* ((sx (floor (* rx width) cols))
+               (sy (floor (* ry height) rows))
+               (box-w (- (min width
+                              (max (1+ sx) (floor (* (1+ rx) width) cols)))
+                         sx))
+               (box-h (- (min height
+                              (max (1+ sy) (floor (* (1+ ry) height) rows)))
+                         sy)))
+          (if ansi-p
+              (print-ansi-cell-pattern palette-pixels sx sy box-w box-h stream)
+              (multiple-value-bind (light dark light-count dark-count)
+                  (%region->two-populations palette-pixels sx sy box-w box-h)
+                (if (null dark)
+                    (princ "█" stream)
+                    (let ((char (%darkness-char dark-count (+ light-count dark-count))))
+                      (format stream "~a~a~c"
+                              (ansi-color-rgb (first dark) (second dark) (third dark) t)
+                              (ansi-color-rgb (first light) (second light) (third light) nil)
+                              char)))))))
+      (format stream "~c[0m~%" #\escape))
+    (finish-output stream)))
 
 (defun %print-thumbnail-ansi (palette-pixels stream region-w region-h cols rows)
-  (format stream "~&Thumbnail (ANSI, ~D×~D cells):~%" cols rows)
+  (format stream "~&Thumbnail (ANSI):~%")
   (%print-thumbnail-cells palette-pixels stream region-w region-h cols rows :ansi-p t))
 
 (defun %print-thumbnail-dumb (palette-pixels stream region-w region-h cols rows)
@@ -944,46 +964,102 @@ Returns (values lighter-rgb darker-rgb light-count dark-count)."
                                       :filled t))))))
       (setf (clim:medium-ink stream) clim:+foreground-ink+))))
 
-(defun %compute-ansi-sizing (width height)
-  (let* ((cols-str (uiop:getenv "COLUMNS"))
-         (term-width (if cols-str
-                         (or (parse-integer cols-str :junk-allowed t) 80)
-                         80))
-         (max-cols (max 8 (floor (* term-width 8/10) 2)))
-         (base-rw (if (> width 160) 16 4))
-         (base-rh 16)
-         (natural-cols (floor width base-rw))
-         (natural-rows (floor height base-rh))
-         (target-cols (max 8 (min natural-cols max-cols)))
-         (target-rows (max 4 (if (> width 160)
-                                (round (/ (* target-cols height) width))
-                                (round (/ (* target-cols height) width 2)))))
-         (rw (max 1 (floor width target-cols)))
-         (rh (max 1 (floor height target-rows)))
-         (cols (floor width rw))
-         (rows (floor height rh)))
-    (values rw rh cols rows)))
+(defun %compute-ansi-sizing (width height &optional aspect)
+  "Calculate cell dimensions for ANSI thumbnail output.
 
-(defun print-thumbnail-image (png-file &optional (stream *trace-output*))
+  For text terminals:
+  - Character cells are ~2:1 height:width (taller than wide)
+  - 160B pixels are 2:1 width:height (wider than tall)
+  - 320 pixels are 1:1 (square)
+
+  The image's visual aspect is found from its pixel dimensions and
+  pixel aspect ratio (160 modes are 2:1, 320 modes are 1:1; ASPECT
+  overrides the width-derived guess).  The width is then doubled to
+  account for the ~2:1 character cell aspect, and the result is scaled
+  to fill the smaller available dimension: at least 80 columns and 25
+  rows, up to COLUMNS columns and LINES/2 rows (a 43-line terminal is
+  assumed when $LINES is unset).  Source tile sizes are irrelevant:
+  the whole image is divided evenly into COLS × ROWS cells, each
+  sampling REGION-W × REGION-H pixels (fractional values allowed;
+  callers floor the region boxes to integer pixel spans).
+
+  Returns (values region-w region-h cols rows): each output cell
+  samples a REGION-W × REGION-H pixel block, of which there are COLS ×
+  ROWS on screen."
+  (let* ((cols-str (uiop:getenv "COLUMNS"))
+         (row-str (uiop:getenv "LINES"))
+         (term-width (if cols-str
+                         (max 80 (or (parse-integer cols-str :junk-allowed t) 80))
+                         80))
+         (term-lines (if row-str
+                         (or (parse-integer row-str :junk-allowed t) 43)
+                         43))
+         ;; Height cap: half the terminal, at least 25 rows, never more
+         ;; than the terminal itself.
+         (term-rows (if (< term-lines 25)
+                        term-lines
+                        (max 25 (floor term-lines 2))))
+         ;; Pixel aspect ratio: 160 modes = 2:1, 320 modes = 1:1
+         (pixel-aspect (or aspect (if (> width 160) 1 2)))
+         ;; Visual aspect: source width * pixel-aspect, height unchanged,
+         ;; then width doubled for the ~2:1 character cell aspect
+         (visual-aspect (/ (* width pixel-aspect 2.0) height))
+         ;; Available terminal dimensions; region boxes are allowed to
+         ;; be fractional (smaller than a pixel), so no pixel-count
+         ;; floor applies here.
+         (max-cols term-width)
+         (max-rows term-rows)
+         ;; Target dimensions preserving visual aspect
+         (target-cols 0)
+         (target-rows 0))
+    ;; Scale to fill the smaller available dimension
+    (cond
+      ;; Width-constrained: image is wider than terminal allows
+      ((> visual-aspect (/ max-cols max-rows))
+       (setf target-cols max-cols)
+       (setf target-rows (max 1 (floor (/ max-cols visual-aspect)))))
+      ;; Height-constrained: image is taller than terminal allows
+      (t
+       (setf target-rows max-rows)
+       (setf target-cols (max 1 (floor (* max-rows visual-aspect))))))
+    ;; Ensure we don't exceed bounds
+    (when (> target-cols max-cols)
+      (setf target-cols max-cols)
+      (setf target-rows (max 1 (floor (/ max-cols visual-aspect)))))
+    (when (> target-rows max-rows)
+      (setf target-rows max-rows)
+      (setf target-cols (max 1 (floor (* max-rows visual-aspect)))))
+    ;; Sampling area per character cell (may be fractional; the
+    ;; renderer floors the region box to integer pixel spans, with each
+    ;; cell sampling at least one pixel).  Cell counts are exact:
+    ;; target-cols/target-rows are integers already constrained to the
+    ;; terminal bounds.
+    (values (/ width target-cols) (/ height target-rows)
+            target-cols target-rows)))
+
+(defun ansi-terminal-p ()
+  (let ((term (string-downcase (uiop:getenv "TERM"))))
+    (or (search "xterm" term)
+        (search "ansi" term)
+        (search "linux" term))))
+
+(defun print-thumbnail-image (png-file &optional (stream *trace-output*) aspect)
+  "Print a scaled ANSI thumbnail of PNG-FILE to STREAM.
+
+  ASPECT is the pixel aspect ratio of the image (2 for 160 modes, 1 for
+  320 modes); when nil it is guessed from the image width."
   (let* ((path (pathname png-file))
          (png (png-read:read-png-file path))
          (image-data (png-read:image-data png))
          (width (array-dimension image-data 0))
          (height (array-dimension image-data 1))
          (palette-pixels (png->palette image-data)))
-    (cond
-      #+mcclim
-      ((and (typep stream 'clim:sheet)
-            (ignore-errors (clim:stream-drawing-p stream)))
-       (%print-thumbnail-clim stream path width height))
-      ((and (not (typep stream 'string-stream))
-            (tty-xterm-p))
-       (multiple-value-bind (region-w region-h cols rows)
-           (%compute-ansi-sizing width height)
-         (%print-thumbnail-ansi palette-pixels stream region-w region-h cols rows)))
-      (t
-       (multiple-value-bind (region-w region-h cols rows)
-           (%compute-ansi-sizing width height)
-         (%print-thumbnail-dumb palette-pixels stream region-w region-h cols rows))))))
+    (if (or #+mcclim (ignore-errors (clim:stream-drawing-p stream)) nil)
+        (%print-thumbnail-clim stream path width height)
+        (multiple-value-bind (region-w region-h cols rows)
+            (%compute-ansi-sizing width height aspect)
+          (if (ansi-terminal-p)
+              (%print-thumbnail-ansi palette-pixels stream region-w region-h cols rows)
+              (%print-thumbnail-cells palette-pixels stream region-w region-h cols rows))))))
 
 

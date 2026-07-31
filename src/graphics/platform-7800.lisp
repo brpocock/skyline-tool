@@ -794,14 +794,28 @@ Signals assertion errors for invalid dimensions."
 
 (defun blob/write-spans (spans output &key imperfectp)
   (format output "~2%Spans:~%")
-  (let ((stamp-buffer (make-array #x1000 :adjustable t))
-        (stamp-offsets (make-hash-table)))
+  (let ((stamp-buffer (make-array #x1000 :adjustable t :initial-element 0))
+        (stamp-offsets (make-hash-table))
+        (serial 0))
     (loop for span being the hash-keys in spans using (hash-value id)
-          for serial from 0
           do (progn
                (if (and (< serial #x100)
                         (>= (+ serial (length span)) #x100))
                    (setf serial #x100))
+               (loop
+                 (let ((start (+ (* #x1000 (floor serial #x100))
+                                (mod serial #x100)))
+                       (collision nil))
+                   (unless (>= start (array-dimension stamp-buffer 0))
+                     (dotimes (stamp (length span))
+                       (dotimes (byte 16)
+                         (let ((i (+ start stamp (* #x100 byte))))
+                           (when (not (zerop (aref stamp-buffer i)))
+                             (setf collision t)
+                             (return))))))
+                   (if collision
+                       (incf serial (- #x100 (mod serial #x100)))
+                       (return))))
                (blob/write-span-to-stamp-buffer span stamp-buffer
                                                 :stamp-offsets stamp-offsets
                                                 :serial serial
@@ -825,22 +839,40 @@ Signals assertion errors for invalid dimensions."
 
 Each span hash value is (id . mode)."
   (format output "~2%Spans:~%")
-  (let ((stamp-buffer (make-array #x1000 :adjustable t))
-        (stamp-offsets (make-hash-table)))
+  (let ((stamp-buffer (make-array #x1000 :adjustable t :initial-element 0))
+        (stamp-offsets (make-hash-table))
+        (serial 0))
     (loop for span being the hash-keys in spans using (hash-value span-entry)
           for (id . mode) = span-entry
-          for serial from 0
           do (progn
                (if (and (< serial #x100)
                         (>= (+ serial (length span)) #x100))
                    (setf serial #x100))
+               ;; Collision avoidance: if this span's scanline 0 would
+               ;; overlap with an earlier span's scanline 1 on the same
+               ;; page (since MARIA reads scanline N at SpanX + N * #x100),
+               ;; advance past the collision to the next page.
+               (loop
+                 (let ((start (+ (* #x1000 (floor serial #x100))
+                                (mod serial #x100)))
+                       (collision nil))
+                   (unless (>= start (array-dimension stamp-buffer 0))
+                     (dotimes (stamp (length span))
+                       (dotimes (byte 16)
+                         (let ((i (+ start stamp (* #x100 byte))))
+                           (when (not (zerop (aref stamp-buffer i)))
+                             (setf collision t)
+                             (return))))))
+                   (if collision
+                       (incf serial (- #x100 (mod serial #x100)))
+                       (return))))
                (blob/write-span-to-stamp-buffer-320ac span stamp-buffer
-                                                      :mode mode
-                                                      :stamp-offsets stamp-offsets
-                                                      :serial serial
-                                                      :output output
-                                                      :id id
-                                                      :imperfectp imperfectp)
+                                                       :mode mode
+                                                       :stamp-offsets stamp-offsets
+                                                       :serial serial
+                                                       :output output
+                                                       :id id
+                                                       :imperfectp imperfectp)
                (incf serial (length span))))
     (format *trace-output* " writing 320A/C stamps … ")
   (format output "~2%;;; Binary stamp data follows.~%")
@@ -953,8 +985,8 @@ Returns the palette entry index, or 0 if no match."
       (first cands))))
 
 (defun blob/write-span-to-stamp-buffer-320ac (span stamp-buffer
-                                                &key mode stamp-offsets serial output id
-                                                     imperfectp)
+                                              &key mode stamp-offsets serial output id
+                                                   imperfectp)
   "Write a span of stamps for 320A/C mode, converting each stamp according to MODE.
 
 When MODE is :320a, each element of SPAN is an 8�~V16 pixel array (two combined 4px stamps);
@@ -975,8 +1007,8 @@ when MODE is :320c, each element is a 4�~V16 pixel array."
           (let ((i (+ start stamp (* #x100 byte))))
             (assert (let ((b (aref stamp-buffer i)))
                       (or (null b) (zerop b))) ()
-                      "Stamp buffer contains ~x at index ~x; serial ~x, stamp ~x"
-                      (aref stamp-buffer i) i serial stamp)
+                    "Stamp buffer already contained ~x at index ~x; serial ~x, stamp ~x"
+                    (aref stamp-buffer i) i serial stamp)
             (setf (aref stamp-buffer i)
                   (elt bytes (- 15 byte)))))))))
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
@@ -1070,6 +1102,7 @@ Rip a Bitmap Large Object Block in 160A/B mode from PNG-FILE for standard sprite
 
 Pass --imperfect to allow imperfect palette matches instead of signaling errors."
   (let* ((imperfectp (and imperfectp$ (not (emptyp imperfectp$))))
+         (*region* (or *region* :ntsc))
          (png (png-read:read-png-file png-file))
          (height (png-read:height png))
          (width (png-read:width png))
@@ -1085,10 +1118,10 @@ Pass --imperfect to allow imperfect palette matches instead of signaling errors.
          (next-span-id 0))
     (format *trace-output* "accepting ~:[only perfect palette matches~;imperfect palette matches~]… " imperfectp)
     (check-height+width-for-blob height width palette-pixels)
-        (print-thumbnail-image png-file)
-        (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
-        (%write-blob-assembly-atomically
-         output-pathname
+    (print-thumbnail-image png-file)
+    (format *trace-output* " generating drawing lists in ~a… " (enough-namestring output-pathname))
+    (%write-blob-assembly-atomically
+     output-pathname
      (lambda (output)
        (format output ";;; Bitmap Large Object Block for Atari 7800
 ;;; Derived from source file ~a. This is a generated file.~3%
@@ -1386,22 +1419,36 @@ Blob_~a:~10t.block~2%"
 
 (defun blob/write-spans-320bd (spans output &key imperfectp)
   (format output "~2%Spans:~%")
-  (let ((stamp-buffer (make-array #x1000 :adjustable t))
-        (stamp-offsets (make-hash-table)))
+  (let ((stamp-buffer (make-array #x1000 :adjustable t :initial-element 0))
+        (stamp-offsets (make-hash-table))
+        (serial 0))
     (loop for span being the hash-keys in spans using (hash-value span-entry)
           for (id . mode) = span-entry
-          for serial from 0
           do (progn
                (if (and (< serial #x100)
                         (>= (+ serial (length span)) #x100))
                    (setf serial #x100))
+               (loop
+                 (let ((start (+ (* #x1000 (floor serial #x100))
+                                (mod serial #x100)))
+                       (collision nil))
+                   (unless (>= start (array-dimension stamp-buffer 0))
+                     (dotimes (stamp (length span))
+                       (dotimes (byte 16)
+                         (let ((i (+ start stamp (* #x100 byte))))
+                           (when (not (zerop (aref stamp-buffer i)))
+                             (setf collision t)
+                             (return))))))
+                   (if collision
+                       (incf serial (- #x100 (mod serial #x100)))
+                       (return))))
                (blob/write-span-to-stamp-buffer-320bd span stamp-buffer
-                                                      :mode mode
-                                                      :stamp-offsets stamp-offsets
-                                                      :serial serial
-                                                      :output output
-                                                      :id id
-                                                      :imperfectp imperfectp)
+                                                       :mode mode
+                                                       :stamp-offsets stamp-offsets
+                                                       :serial serial
+                                                       :output output
+                                                       :id id
+                                                       :imperfectp imperfectp)
                (incf serial (length span))))
     (format *trace-output* " writing 320B/D stamps … ")
   (format output "~2%;;; Binary stamp data follows.~%")
@@ -1739,8 +1786,7 @@ List of byte lists, one per column
         (push (reverse bytes) bytes-across)))
     (reverse bytes-across)))
 
-(defun compile-art-7800 (index-out index-in &optional (region :ntsc)
-                                                      )
+(defun compile-art-7800 (index-out index-in &optional (region (or *region* :ntsc)))
   "Compile 7800 art assets from INDEX-IN to binary at INDEX-OUT.
   Parses a 7800 art index file, converts the referenced PNG assets into
   interleaved 7800-format bytes (bitplanes for Maria), and writes the
@@ -1757,17 +1803,26 @@ List of byte lists, one per column
   @end table
   @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
   (let ((*machine* 7800)
-        (*region* region))
+        (*region* region)
+        (name (pathname-name index-out)))
     (write-7800-binary (make-pathname
                         :directory (list :relative "Object" (machine-directory-name) "Assets") 
                         :name (format nil "~a.~a"
-                                      (pathname-name index-out)
+                                      name
                                       (string-upcase (string region)))
                         :type "o")
                        (interleave-7800-bytes
                         (parse-into-7800-bytes
                          (read-7800-art-index index-in))))
-    (with-output-to-file (index index-out))))
+    (with-output-to-file (index index-out :if-exists :supersede)
+      (format index ";;; This is a generated file, from ~a" index-in)
+      (format index "
+~10t.if TV == NTSC
+~12t.binary \"~a.NTSC.o\"
+~10t.else
+~12t.binary \"~a.PAL.o\"
+~10t.fi~2%"
+              name name))))
 
 (defun display-maria-art (stream &key dump mode address colors width (unit #x10)
                                       var-colors)
@@ -1892,8 +1947,10 @@ List of byte lists, one per column
         (let* ((png (png-read:read-png-file png-name))
                (palette-pixels (png->palette (png-read:image-data png)
                                              (png-read:transparency png)))
-               (palette (grab-7800-palette mode palette-pixels)))
-          (print-thumbnail-image png-name)
+               (palette (grab-7800-palette mode palette-pixels))
+               (mode-aspect (if (eql (char (string-trim " " mode) 0) #\1)
+                                2 1)))
+          (print-thumbnail-image png-name *trace-output* mode-aspect)
           (appendf bytes
                    (parse-7800-object mode palette-pixels :width width-px :height height-px
                                                           :palette palette)))

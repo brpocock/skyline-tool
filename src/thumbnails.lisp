@@ -23,18 +23,19 @@ An empty list produces black (0 0 0)."
                 (max 0 (min 255 (round b))))))))
 
 (defun region-pixel-colors (palette-pixels x y width height)
-  "Collect all non-nil pixel RGB colors from a rectangular region.
+  "Collect pixel RGB colors from a rectangular region.
 
 PALETTE-PIXELS is a 2D array of palette indices or nil.
 X, Y are the top-left corner; WIDTH, HEIGHT is the region size.
-Returns a list of (r g b) triples from the machine palette."
+Transparent (nil) pixels are reported as black, so that images drawn
+against a transparent background still separate into light and dark
+quadrants.  Returns a list of (r g b) triples from the machine palette."
   (let* ((machine-colors (machine-palette))
          (colors nil))
     (dotimes (dy height)
       (dotimes (dx width)
         (let ((pixel (aref palette-pixels (+ x dx) (+ y dy))))
-          (when pixel
-            (push (nth pixel machine-colors) colors)))))
+          (push (if pixel (nth pixel machine-colors) (list 0 0 0)) colors))))
     (nreverse colors)))
 
 (defun tile-pixel-colors (tile-image)
@@ -77,13 +78,36 @@ is mapped to its nearest color within the effective palette."
                       colors)))))))
     (nreverse colors)))
 
-(defun compute-tile-average-cache (tileset)
-  "Precompute the average XYZ color for every tile in TILESET.
+(defun cell-quadrant-averages (palette-pixels x y w h)
+  "Compute average XYZ colors and lightness for 4 quadrants in cell.
+Returns values: nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light
 
-Each tile's colors are mapped through its effective palette before
-averaging.  Returns a vector of (r g b) triples indexed by local tile-id."
+Every quadrant samples at least one pixel: when the cell is smaller
+than 2×2 pixels the quadrants overlap the cell's pixels, and the right
+and bottom edges are aligned to the cell edge (so sampling never reads
+outside the cell)."
+  (let* ((half-w (max 1 (floor w 2)))
+         (half-h (max 1 (floor h 2)))
+         (right (- (+ x w) half-w))
+         (bottom (- (+ y h) half-h))
+         (nw (region-pixel-colors palette-pixels x y half-w half-h))
+         (ne (region-pixel-colors palette-pixels right y half-w half-h))
+         (se (region-pixel-colors palette-pixels right bottom half-w half-h))
+         (sw (region-pixel-colors palette-pixels x bottom half-w half-h)))
+    (let ((nw-avg (average-rgb-via-xyz nw))
+          (ne-avg (average-rgb-via-xyz ne))
+          (se-avg (average-rgb-via-xyz se))
+          (sw-avg (average-rgb-via-xyz sw)))
+      (let* ((nw-light (rgb-hsl-lightness nw-avg))
+             (ne-light (rgb-hsl-lightness ne-avg))
+             (se-light (rgb-hsl-lightness se-avg))
+             (sw-light (rgb-hsl-lightness sw-avg)))
+        (values nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light)))))
+
+(defun compute-tile-average-cache (tileset)
+  "Precompute quadrant averages and median lightness for each tile in TILESET.
+Returns a vector of (nw-avg ne-avg se-avg sw-avg median-lightness) for each tile."
   (let* ((image (tileset-image tileset))
-         (palette-table (extract-palettes image))
          (tiles-across (floor (array-dimension image 0) 8))
          (tiles-down (floor (array-dimension image 1) 16))
          (total-tiles (* tiles-across tiles-down))
@@ -91,12 +115,16 @@ averaging.  Returns a vector of (r g b) triples indexed by local tile-id."
     (dotimes (tile-id total-tiles cache)
       (let* ((tx (mod tile-id tiles-across))
              (ty (floor tile-id tiles-across))
-             (pal-idx (aref (tileset-palettes tileset) tile-id))
              (tile (extract-region image
                                    (* tx 8) (* ty 16)
-                                   (+ (* tx 8) 8) (+ (* ty 16) 16)))
-             (colors (tile-effective-rgb-colors tile palette-table pal-idx)))
-        (setf (aref cache tile-id) (average-rgb-via-xyz colors))))))
+                                   (+ (* tx 8) 8) (+ (* ty 16) 16))))
+        (multiple-value-bind (nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light)
+            (cell-quadrant-averages tile 0 0 8 16)
+          (let* ((lightnesses (list nw-light ne-light se-light sw-light))
+                 (sorted-lights (sort (copy-list lightnesses) #'<))
+                 (median-light (second sorted-lights)))
+            (setf (aref cache tile-id)
+                  (list nw-avg ne-avg se-avg sw-avg median-light))))))))
 
 (defun tileset-tile-count (tileset)
   "Number of complete tiles in TILESET, derived from image dimensions.
@@ -121,64 +149,37 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
       (t (values nil 0)))))
 
 (defun print-mini-tile-map (tileset &optional (stream *trace-output*))
-  "Print a mini-tile-map of a TILESET to STREAM (default *trace-output*).
+  "Print a scaled-down ANSI thumbnail of TILESET, filling the terminal.
 
-Each tile is displayed as 2×2 shaded grayscale pixels (4 characters
-across × 2 rows per tile).  Pixel darkness is the XYZ-luminance of
-the quadrant's average colour.  Output is top-to-bottom rows,
-left-to-right within each row."
+  The whole tileset image is sampled into evenly-divided character
+  cells (via %compute-ansi-sizing), not one glyph per tile, so even a
+  small tileset fills the available terminal space."
   (let* ((image (tileset-image tileset))
-         (tile-width 8)
-         (tile-height 16)
-         (tiles-across (floor (array-dimension image 0) tile-width))
-         (tiles-down (floor (array-dimension image 1) tile-height))
-         (total-tiles (* tiles-across tiles-down))
-         (half-w (floor tile-width 2))
-         (half-h (floor tile-height 2)))
-    (format stream "~&Mini-tile-map (~D×~D tiles, 2×2 px each):~%" tiles-across tiles-down)
-    #+mcclim
-    (when (typep stream 'clim:sheet)
-      (%print-clim-pixels image stream)
-      (return-from print-mini-tile-map))
-    (dotimes (ty tiles-down)
-      (dotimes (qy 2)
-        (dotimes (tx tiles-across)
-          (let ((x0 (* tx tile-width))
-                (y0 (* ty tile-height)))
-            (dotimes (qx 2)
-              (let ((sx (+ x0 (* qx half-w)))
-                    (sy (+ y0 (* qy half-h))))
-                (multiple-value-bind (light dark light-count dark-count)
-                    (%region->two-populations image sx sy half-w half-h)
-                  (if (null dark)
-                      (let ((ansi-p (and (not (typep stream 'string-stream))
-                                        (tty-xterm-p))))
-                        (if ansi-p
-                            (print-wide-pixel light stream)
-                            (princ "██" stream)))
-                      (let ((char (%darkness-char dark-count (+ light-count dark-count)))
-                            (ansi-p (and (not (typep stream 'string-stream))
-                                         (tty-xterm-p))))
-                        (if ansi-p
-                            (%ansi-two-color-cell dark light char stream)
-                            (format stream "~c~c" char char)))))))))
-        (terpri stream)))
-    (finish-output stream)))
+         (w (array-dimension image 0))
+         (h (array-dimension image 1)))
+    (format stream "~&Tileset image (~D×~D tiles):~%"
+            (floor w 8) (floor h 16))
+    (multiple-value-bind (rw rh cols rows)
+        (%compute-ansi-sizing w h)
+      (%print-thumbnail-cells image stream rw rh cols rows :ansi-p t))))
 
 (defun print-mini-blob-view (palette-pixels &optional (stream *trace-output*))
   "Print a mini-blob (scaled-down) view of an image to STREAM.
-
-For 160A/B modes (width ≤ 160): each 8×16 pixel region → one pixel.
-For 320A/B/C/D modes (width > 160): each 16×16 pixel region → one pixel.
-
-PALETTE-PIXELS is a 2D array of palette indices (from png->palette).
-The bottom palette-strip row (if present) is included in the display."
+   
+   For 160A/B modes (width ≤ 160): each 8×16 pixel region → one pixel.
+   For 320A/B/C/D modes (width > 160): each 16×16 pixel region → one pixel.
+   
+  PALETTE-PIXELS is a 2D array of palette indices (from png->palette).
+  The bottom palette-strip row (if present) is included in the display."
   (let* ((width (array-dimension palette-pixels 0))
          (height (array-dimension palette-pixels 1))
+         (term-width (parse-integer (or (uiop:getenv "COLUMNS") "80") :junk-allowed t))
          (region-w (if (> width 160) 16 8))
          (region-h 16)
-         (cols (floor width region-w))
-         (rows (floor height region-h)))
+         (image-cols (floor width region-w))
+         (image-rows (floor height region-h))
+         (cols (min term-width image-cols))
+         (rows image-rows))
     (format stream "~&Mini-blob view (~D×~D regions, ~D×~Dpx each):~%"
             cols rows region-w region-h)
     (dotimes (ry rows)
@@ -188,32 +189,134 @@ The bottom palette-strip row (if present) is included in the display."
           (print-wide-pixel
            (average-rgb-via-xyz
             (region-pixel-colors palette-pixels sx sy region-w region-h))
-           stream)))
-      (terpri stream))
+           stream))))
+    (terpri stream)
     (finish-output stream)))
+
+(defun rgb-hsl-lightness (rgb)
+  "Return HSL lightness (0.0-1.0) for RGB triple (r g b), each 0-255."
+  (if (null rgb)
+      0.0
+      (destructuring-bind (r g b) rgb
+        (multiple-value-bind (h s l)
+            (dufy:rgb-to-hsl r g b)
+          (declare (ignore h s))
+          l))))
+
+(defun median-lightness (rgbs)
+  "Return median HSL lightness from list of RGB triples."
+  (let ((lights (sort (mapcar #'rgb-hsl-lightness rgbs) #'<)))
+    (elt lights (floor (length lights) 2))))
+
+(defun classify-sample-lightness (sample-rgb median)
+  "Return :light if SAMPLE-RGB lightness <= MEDIAN, else :dark."
+  (if (null sample-rgb)
+      :dark
+      (if (>= (rgb-hsl-lightness sample-rgb) median)
+          :light
+          :dark)))
+
+(defun compute-tile-character (nw-avg ne-avg se-avg sw-avg median-light)
+  "Given 4 quadrant averages and median lightness, return (values char fg-rgb bg-rgb).
+Uses 16 quadrant-drawing characters based on which quadrants are above/below median."
+  (let* ((nw-light (rgb-hsl-lightness nw-avg))
+         (ne-light (rgb-hsl-lightness ne-avg))
+         (se-light (rgb-hsl-lightness se-avg))
+         (sw-light (rgb-hsl-lightness sw-avg))
+         (bits (+ (if (> nw-light median-light) 8 0)
+                  (if (> ne-light median-light) 4 0)
+                  (if (> se-light median-light) 2 0)
+                  (if (> sw-light median-light) 1 0)))
+         (overall-avg (average-rgb-via-xyz (list nw-avg ne-avg se-avg sw-avg)))
+         (overall-light (rgb-hsl-lightness overall-avg))
+         (light-quads (remove-if-not (lambda (q) (> (rgb-hsl-lightness q) median-light))
+                                     (list nw-avg ne-avg se-avg sw-avg)))
+         (dark-quads (remove-if (lambda (q) (> (rgb-hsl-lightness q) median-light))
+                                (list nw-avg ne-avg se-avg sw-avg)))
+         (light-avg (average-rgb-via-xyz light-quads))
+         (dark-avg (average-rgb-via-xyz dark-quads))
+         (glyphs " ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█")
+         (fg (if (<= overall-light median-light) light-avg dark-avg))
+         (bg (if (<= overall-light median-light) dark-avg light-avg)))
+    (values (aref glyphs bits) fg bg)))
 
 (defun print-mini-map (width height gid-grid base-tileset decal-tileset
                        &optional (stream *trace-output*))
-  "Print a mini-map of the tile grid to STREAM (default *trace-output*).
+  "Print a mini-map of the tile grid to STREAM, scaled to fill terminal.
 
-Each grid cell is one print-wide-pixel whose color is the average (in
-CIE XYZ) of all pixels in the tile referenced by that cell, mapped
-through the tile's effective palette."
-  (let* ((base-cache (compute-tile-average-cache base-tileset))
-         (decal-cache (and decal-tileset (compute-tile-average-cache decal-tileset))))
-    (format stream "~&Mini-map (~D×~D tiles):~%" width height)
-    (dotimes (y height)
-      (dotimes (x width)
-        (let* ((gid (aref gid-grid x y))
-               (avg (multiple-value-bind (ts tid) (resolve-gid gid base-tileset decal-tileset)
-                      (cond
-                        ((eql ts base-tileset)
-                         (if (< tid (length base-cache))
-                             (aref base-cache tid)
-                             (list 0 0 0)))
-                        ((and decal-cache (< tid (length decal-cache)))
-                         (aref decal-cache tid))
-                        (t (list 0 0 0))))))
-          (print-wide-pixel avg stream)))
-      (terpri stream))
-    (finish-output stream)))
+  The map is assembled into a full pixel image (8×16 px per tile),
+  then rendered with the same ANSI quadrant sampling as the other
+  thumbnails.  Maps are 160B mode, so each pixel is 2:1 wide;
+  %compute-ansi-sizing applies that aspect correction."
+  (let* ((base-image (tileset-image base-tileset))
+         (decal-image (when decal-tileset (tileset-image decal-tileset)))
+         (pixel-w (* width 8))
+         (pixel-h (* height 16))
+         (pixels (make-array (list pixel-w pixel-h) :initial-element nil)))
+    (flet ((blit-tile (image tid mx my)
+             (let* ((tiles-across (floor (array-dimension image 0) 8))
+                    (tx (mod tid tiles-across))
+                    (ty (floor tid tiles-across)))
+               (dotimes (dy 16)
+                 (dotimes (dx 8)
+                   (let ((p (aref image (+ (* tx 8) dx) (+ (* ty 16) dy))))
+                     (when p
+                       (setf (aref pixels (+ (* mx 8) dx) (+ (* my 16) dy)) p))))))))
+      (dotimes (my height)
+        (dotimes (mx width)
+          (multiple-value-bind (ts tid)
+              (resolve-gid (aref gid-grid mx my) base-tileset decal-tileset)
+            (when ts
+              (if (eql ts base-tileset)
+                  (blit-tile base-image tid mx my)
+                  (blit-tile decal-image tid mx my))))))
+      (multiple-value-bind (rw rh cols rows)
+          (%compute-ansi-sizing pixel-w pixel-h 2)
+        (format stream "~&Mini-map (~D×~D tiles, scaled to ~D×~D):~%"
+                width height cols rows)
+        (%print-thumbnail-cells pixels stream rw rh cols rows :ansi-p t)))))
+
+;; ANSI terminal output for thumbnails (quadrant-based, 16 patterns)
+(defun print-ansi-cell-pattern (palette-pixels x y w h stream)
+  "Print a single ANSI cell using 4-quadrant algorithm.
+Divides cell into 4 quadrants, averages each in XYZ, uses median
+lightness to classify, and renders with 16 quadrant-drawing characters."
+  (let* ((all-colors (region-pixel-colors palette-pixels x y w h))
+         (unique-colors (remove-duplicates all-colors :test #'equal)))
+    (when (<= (length unique-colors) 1)
+      (let ((color (or (first unique-colors) (list 0 0 0))))
+        (princ (ansi-color-rgb (first color) (second color) (third color) nil) stream)
+        (princ #\Space stream)
+        (return-from print-ansi-cell-pattern)))
+    (multiple-value-bind (nw-avg ne-avg se-avg
+                          sw-avg nw-light ne-light se-light sw-light)
+        (cell-quadrant-averages palette-pixels x y w h)
+      (let* ((lightnesses (list nw-light ne-light se-light sw-light))
+             (sorted-lights (sort (copy-list lightnesses) #'<))
+             (median (second sorted-lights))
+             (all-quads (list nw-avg ne-avg se-avg sw-avg))
+             (light-quads (remove-if-not (lambda (q) (> (rgb-hsl-lightness q) median))
+                                         all-quads))
+             (dark-quads (remove-if (lambda (q) (> (rgb-hsl-lightness q) median))
+                                    all-quads)))
+        (when (null light-quads)
+          (let* ((sums (mapcar (lambda (q) (+ (first q) (second q) (third q))) all-quads))
+                 (max-index (position (apply #'max sums) sums)))
+            (setf light-quads (list (nth max-index all-quads)))))
+        (when (null dark-quads)
+          (let* ((sums (mapcar (lambda (q) (+ (first q) (second q) (third q))) all-quads))
+                 (min-index (position (apply #'min sums) sums)))
+            (setf dark-quads (list (nth min-index all-quads)))))
+        (let* ((light-avg (average-rgb-via-xyz light-quads))
+               (dark-avg (average-rgb-via-xyz dark-quads))
+               (bits (+ (if (< nw-light median) 1 0)
+                        (if (< ne-light median) 2 0)
+                        (if (< se-light median) 4 0)
+                        (if (< sw-light median) 8 0)))
+               (glyphs " ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█")
+               (fg dark-avg)
+               (bg light-avg)
+               (char (aref glyphs bits)))
+          (princ (ansi-color-rgb (first fg) (second fg) (third fg) t) stream)
+          (princ (ansi-color-rgb (first bg) (second bg) (third bg) nil) stream)
+          (princ char stream))))))
