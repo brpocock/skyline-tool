@@ -35,7 +35,7 @@ asset is an error and such code will always be rejected.
 |#
 
 (defclass game-resource ()
-  ()
+  ((language :initarg :language :reader game-resource-language :initform :blob))
   (:documentation "Base class for all game resources. Kind is determined by class."))
 
 ;; game-resource-moniker is ONLY for game-resource-asset subclasses.
@@ -54,7 +54,8 @@ asset is an error and such code will always be rejected.
 (defclass game-resource-asset (game-resource-from-file)
   ((moniker :initarg :moniker :reader game-asset-moniker :initform nil)
    (asset-id :initarg :asset-id :reader game-resource-asset-id :initform nil)
-   (builds :initarg :builds :reader game-asset-builds :initform nil)))
+   (builds :initarg :builds :reader game-asset-builds :initform nil)
+   (language :initarg :language :reader game-resource-language :initform :blob)))
 
 (defmethod game-resource-full-path ((resource game-resource))
   nil)
@@ -186,6 +187,14 @@ asset is an error and such code will always be rejected.
    (comment-before :initarg :comment-before :accessor game-translation-comments)))
 
 (defclass game-resource-class (game-resource-from-file) ())
+(defclass game-resource-class-cobol (game-resource-class) ())
+(defclass game-resource-class-basic (game-resource-class) ())
+(defclass game-resource-class-fortran (game-resource-class) ())
+(defclass game-resource-class-pascal (game-resource-class) ())
+(defclass game-resource-class-smalltalk (game-resource-class) ())
+(defclass game-resource-class-lingo (game-resource-class) ())
+(defclass game-resource-class-lua (game-resource-class) ())
+(defclass game-resource-class-objective (game-resource-class) ())
 
 (defclass game-resource-tileset (game-resource-from-file) ())
 
@@ -197,6 +206,11 @@ asset is an error and such code will always be rejected.
 (defclass game-resource-routine-rc-cobol (game-resource-routine-run-commands) ())
 (defclass game-resource-routine-rc-basic (game-resource-routine-run-commands) ())
 (defclass game-resource-routine-rc-pascal (game-resource-routine-run-commands) ())
+(defclass game-resource-routine-rc-fortran (game-resource-routine-run-commands) ())
+(defclass game-resource-routine-rc-smalltalk (game-resource-routine-run-commands) ())
+(defclass game-resource-routine-rc-lingo (game-resource-routine-run-commands) ())
+(defclass game-resource-routine-rc-lua (game-resource-routine-run-commands) ())
+(defclass game-resource-routine-rc-objective (game-resource-routine-run-commands) ())
 
 (clim:define-presentation-type game-resource-reference ())
 
@@ -993,6 +1007,49 @@ resource view mode (reference/reading/editing).")
 
 (defmethod game-resource-subheading ((resource game-resource-routine-rc-pascal))
   "Pascal Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-fortran))
+  "FORTRAN Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-smalltalk))
+  "SmallTalk Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-lingo))
+  "Lingo Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-lua))
+  "Lua Run-Commands Routine")
+
+(defmethod game-resource-subheading ((resource game-resource-routine-rc-objective))
+  "Objective Run-Commands Routine")
+
+;; Class resources
+(defmethod game-resource-subheading ((resource game-resource-class))
+  "Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-cobol))
+  "COBOL Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-basic))
+  "BASIC Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-fortran))
+  "FORTRAN Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-pascal))
+  "Pascal Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-smalltalk))
+  "SmallTalk Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-lingo))
+  "Lingo Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-lua))
+  "Lua Class Definition")
+
+(defmethod game-resource-subheading ((resource game-resource-class-objective))
+  "Objective Class Definition")
 
 (defgeneric game-resource-title (resource))
 (defgeneric game-resource-subheading (resource))

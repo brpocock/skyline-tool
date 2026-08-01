@@ -665,9 +665,25 @@ fallback path: @file{Hicolor/} for 7850, else the machine-specific path under
           (assert (= 8 (array-dimension tile 0)))
           (assert (= 16 (array-dimension tile 1)))
           (push tile output))))
-    (format *trace-output* "… found ~d tile~:p in ~d×~d image"
-            (length output) (array-dimension image 0) (array-dimension image 1))
+  (format *trace-output* "… found ~d tile~:p in ~d×~d image"
+          (length output) (array-dimension image 0) (array-dimension image 1))
     (reverse output)))
+
+(defun tileset-gid-grid (tileset)
+  "Return a 2D array of the global IDs of the tiles in TILESET's image.
+
+   The image is laid out as 8×16 tiles arranged in a grid.
+   Each element is (tileset-gid tileset) plus the linear tile index,
+   so that consecutive GIDs run across each row then advance to the
+   next row — matching the order in which tiles appear in the sheet."
+  (let* ((image (tileset-image tileset))
+         (columns (floor (array-dimension image 0) 8))
+         (rows (floor (array-dimension image 1) 16))
+         (base-gid (tileset-gid tileset))
+         (grid (make-array (list columns rows))))
+    (dotimes (y rows grid)
+      (dotimes (x columns)
+        (setf (aref grid x y) (+ base-gid x (* y columns)))))))
 
 (defun extract-palettes (image &key (count 8))
   (let* ((last-row (1- (array-dimension image 1)))

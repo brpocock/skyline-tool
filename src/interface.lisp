@@ -456,7 +456,8 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                                #+mcclim (when (and (x11-p)
                                                    (not (string-equal (or (sb-posix:getenv "AUTOCONTINUE") "") "t")))
                                           #'clim-debugger:debugger)
-                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
+                               (when (or #+mcclim (not (x11-p)) t) #'friendly-tty-debugger)
+                               #'friendly-tty-debugger
                                *debugger-hook*)))
         (restart-case
             (unwind-protect

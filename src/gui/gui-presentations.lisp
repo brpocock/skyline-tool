@@ -398,25 +398,26 @@ Base91 provides ~23% overhead vs base64's 33%."
         (encode-base91 bytes)))))
 
 (defmethod resource-to-json ((resource game-resource))
-  (let ((obj (make-hash-table :test 'equal)))
-    (setf (gethash "name" obj) (game-resource-title resource))
-    (setf (gethash "kind" obj) (game-resource-kind resource))
-    (when (typep resource 'game-resource-asset)
-      (setf (gethash "moniker" obj) (game-asset-moniker resource)))
-    (when (typep resource 'game-resource-from-file)
-      (let ((path (game-resource-full-path resource)))
-        (setf (gethash "path" obj) (namestring path))
-        ;; Include file contents as base91 for file-based resources
-        (let ((content (encode-file-to-base91 path)))
-          (when content
-            (setf (gethash "content" obj)
-                  (list :encoding "base91"
-                        :size (file-length (game-resource-full-path resource))
-                        :data content))))))
-    (when (typep resource 'game-resource-asset)
-      (setf (gethash "assetId" obj) (game-resource-asset-id resource))
-      (setf (gethash "builds" obj) (game-resource-builds resource)))
-    (wrap-with-headers obj (class-name (class-of resource)))))
+   (let ((obj (make-hash-table :test 'equal)))
+     (setf (gethash "name" obj) (game-resource-title resource))
+     (setf (gethash "kind" obj) (game-resource-kind resource))
+     (setf (gethash "language" obj) (game-resource-language resource))
+     (when (typep resource 'game-resource-asset)
+       (setf (gethash "moniker" obj) (game-asset-moniker resource)))
+     (when (typep resource 'game-resource-from-file)
+       (let ((path (game-resource-full-path resource)))
+         (setf (gethash "path" obj) (namestring path))
+         ;; Include file contents as base91 for file-based resources
+         (let ((content (encode-file-to-base91 path)))
+           (when content
+             (setf (gethash "content" obj)
+                   (list :encoding "base91"
+                         :size (file-length (game-resource-full-path resource))
+                         :data content))))))
+     (when (typep resource 'game-resource-asset)
+       (setf (gethash "assetId" obj) (game-resource-asset-id resource))
+       (setf (gethash "builds" obj) (game-asset-builds resource)))
+     (wrap-with-headers obj (class-name (class-of resource)))))
 
 (defmethod resource-to-json ((resource game-resource-map))
   (let ((obj (call-next-method)))
@@ -485,6 +486,12 @@ Base91 provides ~23% overhead vs base64's 33%."
 ;; 
 ;; resource-from-json methods for all concrete resource classes
 ;; 
+
+(defmethod resource-from-json (json (class (eql 'game-resource)))
+   (make-instance class
+                  :name (gethash "name" json)
+                  :kind (ignore-errors (kind-by-name (gethash "kind" json)))
+                  :language (gethash "language" json))) 
 
 (defmethod resource-from-json (json (class (eql 'game-resource-map)))
   (error "unimplemented")

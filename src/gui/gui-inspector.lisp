@@ -235,10 +235,17 @@ Call this when region targets change or on initial window creation."
 ;; Provides standardized layout, display functions, menu infrastructure,
 ;; thread management, and eventbus subscription for all resource type inspectors
 ;;
-(defclass uniform-inspector-frame ()
+(defclass uniform-inspector-frame (clim:standard-application-frame)
   ((watcher-thread :initform nil :accessor frame-watcher-thread)
    (eventbus-subscriber :initform nil :accessor frame-eventbus-subscriber)
    (view-mode :initform :editing :initarg :view-mode :accessor frame-view-mode)))
+
+(defmethod initialize-instance :after ((frame uniform-inspector-frame) &key)
+  "Handle post-initialization for uniform inspector frames."
+  (call-next-method))
+
+(defmethod initialize-instance :before ((frame uniform-inspector-frame) &key)
+  (declare (ignore frame key)))
 
 (defun setup-inspector-eventbus (frame)
   "Subscribe FRAME to resource change events for auto-redisplay.

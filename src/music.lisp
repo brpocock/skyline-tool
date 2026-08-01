@@ -2071,8 +2071,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
           (return-from hokey-reckon (values i best1 best-e)))))
     (when (> q 1/2)
       (hokey-reckon note (getf (elt o (mod (1- i) (length o))) :instrument) (* q 3/4) tv)
-      (cerror "Continue, dropping this note"
-              "Hokey cannot play ~a on any instrument" (midi->note-name note)))))
+      (warn "Hokey cannot play ~a on any instrument" (midi->note-name note)))))
 
 (defun simplify-to-rational (fraction &optional (smallest-part 1/3))
   (let* ((numerator (floor fraction smallest-part))

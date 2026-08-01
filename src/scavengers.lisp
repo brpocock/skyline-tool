@@ -4,6 +4,25 @@
 
 (in-package :skyline-tool)
 
+(defun infer-language (file)
+  "Infer language from file extension for Eightbol compiled languages."
+  (case (pathname-type file)
+    (:bas :basic)
+    (:f :fortran)
+    (:for :fortran)
+    (:p :pascal)
+    (:pa :pascal) ; Alternative alias for .pascal
+    (:cp :pascal) ; Alternative alias for .pas?
+    (:psh :pascal) ; Alternative alias for .psh?
+    (:st :smalltalk)
+    (:stxt :smalltalk) ; Lingo shortform
+    (:lua :lua)
+    (:m :objective)
+    (:c :objective) ; Objective-C
+    (:cob :cobol)
+    (:cs :csharp) ; Supports WWW-based C#
+    (t :unknown))) ; Default to unknown
+
 ;;; 
 ;;; Utility Functions
 ;;; 
@@ -101,12 +120,15 @@ Returns the new thread."
                    (setf (gethash (first parts) asset-index) (second parts))))))
     (loop for file in (directory (make-pathname :name :wild :type "xcf" :defaults blob-dir))
           do (let* ((filename (pathname-name file))
-                    (moniker (gethash filename asset-index)))
-               (when moniker
-                 (let ((resource (make-instance 'game-resource-blob
-                                                :moniker moniker
-                                                :full-path (truename file))))
-                   (cache-and-publish-resource resource)))))))
+(moniker (gethash filename asset-index))
+                     (language (infer-language file)))
+                 (when moniker
+                   (let ((resource (make-instance 'game-resource-blob
+                                                  :moniker moniker
+                                                  :full-path (truename file)
+                                                  :kind 'blob
+                                                  :language language)))
+                     (cache-and-publish-resource resource)))))))
 
 (defun start-character-scavenger ()
   "Publish character resources from Source/Tables/NPCStats.ods."
@@ -182,14 +204,29 @@ Returns the new thread."
    :name "sprite-sheet-scavenger-watcher"))
 
 (defun start-routine-run-command-scavenger ()
-  "Publish routine-run-command resources from Source/Routines/ directory."
-  (loop for file in (directory (make-pathname :name :wild :type "cob" :defaults "Source/Routines/"))
-        do (let ((resource (make-instance 'game-resource-routine-run-commands
-                                          :full-path (truename file))))
-             (cache-and-publish-resource resource)))
-  (start-resource-directory-watcher
-   (list #p"Source/Routines/")
-   :name "routine-run-command-scavenger-watcher"))
+  "Publish routine-run-command resources from Source/Routines/ directory for all supported languages."
+  (let ((extensions '("cob" "cpy" "bas" "f" "for" "p" "pas" "st" "ls" "stxt" "lua" "m" "c")))
+    (dolist (ext extensions)
+      (let ((class (case ext
+                     ("cob" 'game-resource-routine-rc-cobol)
+                     ("cpy" 'game-resource-routine-rc-cobol)
+                     ("bas" 'game-resource-routine-rc-basic)
+                     ("f" 'game-resource-routine-rc-fortran)
+                     ("for" 'game-resource-routine-rc-fortran)
+                     ("p" 'game-resource-routine-rc-pascal)
+                     ("pas" 'game-resource-routine-rc-pascal)
+                     ("st" 'game-resource-routine-rc-smalltalk)
+                     ("ls" 'game-resource-routine-rc-lingo)
+                     ("stxt" 'game-resource-routine-rc-lingo)
+                     ("lua" 'game-resource-routine-rc-lua)
+                     ("m" 'game-resource-routine-rc-objective)
+                     ("c" 'game-resource-routine-rc-objective))))
+        (loop for file in (directory (make-pathname :name :wild :type ext :defaults "Source/Routines/"))
+              do (let ((resource (make-instance class :full-path (truename file))))
+                   (cache-and-publish-resource resource)))))
+    (start-resource-directory-watcher
+     (list #p"Source/Routines/")
+     :name "routine-run-command-scavenger-watcher")))
 
 (defun start-routine-forth-library-scavenger ()
   "Publish routine-forth-library resources from Source/Scripts/Forth/ directory."
@@ -202,14 +239,29 @@ Returns the new thread."
    :name "routine-forth-library-scavenger-watcher"))
 
 (defun start-class-scavenger ()
-  "Publish class resources from Source/Classes/ directory."
-  (loop for file in (directory (make-pathname :name :wild :type "cob" :defaults "Source/Classes/"))
-        do (let ((resource (make-instance 'game-resource-class
-                                          :full-path (truename file))))
-             (cache-and-publish-resource resource)))
-  (start-resource-directory-watcher
-   (list #p"Source/Classes/")
-   :name "class-scavenger-watcher"))
+  "Publish class resources from Source/Classes/ directory for all supported languages."
+  (let ((extensions '("cob" "cpy" "bas" "f" "for" "p" "pas" "st" "ls" "stxt" "lua" "m" "c")))
+    (dolist (ext extensions)
+      (let ((class (case ext
+                     ("cob" 'game-resource-class-cobol)
+                     ("cpy" 'game-resource-class-cobol)
+                     ("bas" 'game-resource-class-basic)
+                     ("f" 'game-resource-class-fortran)
+                     ("for" 'game-resource-class-fortran)
+                     ("p" 'game-resource-class-pascal)
+                     ("pas" 'game-resource-class-pascal)
+                     ("st" 'game-resource-class-smalltalk)
+                     ("ls" 'game-resource-class-lingo)
+                     ("stxt" 'game-resource-class-lingo)
+                     ("lua" 'game-resource-class-lua)
+                     ("m" 'game-resource-class-objective)
+                     ("c" 'game-resource-class-objective))))
+        (loop for file in (directory (make-pathname :name :wild :type ext :defaults "Source/Classes/"))
+              do (let ((resource (make-instance class :full-path (truename file))))
+                   (cache-and-publish-resource resource)))))
+    (start-resource-directory-watcher
+     (list #p"Source/Classes/")
+     :name "class-scavenger-watcher")))
 
 (defun start-instrument-scavenger ()
   "Publish instrument resources from Source/Tables/Instruments.ods."

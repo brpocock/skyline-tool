@@ -1,5 +1,14 @@
 (in-package :skyline-tool)
 
+(define-constant +quad-glyphs+ #(#\Space
+                                 #\▗
+                                 #\▖ #\▄
+                                 #\▝ #\▐ #\▞ #\▟
+                                 #\▘ #\▚ #\▌ #\▙ #\▀ #\▜ #\▛
+                                 #\█)
+  :test 'equalp
+  :documentation "glyphs for quarter-character “low-res graphics”")
+
 (defun average-rgb-via-xyz (colors)
   "Average a list of RGB triples in CIE XYZ space, return (r g b).
 
@@ -20,7 +29,7 @@
             (dufy:xyz-to-rgb (/ sum-x n) (/ sum-y n) (/ sum-z n))
           (list (max 0 (min 255 (round r)))
                 (max 0 (min 255 (round g)))
-                (max 0 (min 255 (round b)))))))
+                (max 0 (min 255 (round b))))))))
 
 (defun region-pixel-colors (palette-pixels x y width height)
   "Collect pixel RGB colors from a rectangular region.
@@ -104,7 +113,7 @@ outside the cell)."
              (ne-light (rgb-hsl-lightness ne-avg))
              (se-light (rgb-hsl-lightness se-avg))
              (sw-light (rgb-hsl-lightness sw-avg)))
-        (values nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light))))))
+        (values nw-avg ne-avg se-avg sw-avg nw-light ne-light se-light sw-light)))))
 
 (defun tileset-tile-count (tileset)
   "Number of complete tiles in TILESET, derived from image dimensions.
@@ -141,7 +150,7 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
             (floor w 8) (floor h 16))
     (multiple-value-bind (rw rh cols rows)
         (%compute-ansi-sizing w h)
-      (%print-thumbnail-cells image stream rw rh cols rows :ansi-p t)))))
+      (%print-thumbnail-cells image stream rw rh cols rows :ansi-p t))))
 
 (defun rgb-hsl-lightness (rgb)
   "Return HSL lightness (0.0-1.0) for RGB triple (r g b), each 0-255."
@@ -191,14 +200,20 @@ Matches @code{extract-8×16-tiles} so tile-id x,y positions are correct."
 ;; ANSI terminal output for thumbnails (quadrant-based, 16 patterns)
 (defun print-ansi-cell-pattern (palette-pixels x y w h stream)
   "Print a single ANSI cell using 4-quadrant algorithm.
-Divides cell into 4 quadrants, averages each in XYZ, uses median
-lightness to classify, and renders with 16 quadrant-drawing characters."
+Divides cell into 4 quadrants (NW, NE, SE, SW), averages each in XYZ space,
+uses median lightness to classify quadrants as dark (<= median) or light (> median),
+and renders with 16 quadrant-drawing characters.
+Quadrant bit order: NW=8, NE=4, SE=1, SW=2 (matches glyph string \" ▗▖▄▝▐▞▟▘▚▌▙▀\") "
   (let* ((all-colors (region-pixel-colors palette-pixels x y w h))
          (unique-colors (remove-duplicates all-colors :test #'equal)))
     (when (<= (length unique-colors) 1)
-      (let ((color (or (first unique-colors) (list 0 0 0))))
-        (princ (ansi-color-rgb (first color) (second color) (third color) nil) stream)
-        (princ #\Space stream)
+      (let* ((color (or (first unique-colors) (list 0 0 0)))
+             (lum (rgb-hsl-lightness color)))
+        (if (< lum .5)
+            (progn (princ (ansi-color-rgb (first color) (second color) (third color) nil) stream)
+                   (princ #\█ stream))
+            (progn (princ (ansi-color-rgb (first color) (second color) (third color) nil) stream)
+                   (princ #\Space stream)))
         (return-from print-ansi-cell-pattern)))
     (multiple-value-bind (nw-avg ne-avg se-avg
                           sw-avg nw-light ne-light se-light sw-light)
@@ -225,10 +240,9 @@ lightness to classify, and renders with 16 quadrant-drawing characters."
                         (if (<= ne-light median) 4 0)
                         (if (<= se-light median) 1 0)
                         (if (<= sw-light median) 2 0)))
-               (glyphs " ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█")
                (fg dark-avg)
                (bg light-avg)
-               (char (aref glyphs bits)))
+               (char (aref +quad-glyphs+ bits)))
           (princ (ansi-color-rgb (first fg) (second fg) (third fg) t) stream)
           (princ (ansi-color-rgb (first bg) (second bg) (third bg) nil) stream)
           (princ char stream))))))

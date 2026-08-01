@@ -458,7 +458,7 @@ ___________________________
 (clim:define-command (com-show-journal :command-table clim-internals::global-command-table
                                        :menu t :name t) ()
   "Show the worker journal log."
-  (clim-simple-echo:run-in-simple-echo
+  (run-journal-inspector
    (lambda ()
      (if *worker-journal*
          (let ((events (journal:list-events *worker-journal*)))
