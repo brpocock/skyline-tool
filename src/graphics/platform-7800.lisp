@@ -1011,6 +1011,7 @@ when MODE is :320c, each element is a 4�~V16 pixel array."
                     (aref stamp-buffer i) i serial stamp)
             (setf (aref stamp-buffer i)
                   (elt bytes (- 15 byte)))))))))
+
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
   "Rip a Bitmap Large Object Block from PNG-FILE
 
@@ -1788,41 +1789,58 @@ List of byte lists, one per column
 
 (defun compile-art-7800 (index-out index-in &optional (region (or *region* :ntsc)))
   "Compile 7800 art assets from INDEX-IN to binary at INDEX-OUT.
-  Parses a 7800 art index file, converts the referenced PNG assets into
-  interleaved 7800-format bytes (bitplanes for Maria), and writes the
-  resulting binary file.
-  @table @asis
-  @item INDEX-OUT
-  Output path for the compiled binary
-  @item INDEX-IN
-  Input path for the 7800 art index file
-  @item REGION
-  Video region (:ntsc or :pal) (default: :ntsc)
-  @item Side Effects
-  Sets *machine* to 7800 and *region* to REGION during compilation
-  @end table
-  @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
+   Parses a 7800 art index file, converts the referenced PNG assets into
+   interleaved 7800-format bytes (bitplanes for Maria), and writes the
+   resulting binary file.
+   @table @asis
+   @item INDEX-OUT
+   Output path for the compiled binary
+   @item INDEX-IN
+   Input path for the 7800 art index file
+   @item REGION
+   Video region (:ntsc or :pal) (default: :ntsc)
+   @item Side Effects
+   Sets *machine* to 7800 and *region* to REGION during compilation
+   @end table
+   @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
   (let ((*machine* 7800)
         (*region* region)
         (name (pathname-name index-out)))
-    (write-7800-binary (make-pathname
-                        :directory (list :relative "Object" (machine-directory-name) "Assets") 
-                        :name (format nil "~a.~a"
-                                      name
-                                      (string-upcase (string region)))
-                        :type "o")
-                       (interleave-7800-bytes
-                        (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))
-    (with-output-to-file (index index-out :if-exists :supersede)
-      (format index ";;; This is a generated file, from ~a" index-in)
-      (format index "
-~10t.if TV == NTSC
-~12t.binary \"~a.NTSC.o\"
-~10t.else
-~12t.binary \"~a.PAL.o\"
-~10t.fi~2%"
-              name name))))
+    (cond
+      ((string= (pathname-type index-out) "s")
+       ;; index-out is the .s file - generate both binaries and the stub
+       (let* ((base-name name)
+              (binary-data (interleave-7800-bytes
+                            (parse-into-7800-bytes
+                             (read-7800-art-index index-in)))))
+         ;; Write both NTSC and PAL binary files
+         (write-7800-binary (make-pathname
+                             :directory (list :relative "Object" (machine-directory-name) "Assets") 
+                             :name (format nil "~a.NTSC" base-name)
+                             :type "o")
+                            binary-data)
+         (write-7800-binary (make-pathname
+                             :directory (list :relative "Object" (machine-directory-name) "Assets") 
+                             :name (format nil "~a.PAL" base-name)
+                             :type "o")
+                            binary-data)
+         ;; Write the .s file stub
+         (with-output-to-file (src-file index-out :if-exists :supersede)
+           (format src-file ";;; -*- asm -*-~%")
+           (format src-file ";;; This is a generated file, from ~A~%" index-in)
+           (format src-file "
+.if TV == NTSC
+        .binary \"~a.NTSC.o\"
+.else
+        .binary \"~a.PAL.o\"
+.fi~2%"
+                   base-name base-name))))
+      (t
+       ;; index-out is a .o file - write the binary directly (backwards compatibility)
+       (write-7800-binary index-out
+                          (interleave-7800-bytes
+                           (parse-into-7800-bytes
+                            (read-7800-art-index index-in))))))))
 
 (defun display-maria-art (stream &key dump mode address colors width (unit #x10)
                                       var-colors)
