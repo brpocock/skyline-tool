@@ -486,6 +486,12 @@ Returns allocation result if successful, NIL if allocation fails."
                              bank-assets))
                      (return-from try-allocation-sequence banks)))))
 
+(defun find-size-tag-in (file)
+  (let ((size (nth-value 1 (cl-ppcre:scan-to-strings
+                            "\\$SIZE\\$([0-9a-f]{4})" (read-file-into-string file)))))
+    (when size
+      (parse-integer (aref size 0) :radix 16))))
+
 (defun compute-asset-size (asset-file &key file-sizes)
   "Compute the size of ASSET-FILE for ROM allocation.
 
@@ -500,7 +506,8 @@ Returns the size in bytes required for the asset in ROM."
   (let ((n (cond ((equal "o" (pathname-type asset-file))
                   (ql-util:file-size asset-file))
                  ((equal "s" (pathname-type asset-file))
-                  (assemble-file-for-size asset-file))
+                  (or (find-size-tag-in asset-file)
+                      (assemble-file-for-size asset-file)))
                  (t (cerror "Pretend asset size is 8kiB"
                             "Don't know how to estimate size of “~a”"
                             (enough-namestring asset-file))
@@ -697,72 +704,65 @@ Uses the same path layout as @code{bank-source-pathname}
                                build video)
                  :type "size"))
 
-(defun allocate-assets (build &optional supplied-machine)
+(defun allocate-assets (build &optional (supplied-machine *machine*))
   "Allocate ROM bank lists for BUILD (Demo, AA, Public, Test).
 
 Uses special @code{*machine*} from the loaded @code{--port} unless
 SUPPLIED-MACHINE overrides it for tests; defaults to machine 7800 when no port
 binding exists."
-  (let ((*machine* (or supplied-machine
-                       (when (boundp '*machine*)
-                         *machine*)
-                       7800)))
-    (assert (member build +all-builds+ :test 'equal) (build)
-            "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
-    (let ((assets-list (all-assets-for-build build)))
-      (dolist (video (all-regions-for-machine))
-        (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
-                build video)
-        (loop with allocation = (find-best-allocation assets-list
-                                                      :build build :video video)
-              for bank-offset being the hash-keys of allocation
-              for bank = (+ (first-assets-bank build) bank-offset)
-              for assets = (gethash bank-offset allocation)
-              for allocation-list-name = (allocation-list-name bank build video)
-              for allocation-size-name = (allocation-size-name bank build video)
-              unless (and assets (plusp (hash-table-count assets)))
-                do (error "No assets assigned to bank ~2,'0x" bank)
-              do (ensure-directories-exist allocation-list-name)
-              do (with-output-to-file (allocation-file allocation-list-name
-                                                       :if-exists :supersede)
-                   (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
-                           bank (length (hash-table-keys assets)))
-                   (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
-              do (ensure-directories-exist allocation-size-name)
-              do (with-output-to-file (allocation-file allocation-size-name
-                                                       :if-exists :supersede)
-                   (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
-                           (hash-table-plist assets)
-                           (reduce #'+ (hash-table-values assets))))
-              finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
-                               (1- (number-of-banks build video)))
-                        (format *trace-output* "~&… and blank asset lists for: Bank ")
-                        (let ((empty-banks (list)))
-                          (loop for bank from (+ (first-assets-bank build)
-                                                 (length (hash-table-keys allocation)))
-                                  below (1- (number-of-banks build video))
-                                for allocation-list-name = (allocation-list-name bank build video)
-                                for allocation-size-name = (allocation-size-name bank build video)
-                                do (ensure-directories-exist allocation-list-name)
-                                do (with-output-to-file (allocation-file allocation-list-name
-                                                                         :if-exists :supersede)
-                                     (push bank empty-banks)
-                                     (fresh-line allocation-file))
-                                do (ensure-directories-exist allocation-size-name)
-                                do (with-output-to-file (allocation-file allocation-size-name
-                                                                         :if-exists :supersede)
-                                     (format allocation-file "@	0~%")))
-                          (format *trace-output* "~{~a~^, ~}"
-                                  (apply #'compress-sequential-numbers
-                                         (sort empty-banks #'<))))))))))
+  (assert (member build +all-builds+ :test 'equal) (build)
+          "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
+  (let ((assets-list (all-assets-for-build build)))
+    (dolist (video (all-regions-for-machine))
+      (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
+              build video)
+      (loop with allocation = (find-best-allocation assets-list
+                                                    :build build :video video)
+            for bank-offset being the hash-keys of allocation
+            for bank = (+ (first-assets-bank build) bank-offset)
+            for assets = (gethash bank-offset allocation)
+            for allocation-list-name = (allocation-list-name bank build video)
+            for allocation-size-name = (allocation-size-name bank build video)
+            unless (and assets (plusp (hash-table-count assets)))
+              do (error "No assets assigned to bank ~2,'0x" bank)
+            do (ensure-directories-exist allocation-list-name)
+            do (with-output-to-file (allocation-file allocation-list-name
+                                                     :if-exists :supersede)
+                 (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
+                         bank (length (hash-table-keys assets)))
+                 (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
+            do (ensure-directories-exist allocation-size-name)
+            do (with-output-to-file (allocation-file allocation-size-name
+                                                     :if-exists :supersede)
+                 (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
+                         (hash-table-plist assets)
+                         (reduce #'+ (hash-table-values assets))))
+            finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
+                             (1- (number-of-banks build video)))
+                      (format *trace-output* "~&… and blank asset lists for: Bank ")
+                      (let ((empty-banks (list)))
+                        (loop for bank from (+ (first-assets-bank build)
+                                               (length (hash-table-keys allocation)))
+                                below (1- (number-of-banks build video))
+                              for allocation-list-name = (allocation-list-name bank build video)
+                              for allocation-size-name = (allocation-size-name bank build video)
+                              do (ensure-directories-exist allocation-list-name)
+                              do (with-output-to-file (allocation-file allocation-list-name
+                                                                       :if-exists :supersede)
+                                   (push bank empty-banks)
+                                   (fresh-line allocation-file))
+                              do (ensure-directories-exist allocation-size-name)
+                              do (with-output-to-file (allocation-file allocation-size-name
+                                                                       :if-exists :supersede)
+                                   (format allocation-file "@	0~%")))
+                        (format *trace-output* "~{~a~^, ~}"
+                                (apply #'compress-sequential-numbers
+                                       (sort empty-banks #'<)))))))))
 
 (defun number-of-banks (build video)
   (declare (ignore video))
   (ecase *machine*
-    (7800 (cond
-            ((equal build "Demo") 64)
-            ((equal build "Test") 64)
-            (t 64)))
+    (7800 64)
     ((5200 400 800) 32)
     ;; Atari Lynx (Phantasia #1321 / Phase 1 #1322): 32 logical 16 KiB banks
     ;; produce a 512 KiB cart image, matching @file{Project.Lynx.json}
@@ -812,11 +812,11 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
 
 (defun cpu-directory-name (&optional (machine *machine*))
   (ecase machine
-    ((1 2 3 8 16 20 23 64 128 200 223 264 400 800 1200 2600 5200 7800 7850)
+    ((1 2 3 8 16 20 23 64 200 223 264 400 800 1200 2600 5200 7800 7850)
      "6502")
     ((9 1080 1601 8011) "m68k")
     ((15) "F8")
-    ((81 1000 2068 2110 3010 837 9918) "Z80")
+    ((128 81 1000 2068 2110 3010 837 9918) "Z80")
     ((88 222 2416) "65816")
     ((821) "V810")
     ((1624) "sh2")
@@ -1803,13 +1803,8 @@ and target platform. Handles special cases for different machines and video mode
             machine-dir)))
 
 (defun makefile-blob-videos ()
-  "Video keywords to emit for blob compile rules.
-
-Blobs whose paths omit a video suffix (TMS9918-family Z80 ports) must not
-emit duplicate GNU Make targets for :ntsc / :pal / :secam."
-  (if (member *machine* '(3010 9918 1000 837 2110))
-      '(:ntsc)
-      (all-regions-for-machine)))
+  "Video keywords to emit for blob compile rules."
+  (all-regions-for-machine))
 
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
@@ -1889,7 +1884,7 @@ emit duplicate GNU Make targets for :ntsc / :pal / :secam."
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (member *machine* '(2600 7800 2609))) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
+  (member *machine* '(2600 7800 2609 3000)))
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
@@ -2828,10 +2823,9 @@ stderr."
           (write-makefile-for-tilesets)
           (write-makefile-for-art)
           (write-makefile-for-blobs)
-          (unless (member *machine* '(5200 400 800 2609 200))
-	  (write-makefile-test-target)
-	  (write-test-header-script)
-	  (write-makefile-test-banks))
+          (write-makefile-test-target)
+	(write-test-header-script)
+	(write-makefile-test-banks)
           (write-master-makefile-for-machine *machine*))))
     (%scrub-makefile-nul-bytes gen-mf)
     (format *trace-output* " … done writing master Makefile.~%")))
@@ -3211,9 +3205,7 @@ If CHAR does not occur in STRING, returns STRING."
 
 (defun start-bank-include-name ()
   "Return @file{StartBank.s} or @file{StartAssetBank.s} for the active @code{*machine*}."
-  (if (member *machine* '(5200 400 800))
-      "StartAssetBank.s"
-      "StartBank.s"))
+  "StartBank.s")
 
 (defun write-asset-bank (bank-hex build video)
   "Write out the skeletal bank file for BANK-HEX for BUILD with VIDEO formats specified.
@@ -3552,7 +3544,7 @@ Creates parent directories if needed; overwrites the output file."
 ~10t.include \"~a\"
 "
           (start-bank-include-name))
-  (when (not (member *machine* '(5200 400 800)))
+  (when (member *machine* '(2600 7800 3000))
     (format tmp.s "~10t.include \"SpeakJet.s\"~%"))
   (format tmp.s "Start:
 ~10t.include ~s

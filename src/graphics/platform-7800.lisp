@@ -732,7 +732,7 @@ Signals assertion errors for invalid dimensions."
   (assert (= (array-dimension palette-pixels 0) width))
   (assert (= (array-dimension palette-pixels 1) height)))
 
-(defun NEW-320C-MODE-LOGIC (stamp c2-entries)
+(defun new-320c-mode-logic (stamp c2-entries)
   (let ((stamp-colors (remove 0 (all-colors-in-tile stamp))))
     (if (null stamp-colors)
         (list 0 (aref c2-entries 0) (aref c2-entries 1) (aref c2-entries 2))
@@ -989,9 +989,8 @@ Returns the palette entry index, or 0 if no match."
                                                    imperfectp)
   "Write a span of stamps for 320A/C mode, converting each stamp according to MODE.
 
-When MODE is :320a, each element of SPAN is an 8�~V16 pixel array (two combined 4px stamps);
-when MODE is :320c, each element is a 4�~V16 pixel array."
-  (declare (ignore imperfectp))
+When MODE is :320a, each element of SPAN is an 8×16 pixel array (two combined 4px stamps);
+when MODE is :320c, each element is a 4×16 pixel array."
   (setf (gethash id stamp-offsets) serial)
   (let ((start (+ (* #x1000 (floor serial #x100))
                   (mod serial #x100))))
@@ -1007,10 +1006,11 @@ when MODE is :320c, each element is a 4�~V16 pixel array."
           (let ((i (+ start stamp (* #x100 byte))))
             (assert (let ((b (aref stamp-buffer i)))
                       (or (null b) (zerop b))) ()
-                    "Stamp buffer already contained ~x at index ~x; serial ~x, stamp ~x"
+                    "Stamp buffer already contained $~x at index $~x; serial $~x, stamp $~x"
                     (aref stamp-buffer i) i serial stamp)
             (setf (aref stamp-buffer i)
                   (elt bytes (- 15 byte)))))))))
+
 (defun blob-rip-7800 (png-file &optional (imperfectp$ nil))
   "Rip a Bitmap Large Object Block from PNG-FILE
 
@@ -1279,7 +1279,7 @@ Blob_~a:~10t.block~2%"
                           ((and (eql stamp-mode :320a)
                                 (< (1+ col) columns)
                                 (stamp-is-monochrome-p (aref stamps (1+ col) zone)))
-                           (let* ((fg-color (car (remove 0 (all-colors-in-tile stamp))))
+                           (let* ((fg-color (first (remove 0 (all-colors-in-tile stamp))))
                                   (pal-entry (320a-find-palette-entry fg-color palettes))
                                   (left-normalized (limit-region-to-palette
                                                     stamp '(0 1)
@@ -1304,7 +1304,6 @@ Blob_~a:~10t.block~2%"
                                 (setf span (list combined)
                                       last-palette pal-entry
                                       last-mode :320a)))
-                             (format *trace-output* " 320A")
                              (incf col 2)))
                           ;; Blank stamp — end current span
                           ((blank-stamp-p stamp (aref palettes 0 0))
@@ -1321,7 +1320,7 @@ Blob_~a:~10t.block~2%"
                                                       (aref palettes (+ c2-base 2) 2)
                                                       (aref palettes (+ c2-base 3) 2)))
                                   (group-pal (if (< palette 4) 0 4))
-                                  (limit-chosen (NEW-320C-MODE-LOGIC stamp c2-entries))
+                                  (limit-chosen (new-320c-mode-logic stamp c2-entries))
                                   (limit-pal (or limit-chosen
                                                  (list 0 (aref c2-entries 0)
                                                        (aref c2-entries 1)
@@ -1346,40 +1345,40 @@ Blob_~a:~10t.block~2%"
                                       last-mode :320c)))
                              (incf col 1))))
                      finally
-                        (collect-span)))))
-         (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first))
-               (first-320c-header t))
-           (setf zone-spans nil)
-           (dolist (entry spans-this-zone)
-             (let* ((x (first entry))
-                    (span (second entry))
-                    (pal (third entry))
-                    (mode (fourth entry))
-                    (header (if (and (eql mode :320c) first-320c-header)
-                                (progn (setf first-320c-header nil) "DLAltHeader")
-                                "DLHeader"))
-                    (existing (gethash span spans))
-                    (id (if existing
-                            (car existing)
-                            (let ((new-id next-span-id))
-                              (incf next-span-id)
-                              (cond
-                                ((and (< stamp-counting #x100)
-                                      (< (+ stamp-counting (length span)) #x100))
-                                 (incf stamp-counting (length span)))
-                                ((and (< stamp-counting #x100)
-                                      (>= (+ stamp-counting (length span)) #x100))
-                                 (setf stamp-counting #x100))
-                                (t (incf stamp-counting)))
-                              (setf (gethash span spans) (cons new-id mode))
-                              new-id)))
-                    (pos (if (eql mode :320a)
-                             (* 2 (- x (* 2 (length span))))
-                             (* 2 (- x (length span))))))
-               (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
-                       header id pal (length span) pos)))
-           (format output "~%~10t.DLEnd")
-           (blob/write-spans-320ac spans output :imperfectp imperfectp))))
+                        (collect-span))))
+           (let ((spans-this-zone (sort (nreverse zone-spans) #'< :key #'first))
+                 (first-320c-header t))
+             (setf zone-spans nil)
+             (dolist (entry spans-this-zone)
+               (let* ((x (first entry))
+                      (span (second entry))
+                      (pal (third entry))
+                      (mode (fourth entry))
+                      (header (if (and (eql mode :320c) first-320c-header)
+                                  (progn (setf first-320c-header nil) "DLAltHeader")
+                                  "DLHeader"))
+                      (existing (gethash span spans))
+                      (id (if existing
+                              (car existing)
+                              (let ((new-id next-span-id))
+                                (incf next-span-id)
+                                (cond
+                                  ((and (< stamp-counting #x100)
+                                        (< (+ stamp-counting (length span)) #x100))
+                                   (incf stamp-counting (length span)))
+                                  ((and (< stamp-counting #x100)
+                                        (>= (+ stamp-counting (length span)) #x100))
+                                   (setf stamp-counting #x100))
+                                  (t (incf stamp-counting)))
+                                (setf (gethash span spans) (cons new-id mode))
+                                new-id)))
+                      (pos (if (eql mode :320a)
+                               (* 2 (- x (* 2 (length span))))
+                               (* 2 (- x (length span))))))
+                 (format output "~%~10t.~a Span~x, ~d, ~d, ~d"
+                         header id pal (length span) pos)))
+             (format output "~%~10t.DLEnd")))
+         (blob/write-spans-320ac spans output :imperfectp imperfectp)))
       (format *trace-output* " … done!~%"))))
 
 (defun check-height+width-for-blob-320bd (height width palette-pixels)
@@ -1804,25 +1803,32 @@ List of byte lists, one per column
   @xref{fun:read-7800-art-index}, @xref{fun:interleave-7800-bytes}."
   (let ((*machine* 7800)
         (*region* region)
-        (name (pathname-name index-out)))
-    (write-7800-binary (make-pathname
-                        :directory (list :relative "Object" (machine-directory-name) "Assets") 
-                        :name (format nil "~a.~a"
-                                      name
-                                      (string-upcase (string region)))
-                        :type "o")
-                       (interleave-7800-bytes
-                        (parse-into-7800-bytes
-                         (read-7800-art-index index-in))))
-    (with-output-to-file (index index-out :if-exists :supersede)
-      (format index ";;; This is a generated file, from ~a" index-in)
-      (format index "
-~10t.if TV == NTSC
-~12t.binary \"~a.NTSC.o\"
-~10t.else
-~12t.binary \"~a.PAL.o\"
-~10t.fi~2%"
-              name name))))
+        (name (pathname-name index-out))
+        (type (pathname-type index-out)))
+    (if (string= type "s")
+        (let* ((binary-data (interleave-7800-bytes
+                             (parse-into-7800-bytes
+                              (read-7800-art-index index-in)))))
+          (write-7800-binary (make-pathname :name (format nil "~a.NTSC" name)
+                                            :type "o"
+                                            :directory (pathname-directory index-out))
+                             binary-data)
+          (write-7800-binary (make-pathname :name (format nil "~a.PAL" name)
+                                            :type "o"
+                                            :directory (pathname-directory index-out))
+                             binary-data)
+          (with-output-to-file (out index-out :if-exists :supersede)
+            (format out ";;; -*- asm -*-")
+            (format out "~%;;; This is a generated file, from ~A" index-in)
+            (format out "~2%~10t.if TV == NTSC")
+            (format out "~%~14t.binary \"~a.NTSC.o\"" name)
+            (format out "~%~10t.else")
+            (format out "~%~14t.binary \"~a.PAL.o\"" name)
+            (format out "~%~10t.fi~%")))
+        (write-7800-binary index-out
+                           (interleave-7800-bytes
+                            (parse-into-7800-bytes
+                             (read-7800-art-index index-in)))))))
 
 (defun display-maria-art (stream &key dump mode address colors width (unit #x10)
                                       var-colors)
