@@ -184,19 +184,18 @@ NIL; outputs decoded DLL and display list contents to @code{*standard-output*}
                   (when dll-pointer
                     (decode-display-list MEM :offset dll-pointer)))))
 
-(defun detect-active-dll (&optional (DUMP-FILE #p"/tmp/dump"))
-  "Determine which DLL (primary or alternate) is active in DUMP-FILE.
+(defun detect-active-dll (&optional (dump-file #p"/tmp/dump"))
+  "Determine which DLL (primary or alternate) is active in dump-file.
 
 @table @asis
-@item DUMP-FILE
+@item dump-file
 Path to core dump file (default @file{/tmp/dump})
 @item Returns
 Address of the active DLL (#x1800 or #x1880)
 @end table"
-  (ecase (elt (etypecase DUMP-FILE
-                (string (load-dump-into-mem DUMP-FILE))
-                (vector DUMP-FILE)
-                (t (load-dump-into-mem DUMP-FILE)))
+  (ecase (elt (etypecase dump-file
+                (vector dump-file)
+                (t (load-dump-into-mem dump-file)))
               (find-label-from-files "ActiveDLL"))
     (#x80 (find-label-from-files "AltDLL"))
     (0 (find-label-from-files "DLL"))))

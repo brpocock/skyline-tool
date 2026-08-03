@@ -249,12 +249,16 @@
          ("View" :menu terminal-echo-view-menu)
          ("Help" :menu terminal-echo-help-menu)))
 
+(clim:define-command-table terminal-save-menu
+  :menu (("Save to File..." :command com-terminal-echo-save)
+         ("Save to Buffer" :command com-terminal-echo-save-buffer)))
+
 (clim:define-command-table terminal-echo-file-menu
-  :menu (("Save" :menu terminal-save-menu)
-         ("Send to" :menu send-to-menu)
-         ("Print to" :menu print-to-menu)
-         (nil :divider :line)
-         ("Close" :command com-terminal-echo-close)))
+   :menu (("Save" :menu terminal-save-menu)
+          ("Send to" :menu send-to-menu)
+          ("Print to" :menu print-to-menu)
+          (nil :divider :line)
+          ("Close" :command com-terminal-echo-close)))
 
 (clim:define-command-table terminal-echo-edit-menu
   :menu (("Copy" :command com-terminal-echo-copy)
@@ -328,6 +332,24 @@
     (window-clear pane)
     (let ((parser (frame-parser *application-frame*)))
       (reset-ansi-parser parser))))
+
+(define-terminal-echo-frame-command (com-terminal-echo-save :menu t :name t) ()
+  "Save terminal output to a file."
+  (let* ((frame *application-frame*)
+         (text (frame-captured-text frame))
+         (output-file (prompt-save-pathname "terminal-output.txt"
+                                            :type "txt"
+                                            :name "terminal-output")))
+    (when (and text output-file)
+      (with-open-file (out output-file :direction :output :if-exists :supersede)
+        (write-string text out))
+      (format t "Saved terminal output to ~a~%" output-file))))
+
+(define-terminal-echo-frame-command (com-terminal-echo-save-buffer :menu t :name t) ()
+  "Copy terminal buffer content to clipboard."
+  (let ((text (frame-captured-text *application-frame*)))
+    (when text
+      (%clipboard-copy text))))
 
 (define-terminal-echo-frame-command (com-terminal-echo-close :menu t :name t) ()
   "Close the terminal echo window."

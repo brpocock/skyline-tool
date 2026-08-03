@@ -713,11 +713,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (setf *common-palette*
       (let ((json-path
-             (merge-pathnames #p"Project.7800.json"
-                              (make-pathname :directory
-                                             (append (pathname-directory
-                                                      (asdf:system-source-directory :skyline-tool))
-                                                     '(:up))))))
+              (merge-pathnames #p"Project.7800.json"
+                               (make-pathname :directory
+                                              (append (pathname-directory
+                                                       (asdf:system-source-directory :skyline-tool))
+                                                      '(:up))))))
         (with-input-from-file (input json-path)
           (let ((data (json:decode-json-from-source input)))
             (mapcar (lambda (entry) (intern (string (car entry))))
@@ -1697,13 +1697,13 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                      (every #'actor-name-char-p (subseq string 1)))
                 (list 'variable string))
                ((char= #\" (char string 0))
-                 (list 'quoted (subseq string 1)))
+                (list 'quoted (subseq string 1)))
                (t (list 'string string)))))
     (let ((parsed (loop with word = ""
                         for char = (read-char stream nil nil)
                         unless char
-                        return (unless (emptyp word)
-                                 (token-values word))
+                          return (unless (emptyp word)
+                                   (token-values word))
                         do (cond
                              ((member char (list #\Space #\Tab #\Newline))
                               (return (prog1 (token-values word)
@@ -1758,60 +1758,60 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
 (defun prepare-dialogue (string)
   "Prepare STRING for encoding into Minifont for the game console"
   (let ((prepared
-         (string-trim
-          #(#\Space #\Tab)
-          (cl-ppcre:regex-replace-all
-           "\\\\[A-Za-z0-9]+"
+          (string-trim
+           #(#\Space #\Tab)
            (cl-ppcre:regex-replace-all
-            "~([a-z]+){([a-z]*)}"
+            "\\\\[A-Za-z0-9]+"
             (cl-ppcre:regex-replace-all
-             "'t"
+             "~([a-z]+){([a-z]*)}"
              (cl-ppcre:regex-replace-all
-              "’s"
+              "'t"
               (cl-ppcre:regex-replace-all
-               "fi"
+               "’s"
                (cl-ppcre:regex-replace-all
-                "ij"
+                "fi"
                 (cl-ppcre:regex-replace-all
-                 "li"
+                 "ij"
                  (cl-ppcre:regex-replace-all
-                  "’r"
+                  "li"
                   (cl-ppcre:regex-replace-all
-                   "ll"
+                   "’r"
                    (cl-ppcre:regex-replace-all
-                    "I’"
+                    "ll"
                     (cl-ppcre:regex-replace-all
-                     "I’ll"
+                     "I’"
                      (cl-ppcre:regex-replace-all
-                      "—"
+                      "I’ll"
                       (cl-ppcre:regex-replace-all
-                       "[ \\t\\n]+"
+                       "—"
                        (cl-ppcre:regex-replace-all
-                        "(\\.\\.\\.+)"
+                        "[ \\t\\n]+"
                         (cl-ppcre:regex-replace-all
-                         "(\\b[A-Za-z0-9-']+\\b *)\\[[a-z ]*\\]( *)"
+                         "(\\.\\.\\.+)"
                          (cl-ppcre:regex-replace-all
-                          "\\'"
+                          "(\\b[A-Za-z0-9-']+\\b *)\\[[a-z ]*\\]( *)"
                           (cl-ppcre:regex-replace-all
-                           "\\[.*\\]"
-                           string
-                           "")
-                          "’")
-                         "\\1\\2")
-                        "…")
-                       " ")
-                      "-")
-                     "{i’ll}")
-                    "{i’}")
-                   "{ll}")
-                  "{’r}")
-                 "{li}")
-                "{ij}")
-               "{fi}")
-              "{’s}")
-             "{'t}")
-            "\\1\\2")
-           ""))))
+                           "\\'"
+                           (cl-ppcre:regex-replace-all
+                            "\\[.*\\]"
+                            string
+                            "")
+                           "’")
+                          "\\1\\2")
+                         "…")
+                        " ")
+                       "-")
+                      "{i’ll}")
+                     "{i’}")
+                    "{ll}")
+                   "{’r}")
+                  "{li}")
+                 "{ij}")
+                "{fi}")
+               "{’s}")
+              "{'t}")
+             "\\1\\2")
+            ""))))
     (let* ((no~ (remove #\} (remove #\{ (remove #\~ (remove #\¶ (string-downcase prepared))))))
            (encoded (ignore-errors (unicode->minifont no~)))
            (back+forth (when encoded (ignore-errors (minifont->unicode encoded)))))
@@ -1852,12 +1852,14 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
 (define-constant +speakjet-phonemes+
     '(
       "Pause0" "Pause1" "Pause2" "Pause3" "Pause4" "Pause5" "Pause6"
-      "Fast" "Slow" "Stress" "Relax" "Wait" "Soft" "Volume" "Speed" "Pitch" "Bend" "PortCtr"
+      "Fast" "Slow" "Stress" "Relax" "Wait" "Soft"
+      "Volume" "Speed" "Pitch" "Bend" "PortCtr"
       "Port" "Repeat" "CallPhrase" "GotoPhrase" "Delay" "Reset"
       "IY" "IH" "EY" "EH" "AY" "AX" "UX" "OH" "AW" "OW" "UH" "UW"
       "MM" "NE" "NO" "NGE" "NGO" "LE" "LO" "WW"
       "RR" "IYRR" "EYRR" "AXRR" "AWRR" "OWRR"
-      "EYIY" "OHIY" "OWIY" "OHIH" "IYEH" "EHLE" "IYUW" "AXUW" "IHWW" "AYWW" "OWWW"
+      "EYIY" "OHIY" "OWIY" "OHIH" "IYEH" "EHLE"
+      "IYUW" "AXUW" "IHWW" "AYWW" "OWWW"
       "JH" "VV" "ZZ" "ZH" "DH" "BE" "BO" "EB" "OB"
       "DE" "DO" "ED" "OD" "GE" "GO" "EG" "OG"
       "CH" "HE" "HO" "WH" "FF" "SE" "SO" "SH" "TH"
@@ -1871,7 +1873,8 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
       "M0" "M1" "M2" "EndOfPhrase"
       "PlayerNamePlace" "PlayerVerbS"
       "PronounThey" "PronounThem" "PronounTheir" "PronounTheirs"
-      "PronounSibling" "PronounPerson" "PronounAre" "PronounWere" "PronounHave"
+      "PronounSibling" "PronounPerson"
+      "PronounAre" "PronounWere" "PronounHave"
       "ButtonILabel" "ButtonIILabel" "ButtonIIILabel"
       "ButtonSelectLabel" "ButtonPauseLabel" "ButtonResetLabel"
       "PlayerHonorific" )
@@ -1888,17 +1891,17 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                   (unless (char= #\\ (char phoneme 0))
                     (error "Expected SpeakJet phoneme code, beginning with \\, but got ~s" phoneme))
                 (continue () :report "Continue with a gunshot sound"
-			  "M1"))
+	        "M1"))
            do (restart-case
                   (unless (or (numberp (ignore-errors (parse-number (subseq phoneme 1))))
                               (member (subseq phoneme 1) +speakjet-phonemes+ :test #'string=))
                     (error "Expected SpeakJet phoneme code, but got: ~a" phoneme))
                 (continue () :report "Continue with a gunshot sound"
-			  "M1"))
+	        "M1"))
            collect (if (every #'digit-char-p (subseq phoneme 1))
-		       (format nil "$~2,'0x"
-			       (logand #xff (parse-number (subseq phoneme 1))))
-		       (subseq phoneme 1))))))
+		   (format nil "$~2,'0x"
+			 (logand #xff (parse-number (subseq phoneme 1))))
+		   (subseq phoneme 1))))))
 
 (defun load-atarivox-dictionary ()
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
@@ -1956,66 +1959,66 @@ but now also ~s."
 
 (defun fixup-exclamations (seq)
   (loop
-   (let ((bang (position-if (lambda (n) (member n '(:bang :query))) seq)))
-     (unless bang
-       (return-from fixup-exclamations seq))
-     (assert (plusp bang) ()
-             "Neither exclamation mark nor question mark can begin a sentence")
-     (setf seq
-           (let* ((alteration (elt seq bang))
-                  (phrase-start
-                   (or (let ((n (position-if
-                                 (lambda (tok)
-                                   (and (stringp tok)
-                                        (starts-with-subseq "Pause" tok)))
-                                 seq
-                                 :end bang :from-end t)))
-                         (when n (1+ n)))
-                       0))
-                  (before (subseq seq 0 phrase-start))
-                  (phrase (subseq seq phrase-start bang))
-                  (after (when (< bang (length seq))
-                           (subseq seq (1+ bang))))
-                  (phrase-length (length phrase)))
-             (assert (plusp phrase-length) ()
-                     "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
-             (ecase alteration
-               (:bang
-                (warn "handling of “!” is poor")
-                (reduce (curry #'concatenate 'list)
-                        (list
-                         before
-                         (list "Bend" "$04")
-                         (mapcan (lambda (phoneme)
-                                   (list "Stress" phoneme))
-                                 phrase)
-                         (list "Bend" "$05")
-                         after)))
-               (:query
-                (warn "handling of “?” is poor")
-                (reduce (curry #'concatenate 'list)
-                        (list
-                         before
-                         (case (length phrase)
-                           (1 (list "Bend" "$08" (car phrase)))
-                           (2 (list "Bend" "$06" (first phrase)
-                                    "Bend" "$08" (second phrase)))
-                           (3 (list "Bend" "$06" (first phrase)
-                                    "Bend" "$08" (second phrase)
-                                    "Bend" "$0a" (third phrase)))
-                           (4 (list "Bend" "$06" (first phrase)
-                                    "Bend" "$08" (second phrase)
-                                    "Bend" "$0a" (third phrase)
-                                    "Bend" "$08" (fourth phrase)))
-                           (otherwise
-                            (cons (subseq phrase 0 (- (length phrase) 5))
-                                  (list "Bend" "$06" (elt phrase (- (length phrase) 5))
-                                        "Bend" "$08" (elt phrase (- (length phrase) 4))
-                                        "Bend" "$0a" (elt phrase (- (length phrase) 3))
-                                        "Bend" "$0c" (elt phrase (- (length phrase) 2))
-                                        "Bend" "$09" (elt phrase (- (length phrase) 1))))))
-                         (list "Bend" "$05")
-                         after)))))))))
+     (let ((bang (position-if (lambda (n) (member n '(:bang :query))) seq)))
+       (unless bang
+         (return-from fixup-exclamations seq))
+       (assert (plusp bang) ()
+               "Neither exclamation mark nor question mark can begin a sentence")
+       (setf seq
+             (let* ((alteration (elt seq bang))
+                    (phrase-start
+                      (or (let ((n (position-if
+                                    (lambda (tok)
+                                      (and (stringp tok)
+                                           (starts-with-subseq "Pause" tok)))
+                                    seq
+                                    :end bang :from-end t)))
+                            (when n (1+ n)))
+                          0))
+                    (before (subseq seq 0 phrase-start))
+                    (phrase (subseq seq phrase-start bang))
+                    (after (when (< bang (length seq))
+                             (subseq seq (1+ bang))))
+                    (phrase-length (length phrase)))
+               (assert (plusp phrase-length) ()
+                       "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
+               (ecase alteration
+                 (:bang
+                  (warn "handling of “!” is poor")
+                  (reduce (curry #'concatenate 'list)
+                          (list
+                           before
+                           (list "Bend" "$04")
+                           (mapcan (lambda (phoneme)
+                                     (list "Stress" phoneme))
+                                   phrase)
+                           (list "Bend" "$05")
+                           after)))
+                 (:query
+                  (warn "handling of “?” is poor")
+                  (reduce (curry #'concatenate 'list)
+                          (list
+                           before
+                           (case (length phrase)
+                             (1 (list "Bend" "$08" (car phrase)))
+                             (2 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)))
+                             (3 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)
+                                      "Bend" "$0a" (third phrase)))
+                             (4 (list "Bend" "$06" (first phrase)
+                                      "Bend" "$08" (second phrase)
+                                      "Bend" "$0a" (third phrase)
+                                      "Bend" "$08" (fourth phrase)))
+                             (otherwise
+                              (cons (subseq phrase 0 (- (length phrase) 5))
+                                    (list "Bend" "$06" (elt phrase (- (length phrase) 5))
+                                          "Bend" "$08" (elt phrase (- (length phrase) 4))
+                                          "Bend" "$0a" (elt phrase (- (length phrase) 3))
+                                          "Bend" "$0c" (elt phrase (- (length phrase) 2))
+                                          "Bend" "$09" (elt phrase (- (length phrase) 1))))))
+                           (list "Bend" "$05")
+                           after)))))))))
 
 (defmacro repeat-unrolled ((times) &body body)
   (cons 'progn
@@ -2026,31 +2029,31 @@ but now also ~s."
   (when (< (length bytes) 2)
     (return-from combine-adjacent-pauses bytes))
   (let ((merge1
-         (append
-          (loop for i from 0 below (1- (length bytes))
-                for a = (elt bytes i)
-                for b = (elt bytes (1+ i))
-                if (and (stringp a)
-                        (stringp b)
-                        (starts-with-subseq "Pause" a)
-                        (starts-with-subseq "Pause" b))
-                collect (prog1 (speakjet-pause+ a b)
-                          (incf i))
-                else
-                if (and (stringp a)
-                        (member b '(:bang :query))
-                        (starts-with-subseq "Pause" a))
-                collect (prog1 b
-                          (incf i))
-                else
-                if (and (stringp a)
-                        (starts-with-subseq "Pause" a)
-                        (string= b "EndOfPhrase"))
-                collect (prog1 b
-                          (incf i))
-                else
-                collect a)
-          (last bytes))))
+          (append
+           (loop for i from 0 below (1- (length bytes))
+                 for a = (elt bytes i)
+                 for b = (elt bytes (1+ i))
+                 if (and (stringp a)
+                         (stringp b)
+                         (starts-with-subseq "Pause" a)
+                         (starts-with-subseq "Pause" b))
+                   collect (prog1 (speakjet-pause+ a b)
+                             (incf i))
+                 else
+                   if (and (stringp a)
+                           (member b '(:bang :query))
+                           (starts-with-subseq "Pause" a))
+                     collect (prog1 b
+                               (incf i))
+                 else
+                   if (and (stringp a)
+                           (starts-with-subseq "Pause" a)
+                           (string= b "EndOfPhrase"))
+                     collect (prog1 b
+                               (incf i))
+                 else
+                   collect a)
+           (last bytes))))
     (let ((penultimate (elt merge1 (- (length merge1) 2)))
           (ultimate (elt merge1 (- (length merge1) 1))))
       (if (and (stringp penultimate)
@@ -2077,7 +2080,7 @@ but now also ~s."
                  " \\1 "))
         (words nil))
     (cl-ppcre:do-scans (start end reg-starts reg-ends
-                              "(\\s+|-|\\\\\\d+|[~\\\\]\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
+                        "(\\s+|-|\\\\\\d+|[~\\\\]\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
                                (subseq string start end) )))
         (push word words)))
@@ -2092,31 +2095,26 @@ but now also ~s."
             (push word output)))
       (setf words output))
     (let ((bytes (loop
-                       for word in words
-                       append (cond
-				((emptyp word) (list "Pause1"))
-				((char= (char word 0) #\\)
-				 (if (every #'digit-char-p (subseq word 1))
-                                     (list (format nil "$~2,'0x" (parse-number (subseq word 1))))
-                                     (list (subseq word 1))))
-				((equalp word "?!") (list :bang :query))
-				((equalp word "!") (list :bang))
-				((equalp word "?") (list :query))
-				((member word '("-" "“" "”") :test #'string-equal)
-				 nil)
-				((or (eql :nil (gethash word *atarivox-dictionary*))
-                                     (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
-				 nil)
-				((and (not (gethash word *atarivox-dictionary*))
-                                      (every (complement #'alphanumericp) word))
-				 (list "Pause1"))
-				(t (or (gethash word *atarivox-dictionary*)
-                                       (progn
-					 (log-missing-word-for-speakjet word)
-					 (cerror "Continue with a gunshot sound"
-						 "Word not in dictionary: “~a” not found"
-						 word)
-					 (list "M1"))))))))
+                   for word in words
+                   append (cond
+		        ((emptyp word) (list "Pause1"))
+		        ((char= (char word 0) #\\)
+		         (if (every #'digit-char-p (subseq word 1))
+                                 (list (format nil "$~2,'0x" (parse-number (subseq word 1))))
+                                 (list (subseq word 1))))
+		        ((equalp word "?!") (list :bang :query))
+		        ((equalp word "!") (list :bang))
+		        ((equalp word "?") (list :query))
+		        ((member word '("-" "“" "”") :test #'string-equal)
+		         nil)
+		        ((or (eql :nil (gethash word *atarivox-dictionary*))
+                                 (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
+		         nil)
+		        ((and (not (gethash word *atarivox-dictionary*))
+                                  (every (complement #'alphanumericp) word))
+		         (list "Pause1"))
+                            (t (or (gethash word *atarivox-dictionary*)
+                                   (atarivox-basic-pronunciation word)))))))
       (flatten
        (append (remove-if #'null
                           (fixup-exclamations (combine-adjacent-pauses bytes)))
@@ -2279,7 +2277,7 @@ but now also ~s."
                                     voice-pitch voice-speed voice-bend speech-color
                                     hp ac character-id nicks class gender
                                     crowns arrows potions chalice
-				    &allow-other-keys)
+			 &allow-other-keys)
              (find-npc-stats actor)
            (unless character-id
              (cerror "Continue, using Norville"
@@ -2297,32 +2295,32 @@ but now also ~s."
                                          "Decal kind “~a” not recognized (for “~:(~a~)”/“~a” in NPC stats)"
                                          decal actor name))))
                   (record
-                   (append (list :name name
-                                 :kind kind
-                                 :hp (unless (emptyp hp) (parse-integer hp))
-                                 :ac (unless (emptyp ac) (parse-integer ac))
-                                 :pitch (npc-interpret-field voice-pitch :voice-pitch :name name)
-                                 :speed (npc-interpret-field voice-speed :voice-speed :name name)
-                                 :bend (npc-interpret-field voice-bend :voice-bend :name name)
-                                 :speech-color (npc-interpret-field speech-color
-                                                                    :speech-color :name name)
-                                 :character-id character-id
-                                 :nicks nicks
-                                 :class class
-                                 :gender (npc-interpret-field gender :gender :name name)
-                                 :crowns (npc-interpret-field crowns :crowns :name name)
-                                 :arrows (npc-interpret-field arrows :arrows :name name)
-                                 :potions (npc-interpret-field potions :potions :name name)
-                                 :chalice (npc-interpret-field chalice :chalice :name name)
-                                 :hair-color (npc-interpret-field hair :hair-color :name name)
-                                 :skin-color (npc-interpret-field skin :skin-color :name name)
-                                 :clothes-color (npc-interpret-field clothing :clothes-color
-                                                                     :name name))
-                           (when (eql kind 'sailor)
-                             (list :body (npc-interpret-field body :body :kind kind :name name)))
-                           (when (eql kind 'human)
-                             (list :head (npc-interpret-field head :head :kind kind :name name)
-                                   :body (npc-interpret-field body :body :kind kind :name name))))))
+                    (append (list :name name
+                                  :kind kind
+                                  :hp (unless (emptyp hp) (parse-integer hp))
+                                  :ac (unless (emptyp ac) (parse-integer ac))
+                                  :pitch (npc-interpret-field voice-pitch :voice-pitch :name name)
+                                  :speed (npc-interpret-field voice-speed :voice-speed :name name)
+                                  :bend (npc-interpret-field voice-bend :voice-bend :name name)
+                                  :speech-color (npc-interpret-field speech-color
+                                                                     :speech-color :name name)
+                                  :character-id character-id
+                                  :nicks nicks
+                                  :class class
+                                  :gender (npc-interpret-field gender :gender :name name)
+                                  :crowns (npc-interpret-field crowns :crowns :name name)
+                                  :arrows (npc-interpret-field arrows :arrows :name name)
+                                  :potions (npc-interpret-field potions :potions :name name)
+                                  :chalice (npc-interpret-field chalice :chalice :name name)
+                                  :hair-color (npc-interpret-field hair :hair-color :name name)
+                                  :skin-color (npc-interpret-field skin :skin-color :name name)
+                                  :clothes-color (npc-interpret-field clothing :clothes-color
+                                                                      :name name))
+                            (when (eql kind 'sailor)
+                              (list :body (npc-interpret-field body :body :kind kind :name name)))
+                            (when (eql kind 'human)
+                              (list :head (npc-interpret-field head :head :kind kind :name name)
+                                    :body (npc-interpret-field body :body :kind kind :name name))))))
              (if-let (i (position-if
                          (lambda (actor)
                            (and (consp actor)
@@ -2330,7 +2328,7 @@ but now also ~s."
                                 (getf actor :character-id)
                                 (= character-id (getf actor :character-id))))
                          *actors*))
-		 (setf (elt *actors* i) record)
+	     (setf (elt *actors* i) record)
                (push record *actors*))
              (return-from load-actor record))))))
 
@@ -2758,10 +2756,10 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
                                who)
                        (return))))
           (format t "~% ~d ~d CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
-		  x y (pascal-case (string name))
-		  (ecase abs/rel
-		    (:absolute 0)
-		    (:relative 1)))
+	        x y (pascal-case (string name))
+	        (ecase abs/rel
+		(:absolute 0)
+		(:relative 1)))
           (when waitp
             (format t "~% CharacterID_~a settle-actor"
                     (pascal-case (string name))))))))
@@ -2770,27 +2768,27 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
   (loop for i from 0
         for npc in *npc-stats*
         when (string-equal (getf npc :name) who)
-        do
-        (loop for fact in how
-              do
-              (destructuring-bind (key value) fact
-                (ecase key
-                  (skin (setf (getf npc :skin)
-                              (npc-interpret-field value :skin-color :name who)))
-                  (hair (setf (getf npc :hair)
-                              (npc-interpret-field value :hair-color :name who)))
-                  (tunic (setf (getf npc :clothing)
-                               (npc-interpret-field value :clothes-color :name who)
-                               (getf npc :body) 0))
-                  (robe (setf (getf npc :clothing)
-                              (npc-interpret-field value :clothes-color :name who)
-                              (getf npc :body) 1))
-                  (head (setf (getf npc :head)
-                              (let ((n (parse-integer value)))
-                                (check-type n (integer 0 9)
-                                            "the number of a head (0-9)")
-                                n)))))
-              (return how))))
+          do
+             (loop for fact in how
+                   do
+                      (destructuring-bind (key value) fact
+                        (ecase key
+                          (skin (setf (getf npc :skin)
+                                      (npc-interpret-field value :skin-color :name who)))
+                          (hair (setf (getf npc :hair)
+                                      (npc-interpret-field value :hair-color :name who)))
+                          (tunic (setf (getf npc :clothing)
+                                       (npc-interpret-field value :clothes-color :name who)
+                                       (getf npc :body) 0))
+                          (robe (setf (getf npc :clothing)
+                                      (npc-interpret-field value :clothes-color :name who)
+                                      (getf npc :body) 1))
+                          (head (setf (getf npc :head)
+                                      (let ((n (parse-integer value)))
+                                        (check-type n (integer 0 9)
+                                                    "the number of a head (0-9)")
+                                        n)))))
+                      (return how))))
 
 (defun stage-facing-value (direction &key (playerp nil))
   (declare (ignore playerp))
@@ -2858,16 +2856,16 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
 (defmacro define-compiler-math (fun (&rest args) &body body)
   (let ((args* (loop for arg in args
                      if (char= #\& (char (string arg) 0))
-                     collect arg
+                       collect arg
                      else
-                     collect (intern (format nil "~a*" arg) #.*package*)))
+                       collect (intern (format nil "~a*" arg) #.*package*)))
         (argv (gensym "ARGS-")))
     `(defmethod compile-time-math ((fun (eql ',fun)) (,argv cons))
        (destructuring-bind (,@args*) ,argv
          (let (,@(loop for arg in args
                        for arg* in args*
                        unless (char= #\& (char (string arg) 0))
-                       collect (list arg (list 'stage/constant-value arg*))))
+                         collect (list arg (list 'stage/constant-value arg*))))
            (if (some #'null (list ,@(remove-if (lambda (arg) (char= #\& (char (string arg) 0)))
                                                args)))
                (error "Compile-time maths require constant expressions, got ~s"
@@ -3026,13 +3024,13 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
 
 (defun find-or-load-actor (actor)
   (if-let (record (find-actor actor))
-      (list record t)
+    (list record t)
     (list (load-actor actor) nil)))
 
 (defun require-actor (actor)
   (let* ((found-in-scene
-          (or (find-actor actor)
-              (warn "Actor ~:(~a~) was not present in scene" actor)))
+           (or (find-actor actor)
+               (warn "Actor ~:(~a~) was not present in scene" actor)))
          (deets (or found-in-scene (load-actor actor))))
     (unless (getf deets :character-id)
       (setf deets (load-actor actor)))
@@ -3051,11 +3049,11 @@ VALUE is either a @code{cons} @code{(island locale)} (already
 pascal-cased by the lexer) or a @code{string}.  The components are
 joined with @code{/} verbatim — no additional @code{pascal-case}
 normalization is applied, since the lexer already handles that."
-    (setf *current-scene*
-          (etypecase value
-            (cons (concatenate 'string (first value) "/" (second value)))
-            (string (format nil "~{~a~^/~}"
-                            (split-sequence #\/ value)))))
+  (setf *current-scene*
+        (etypecase value
+          (cons (concatenate 'string (first value) "/" (second value)))
+          (string (format nil "~{~a~^/~}"
+                          (split-sequence #\/ value)))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
 
@@ -3099,8 +3097,8 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
   (let ((intro (format nil "~{~a~}"
                        (mapcar #'string-capitalize
                                (mapcar (lambda (word)
-                                          (remove-if-not #'alpha-char-p word))
-                                        (split-sequence #\Space text)))))
+                                         (remove-if-not #'alpha-char-p word))
+                                       (split-sequence #\Space text)))))
         (hash (format nil "~36r" (sxhash text))))
     (format nil "~a_~a_~a"
             (subseq intro 0 (min (length intro) 24))
@@ -3264,7 +3262,7 @@ code for the game's scripting engine.
                                  (enough-namestring forth))
                          (force-output *trace-output*)
                          (with-output-to-file (*standard-output* forth :if-does-not-exist :create
-                                                                 :if-exists :supersede)
+                                                                       :if-exists :supersede)
                            (with-forth-file-wrappers ()
                              (compile-fountain-script from)))
                          (format *trace-output* " Forth script ready to compile.")
@@ -3274,8 +3272,8 @@ code for the game's scripting engine.
                   :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
                   (go top))
                 (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
-				  (load-npc-stats)
-				  (go top)))))
+	        (load-npc-stats)
+	        (go top)))))
       (unless victoryp
         (ignore-errors (delete-file forth))))))
 
@@ -3286,7 +3284,7 @@ code for the game's scripting engine.
   (loop for npc in *npc-stats*
         when (or (string-equal (getf npc :name) name)
                  (member name (getf npc :nicks) :test #'string-equal))
-        do (return npc)))
+          do (return npc)))
 
 (defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (uiop:getcwd))))
   "Load the NPC stats table from PATHNAME"
@@ -3601,39 +3599,44 @@ ActorClassSize:
 (defun write-character-ids ()
   "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
   (format *trace-output* "~&Writing CharacterIDs.s …")
+  (ensure-directories-exist (make-pathname
+                             :directory (list :relative "Source" "Generated"
+                                              (machine-directory-name))
+                             :name "CharacterIDs" :type "s"))
+  (with-output-to-file (*standard-output* (make-pathname
+                                           :directory (list :relative "Source" "Generated"
+                                                            (machine-directory-name))
+                                           :name "CharacterIDs" :type "s")
+                                          :if-exists :supersede)
+    (format t "~&;;; Generated character ID data from NPC Stats file~2%")
+    (dolist (actor (load-npc-stats))
+      (destructuring-bind (&key name character-id
+		       &allow-other-keys)
+          actor
+        (unless (member name '(player narrator) :test 'string-equal)
+          (when (> (length (string name)) 12)
+            (let ((trunc (subseq (string name) 0 12)))
+              (cerror (format nil "Continue with truncated name “~a”" trunc)
+                      "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+                      name name (length (string name)))
+              (setf name trunc)))
+          (format t "~%~10tCharacterID_~a = $~2,'0x"
+                  (pascal-case (string name)) character-id))))
+    (format *trace-output* " …done."))
+
+  (format *trace-output* "~&Writing CharacterIDs.forth …")
   (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
     (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
-    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (uiop:getcwd))
-                                            :if-exists :supersede)
-      (format t "~&;;; Generated character ID data from NPC Stats file~2%")
+    (with-output-to-file (*standard-output*
+                          (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
+                                           (uiop:getcwd))
+                          :if-exists :supersede)
+      (format t "~& ( Generated character ID data from NPC Stats file )~2%")
       (dolist (actor (load-npc-stats))
         (destructuring-bind (&key name character-id
-				  &allow-other-keys)
+                             &allow-other-keys)
             actor
           (unless (member name '(player narrator) :test 'string-equal)
-            (when (> (length (string name)) 12)
-              (let ((trunc (subseq (string name) 0 12)))
-                (cerror (format nil "Continue with truncated name “~a”" trunc)
-                        "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
-                        name name (length (string name)))
-                (setf name trunc)))
-            (format t "~%~10tCharacterID_~a = $~2,'0x"
+            (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
                     (pascal-case (string name)) character-id))))
-      (format *trace-output* " …done."))
-
-    (format *trace-output* "~&Writing CharacterIDs.forth …")
-    (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-      (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
-      (with-output-to-file (*standard-output*
-                            (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
-                                             (uiop:getcwd))
-                            :if-exists :supersede)
-        (format t "~& ( Generated character ID data from NPC Stats file )~2%")
-        (dolist (actor (load-npc-stats))
-          (destructuring-bind (&key name character-id
-                                    &allow-other-keys)
-              actor
-            (unless (member name '(player narrator) :test 'string-equal)
-              (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
-                      (pascal-case (string name)) character-id))))
-        (format *trace-output* " …done.~%")))))
+      (format *trace-output* " …done.~%"))))
