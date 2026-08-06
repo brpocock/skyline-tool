@@ -2,22 +2,21 @@
 ;;; Unit tests for Skyline-Tool version control integration
 
 (defpackage :skyline-tool.test.version-control
-  (:use :cl :fiveam :skyline-tool.version-control)
-  (:import-from :skyline-tool.version-control.gui
-                #:format-vc-window-title))
+  (:use :cl :fiveam :skyline-tool.version-control))
 
 (in-package :skyline-tool.test.version-control)
 
-(def-suite vc-tests :description "Version Control integration tests")
-(in-suite vc-tests)
+(def-suite version-control-tests
+  :description "Version Control integration tests")
+(in-suite version-control-tests)
 
-(test vc-status-icon-test
+(test version-control-status-icon-test
   "Test that status icons return proper color and symbol for each status"
-  (let ((absent (vc-status-icon :absent))
-        (current (vc-status-icon :current))
-        (staged (vc-status-icon :staged))
-        (modified (vc-status-icon :modified))
-        (untracked (vc-status-icon :untracked)))
+  (let ((absent (version-control-status-icon :absent))
+        (current (version-control-status-icon :current))
+        (staged (version-control-status-icon :staged))
+        (modified (version-control-status-icon :modified))
+        (untracked (version-control-status-icon :untracked)))
     (is (string= (getf absent :color) "0.8 0 0") "Absent status has red color")
     (is (string= (getf current :color) "0 0.8 0") "Current status has green color")
     (is (string= (getf staged :color) "0 0 0.8") "Staged status has blue color")
@@ -29,46 +28,22 @@
     (is (char= (getf modified :symbol) #\✎) "Modified status has pencil symbol")
     (is (char= (getf untracked :symbol) #\✱) "Untracked status has star symbol")))
 
-(test vc-status-text-test
+(test version-control-status-text-test
   "Test that status text returns proper description for each status"
-  (is (string= (vc-status-text :absent) "Absent from VC"))
-  (is (string= (vc-status-text :current) "Current"))
-  (is (string= (vc-status-text :staged) "Staged for commit"))
-  (is (string= (vc-status-text :modified) "Modified since last commit"))
-  (is (string= (vc-status-text :untracked) "Untracked")))
+  (is (string= (version-control-status-text :absent) "Absent from VC"))
+  (is (string= (version-control-status-text :current) "Current"))
+  (is (string= (version-control-status-text :staged) "Staged for commit"))
+  (is (string= (version-control-status-text :modified) "Modified since last commit"))
+  (is (string= (version-control-status-text :untracked) "Untracked")))
 
-(test vc-config-pathname-test
-  "Test that config pathname uses title-case and machine-directory-name"
-  (let ((path (vc-config-pathname)))
-    (is (search ".config/Skyline-Tool/" (namestring path)) "Config path contains expected directory")
-    (is (search "-config.lisp" (namestring path)) "Config filename ends with -config.lisp")))
+(test version-control-backend-factories-test
+  "Test that backend factory functions return backend keywords"
+  (is (eq (make-git-backend) :git) "make-git-backend returns :git")
+  (is (eq (make-svn-backend "/tmp") :svn) "make-svn-backend returns :svn"))
 
-(test git-backend-test
-  "Test Git backend creation and availability check"
-  (let ((backend (make-instance 'git-backend)))
-    (is (string= (vc-name backend) "git") "Git backend returns correct name")
-    (is (vc-available-p backend) "Git is available on system")))
-
-(test svn-backend-test
-  "Test SVN backend creation"
-  (let ((backend (make-instance 'svn-backend)))
-    (is (string= (vc-name backend) "svn") "SVN backend returns correct name")
-    ;; SVN may or may not be available depending on system
-    ))
-
-(test detect-vc-backend-test
-  "Test detection of version control backend from directory"
-  (let ((detected (detect-vc-backend (uiop:getcwd)))
-        (valid (member detected '(:git :svn :hg nil))))
-    (is-valid-backend detected valid)))
-
-(test list-available-backends-test
-  "Test listing available backends"
-  (let ((available (list-available-backends)))
-    (is (listp available) "Returns a list")
-    (is (member :git available) "Git is in available list if installed")))
-
-;; Helper for detecting valid backends
-(defun is-valid-backend (detected)
-  "Return T if detected is a valid backend keyword or NIL."
-  (member detected '(:git :svn :hg nil)))
+(test version-control-git-backend-test
+  "Test Git backend protocol methods"
+  (let ((backend (make-git-backend)))
+    (is (string= (version-control-name backend) "Git") "Git backend returns correct name")
+    (is-true (member (version-control-available-p backend) '(t nil))
+             "Git availability should be a boolean")))

@@ -33,6 +33,7 @@
            #:interface-tests
            #:makefile-tests
            #:music-tests
+           #:speech-unit-test
            #:intv-asset-converters
            #:intv-card-layouts
            #:intv-gram-tests

@@ -1832,7 +1832,13 @@ as
               "This text is more than 192 characters in length and cannot be prepared.
 “~a”"
               prepared))
-    prepared))
+    (cl-ppcre:regex-replace-all
+     (string +end-emphasis-char+)
+     (cl-ppcre:regex-replace-all
+      (string +begin-emphasis-char+)
+      prepared
+      "~<emph>")
+     "~</emph>")))
 
 (assert (handler-case (prepare-dialogue "Para¶check")
           (error (c)
@@ -1942,12 +1948,47 @@ but now also ~s."
   (setf *atarivox-dictionary* (load-atarivox-dictionary))
   (length (hash-table-keys *atarivox-dictionary*)))
 
+(define-constant +speakjet-pause-durations+
+  '(("Pause0" . 0)
+    ("Pause1" . 100)
+    ("Pause2" . 200)
+    ("Pause3" . 700)
+    ("Pause4" . 30)
+    ("Pause5" . 60)
+    ("Pause6" . 90))
+  :test 'equalp)
+
 (defun speakjet-pause+ (x y)
-  "Sum together the SpeakJet pauses X and Y into one longer pause"
-  (format nil "Pause~d"
-          (min (+ (parse-integer x :start 5)
-                  (parse-integer y :start 5))
-               6)))
+  "Sum together the SpeakJet pauses X and Y into one longer pause, 
+   rounding to the nearest equal or lesser duration based on actual values"
+  (let ((entry-x (assoc x +speakjet-pause-durations+ :test #'string=))
+        (entry-y (assoc y +speakjet-pause-durations+ :test #'string=)))
+    (assert entry-x (entry-x) "Unknown delay token ~s" x)
+    (assert entry-y (entry-y) "Unknown delay token ~s" y)
+    (let ((total (+ (cdr entry-x) (cdr entry-y))))
+      ;; Find the largest duration that is equal-or-lower than the total
+      (loop for (token . duration) in +speakjet-pause-durations+
+            when (<= duration total)
+              collect (cons duration token) into candidates
+            finally (return (cdr (car (sort candidates (lambda (a b) (> (car a) (car b)))))))))))
+
+(defun second-last (list)
+  "Return the second-to-last element of LIST, or NIL if it has fewer than two elements"
+  (when (and list (cdr list))
+    (if (null (cddr list))
+        (car list)
+        (second-last (cdr list)))))
+
+(define-constant +speakjet-control-tokens+
+    '("Volume" "Speed" "Pitch" "Bend" "PortCtr" "Port" "Repeat"
+      "CallPhrase" "GotoPhrase" "Delay" "Reset" "Fast" "Slow"
+      "Stress" "Relax" "Wait" "Soft" "EndOfPhrase")
+  :test #'equalp)
+
+(defun speakjet-control-token-p (token)
+  "Return true if TOKEN is a SpeakJet control token"
+  (and (stringp token)
+       (member token +speakjet-control-tokens+ :test #'string=)))
 
 (defun log-missing-word-for-speakjet (word)
   (with-output-to-file (missing-words #p"Object/SpeakJet.missing.words"
@@ -1957,128 +1998,63 @@ but now also ~s."
     (princ word missing-words)
     (fresh-line missing-words)))
 
-(defun fixup-exclamations (seq)
-  (loop
-     (let ((bang (position-if (lambda (n) (member n '(:bang :query))) seq)))
-       (unless bang
-         (return-from fixup-exclamations seq))
-       (assert (plusp bang) ()
-               "Neither exclamation mark nor question mark can begin a sentence")
-       (setf seq
-             (let* ((alteration (elt seq bang))
-                    (phrase-start
-                      (or (let ((n (position-if
-                                    (lambda (tok)
-                                      (and (stringp tok)
-                                           (starts-with-subseq "Pause" tok)))
-                                    seq
-                                    :end bang :from-end t)))
-                            (when n (1+ n)))
-                          0))
-                    (before (subseq seq 0 phrase-start))
-                    (phrase (subseq seq phrase-start bang))
-                    (after (when (< bang (length seq))
-                             (subseq seq (1+ bang))))
-                    (phrase-length (length phrase)))
-               (assert (plusp phrase-length) ()
-                       "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
-               (ecase alteration
-                 (:bang
-                  (warn "handling of “!” is poor")
-                  (reduce (curry #'concatenate 'list)
-                          (list
-                           before
-                           (list "Bend" "$04")
-                           (mapcan (lambda (phoneme)
-                                     (list "Stress" phoneme))
-                                   phrase)
-                           (list "Bend" "$05")
-                           after)))
-                 (:query
-                  (warn "handling of “?” is poor")
-                  (reduce (curry #'concatenate 'list)
-                          (list
-                           before
-                           (case (length phrase)
-                             (1 (list "Bend" "$08" (car phrase)))
-                             (2 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)))
-                             (3 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)
-                                      "Bend" "$0a" (third phrase)))
-                             (4 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)
-                                      "Bend" "$0a" (third phrase)
-                                      "Bend" "$08" (fourth phrase)))
-                             (otherwise
-                              (cons (subseq phrase 0 (- (length phrase) 5))
-                                    (list "Bend" "$06" (elt phrase (- (length phrase) 5))
-                                          "Bend" "$08" (elt phrase (- (length phrase) 4))
-                                          "Bend" "$0a" (elt phrase (- (length phrase) 3))
-                                          "Bend" "$0c" (elt phrase (- (length phrase) 2))
-                                          "Bend" "$09" (elt phrase (- (length phrase) 1))))))
-                           (list "Bend" "$05")
-                           after)))))))))
-
 (defmacro repeat-unrolled ((times) &body body)
   (cons 'progn
         (loop repeat times
               collect `(progn ,@ (copy-list body)))))
 
 (defun combine-adjacent-pauses (bytes)
+  "Consolidate consecutive pauses and parameter changes without intervening phonemes"
+  (setf bytes (flatten bytes))
   (when (< (length bytes) 2)
     (return-from combine-adjacent-pauses bytes))
   (let ((merge1
-          (append
-           (loop for i from 0 below (1- (length bytes))
-                 for a = (elt bytes i)
-                 for b = (elt bytes (1+ i))
-                 if (and (stringp a)
-                         (stringp b)
-                         (starts-with-subseq "Pause" a)
-                         (starts-with-subseq "Pause" b))
-                   collect (prog1 (speakjet-pause+ a b)
-                             (incf i))
-                 else
-                   if (and (stringp a)
-                           (member b '(:bang :query))
-                           (starts-with-subseq "Pause" a))
-                     collect (prog1 b
-                               (incf i))
-                 else
-                   if (and (stringp a)
-                           (starts-with-subseq "Pause" a)
-                           (string= b "EndOfPhrase"))
-                     collect (prog1 b
-                               (incf i))
-                 else
-                   collect a)
-           (last bytes))))
-    (let ((penultimate (elt merge1 (- (length merge1) 2)))
-          (ultimate (elt merge1 (- (length merge1) 1))))
-      (if (and (stringp penultimate)
-               (stringp ultimate)
-               (starts-with-subseq "Pause" penultimate)
-               (or (starts-with-subseq "Pause" ultimate)
-                   (string= "EndOfPhrase" ultimate)))
-          (return-from combine-adjacent-pauses
-            (combine-adjacent-pauses
-             (append (subseq merge1 0 (- (length merge1) 1))
-                     (list "EndOfPhrase"))))
-          merge1))))
+         (append
+          (loop for i from 0 below (1- (length bytes))
+                for a = (elt bytes i)
+                for b = (elt bytes (1+ i))
+                collect
+                (cond
+                  ;; Two consecutive pauses: combine into one longer pause
+                  ((and (stringp a) (stringp b)
+                        (starts-with-subseq "Pause" a)
+                        (starts-with-subseq "Pause" b))
+                   (prog1 (speakjet-pause+ a b) (incf i)))
+                  ;; Pause followed by EndOfPhrase: drop the pause, keep EndOfPhrase
+                  ((and (stringp a) (stringp b)
+                        (starts-with-subseq "Pause" a)
+                        (string= b "EndOfPhrase"))
+                   (prog1 b (incf i)))
+                  ;; Two control tokens in a row: keep the second, drop the first
+                  ((and (speakjet-control-token-p a)
+                        (speakjet-control-token-p b))
+                   (prog1 b (incf i)))
+                  ;; Default: keep both tokens
+                  (t a)))
+          (last bytes))))
+    ;; A trailing pause is redundant before EndOfPhrase, so strip it
+    (if (and (stringp (first (last merge1)))
+             (starts-with-subseq "Pause" (first (last merge1))))
+        (combine-adjacent-pauses (butlast merge1))
+        merge1)))
 
 (defun char-digit-or-comma-p (char)
   (or (digit-char-p char) (char= #\, char)))
 
-(defun convert-for-atarivox (string)
-  "Convert STRING into a list of tokens for AtariVox (SpeakJet)"
+(defun convert-for-atarivox (string &key (voice (default-voice-profile)))
+  "Convert STRING into a list of tokens for AtariVox (SpeakJet)
+under the VOICE character baseline (default: the default voice profile)."
   (ensure-atarivox-dictionary)
-  (when (emptyp string) (return-from convert-for-atarivox nil))
-  (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[\\p{L}\\p{N}’'-]+\\s*\\[(.*?)\\]"
-                 string
-                 " \\1 "))
-        (words nil))
+  (when (stringp voice)
+    (setf voice (voice-profile-for-name voice)))
+  (when (emptyp string)
+    (return-from convert-for-atarivox nil))
+  (let ((string (emphasize-text
+                 (cl-ppcre:regex-replace-all
+                  "\\b[\\p{L}\\p{N}’'-]+\\s*\\[(.*?)\\]"
+                  string
+                  " \\1 ")))
+        words)
     (cl-ppcre:do-scans (start end reg-starts reg-ends
                         "(\\s+|-|\\\\\\d+|[~\\\\]\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
@@ -2094,31 +2070,21 @@ but now also ~s."
               (push num output))
             (push word output)))
       (setf words output))
-    (let ((bytes (loop
-                   for word in words
-                   append (cond
-		        ((emptyp word) (list "Pause1"))
-		        ((char= (char word 0) #\\)
-		         (if (every #'digit-char-p (subseq word 1))
-                                 (list (format nil "$~2,'0x" (parse-number (subseq word 1))))
-                                 (list (subseq word 1))))
-		        ((equalp word "?!") (list :bang :query))
-		        ((equalp word "!") (list :bang))
-		        ((equalp word "?") (list :query))
-		        ((member word '("-" "“" "”") :test #'string-equal)
-		         nil)
-		        ((or (eql :nil (gethash word *atarivox-dictionary*))
-                                 (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
-		         nil)
-		        ((and (not (gethash word *atarivox-dictionary*))
-                                  (every (complement #'alphanumericp) word))
-		         (list "Pause1"))
-                            (t (or (gethash word *atarivox-dictionary*)
-                                   (atarivox-basic-pronunciation word)))))))
-      (flatten
-       (append (remove-if #'null
-                          (fixup-exclamations (combine-adjacent-pauses bytes)))
-               (cons "EndOfPhrase" nil))))))
+    (append
+     (combine-adjacent-pauses
+      (speakjet-convert
+       words
+       (lambda (word)
+         (let ((entry (gethash word *atarivox-dictionary* :absent)))
+           (cond
+             ((eq entry :absent)
+              (if (every (complement #'alphanumericp) word)
+                  (list "Pause1")
+                  (atarivox-basic-pronunciation word)))
+             ((eq entry :nil) nil)
+             (t entry))))
+       voice))
+     (list "EndOfPhrase"))))
 
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
@@ -3011,9 +2977,11 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
 
 (defun find-actor (actor)
   (or (when (string-equal actor 'player)
-        (list :name "Player" :kind 'player :character-id #xff))
+        (list :name "Player" :kind 'player :character-id #xff
+              :speed 96 :pitch 80 :bend 5))
       (when (string-equal actor 'narrator)
-        (list :name "Narrator" :kind 'narrator :character-id #xfe))
+        (list :name "Narrator" :kind 'narrator :character-id #xfe
+              :speed 96 :pitch 88 :bend 4))
       (when-let (found (find-if (lambda (record)
                                   (or (string-equal actor (getf record :name))
                                       (member actor (getf record :nicks)
@@ -3068,30 +3036,31 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
   (format t "~% Blob_~a_ID scripted-blob-screen"
           (pascal-case blob-screen-name)))
 
-(defun fountain/write-speech (text)
+(defun fountain/write-speech (text &key (voice (default-voice-profile)))
   "Write the speech data for TEXT in text, SpeakJet, and IntelliVoice forms"
-  (assert (< (length text) #x100) (text)
-          "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
-          (length text))
-  (when (speech-supported-p)
-    (restart-case
-        (progn
-          (format t "
+  (let ((text (emphasize-text text)))
+    (assert (< (length text) #x100) (text)
+            "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
+            (length text))
+    (when (speech-supported-p)
+      (restart-case
+          (progn
+            (format t "
   C\" ~a\"
   SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-                  (prepare-dialogue text)
-                  (convert-for-atarivox text))
-          ;; Include IntelliVoice phonemes for Intellivision
-          (format t "
+                    (prepare-dialogue text)
+                    (convert-for-atarivox text :voice voice))
+            ;; Include IntelliVoice phonemes for Intellivision
+            (format t "
   IntelliVoice[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]IntelliVoice"
-                  (convert-for-speech text :intellivoice)))
-      (reload-dictionary ()
-        :report "Reload the speech dictionaries"
-        (reload-atarivox-dictionary)
-        (reload-intellivoice-dictionary)
-        (fountain/write-speech text))))
-  (format t "~% ( ~s ) do-dialogue"
-          text))
+                    (convert-for-speech (strip-emphasis text) :intellivoice)))
+        (reload-dictionary ()
+          :report "Reload the speech dictionaries"
+          (reload-atarivox-dictionary)
+          (reload-intellivoice-dictionary)
+          (fountain/write-speech text :voice voice))))
+    (format t "~% ( ~s ) do-dialogue"
+            text)))
 
 (defun dialogue-hash (text format-keyword)
   (let ((intro (format nil "~{~a~}"
@@ -3112,7 +3081,7 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
          (format t "
   C\" ~a\"
   add-dialogue-branch-option "
-                 (prepare-dialogue text))
+                 (prepare-dialogue (emphasize-text text)))
        (reload-dictionary ()
          :report "Reload the AtariVox (SpeakJet) dictionary"
          (reload-atarivox-dictionary)
@@ -3148,6 +3117,7 @@ do-branching-dialogue ~a"
       (format t "~% ( Compiled from input stream )  "))
   (let ((lexer (make-fountain-lexer fountain))
         (*actors* nil)
+        (voice (default-voice-profile))
         (*line-number* 0)
         (*fountain-state* nil))
     (loop (multiple-value-bind (sym value)
@@ -3175,11 +3145,15 @@ do-branching-dialogue ~a"
               (blob-screen
                (fountain/write-blob-screen value))
               (speaker-oc
-               (destructuring-bind (&key name &allow-other-keys) (require-actor value)
+               (let* ((deets (require-actor value))
+                      (name (getf deets :name)))
+                 (setf voice (voice-profile-from-actor deets))
                  (write-off-camera-speaker name)))
               (speaker
-               (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
-                   (require-actor value)
+               (let* ((deets (require-actor value))
+                      (name (getf deets :name))
+                      (found-in-scene-p (getf deets :found-in-scene-p)))
+                 (setf voice (voice-profile-from-actor deets))
                  (cond
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
@@ -3189,7 +3163,7 @@ do-branching-dialogue ~a"
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
                       (write-off-camera-speaker name)))))
-              (speech (fountain/write-speech value))
+              (speech (fountain/write-speech value :voice voice))
               (reboot
                (format t "~% reboot")
                (return))
@@ -3493,17 +3467,23 @@ code for the game's scripting engine.
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-pitch) :voice-pitch
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-bend) :voice-bend
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-speed) :voice-speed
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))

@@ -1492,6 +1492,10 @@ range is 0 - #xffffffff (4,294,967,295)"
   ;; it to space ensures validation/round-trip checks don't falsely fail while
   ;; preserving layout semantics.
   (cond
+    ((char= char +begin-emphasis-char+)
+     +control-emphasis-minifont+)
+    ((char= char +end-emphasis-char+)
+     +control-end-emphasis-minifont+)
     ((or (char<= #\0 char #\9)
          (char<= #\a char #\z)
          (char<= #\A char #\Z))
@@ -1509,8 +1513,13 @@ range is 0 - #xffffffff (4,294,967,295)"
 
 (defun minifont->char (byte &key (replace #\❓))
   (unless replace
-    (check-type byte (or (integer 0 127) (integer #xd2 #xd2)) "a minifont character value (0-127 or $d2)"))
+    (check-type byte (or (integer 0 127) (integer #xd0 #xd2))
+                "a minifont character value (0-127 or $d0-$d2)"))
   (cond
+    ((= byte +control-emphasis-minifont+)
+     (string +begin-emphasis-char+))
+    ((= byte +control-end-emphasis-minifont+)
+     (string +end-emphasis-char+))
     ((<= 0 byte 35) (format nil "~36r" byte))
     ((= #xd2 byte) (coerce #(#\¶ #\Newline) 'string))
     ((or (< byte 0) (> byte 127)) (string replace))

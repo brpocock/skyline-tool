@@ -144,19 +144,33 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
 (defun convert-intellivoice-bytes (tokens)
   (convert-speech-bytes tokens :intellivoice))
 
-(defmethod speech-speak (phrase (speech-system (eql :atarivox)))
-  "Speak a phrase using the specified speech system."
-  (dolist (byte (convert-speech-bytes (convert-for-speech phrase speech-system) speech-system))
-    (when byte
-      (write-byte byte *atarivox-port*)
-      (sleep 1/50))))
+(defmethod speech-speak (phrase (speech-system (eql :atarivox)) &key
+                                                                  (voice (default-voice-profile)))
+  "Speak a phrase using the specified speech system.
+VOICE supplies the speaking character's VOICE-PROFILE, which drives the
+intonation envelope; when omitted the default profile is used."
+  (let ((buffer (convert-for-speech phrase speech-system :voice voice))
+        (speakjet-queue 0))
+    (dolist (byte  buffer)
+      (loop with bytes = (convert-speech-bytes buffer speech-system)
+            for byte = (pop bytes)
+            when byte
+              do (progn (write-byte byte *atarivox-port*)
+                        (sleep 1/16)
+                        (when (< 4 (incf speakjet-queue
+                                         (cond ((< byte 6) (/ (rest (elt +speakjet-pause-durations+ byte)) 1000))
+                                               ((<= 20 byte 30) (write-byte (pop bytes) *atarivox-port*)
+                                                                1/30)
+                                               ((< byte #x20) 1/60)
+                                               (t 1/30))))
+                          (loop while (plusp (decf speakjet-queue)) do (sleep 1/30))))))))
 
 (defun current-speech-system ()
   "Determine the appropriate speech system based on the current machine."
   (case *machine*
-    (2609 :intellivoice)  ; Intellivision with IntelliVoice (CP1610)
-    (64 :magic-desk)
-    ((2600 7800 3000) :atarivox)))    ; AtariVox/VecVox
+    (2609 :intellivoice)      ; Intellivision with IntelliVoice (CP1610)
+    (64 :magic-voice)
+    ((2600 7800 3000 20 64 128) :atarivox)))    ; AtariVox/VecVox
 
 (defun atarivox-speak (phrase)
   (speech-speak phrase :atarivox))
@@ -165,12 +179,28 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
   (declare (ignore phrase))
   (error "IntelliVoice does not have a PC interface, so I cannot speak thisnnnn"))
 
-(defmethod convert-for-speech (string (speech-system (eql :atarivox)))
-  "Convert STRING into a list of tokens for the specified speech system."
-  (convert-for-atarivox string))
+(defun voice-profile-for-name (char-name)
+  "Return the VOICE-PROFILE for the speaker CHAR-NAME, or the default profile.
+NARRATOR and PLAYER use the fixed values applied by %SETUP-VOICE-PARAMS."
+  (let ((name (string-trim " " (or char-name ""))))
+    (cond
+      ((or (emptyp name) (char= #\> (char name 0)))
+       (default-voice-profile))
+      ((string-equal "NARRATOR" name)
+       (voice-profile-from-actor (list :speed 96 :pitch 88 :bend 4)))
+      ((string-equal "PLAYER" name)
+       (voice-profile-from-actor (list :speed 96 :pitch 80 :bend 5)))
+      (t (voice-profile-from-actor (load-actor name))))))
 
-(defmethod convert-for-speech (string (speech-system (eql :intellivoice)))
+(defmethod convert-for-speech (string (speech-system (eql :atarivox))
+                               &key (voice (default-voice-profile)))
   "Convert STRING into a list of tokens for the specified speech system."
+  (convert-for-atarivox string :voice voice))
+
+(defmethod convert-for-speech (string (speech-system (eql :intellivoice))
+                               &key (voice (default-voice-profile)))
+  "Convert STRING into a list of tokens for the specified speech system."
+  (declare (ignore voice))
   (convert-for-intellivoice string))
 
 (defun intellivoice-basic-pronunciation (word)
@@ -525,6 +555,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
              (force-output stream)))
       (loop for line = (read-line script nil nil)
             with mode = nil
+            with speaker = nil
             while line
             do (ecase mode
                  ((nil)
@@ -537,12 +568,14 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                      (destructuring-bind (char-name &rest _)
                          (split-sequence #\Space (string-trim " " line))
                        (declare (ignore _))
+                       (setf speaker char-name)
                        ($ "~%~%Speaker: ~a~%" char-name)
                        (let* ((stats (cond
                                        ((char= #\> (char char-name 0)) nil)
-                                       ((or (string-equal "NARRATOR" char-name)
-                                            (string-equal "PLAYER" char-name))
-                                        (list :speed 96 :pitch 114 :bend 88))
+                                       ((string-equal "NARRATOR" char-name)
+                                        (list :speed 96 :pitch 88 :bend 4))
+                                       ((string-equal "PLAYER" char-name)
+                                        (list :speed 96 :pitch 80 :bend 5))
                                        (t (load-actor char-name))))
                               (speed (getf stats :speed))
                               (pitch (getf stats :pitch))
@@ -559,7 +592,8 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                          ($ "~&"))
                         (t
                          ($ "~&  « ~a »" line)
-                         (speech-speak line :atarivox)
+                         (speech-speak line :atarivox
+                                       :voice (voice-profile-for-name speaker))
                          (when interactive
                            ($ "~%  — Press Return to continue —")
                            (read-char stream))))))))))
@@ -569,9 +603,10 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
   "Load and apply voice parameters for CHAR-NAME to the AtariVox."
   (let* ((stats (cond
                   ((char= #\> (char char-name 0)) nil)
-                  ((or (string-equal "NARRATOR" char-name)
-                       (string-equal "PLAYER" char-name))
-                   (list :speed 96 :pitch 114 :bend 88))
+                  ((string-equal "NARRATOR" char-name)
+                   (list :speed 96 :pitch 88 :bend 4))
+                  ((string-equal "PLAYER" char-name)
+                   (list :speed 96 :pitch 80 :bend 5))
                   (t (load-actor char-name))))
          (speed (getf stats :speed))
          (pitch (getf stats :pitch))
@@ -620,6 +655,7 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
    and speaking dialogue via AtariVox."
   (let* ((elements (reader-elements frame))
          (idx 0)
+         (speaker nil)
          (interactor (clim:find-pane-named frame 'interactor))
          (stream (or interactor *standard-output*)))
     (flet ((show (scene speaker line)
@@ -637,22 +673,17 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
                  (:scene-heading
                   (show text nil nil))
                  (:character
+                  (setf speaker text)
                   (show nil text "")
-                  (%setup-voice-params text)
-                  ;; Wait for Return before showing dialogue
-                  (handler-case
-                      (progn
-                        (format stream "~&Press Return to hear ~a..." text)
-                        (force-output stream)
-                        (read-line stream))
-                    (error ())))
+                  (%setup-voice-params text))
                  (:parenthetical
                   (show nil nil text))
                  (:dialogue
                   (show nil nil text)
                   (handler-case
                       (progn
-                        (speech-speak text :atarivox)
+                        (speech-speak text :atarivox
+                                      :voice (voice-profile-for-name speaker))
                         (format stream "~&Press Return for next line...")
                         (force-output stream)
                         (read-line stream))
@@ -728,3 +759,15 @@ When ready, hit Return, and I'll try to locate the path to the burner.")
               (window-title "Read Script"))
         (clim-sys:make-process (lambda () (clim:run-frame-top-level frame))
                                :name "Script Reader (launcher)"))))
+
+(defun convert-for-intellivoice (string)
+  "Convert STRING into a list of IntelliVoice phoneme tokens"
+  (ensure-intellivoice-dictionary)
+  (let ((words (cl-ppcre:split "\\s+" (string-trim " " string))))
+    (mapcar (lambda (word)
+              (let* ((lookup (gethash (string-upcase word) *intellivoice-dictionary*))
+                     (result (if lookup
+                                 (split " " lookup)
+                                 (intellivoice-basic-pronunciation word))))
+                result))
+            words)))

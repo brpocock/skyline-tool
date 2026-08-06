@@ -108,11 +108,12 @@
 (test lynx-graphics-utilities
   "Test Lynx graphics utility functions"
   ;; Test machine-palette with Lynx machine number
-  (let ((skyline-tool::*machine* 200))
+  (let ((skyline-tool::*machine* 200)
+        (skyline-tool::*region* :internal))
     (is (equal (length (skyline-tool::machine-palette)) 4096)
         "Lynx machine palette should have 4096 colors"))
   ;; Test that Lynx is properly recognized as a valid machine
-  (is (equal (skyline-tool::machine-number-by-tag "Lynx") 200)
+  (is (equal (skyline-tool::machine-number-from-tag "Lynx") 200)
       "Lynx should map to machine number 200"))
 
 ;; Test error handling

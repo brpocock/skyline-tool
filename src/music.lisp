@@ -2679,8 +2679,7 @@ Format: 2-byte note count header + 6 bytes per note."
 
 SOUND-CHIP defaults to Mikey; OUTPUT-CODING defaults to NTSC.
 The Lynx is a single-region portable, so only NTSC timing is needed."
-  (declare (ignore sound-chip output-coding))
-  )
+  (compile-music-for-machine 200 sound-chip source-out-name in-file-name output-coding))
 
 (defmethod compile-music-for-machine ((machine (eql 200)) sound-chip source-out-name in-file-name output-coding)
   "Compile Mikey audio for Atari Lynx — emits assembly with register and song data.

@@ -240,29 +240,29 @@
 (defun make-git-backend (&optional (path (uiop:getcwd)))
   "Create a Git backend instance for PATH"
   (declare (ignore path))
-  'git)
+  :git)
 
 (defun make-svn-backend (path)
   "Create an SVN backend instance"
   (declare (ignore path))
-  'svn)
+  :svn)
 
 (defun make-bazaar-backend (path)
   "Create a Bazaar backend instance"
   (declare (ignore path))
-  'bazaar)
+  :bazaar)
 
 (defun make-cvs-backend (path)
   "Create a CVS backend instance"
   (declare (ignore path))
-  'cvs)
+  :cvs)
 
 (defun make-rcs-backend (path)
   "Create an RCS backend instance"
   (declare (ignore path))
-  'rcs)
+  :rcs)
 
 (defun make-mercurial-backend (path)
   "Create a Mercurial backend instance"
   (declare (ignore path))
-  'mercurial)
+  :mercurial)
