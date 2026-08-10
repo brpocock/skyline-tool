@@ -1,5 +1,87 @@
 (in-package :skyline-tool)
 
+(defvar *classes-defs-cache* nil
+  "Cached parsed contents of Classes.Defs file.
+   Format: ((class-name . ((slot-name . (offset . type)) ...)) ...)")
+(defvar *classes-defs-timestamp* 0
+  "Timestamp of Classes.Defs file when cache was last updated.")
+
+(defvar *classes-defs-cache* nil
+  "Cached parsed contents of Classes.Defs file.
+   Format: ((class-name . ((slot-name . (offset . type)) ...)) ...)")
+(defvar *classes-defs-timestamp* 0
+  "Timestamp of Classes.Defs file when cache was last updated.")
+
+(defun load-classes-defs ()
+  "Load and parse Classes.Defs file, using cache if file hasn't changed.
+   Returns alist: ((class-name . ((slot-name . (offset . type)) ...)) ...)
+   Where type is :string or :numeric."
+  (let* ((pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
+                                    (uiop:getcwd)))
+         (file-time (file-write-date pathname)))
+    (when (and *classes-defs-cache*
+               (= *classes-defs-timestamp* file-time))
+      (return-from load-classes-defs *classes-defs-cache*))
+    
+    (let ((classes (make-hash-table :test #'equal)))
+      (with-input-from-file (classes.defs pathname :if-does-not-exist :error)
+        (let ((current-class nil)
+              (offset 0))
+          (loop for line = (read-line classes.defs nil nil)
+                while line
+                do (cond
+                     ;; Skip empty lines and comments
+                     ((or (zerop (length line))
+                          (char= #\; (char line 0)))
+                      nil)
+                     ;; Class definition line: "Class < ParentClass"
+                     ((and (> (length line) 2)
+                           (char= #\< (char line 1)))
+                      (let ((class-name (string-trim #(#\Space #\Tab)
+                                                     (subseq line 0 (position #\< line)))))
+                        (when (string/= class-name "")
+                          (setf current-class class-name
+                                offset 0
+                                (gethash current-class classes) '()))))
+                     ;; Slot definition line: ".SlotName N = ..."
+                     ((char= #\. (char line 0))
+                      (when current-class
+                        (let* ((parts (split-sequence #\Space (subseq line 1)
+                                                      :remove-empty-subseqs t))
+                               (slot-name (first parts))
+                               (slot-bytes (parse-integer (or (second parts) "1")))
+                               (definition (subseq line (+ 1 (length slot-name)))))
+                          (let* ((up-def (string-upcase definition))
+                                 (has-pic (search "PIC" up-def))
+                                 (has-av (or (search "A" up-def)
+                                             (search "X" up-def)))
+                                 (type (if (and has-pic has-av)
+                                           :string
+                                           :numeric)))
+                            (push (cons slot-name (cons offset type))
+                                  (gethash current-class classes))
+                            (incf offset slot-bytes))))))))
+        (let ((result (alist-plist (hash-table-alist classes))))
+          (setf *classes-defs-cache* result
+                *classes-defs-timestamp* file-time)
+          result)))))
+
+(defun get-slot-info (class-name slot-name)
+  "Return (offset . type) for SLOT-NAME in CLASS-NAME from Classes.Defs.
+   Type is :string or :numeric, or NIL if not found."
+  (rest (assoc slot-name
+               (rest (assoc class-name
+                            (load-classes-defs)
+                            :test #'string=))
+               :test #'string=)))
+
+(defun string-slot-p (class-name slot-name)
+  "Return true if SLOT-NAME in CLASS-NAME is a string slot (defined with PIC X in Classes.Defs)."
+  (let ((info (get-slot-info class-name slot-name)))
+    (or (eq slot-name :|CharacterName|) ; XXX HACK until the below is tested to work properly
+        ;; FIXME the get-slot-info does not detect strings properly yet
+        (and info (eq (cdr info) :string)))))
+
 (defun read-class-methods-from-file (&optional (pathname #p"Object/Bank01.Public.NTSC.o.LABELS.txt"))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
     (let ((classes-table (make-hash-table)))
@@ -19,8 +101,10 @@
             finally (return-from read-class-methods-from-file classes-table)))))
 
 ;;; FIXME make-pathname
-(defun read-class-ids-from-file (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/ClassConstants.s" (skyline-tool::machine-directory-name))
-                                                                          (project-root))))
+(defun read-class-ids-from-file (&optional (pathname (merge-pathnames
+                                                      (format nil "Source/Generated/~a/ClassConstants.s"
+                                                              (skyline-tool::machine-directory-name))
+                                                      (uiop:getcwd))))
   (with-input-from-file (labeled pathname :if-does-not-exist :error)
     (let ((classes-table (make-hash-table)))
       (loop for line = (read-line labeled nil nil)
@@ -43,15 +127,15 @@
   (let ((ids-classes (read-class-ids-from-file)))
     (gethash id ids-classes)))
 
-(defun read-class-fields-from-defs (class-name &optional
+(defun read-class-slots-from-defs (class-name &optional
                                                 (pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
-                                                                           (project-root))))
+                                                                           (uiop:getcwd))))
   (when (string= "BasicObject" class-name)
-    (return-from read-class-fields-from-defs
-      (list (cons (cons "BasicObjectClassID" 0) nil) 1)))
+    (return-from read-class-slots-from-defs
+      (list (cons (cons "ClassID" 0) nil) 1)))
   (let ((class-name-< (concatenate 'string class-name " < "))
         (offset 0)
-        (fields (list)))
+        (slots (list)))
     (with-input-from-file (classes.defs pathname :if-does-not-exist :error)
       (let ((parent-class (loop for line = (read-line classes.defs nil nil)
                                 while line
@@ -63,10 +147,10 @@
                                 finally (unless line
                                           (cerror "Ignore and continue"
                                                   "Can't determine parent class of ~s" class-name)
-                                          (return-from read-class-fields-from-defs
+                                          (return-from read-class-slots-from-defs
                                             (list nil 0))))))
-        (destructuring-bind (f$ o$) (read-class-fields-from-defs parent-class pathname)
-          (setf fields f$ offset o$))
+        (destructuring-bind (f$ o$) (read-class-slots-from-defs parent-class pathname)
+          (setf slots f$ offset o$))
         (loop for line = (read-line classes.defs nil nil)
               while (and line
                          (plusp (length line))
@@ -74,12 +158,13 @@
                              (char= #\# (char line 0))
                              (char= #\; (char line 0))))
               do (when (char= #\. (char line 0))
-                   (destructuring-bind (field-name field-bytes$)
-                       (split-sequence #\Space (subseq line 1) :count 2)
-                     (let ((field-bytes (parse-integer field-bytes$)))
-                       (push (cons (concatenate 'string class-name field-name) offset) fields)
-                       (incf offset field-bytes)))))
-        (list fields offset)))))
+                   (let ((parts (split-sequence #\Space (subseq line 1)
+                                                :remove-empty-subseqs t)))
+                     (let ((slot-name (first parts))
+                           (slot-bytes (parse-integer (or (second parts) "1"))))
+                       (push (cons (concatenate 'string class-name slot-name) offset) slots)
+                       (incf offset slot-bytes)))))
+        (list slots offset)))))
 
 (clim:define-presentation-type ext-file-link () :inherit-from 'pathname)
 
@@ -101,82 +186,82 @@
       (+ (second value) (/ (first value) #x100))))
 
 
-(defun print-field-value (name value &optional (stream  *standard-output*))
-  (print-field-value% name value stream))
+(defun print-slot-value (name value &optional (stream  *standard-output*))
+  (print-slot-value% name value stream))
 
-(defgeneric print-field-value% (field-keyword-name field-value stream)
-  (:documentation "Print the FIELD-VALUE for FIELD-KEYWORD-NAME to STREAM")
-  (:method ((field-keyword-name t) (field-value t) (stream t))
+(defgeneric print-slot-value% (slot-keyword-name slot-value stream)
+  (:documentation "Print the SLOT-VALUE for SLOT-KEYWORD-NAME to STREAM")
+  (:method ((slot-keyword-name t) (slot-value t) (stream t))
     nil)
-  (:method ((field (eql :boat-id)) value s)
+  (:method ((slot (eql :boat-id)) value s)
     (load-boats)
     (format s " = ")
     (clim:with-output-as-presentation (s #p"Source/Tables/Boats.ods" 'ext-file-link)
       (format s "The “~a”" (getf (reverse (hash-table-plist *boat-ids*)) (elt value 0)))))
-  (:method ((field (eql :stab-course-limit)) value s)
+  (:method ((slot (eql :stab-course-limit)) value s)
     (format s " = ~dpx" (first value)))
-  (:method ((field (eql :stab-course-distance)) value s)
+  (:method ((slot (eql :stab-course-distance)) value s)
     (let ((n (8.8-float value)))
       (format s " = ~,2f (~a)" n (rationalize n))))
-  (:method ((field (eql :stab-course-speed)) value s)
+  (:method ((slot (eql :stab-course-speed)) value s)
     (let ((n (8.8-float value)))
       (format s " = ~,2fpx/f (~a) = ~%~~~,2fpx/s @60Hz = ~~~,2ftiles/s"
               n (rationalize n) (* 60 n) (/ (* 60 n) 16))))
-  (:method ((field (eql :stab-course-forward-p)) value s)
+  (:method ((slot (eql :stab-course-forward-p)) value s)
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
-  (:method ((field (eql :course-finished-p)) value s)
+  (:method ((slot (eql :course-finished-p)) value s)
     (format s " = ~[false~:;true~]" (logand #x80 (first value))))
-  (:method ((field (eql :bresenham-course-delta-x)) value s)
+  (:method ((slot (eql :bresenham-course-delta-x)) value s)
     (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
             (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
             (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)))))
-  (:method ((field (eql :bresenham-course-delta-y)) value s)
+  (:method ((slot (eql :bresenham-course-delta-y)) value s)
     (format s " = $~1,'0x.~4,'0x tiles/frame ≈ ~5f tiles/s"
             (ash (second value) -6) (ash (+ (* #x100 (logand #x3f (second value))) (first value)) 2)
             (/ (+ (first value) (* #x100 (second value))) (* 60.0 (expt 2 14)) )))
-  (:method ((field (eql :bresenham-course-absolute-delta-x)) value s)
+  (:method ((slot (eql :bresenham-course-absolute-delta-x)) value s)
     (format s " = $~4,'0x ≈ ~f tiles"
             (+ (first value) (* #x100 (second value)))
             (/ (+ (first value) (* #x100 (second value))) 1024.0)))
-  (:method ((field (eql :bresenham-course-absolute-delta-y)) value s)
+  (:method ((slot (eql :bresenham-course-absolute-delta-y)) value s)
     (format s " = $~4,'0x ≈ ~f tiles"
             (+ (first value) (* #x100 (second value)))
             (/ (+ (first value) (* #x100 (second value))) 1024.0)))
-  (:method ((field (eql :bresenham-course-sign-x)) value s)
+  (:method ((slot (eql :bresenham-course-sign-x)) value s)
     (case (first value)
       (1 (format s " = + (right, east)"))
       (#xff (format s " = - (left, west)"))
       (0 (format s " = zero"))
       (otherwise (format s " = invalid"))))
-  (:method ((field (eql :bresenham-course-sign-y)) value s)
+  (:method ((slot (eql :bresenham-course-sign-y)) value s)
     (case (first value)
       (1 (format s " = + (down, south)"))
       (#xff (format s " = - (up, north)"))
       (0 (format s " = zero"))
       (otherwise (format s " = invalid"))))
-  (:method ((field (eql :bresenham-course-total-length)) value s)
+  (:method ((slot (eql :bresenham-course-total-length)) value s)
     (format s " = $~4,'0x ≈ ~f tiles"
             (+ (first value) (* #x100 (second value)))
             (/ (+ (first value) (* #x100 (second value))) 1024.0)))
-  (:method ((field (eql :course-waypoint-x)) value s)
+  (:method ((slot (eql :course-waypoint-x)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :course-waypoint-y)) value s)
+  (:method ((slot (eql :course-waypoint-y)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :character-speech-pitch)) value s)
+  (:method ((slot (eql :character-speech-pitch)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :character-speech-speed)) value s)
+  (:method ((slot (eql :character-speech-speed)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :character-speech-bend)) value s)
+  (:method ((slot (eql :character-speech-bend)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :character-arrows)) value s)
+  (:method ((slot (eql :character-arrows)) value s)
     (format s " = ~d arrow~:p" (first value)))
-  (:method ((field (eql :character-potions)) value s)
+  (:method ((slot (eql :character-potions)) value s)
     (format s " = ~d potion~:p" (first value)))
-  (:method ((field (eql :character-chalice)) value s)
+  (:method ((slot (eql :character-chalice)) value s)
     (cond ((zerop (first value)) (format s " = no chalice"))
           ((plusp (logand #x80 (first value))) (format s " = empty chalice"))
           (t (format s " = contents are type ~r" (first value)))))
-  (:method ((field (eql :palette-color)) value s)
+  (:method ((slot (eql :palette-color)) value s)
     (format s " = ~a"
             (case (first value)
               (1 "Peach") (2 "Green") (3 "Purple")
@@ -184,13 +269,13 @@
               (9 "White") (10 "Gray") (11 "Black")
               (13 "Yellow") (14 "Red") (15 "Blue")
               (otherwise "(invalid value)"))))
-  (:method ((field (eql :character-skin-color)) value s)
-    (print-field-value :palette-color value s))
-  (:method ((field (eql :character-hair-color)) value s)
-    (print-field-value :palette-color value s))
-  (:method ((field (eql :character-clothes-color)) value s)
-    (print-field-value :palette-color value s))
-  (:method ((field (eql :character-inventory)) value s)
+  (:method ((slot (eql :character-skin-color)) value s)
+    (print-slot-value :palette-color value s))
+  (:method ((slot (eql :character-hair-color)) value s)
+    (print-slot-value :palette-color value s))
+  (:method ((slot (eql :character-clothes-color)) value s)
+    (print-slot-value :palette-color value s))
+  (:method ((slot (eql :character-inventory)) value s)
     (if (every #'zerop value)
         (format s " = nil")
         (format s "~@< = ~;~{~:(~a~)~^,~_~5t~}~;~:>"
@@ -200,16 +285,16 @@
                   (loop for bit from 0 below #x80
                         when (plusp (logand (expt 2 bit) bignum))
                           collect (inventory-item-name bit))))))
-  (:method ((field (eql :character-speech-color)) value s)
+  (:method ((slot (eql :character-speech-color)) value s)
     (format s " = ~a" (atari-color-name (ash (logand #xf0 (first value)) -4)))
     (unless (= #x0f (logand #x0f (first value)))
       (format s " (likely incorrect value)")))
-  (:method ((field (eql :actor-facing)) value s)
+  (:method ((slot (eql :actor-facing)) value s)
     (format s " = ~a"
             (case (first value)
               (0 "Up") (8 "Left") (12 "Right") (4 "Down")
               (otherwise "unknown"))))
-  (:method ((field (eql :character-action)) value s)
+  (:method ((slot (eql :character-action)) value s)
     (format s " = ~a"
             (case (first value)
               (0 "Idle") (1 "Climbing") (2 "Hurt") (3 "Flying")
@@ -219,11 +304,11 @@
               (14 "Panic") (15 "Walk (with shield)") (16 "Idle (with shield)")
               (17 "Boating")
               (otherwise "unknown"))))
-  (:method ((field (eql :actor-course)) value s)
+  (:method ((slot (eql :actor-course)) value s)
     (if (zerop (second value))
         (format s  " = (no course)")
         (format s " = $~4,10x" (+ (* #x100 (second value)) (first value)))))
-  (:method ((field (eql :boat-width)) value s)
+  (:method ((slot (eql :boat-width)) value s)
     (format s " = ~r tile~:p" (1+ (first value))))
   (:method ((filed (eql :boat-state)) value s)
     (format s " = ~a" (case (first value)
@@ -231,27 +316,27 @@
                         (1 "Sailing West")
                         (2 "Sailing East")
                         (otherwise "(invalid)"))))
-  (:method ((field (eql :character-armor-class)) value s)
+  (:method ((slot (eql :character-armor-class)) value s)
     (format s " = ~d" (first value)))
-  (:method ((field (eql :character-hp)) value s)
+  (:method ((slot (eql :character-hp)) value s)
     (format s " = ~:d" (+ (* #x100 (second value)) (first value))))
-  (:method ((field (eql :character-max-hp)) value s)
+  (:method ((slot (eql :character-max-hp)) value s)
     (format s " = ~:d" (+ (* #x100 (second value)) (first value))))
-  (:method ((field (eql :character-crowns)) value s)
+  (:method ((slot (eql :character-crowns)) value s)
     (format s " = ~:d crown~:p" (+ (* #x100 (second value)) (first value))))
-  (:method ((field (eql :character-gender)) value s)
+  (:method ((slot (eql :character-gender)) value s)
     (format s " = ~a" (case (first value)
                         (1 "♂ Male")
                         (2 "☿ Nonbinary")
                         (3 "♀ Female")
                         (otherwise "(invalid)"))))
-  (:method ((field (eql :character-shield)) value s)
+  (:method ((slot (eql :character-shield)) value s)
     (format s " = ~a"
             (case (first value)
               (1 "Small Shield") (6 "Large Shield")
               (#x80 "No Shield")
               (otherwise "(invalid value)"))))
-  (:method ((field (eql :character-equipment)) value s)
+  (:method ((slot (eql :character-equipment)) value s)
     ;; TODO: #1220 move these into JSON
     (format s " = ~a"
             (case (first value)
@@ -263,13 +348,13 @@
               (#x0a "Wand") (#x0b "Rope")
               (#x0c "Glass") (#x0d "Wrench")
               (otherwise "(invalid value)"))))
-  (:method ((field (eql :character-aux-item)) value s)
+  (:method ((slot (eql :character-aux-item)) value s)
     (format s " = ~a"
             (case (first value)
               (#x80 "No Item")
               (4 "Potion") (#x12 "Chalice")
               (otherwise "(invalid value)"))))
-  (:method ((field (eql :character-character-id)) value s)
+  (:method ((slot (eql :character-character-id)) value s)
     (clim:with-output-as-presentation (s #p"Source/Tables/NPCStats.ods" 'ext-file-link)
       (format s " = ~:(~a~)"
               (cond
@@ -280,13 +365,13 @@
                                          (or *npc-stats* (load-npc-stats))))
                      (getf npc :name)
                      "(unknown)"))))))
-  (:method ((field (eql :particle-kind)) value s)
+  (:method ((slot (eql :particle-kind)) value s)
     (format s " = ~a" (case (first value)
                         (1 "Emote")
                         (2 "Rain Splat")
                         (3 "Rain Splash")
                         (otherwise "(invalid)"))))
-  (:method ((field (eql :character-decal-kind)) value s)
+  (:method ((slot (eql :character-decal-kind)) value s)
     (format s " = ~a" (case (first value)
                         (0 "The Player")
                         (1 "Generic Human")
@@ -319,9 +404,9 @@
       (format t "Instance of ~a" class-name))
     (when offset
       (format t " at $~4,'0x" offset))
-    (destructuring-bind (class-fields class-size) (read-class-fields-from-defs class-name) 
-      (format t "~%~5t~:d field~:p using ~:d byte~:p (reserves ~:d byte~:p)~%"
-              (length class-fields) class-size (* 8 (ceiling class-size 8)))
+    (destructuring-bind (class-slots class-size) (read-class-slots-from-defs class-name) 
+      (format t "~%~5t~:d slot~:p using ~:d byte~:p (reserves ~:d byte~:p)~%"
+              (length class-slots) class-size (* 8 (ceiling class-size 8)))
       (when everything
         (let ((bam-start (object-address->bam-block offset)))
           (when (plusp bam-start)
@@ -338,83 +423,83 @@
                                    (bam-block->object-address bam))))))))
       (etypecase *standard-output*
         (swank/gray::slime-output-stream
-         (loop for i from (1- (length class-fields)) downto 0
-               for info = (elt class-fields i)
-               for field-name = (car info)
-               for field-start = (cdr info)
+         (loop for i from (1- (length class-slots)) downto 0
+               for info = (elt class-slots i)
+               for slot-name = (car info)
+               for slot-start = (cdr info)
                for next-offset = (if (zerop i)
                                      class-size
-                                     (cdr (elt class-fields (1- i))))
-               for length = (- next-offset field-start)
+                                     (cdr (elt class-slots (1- i))))
+               for length = (- next-offset slot-start)
                do (progn
-                    (format t "~%~10t~22a" field-name)
-                    (format t "@ $~2,'0x" field-start)
+                    (format t "~%~10t~22a" slot-name)
+                    (format t "@ $~2,'0x" slot-start)
                     (format t " = ")
                     (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
-                            (coerce (subseq dump field-start next-offset)
+                            (coerce (subseq dump slot-start next-offset)
                                     'list))
-                    (if (string= "CharacterName" field-name)
+                    (if (string= "CharacterName" slot-name)
                         (format t "~%“~a”"
                                 (minifont->unicode
-                                 (subseq dump field-start
-                                         (+ field-start
-                                            (elt dump (cdr (elt class-fields (1+ i))))))))
-                        (print-field-value (make-keyword
-                                            (string-upcase
-                                             (cl-change-case:param-case field-name)))
-                                           (coerce (subseq dump field-start next-offset)
-                                                   'list)))
-                    (when (string= "ActorCourse" field-name)
-                      (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                               (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))
+                                 (subseq dump slot-start
+                                         (+ slot-start
+                                            (elt dump (cdr (elt class-slots (1+ i))))))))
+                        (print-slot-value (make-keyword
+                                           (string-upcase
+                                            (cl-change-case:param-case slot-name)))
+                                          (coerce (subseq dump slot-start next-offset)
+                                                  'list)))
+                    (when (string= "ActorCourse" slot-name)
+                      (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-slots (1+ i))))))
+                               (elt dump (+ 1 (cdr (elt class-slots (1+ i))))))
                             other-objects))
-                    (when (string= "ItemWielder" field-name)
-                      (let ((wielder (subseq dump field-start next-offset)))
+                    (when (string= "ItemWielder" slot-name)
+                      (let ((wielder (subseq dump slot-start next-offset)))
                         (push (+ (* #x100 (elt wielder 1)) (elt wielder 0))
                               other-objects)))
                     (terpri))))
         (t
          (fresh-line)
          (clim:formatting-table (t)
-           (loop for i from (1- (length class-fields)) downto 0
-                 for info = (elt class-fields i)
-                 for field-name = (car info)
-                 for field-start = (cdr info)
+           (loop for i from (1- (length class-slots)) downto 0
+                 for info = (elt class-slots i)
+                 for slot-name = (car info)
+                 for slot-start = (cdr info)
                  for next-offset = (if (zerop i)
                                        class-size
-                                       (cdr (elt class-fields (1- i))))
-                 for length = (- next-offset field-start)
+                                       (cdr (elt class-slots (1- i))))
+                 for length = (- next-offset slot-start)
                  do (clim:formatting-row
                         (t)
                       (clim:formatting-cell (t)
-                        (format t "~10t~22a" field-name))
+                        (format t "~10t~22a" slot-name))
                       (clim:formatting-cell (t)
-                        (format t "@ $~2,'0x" field-start))
+                        (format t "@ $~2,'0x" slot-start))
                       (clim:formatting-cell (t)
                         (format t " = "))
                       (clim:formatting-cell (t)
                         (format t "~{~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^   ~2,'0x~^ ~2,'0x~^ ~2,'0x~^ ~2,'0x~^~}"
-                                (coerce (subseq dump field-start next-offset)
+                                (coerce (subseq dump slot-start next-offset)
                                         'list))
-                        (if (string= "CharacterName" field-name)
+                        (if (string= "CharacterName" slot-name)
                             (clim:with-text-style (t
                                                    (clim:make-text-style :serif :italic 16))
                               (format t "~%“~(~a~)”"
                                       (minifont->unicode
-                                       (subseq dump field-start
-                                               (+ field-start
-                                                  (elt dump (cdr (elt class-fields (1+ i)))))))))
-                            (print-field-value (make-keyword
-                                                (string-upcase
-                                                 (cl-change-case:param-case field-name)))
-                                               (coerce (subseq dump field-start next-offset)
-                                                       'list)))
-                        (when (string= "ActorCourse" field-name)
-                          (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-fields (1+ i))))))
-                                   (elt dump (+ 1 (cdr (elt class-fields (1+ i))))))
+                                       (subseq dump slot-start
+                                               (+ slot-start
+                                                  (elt dump (cdr (elt class-slots (1+ i)))))))))
+                            (print-slot-value (make-keyword
+                                               (string-upcase
+                                                (cl-change-case:param-case slot-name)))
+                                              (coerce (subseq dump slot-start next-offset)
+                                                      'list)))
+                        (when (string= "ActorCourse" slot-name)
+                          (push (+ (* #x100 (elt dump (+ 2 (cdr (elt class-slots (1+ i))))))
+                                   (elt dump (+ 1 (cdr (elt class-slots (1+ i))))))
                                 other-objects))
-                        (when (string= "ItemWielder" field-name)
-                          (let ((wielder (subseq dump field-start next-offset)))
+                        (when (string= "ItemWielder" slot-name)
+                          (let ((wielder (subseq dump slot-start next-offset)))
                             (push (+ (* #x100 (elt wielder 1)) (elt wielder 0))
                                   other-objects))))
                       (terpri)))
@@ -480,8 +565,8 @@
   (let* ((subseq (subseq dump address))
          (class-id (elt subseq 0))
          (class-name (dereference-class class-id)))
-    (destructuring-bind (class-fields class-size) (read-class-fields-from-defs class-name)
-      (declare (ignore class-fields))
+    (destructuring-bind (class-slots class-size) (read-class-slots-from-defs class-name)
+      (declare (ignore class-slots))
       (* 8 (ceiling class-size 8)))))
 
 (defun mark-object-visited (dump object-start visited)
@@ -620,9 +705,9 @@ Room for objects:
 (defun show-self-object ()
   "Describe the object pointed-to by the Self pointer from a dump"
   (clim-simple-echo:run-in-simple-echo #'decode-self-object
-                                                   :height 850
-                                                   :process-name "Decode Self Objects"
-                                                   :window-title "Object “Self”"))
+                                       :height 850
+                                       :process-name "Decode Self Objects"
+                                       :window-title "Object “Self”"))
 
 (defun show-all-objects ()
   "Decode all objects currently in the object heap"
@@ -1004,3 +1089,4 @@ DialogueTextLines: ~d …Room: ~d"
   (clim-simple-echo:run-in-simple-echo #'decode-dialogue
                                        :width 500 :height 500
                                        :process-name "Dialogue Buffers"))
+

@@ -459,7 +459,7 @@ Method~aDestroy: .proc
 
 (defun make-classes-for-oops (&optional
                                 (class-defs-pathname (merge-pathnames #p"Source/Classes/Classes.Defs"
-                                                                      (project-root))))
+                                                                      (uiop:getcwd))))
   "Generate OOPS class definitions from class specification file.
 
 Processes the Classes.Defs file to generate various output files containing

@@ -1,15 +1,4 @@
 (in-package :skyline-tool)
-
-;; Force write-master-makefile (and asset-allocator) into the buildapp image.
-;; The symbol reference in *invocation* may not suffice for buildapp's tree-shaking.
-(declaim (ftype (function (&optional t) t) write-master-makefile))
-(declaim (ftype (function (&optional t) t) write-intv-asset-includes))
-(declaim (ftype (function (t t) t) compile-blob-intv))
-(declaim (ftype (function (t &rest t) t) compile-music))
-;; make-classes-for-oops defined in oops.lisp; declaim omitted to avoid
-;; undefined-function during buildapp compile when interface loads before oops.
-(declaim (ftype (function (&key (:root-dir t) (:output-path t) (:game-name t)) t) make-globals-copybook))
-
 ;; entry point from shell
 
 (defvar *invocation*
@@ -22,11 +11,12 @@
         :atari800-label-file 'atari800-label-file
         :build-banking 'build-banking
         :burn-rom 'click.adventuring.skyline.eprom::burn-rom
-        :blob-rip-7800 'blob-rip-7800
-        :blob-rip-5200 'blob-rip-5200
-        :blob-rip-tms9918 'blob-rip-tms9918
-        :blob-rip-400 'blob-rip-400-tile
-        :blob-rip-800 'blob-rip-800-tile
+        :blob-rip 'blob-rip
+        :blob-rip-7800 'blob-rip-7800 ; FIXME use blob-rip
+        :blob-rip-5200 'blob-rip-5200 ; FIXME use blob-rip
+        :blob-rip-tms9918 'blob-rip-tms9918 ; FIXME use blob-rip
+        :blob-rip-400 'blob-rip-400-tile ; FIXME use blob-rip
+        :blob-rip-800 'blob-rip-800-tile ; FIXME use blob-rip
         :check-for-absent-assets 'check-for-absent-assets
         :compile-index 'compile-index
         :compile-animation-sequences 'compile-animation-sequences
@@ -41,7 +31,7 @@
         :compile-forth-z80 'compile-forth-z80
         :compile-item-drops 'compile-item-drops
         :compile-map 'compile-map
-        :compile-music 'compile-music
+        :compile-music 'compile-music  ; FIXME should be compile-midi
         :compile-midi 'midi-compile
         :compile-obj 'compile-obj
         :compile-code 'compile-skylisp
@@ -56,7 +46,6 @@
         :compile-art-400 'compile-art-400
         :compile-art-800 'compile-art-800
         :compile-blob-intv 'compile-blob-intv
-        :compile-eightbol-class 'eightbol:compile-eightbol-class
         :extract-tileset-palette 'extract-tileset-palette
         :gui 'run-gui
         :labels-to-forth 'labels-to-forth
@@ -84,6 +73,7 @@
         :write-keys-tables 'write-keys-tables
         :write-orchestration 'write-orchestration
         :write-projection-tables.s 'write-projection-tables.s
+        :write-sea-chart-docks-index 'write-sea-chart-docks-index
         :write-sound-effects-file 'write-sound-effects-file
         :write-master-makefile 'write-master-makefile
         :write-intv-asset-includes 'write-intv-asset-includes
@@ -220,7 +210,7 @@ User input string with whitespace trimmed
   (if (and (not (tty-xterm-p)) #+mcclim (x11-p) #-mcclim nil)
       #+mcclim
       (clim-simple-echo:run-in-simple-echo
-       (lambda () (prompt "restart with this parameter (e.g. filename) ?")))
+       (lambda () (prompt "restart with this parameter (e.g. filename) ⇒")))
       #-mcclim nil
       (prompt "provide a value for this restart")))
 
@@ -237,15 +227,15 @@ User input string with whitespace trimmed
                     :process-name title)
           #'break)
       (progn
-        (format t "~&~% ?~a?~%" title)
+        (format t "~&~% “~a”~%" title)
         (apply #'format t message args)
         (fresh-line)
         (force-output))))
 
 (defun friendly-offer-single-restart (restart)
-  (if (y-or-n-p "~%Would you like to run this restart? (Say ?N? to quit)
+  (if (y-or-n-p "~%Would you like to run this restart? (Say ‘N’ to quit)
 ~s: ~a
-? "
+⇒ "
                 restart
                 restart)
       (invoke-restart-interactively restart)
@@ -264,7 +254,7 @@ User input string with whitespace trimmed
                                (restart-name restart)
                                restart))
                        restarts)))
-     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ? ")
+     (format *query-io* "~2%Choose a restart by [3mNAME[0m or number above. ⇒ ")
      (finish-output *query-io*)
      (let* ((reply (read-line *query-io*))
             (reply-number (ignore-errors (parse-integer reply :junk-allowed t)))
@@ -282,29 +272,29 @@ User input string with whitespace trimmed
          ((and reply-number (<= 1 reply-number (length restarts)))
           (invoke-restart-interactively (elt restarts (1- reply-number))))
          ((= 1 (length reply-name-matches))
-          (format *query-io* "?~a?" (first reply-name-matches))
+          (format *query-io* "“~a”" (first reply-name-matches))
           (finish-output *query-io*)
           (invoke-restart-interactively (first reply-name-matches)))
          (reply-name-matches
-          (format *query-io* "?~a? is the name of ~r restart~:p."
+          (format *query-io* "“~a” is the name of ~r restart~:p."
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-matches)
-            (when (y-or-n-p "You want to ?~a??~%  ([3m~a[0m) ? "
+            (when (y-or-n-p "You want to “~a”?~%  ([3m~a[0m) ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (reply-name-partials
-          (format *query-io* "?~a? matches ~r restart name~:p (partially)"
+          (format *query-io* "“~a” matches ~r restart name~:p (partially)"
                   reply (length reply-name-partials))
           (finish-output *query-io*)
           (dolist (reply-name-match reply-name-partials)
-            (when (y-or-n-p "~&You want to ?~a??~%  ([3m~a[0m)  ? "
+            (when (y-or-n-p "~&You want to “~a”?~%  ([3m~a[0m)  ⇒ "
                             reply-name-match (restart-name reply-name-match))
               (invoke-restart-interactively reply-name-match)))
           (warn "No restart selected"))
          (t
-          (format *error-output* "~&I'm sorry, I don't see any restart like ?~a.?" reply)
+          (format *error-output* "~&I'm sorry, I don't see any restart like ‘~a.’" reply)
           (finish-output *error-output*))))))
 
 (defvar *system-debugger* *debugger-hook*)
@@ -384,7 +374,7 @@ When true, print error + backtrace and exit instead of waiting for input."
           (format *error-output* "~%~|
 [31;1mAn error of type ~:(~a~) was signalled,
 but a CONTINUE restart was available and AUTOCONTINUE=T.[0m
-~a ? ~a
+~a → ~a
 "
                   (class-name (class-of condition))
                   condition restart))
@@ -493,7 +483,7 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
                      :report "Edit in Climacs"
                      :interactive prompt-function
                      (edit-myself-in-climacs file)
-                     (format t "Climacs now open ? ~
+                     (format t "Climacs now open — ~
 recompile when you've corrected the error. (C-c C-k) and restart.")
                      (go do-over))
           (recompile-tool ()
@@ -525,10 +515,10 @@ Supply a list of verb(s) to see detailed documentation"
   (format *trace-output* "~&
 
  Skyline-Tool
- ????????????
+ ————————————
 
-Copyright ? 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
-Copyright ? 2024-2026 Interworldly Adventuring, LLC.
+Copyright © 2014-2024 Bruce-Robert Pocock (brpocock@interworldly.com);
+Copyright © 2024-2026 Interworldly Adventuring, LLC.
 
 Some Rights Reserved. See COPYING for details.
 
@@ -539,7 +529,7 @@ Machine: ~a, type: ~a,~%	version ~a
 
 Usage: the first  parameter must be a verb;  following parameters depend
 on the verb being invoked. You almost certainly want to just look at the
-Makefile for an example, but you can try ?help? + command-name for the
+Makefile for an example, but you can try ‘help’ + command-name for the
 documentation also.
 
 "
@@ -553,13 +543,13 @@ documentation also.
   (if commands
       (dolist (command commands)
         (if-let (fun (getf *invocation* (make-keyword (string-upcase command))))
-          (format *trace-output* "~2% ? ~(~a~)~2%~a"
+          (format *trace-output* "~2% • ~(~a~)~2%~a"
                   command (or (documentation fun 'function)
                               "(no documentation yet)"))
-          (format *trace-output* "~% ? ~a: unknown ?" command)))
+          (format *trace-output* "~% • ~a: unknown ?" command)))
       (dolist (verb (sort (remove-if-not #'keywordp *invocation*)
                           #'string-lessp))
-        (format *trace-output* "~% ? ~(~a~): ~a"
+        (format *trace-output* "~% • ~(~a~): ~a"
                 verb (or (first-line (documentation (getf *invocation* verb)
                                                     'function))
                          "(no documentation yet)")))))
@@ -591,8 +581,8 @@ To see specifics about one command, add its name to the end, e.g.
 
 If you need more help, ask support@interworldly.com
 
-Copyright ? 2016-2024, Bruce-Robert Pocock
-Copyright ? 2024-2026, Interworldly Adventuring, LLC
+Copyright © 2016-2024, Bruce-Robert Pocock
+Copyright © 2024-2026, Interworldly Adventuring, LLC
 
 See COPYING for details
 
@@ -602,29 +592,12 @@ See COPYING for details
   (clim-debugger:with-debugger ()
     (launcher)))
 
-(defun makefile-port-assignment-rhs-acceptable-p (val)
-  "True if VAL is a plausible sole @samp{PORT=} right-hand side from a Makefile.
-
-Reject values containing whitespace, @samp{=}, or Make-macro punctuation
-(dollar sign or parentheses) so recipe fragments and unexpanded
-@samp{PORT} right-hand sides are never used as a
-@file{Project.@var{port}.json} stem."
-  (and (plusp (length val))
-       (not (find #\Space val))
-       (not (find #\Tab val))
-       (not (find #\Newline val))
-       (not (find #\Return val))
-       (not (find #\= val))
-       (not (find #\$ val))
-       (not (find #\( val))
-       (not (find #\) val))))
-
 (defun find-default-port ()
   "Return default port label when @code{--port} is omitted.
 
 @itemize @bullet
 @item
-If @file{Makefile} in @code{(project-root)} resolves (truename) to
+If @file{Makefile} in @code{(uiop:getcwd)} resolves (truename) to
 @file{Source/Build/<PORT>.mak} (not @file{common.mak} nor
 @file{z80-common.mak}), return @code{<PORT>} as a string (e.g. Lynx,
 7800).
@@ -638,7 +611,7 @@ something starting with @samp{PORT=} is never mistaken for an assignment.
 @item
 If nothing matches, return @code{\"7800\"}.
 @end itemize"
-  (let ((makefile (merge-pathnames "Makefile" (project-root))))
+  (let ((makefile (merge-pathnames "Makefile" (uiop:getcwd))))
     (when (probe-file makefile)
       (multiple-value-bind (resolved err)
           (ignore-errors (values (uiop:truename* makefile) nil))
@@ -670,9 +643,8 @@ If nothing matches, return @code{\"7800\"}.
                         (string= trim "PORT=" :end1 5))
                 do (let* ((raw (subseq trim 5 (length trim)))
                           (val (string-trim '(#\Space #\Tab #\Return #\Newline) raw)))
-                     (when (makefile-port-assignment-rhs-acceptable-p val)
-                       (return-from find-default-port val)))))))
-  "7800")
+                     (return-from find-default-port val)))))
+    "7800"))
 
 (defun project-json-value (data &rest keys)
   "Extract value from project JSON DATA (alist or hash-table) for first matching KEY in KEYS.
@@ -702,7 +674,8 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
   (when (or (null label) (string-equal label ""))
     (error "--port requires a port name (e.g. Intv, 7800, Lynx); the next argument is missing."))
   (when (port-label-looks-like-subcommand-p label)
-    (error "--port requires a port name before the subcommand; '~a' is a Skyline-Tool command, not a port.~%Example: bin/skyline-tool --port Intv ~a ?"
+    (error "--port requires a port name before the subcommand; ‘~a’ is a Skyline-Tool command, not a port.
+Example: bin/skyline-tool --port Intv ~a ?"
            label label))
   label)
 
@@ -710,18 +683,20 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
   "Load Project.{port}.json and run THUNK with *game-title*, *machine*, etc. bound via let.
    PORT-LABEL defaults via find-default-port.
    Game name (for filenames) comes from JSON \"Game\" key (:*game in Lisp)."
-  (let* ((raw-port (if (or (null port-label) (string-equal port-label "nil"))
-                       (find-default-port)
-                       port-label))
-         (effective-port (if (makefile-port-assignment-rhs-acceptable-p raw-port)
-                             raw-port
-                             "7800"))
+  (let* ((effective-port (if (or (null port-label) (string-equal port-label "nil"))
+                             (find-default-port)
+                             port-label))
          (json-name (format nil "Project.~a.json" effective-port))
-         (json-path (merge-pathnames json-name (project-root)))
+         (cwd (uiop:getcwd))
+         (json-path (merge-pathnames json-name cwd))
          (json-path (if (probe-file json-path)
                         json-path
-                        (merge-pathnames json-name (uiop:pathname-directory-pathname
-                                                    (uiop:getcwd)))))
+                        (let* ((dir (pathname-directory cwd))
+                               (parent (if (and (car dir) (eq :absolute (car dir)))
+                                           (cons :absolute (butlast (cdr dir)))
+                                           (butlast dir))))
+                          (merge-pathnames json-name
+                            (make-pathname :directory parent)))))
          (project-data (json:decode-json-from-source json-path)))
     (setf *project.json* project-data
           *game-title* (assocdr :*game project-data)
@@ -729,9 +704,10 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
           *studio* (assocdr :*studio project-data)
           *publisher* (assocdr :*publisher project-data)
           *machine* (or (assocdr :*machine project-data)
-                        (ignore-errors (machine-number-by-tag effective-port)))
+                        (ignore-errors
+                         (machine-number-by-tag (make-keyword (string-upcase effective-port)))))
           *sound* (assocdr :*sound project-data)
-          *common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) '()))
+          *common-palette* (mapcar #'intern (or (assocdr :*common-palette project-data) nil))
           *default-skin-color* (assocdr :*default-skin-color project-data)
           *default-hair-color* (assocdr :*default-hair-color project-data)
           *default-clothes-color* (assocdr :*default-clothes-color project-data)
@@ -746,7 +722,7 @@ Port label from @code{--port} / @code{-p} (e.g. @code{Intv}, @code{7800})
                        (destructuring-bind (verb &rest args) subcommand
                          (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
                            (apply fun args)
-                           (error "Command not recognized: ?~a? (try ?help?)" verb))))))
+                           (error "Command not recognized: ‘~a’ (try ‘help’)" verb))))))
 
 (defun clim-invoke-with-pristine-viewport-p (condition)
   "True if CONDITION is the CLIM INVOKE-WITH-PRISTINE-VIEWPORT name conflict."
@@ -769,6 +745,12 @@ Executes the requested command, may exit the process
 @end table
 
 @xref{fun:run-self-test}, @xref{fun:run-repl}, @xref{var:*invocation*}."
+  ;; SKYLINE_DEBUG_BACKTRACE=t: disable debugger so errors dump backtrace and exit
+  (when (skyline-debug-backtrace-p)
+    (sb-ext:disable-debugger))
+  (format t "~&Skyline tool (© 2026) invoked:
+(Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"
+          argv (sb-ext:posix-getenv "AUTOCONTINUE"))
   (let ((sb-impl::*default-external-format* :utf-8)
         (explicit-port
           (loop for args on (cdr argv)
@@ -776,48 +758,41 @@ Executes the requested command, may exit the process
                 when (or (string= token "--port") (string= token "-p"))
                   do (return (cadr args))
                 finally (return nil))))
-    (when (skyline-debug-backtrace-p)
-      (sb-ext:disable-debugger))
-  ;; Parse an explicit --port/-p argument before loading Project.<port>.json.
-  ;; The previous eager load used find-default-port on the top-level Makefile,
-  ;; which can capture trailing text from generated variable assignments.
+    ;; Parse an explicit --port/-p argument before loading Project.<port>.json.
+    ;; The previous eager load used find-default-port on the top-level Makefile,
+    ;; which can capture trailing text from generated variable assignments.
     (unless (and (boundp '*machine*) *machine* *game-title*)
       (if explicit-port
           (load-project.json (ensure-valid-port-label explicit-port))
           (load-project.json)))
-    (format t "~&Skyline tool (? 2026) invoked:
-(Skyline-Tool:Command '~s)~@[~%~10t? AUTOCONTINUE=~a~]"
-            argv (sb-ext:posix-getenv "AUTOCONTINUE"))
-    (let ((*command-line* (and (< 1 (length argv)) (subseq argv 1))))
-      (with-happy-restarts
-      (unless (< 1 (length argv))
-        (restart-case
-            (error "Ask for help if you need it, argument required")
-          (help () :report "Explain how this tool works"
-            (print-useful-help)
-            (bye))))
-      (destructuring-bind (self verb &rest invocation) argv
-        (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
-          (flet ((runner ()
-                   (unless (char= #\- (char verb 0))
-                     (format *trace-output* "~&Running for game ?~a? for ~a" 
-                             *game-title* (machine-long-name))
-                     (finish-output *trace-output*))
-                   (apply fun (remove-if (curry #'string= self)
-                                         (flatten invocation)))
-                   (fresh-line)))
-            (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
-                #+mcclim
-                (clim-simple-echo:run-in-simple-echo
-                 #'runner
-                 :process-name
-                 (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
-                         (substitute #\Space #\- verb)
-                         invocation))
-                #-mcclim nil
-                (funcall #'runner)))
-          (error "Command not recognized: ?~a? (try ?help?)" verb))
-        (fresh-line))))))
+    (unless (< 1 (length argv))
+      (restart-case
+          (error "Ask for help if you need it, argument required")
+        (help () :report "Explain how this tool works"
+          (print-useful-help)
+          (bye))))
+    (destructuring-bind (self verb &rest invocation) argv
+      (if-let (fun (getf *invocation* (make-keyword (string-upcase verb))))
+        (flet ((runner ()
+                 (unless (char= #\- (char verb 0))
+                   (format *trace-output* "~&Running for game ‘~a’ for ~a" 
+                           *game-title* (machine-long-name))
+                   (finish-output *trace-output*))
+                 (apply fun (remove-if (curry #'string= self)
+                                       (flatten invocation)))
+                 (fresh-line)))
+          (if (and (x11-p) (string-equal "t" (sb-posix:getenv "SKYLINE-GUI")))
+              #+mcclim
+              (clim-simple-echo:run-in-simple-echo
+               #'runner
+               :process-name
+               (format nil "Skyline-Tool: running ~:(~a~)~{ ~a~}"
+                       (substitute #\Space #\- verb)
+                       invocation))
+              #-mcclim nil
+              (funcall #'runner)))
+        (error "Command not recognized: ‘~a’ (try ‘help’)" verb))
+      (fresh-line))))
 
 (defun c (&rest args)
   (funcall #'command (cons "c" args)))

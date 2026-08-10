@@ -8,7 +8,6 @@
       ((error (lambda (c)
                 (format *error-output*
                         "~2%Error of type ~:(~a~):~%~a
-
 Perhaps Quicklisp  is not installed,  or in installed in  a non-standard
 place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                         (type-of c) c)
@@ -17,6 +16,9 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                             :directory '(:relative "quicklisp")
                             :name "setup" :type "lisp")
                            (user-homedir-pathname)))))
+
+;; Load dufy before building the system
+(ql:quickload :dufy)
 
 (defmacro with-casual-handlers (&body body)
   `(handler-bind
@@ -31,22 +33,20 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
                    (princ " … attempting Accept restart … " *error-output*)
                    (finish-output *error-output*)
                    (invoke-restart 'accept)))
-	    (error c))))
+	  (error c))))
      ,@body))
 
 ;; Load skyline-tool system
 (asdf:load-asd (merge-pathnames
-		(make-pathname :directory '(:relative "eightbol")
+	      (make-pathname :directory '(:relative "eightbol")
                                :name "eightbol"
                                :type "asd")
-                *load-pathname*)
-               :name :eightbol)
+                *load-pathname*))
 (asdf:load-asd (merge-pathnames (make-pathname :name "skyline-tool"
                                                :type "asd")
-                                *load-pathname*)
-               :name :skyline-tool)
+                                *load-pathname*))
 (pushnew (asdf:system-relative-pathname :skyline-tool #p"./lib/")
-	 ql:*local-project-directories*)
+         ql:*local-project-directories*)
 
 ;; Load eightbol and skyline-tool with handler to trap CLIM
 ;; name-conflict (INVOKE-WITH-PRISTINE-VIEWPORT already names...) and
@@ -54,41 +54,29 @@ place? Visit https://beta.quicklisp.com/ for installation instructions.~%"
 (format t "~&Loading EIGHTBOL and Skyline-Tool… ")
 (finish-output)
 (handler-bind ((program-error
-                (lambda (c)
-                  (let ((msg (princ-to-string c))
-                        (r (find-restart 'continue c)))
-                    (when (and r (or (search "INVOKE-WITH-PRISTINE-VIEWPORT"
-					     msg)
-                                     (search "already names" msg)))
-                      (format *error-output*
-                              "~&CLIM name conflict (~a): ~
+                 (lambda (c)
+                   (let ((msg (princ-to-string c))
+                         (r (find-restart 'continue c)))
+                     (when (and r (or (search "INVOKE-WITH-PRISTINE-VIEWPORT"
+				      msg)
+                                      (search "already names" msg)))
+                       (format *error-output*
+                               "~&CLIM name conflict (~a): ~
 invoking CONTINUE restart~%"
-                              (type-of c))
-                      (finish-output *error-output*)
-                      (invoke-restart r))))))
-  (asdf:load-system :eightbol)
-  (asdf:load-system :skyline-tool))
-(let ((compile-lisp (merge-pathnames (make-pathname :name "compile"
-						    :type "lisp")
-			 *load-pathname*)))
-  (when (probe-file compile-lisp)
-    (load compile-lisp)))
+                               (type-of c))
+                       (finish-output *error-output*)
+                       (invoke-restart r)))))
+                (uiop/lisp-build:compile-file-error
+                  (lambda (c)
+                    (format *error-output*
+                            "~&Warning: compilation error in dependent system (~a), continuing...~%"
+                            c)
+                    (finish-output *error-output*)))))
+  (unless (ql:quickload :skyline-tool :silent t)
+    (format *error-output* "~&Fatal: skyline-tool failed to load.~%")
+    (finish-output *error-output*)
+    (uiop:quit 1))
+
 (format t "… done.~2%")
 (finish-output)
 
-#+ ()
-(progn
-  (format t "~&Quickloading Skyline-Tool System … ")
-  (finish-output)
-  (handler-case
-      (progn (funcall (intern "QUICKLOAD" (find-package :quicklisp)) :eightbol)
-             #+ () (funcall (intern "QUICKLOAD" (find-package :quicklisp))
-			    :skyline-tool))
-    (name-conflict (e) (error e)))
-  (format t "… done with Quickload.~2%")
-  ;; These are missing, but apparently also no-op works
-  (defmethod clim-internals::note-output-record-got-sheet
-      ((drei drei:drei-area) (pane clim:pane)))
-  (defmethod clim-internals::note-output-record-lost-sheet
-      ((drei drei:drei-area) (pane clim:pane)))
-  (finish-output))

@@ -1057,8 +1057,9 @@ Returns T if the machine is supported, NIL otherwise."
              t))
     (error () nil)))
 
-(defun check-machine-valid ()
-  (assert (machine-valid-p)))
+(defun check-machine-valid (&optional (machine *machine*))
+  (let ((*machine* machine))
+    (assert (machine-valid-p))))
 
 
 
@@ -1387,6 +1388,8 @@ Path to the raw ROM binary to wrap.
                  do (write-byte b out))))))))
 
 (defun prepend-fundamental-mode (file)
+  "Prepend -*- fundamental -*- mode marker to FILE.
+Writes the marker to the beginning of FILE, preserving existing content after it."
   (let ((contents (read-file-into-string file)))
     (with-output-to-file (f file :if-does-not-exist :error :if-exists :overwrite)
       (princ ";;; -*- fundamental -*-" f)
