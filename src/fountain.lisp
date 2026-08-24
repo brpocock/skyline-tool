@@ -1669,14 +1669,23 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
   (or (alpha-char-p char) (char= #\- char)))
 
 (defun numeric-char-p (char)
-  "Returns generally true if it's possible for CHAR to be part of a number. [0-9./]"
-  (or (digit-char-p char) (char= #\. char) (char= #\/ char)))
+  "Returns generally true if it's possible for CHAR to be part of a number.
+   Supports: decimal digits [0-9], decimal point [.], fraction bar [/], 
+   scientific notation [e/E], and signs [+/-]"
+  (or (digit-char-p char) 
+      (char= #\. char) 
+      (char= #\/ char)
+      (member char '(#\e #\E #\+ #\-) :test #'char=)))
 
 (defun stage-direction-lexer (stream)
   "A lexer for stage directions in STREAM"
   (labels ((rewind-stream (&optional (n 1))
-             (file-position stream (- (file-position stream) n)))
-           (token-values (string)
+              (file-position stream (- (file-position stream) n)))
+            (normalize-identifier (ident)
+              "Normalize IDENT to canonical PascalCase form"
+              (pascal-case (string-downcase (string-trim #(#\- #\_ #\Space) ident))))
+            
+            (token-values (string)
              (cond
                ((emptyp string) (multiple-value-list (stage-direction-lexer stream)))
                ((member string +stage-direction-words+ :test #'string-equal)
@@ -1685,17 +1694,31 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                      (member (last-elt string) '(#\. #\/) :test #'char=))
                 (rewind-stream 2)
                 (list 'number (parse-number (subseq string 0 (1- (length string))))))
-               ((every #'numeric-char-p string)
-                (list 'number (parse-number string)))
-               ((every #'actor-name-char-p string)
-                (list 'actor string))
-               ((and (char= #\$ (char string 0))
-                     (every (lambda (ch) (digit-char-p ch 16)) string)
-                     (= 5 (length string)))
-                (list 'memory (parse-number (subseq string 1) :radix 16)))
-               ((and (char= #\$ (char string 0))
-                     (every #'actor-name-char-p (subseq string 1)))
-                (list 'variable string))
+                ((every #'numeric-char-p string)
+                 (list 'number (parse-number string)))
+                ;; Handle binary literals (0b prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0b"))
+                 (list 'number (parse-number (subseq string 2) :radix 2)))
+                ;; Handle octal literals (0o prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0o"))
+                 (list 'number (parse-number (subseq string 2) :radix 8)))
+                ((every #'actor-name-char-p string)
+                 (list 'actor (normalize-identifier string)))
+                ;; Handle hexadecimal literals ($XXXX format, 5 chars total)
+                ((and (char= #\$ (char string 0))
+                      (every (lambda (ch) (digit-char-p ch 16)) (subseq string 1))
+                      (= 5 (length string)))
+                 (list 'memory (parse-number (subseq string 1) :radix 16)))
+                ;; Handle hexadecimal literals (0x prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0x"))
+                 (list 'number (parse-number (subseq string 2) :radix 16)))
+                ;; Handle variables ($ prefix for variables)
+                ((and (char= #\$ (char string 0))
+                      (every #'actor-name-char-p (subseq string 1)))
+                 (list 'variable (concatenate 'string "$" (normalize-identifier (subseq string 1)))))
                ((char= #\" (char string 0))
                 (list 'quoted (subseq string 1)))
                (t (list 'string string)))))
@@ -3255,10 +3278,16 @@ code for the game's scripting engine.
 
 (defun find-npc-stats (name)
   (unless *npc-stats* (load-npc-stats))
-  (loop for npc in *npc-stats*
-        when (or (string-equal (getf npc :name) name)
-                 (member name (getf npc :nicks) :test #'string-equal))
-          do (return npc)))
+  (let ((normalized-name (string-downcase name))
+        ;; Also try with hyphens inserted before capital letters (SentinelI → sentinel-i)
+        (hyphenated-name (string-downcase 
+                          (regex-replace-all "([a-z])([A-Z])" name "\\1-\\2"))))
+    (loop for npc in *npc-stats*
+          when (or (string-equal (getf npc :name) normalized-name)
+                   (string-equal (getf npc :name) hyphenated-name)
+                   (member normalized-name (getf npc :nicks) :test #'string-equal)
+                   (member hyphenated-name (getf npc :nicks) :test #'string-equal))
+            do (return npc))))
 
 (defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (uiop:getcwd))))
   "Load the NPC stats table from PATHNAME"
