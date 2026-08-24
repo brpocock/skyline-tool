@@ -3281,7 +3281,7 @@ code for the game's scripting engine.
   (let ((normalized-name (string-downcase name))
         ;; Also try with hyphens inserted before capital letters (SentinelI → sentinel-i)
         (hyphenated-name (string-downcase 
-                          (regex-replace-all "([a-z])([A-Z])" name "\\1-\\2"))))
+                          (cl-ppcre:regex-replace-all "([a-z])([A-Z])" name "\\1-\\2"))))
     (loop for npc in *npc-stats*
           when (or (string-equal (getf npc :name) normalized-name)
                    (string-equal (getf npc :name) hyphenated-name)
