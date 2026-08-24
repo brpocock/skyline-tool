@@ -2999,19 +2999,24 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
       (t (error "Unexpected tree function name ~s" fun)))))
 
 (defun find-actor (actor)
-  (or (when (string-equal actor 'player)
-        (list :name "Player" :kind 'player :character-id #xff
-              :speed 96 :pitch 80 :bend 5))
-      (when (string-equal actor 'narrator)
-        (list :name "Narrator" :kind 'narrator :character-id #xfe
-              :speed 96 :pitch 88 :bend 4))
-      (when-let (found (find-if (lambda (record)
-                                  (or (string-equal actor (getf record :name))
-                                      (member actor (getf record :nicks)
-                                              :test #'string-equal)
-                                      (string-equal actor (getf record :name))))
-                                *actors*))
-        found)))
+  ;; Actor names are matched case-insensitively and hyphen-insensitively:
+  ;; a Fountain script may write “Sentinel-I” which the lexer delivers as
+  ;; “SentinelI”, while the NPC stats table stores “sentinel-i”.
+  (flet ((same-name-p (a b)
+           (string-equal (remove #\- (string a))
+                         (remove #\- (string b)))))
+    (or (when (same-name-p actor 'player)
+          (list :name "Player" :kind 'player :character-id #xff
+                :speed 96 :pitch 80 :bend 5))
+        (when (same-name-p actor 'narrator)
+          (list :name "Narrator" :kind 'narrator :character-id #xfe
+                :speed 96 :pitch 88 :bend 4))
+        (when-let (found (find-if (lambda (record)
+                                    (or (same-name-p actor (getf record :name))
+                                        (member actor (getf record :nicks)
+                                                :test #'same-name-p)))
+                                  *actors*))
+          found))))
 
 (defun find-or-load-actor (actor)
   (if-let (record (find-actor actor))
