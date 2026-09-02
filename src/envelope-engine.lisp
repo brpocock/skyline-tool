@@ -27,7 +27,7 @@
   "Lowest SpeakJet volume value.")
 (defconstant +speakjet-volume-max+ 15
   "Highest SpeakJet volume value.")
-(defconstant +character-default-volume+ 12
+(defconstant +character-default-volume+ 10
   "Default character baseline volume, 80% of maximum.")
 (defconstant +emphasis-volume-bump+ 4
   "Volume increase per emphasis level on _underlined_ words. (+20% more emphasis)")
@@ -35,7 +35,7 @@
   "Volume increase on the final word of an exclamation.")
 (defconstant +speakjet-volume-max+ 15
   "Highest SpeakJet volume value (4-bit register).")
-(defconstant +character-default-volume+ 12
+(defconstant +character-default-volume+ 10
   "Default character baseline volume, 80% of maximum.")
 
 (defconstant +character-default-pitch+ 90
