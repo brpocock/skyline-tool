@@ -45,11 +45,6 @@ Emits one @code{rp} when @code{pc<0x8000}: instruction fetch must not occur outs
                        (setf break addr))
                      (when (string-equal "MinorFault" label)
                        (setf minor-fault addr)))))
-        (format mame "printf \"Phantasia A7800 public/demo debugger script (labels-to-mame).\\n\"~%")
-        (format mame "printf \"Source labels: ~a\\n\"~%" labels-file)
-        (format mame "printf \"Regenerate: make Dist/7800/Phantasia.Public.NTSC.mame (or Demo/PAL).\\n\"~%")
-        (format mame "printf \"No go here: press F12 (Debug -> Run) after setting extra breakpoints.\\n\"~%")
-        (format mame "printf \"Watchpoints: bank switch $8000, thread id $5048; bp Break/MinorFault; rp pc<8000.\\n\\n\"~%")
         (format mame "printf \"Wait a moment . . .\"~%")
         ;; (loop for addr being the hash-keys of comments
         ;;       for label = (gethash addr comments)
