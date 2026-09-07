@@ -37,7 +37,7 @@
              (error (e)
                (format *query-io* "~&Climacs error: ~a~%" e))))
          :name (format nil "Editing Project (~a)" machine-dir)))
-      (load-project.json nil #'(lambda () (funcall (symbol-function 'com-edit-project.json))))))
+      (load-project.json #'(lambda () (funcall (symbol-function 'com-edit-project.json))))))
 
 (define-launcher-frame-command (com-edit-skyline-config-prefs :menu t :name t) ()
   (let* ((prefs-file (make-pathname :directory (list :relative ".config" "Skyline-Tool"
@@ -474,11 +474,12 @@
   (let ((scroll-y (launcher-saved-scroll-y frame)))
     (unless scroll-y
       (setf scroll-y (nth-value 1 (ignore-errors (clim:window-viewport-position pane)))))
-    (load-project.json)
-    (clim:with-text-size (pane :larger)
-      (display-launcher-menu-item (copy-list +launcher-entries+) pane))
-    (clim:with-text-size (pane :small)
-      (format pane "~3%Click the name of any function to launch it"))
+    (load-project.json
+     (lambda ()
+       (clim:with-text-size (pane :larger)
+         (display-launcher-menu-item (copy-list +launcher-entries+) pane))
+       (clim:with-text-size (pane :small)
+         (format pane "~3%Click the name of any function to launch it"))))
     ;; Restore scroll position to keep the user's view stable after commands
     (when scroll-y
       (ignore-errors (setf (clim:window-viewport-position pane)
@@ -783,8 +784,10 @@ Loaded on demand to avoid redefining its CLIM frame class during ASDF reloads."
 (defun show-all-resources ()
   "Open the unified All Resources browser and run its frame top-level.
 Blocks until the frame is closed."
-  (let ((frame (clim:make-application-frame 'all-resources-frame)))
-    (clim:run-frame-top-level frame)))
+  (load-project.json
+   (lambda ()
+     (let ((frame (clim:make-application-frame 'all-resources-frame)))
+       (clim:run-frame-top-level frame)))))
 
 (defun edit-all-resources ()
   "Open the unified Assets Index in a simple-echo window."
@@ -1342,7 +1345,7 @@ Returns (VALUES bank-data-list total-sum total-banks total-pct)."
   (let ((frame (clim:make-application-frame 'launcher-frame :name "Skyline-Tool")))
     (if (boundp '*machine*)
         (launcher-body frame)
-        (load-project.json nil (lambda () (launcher-body frame))))))
+        (load-project.json (lambda () (launcher-body frame))))))
 
 (defun launcher-body (frame)
   (let ((*launcher-frame* frame))
