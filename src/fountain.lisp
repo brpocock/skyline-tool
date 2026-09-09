@@ -1,7 +1,7 @@
 (in-package :skyline-tool)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-
+  
   (declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))
 
   (defun all-cdrs (expr)
@@ -53,6 +53,13 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
       (error "Cross-quarter direction cannot be found from ~s ~s"
              nor/sou eas/wes)))
 
+  (defun stage/flag-true (flag)
+    (list 'not (list '= 0 flag)))
+
+  (defun stage/flag-false (_not flag)
+    (declare (ignore _not))
+    (list '= 0 flag))
+  
   (defun stage/when (_when conditional _comma clauses _stop)
     "when CONDITIONAL is true, perform CLAUSES"
     (declare (ignore _when _comma _stop))
@@ -503,7 +510,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/color-hair (color hair)
     (declare (ignore hair))
     (list 'hair color))
-
+  
   (defun stage/color-skin (color skin)
     (declare (ignore skin))
     (list 'skin color))
@@ -563,7 +570,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/num-expt-num (the res of n1 raised to the2 n2 pow)
     (declare (ignore the res of raised to the2 pow))
     (list 'expt n1 n2))
-
+  
   (defun stage/log-base-n-of-n (the log base n2 of n1)
     (declare (ignore the log base of))
     (list 'log n1 n2))
@@ -663,12 +670,13 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 
 (define-constant +stage-direction-words+
     (mapcar (lambda (x) (intern (symbol-name x) #.*package*))
-            '(|(| |)| + |,| - |.| /  × ÷ skyline-tool::|:| |…|
-              a an aboard above absolute alarmed all amulet and appears arrow arrows arms armor at awakens
+            '(|(| |)| + |,| - |.| /  × ÷ |:| |…|
+              a an aboard above absolute alarmed all amulet and appears
+              arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
               can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
-              dances dancing dark difference dim disembarks divided do dolly done down durbat
+              dances dancing dark difference dim disembarks divided do dolly done down
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
               flies flying
@@ -712,680 +720,683 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                                       '(:up))))))
         (with-input-from-file (input json-path)
           (let ((data (json:decode-json-from-source input)))
-            (mapcar #'intern (or (cdr (assoc :*common-palette data))
-                                 (cdr (assoc :|*CommonPalette| data))
-                                 (cdr (assoc :common-palette data)) ()))))))
+            (mapcar (lambda (entry) (intern (string (car entry))))
+                    (or (cdr (assoc :*common-palette data))
+                        (cdr (assoc :|*CommonPalette| data))
+                        (cdr (assoc :common-palette data)) ()))))))
 (eval (let ((terminals (concatenate 'list +stage-direction-words+
-                                   '(number quoted actor variable)
-                                   *common-palette*)))
+                                    '(number quoted actor variable)
+                                    *common-palette*)))
         `(yacc:define-parser *stage-direction-parser*
-    (:start-symbol directions)
-    (:terminals ,terminals)
-    (:precedence ((:right -) (:left + -) (:left * /)
-                  (:left directions)
-                  (:left statement)
-                  (:left preparation-paragraph)))
-    (directions (statement #'identity)
-                (directions statement #'list))
-    (someone actor
-             (the actor #1=(lambda (_the actor) (declare (ignore _the)) actor))
-             (a actor #1#)
-             (an actor #1#))
-    (statement call-expr
-               (when conditional |,| clauses |.|
-                     #'stage/when)
-               (if conditional |,| clauses |.|
-                   #'stage/when)
-               (if conditional |,| clauses skyline-tool::|;| otherwise |,| clauses |.|
-                   #'stage/if-otherwise)
-               (unless conditional |,| clauses |.|
-                       #'stage/unless)
-               (clauses |.| (lambda (clauses _stop)
-                              (declare (ignore _stop))
-                              clauses))
-               (repeat numeric times skyline-tool::|:| clauses
-                       #'stage/repeat)
-               preparation-paragraph)
-    (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
-                          	                       (lambda (_intro _ellipsis directions _closing _ellipsout)
-                                                       (declare (ignore _intro _ellipsis _closing _ellipsout))
-                                                       (list 'prepare directions))))
-    (preparation-introduction (we open on) (open on) (we find) (we see))
-    (preparation-closing then suddenly next)
-    (ellipsis (|.| |.| |.|) |…| skyline-tool::|:|)
-    (clauses clause
-             sem-clauses
-             (clause |,| and then clause (lambda (clause1 _comma _and _then clause2)
-                                           (declare (ignore _comma _and _then))
-                                           (list 'progn clause1 clause2)))
-             (clause |,| and clause (lambda (clause1 _comma _and clause2)
-                                      (declare (ignore _comma _and))
-                                      (list 'progn clause1 clause2)))
-             do/done-block)
-    (sem-clauses (clause skyline-tool::|;| clause
-                         #'stage/semicolon-clauses)
-                 (sem-clauses skyline-tool::|;| clause
-                              #'stage/semicolon-clauses))
-    (clause beat-clause
-            fade-clause
-            wake/sleep-clause
-            dance-clause
-            enter-clause
-            equip-clause
-            pick-up-clause
-            actor-is-clause
-            exit-clause
-            walk-clause
-            facing-clause
-            audio-clause
-            assignment-clause
-            go-to-clause
-            truck/dolly
-            ship-clause
-            weather-clause
-            lighting-clause
-            (cut to include actor/location)
-            (cut to center on actor/location)
-            (at numeric / second |,| truck/dolly)
-            jump-to-other-file-clause)
+	 (:start-symbol directions)
+	 (:terminals ,terminals)
+	 (:precedence ((:right -) (:left + -) (:left * /)
+			      (:left directions)
+			      (:left statement)
+			      (:left preparation-paragraph)))
+	 (directions (statement #'identity)
+                       (directions statement #'list))
+	 (someone actor
+		(the actor #1=(lambda (_the actor) (declare (ignore _the)) actor))
+		(a actor #1#)
+		(an actor #1#))
+	 (statement call-expr
+		  (when conditional |,| clauses |.|
+		        #'stage/when)
+		  (if conditional |,| clauses |.|
+		      #'stage/when)
+		  (if conditional |,| clauses |;| otherwise |,| clauses |.|
+		      #'stage/if-otherwise)
+		  (unless conditional |,| clauses |.|
+			#'stage/unless)
+		  (clauses |.| (lambda (clauses _stop)
+			       (declare (ignore _stop))
+			       clauses))
+		  (repeat numeric times |:| clauses
+		    #'stage/repeat)
+		  preparation-paragraph)
+	 (preparation-paragraph (preparation-introduction ellipsis directions preparation-closing ellipsis
+                          				(lambda (_intro _ellipsis directions _closing _ellipsout)
+						  (declare (ignore _intro _ellipsis _closing _ellipsout))
+						  (list 'prepare directions))))
+	 (preparation-introduction (we open on) (open on) (we find) (we see))
+	 (preparation-closing then suddenly next)
+	 (ellipsis (|.| |.| |.|) |…| |:|)
+	 (clauses clause
+		sem-clauses
+		(clause |,| and then clause (lambda (clause1 _comma _and _then clause2)
+					(declare (ignore _comma _and _then))
+					(list 'progn clause1 clause2)))
+		(clause |,| and clause (lambda (clause1 _comma _and clause2)
+				     (declare (ignore _comma _and))
+				     (list 'progn clause1 clause2)))
+		do/done-block)
+	 (sem-clauses (clause |;| clause
+			  #'stage/semicolon-clauses)
+		    (sem-clauses |;| clause
+			       #'stage/semicolon-clauses))
+	 (clause beat-clause
+	         fade-clause
+	         wake/sleep-clause
+	         dance-clause
+	         enter-clause
+	         equip-clause
+	         pick-up-clause
+	         actor-is-clause
+	         exit-clause
+	         walk-clause
+	         facing-clause
+	         audio-clause
+	         assignment-clause
+	         go-to-clause
+	         truck/dolly
+	         ship-clause
+	         weather-clause
+	         lighting-clause
+	         (cut to include actor/location)
+	         (cut to center on actor/location)
+	         (at numeric / second |,| truck/dolly)
+	         jump-to-other-file-clause)
 
-    (actor-is-clause (someone is actor-coda
-                              (lambda (someone _is coda)
-                                (declare (ignore _is))
-                                (cons (car coda)
-                                      (cons someone (rest coda)))))
-                     (someone looks actor-condition
-                              (lambda (someone _is coda)
-                                (declare (ignore _is))
-                                (cons (car coda)
-                                      (cons someone (rest coda)))))
-                     (someone is actor-condition
-                              (lambda (someone _is coda)
-                                (declare (ignore _is))
-                                (cons (car coda) (cons someone (rest coda))))))
-    (actor-coda
-     (at location (lambda (_at location)
-                    (declare (ignore _at))
-                    (list 'enter location)))
-     (hurt (lambda (_hurt)
-             (declare (ignore _hurt))
-             (list 'hurt 1)))
-     (hurt for number hp (lambda (_hurt _for number _hp)
-                           (declare (ignore _hurt _for _hp))
-                           (list 'hurt number)))
-     (sweating (lambda (_sweating)
-                 (declare (ignore _sweating))
-                 (list 'emote '?)))
-     (confused (lambda (_confused)
-                 (declare (ignore _confused))
-                 (list 'emote '?)))
-     (gesturing (lambda (_gesturing)
-                  (declare (ignore _gesturing))
-                  (list 'gesture)))
-     (dancing (lambda (_dancing)
-                (declare (ignore _dancing))
-                (list 'dance)))
-     (flying (lambda (_flying)
-               (declare (ignore _flying))
-               (list 'fly)))
-     (panicking (lambda (_panicking)
-                  (declare (ignore _panicking))
-                  (list 'panic)))
-     (waving (lambda (_waving)
-               (declare (ignore _waving))
-               (list 'wave-arms)))
-     actor-condition)
-    
-    (actor-condition
-     (sweating (lambda (_sweating)
-                 (declare (ignore _sweating))
-                 (list 'emote 'sweat)))
-     (confused (lambda (_confused)
-                 (declare (ignore _confused))
-                 (list 'emote '?)))
-     (surprised (lambda (_surprised)
-                  (declare (ignore _surprised))
-                  (list 'emote '!)))
-     (alarmed (lambda (_surprised)
-                (declare (ignore _surprised))
-                (list 'emote '!)))
-     (puzzled (lambda (_surprised)
-                (declare (ignore _surprised))
-                (list 'emote '?))))
+	 (actor-is-clause (someone is actor-coda
+			       (lambda (someone _is coda)
+                                       (declare (ignore _is))
+                                       (cons (car coda)
+				     (cons someone (rest coda)))))
+		        (someone looks actor-condition
+			       (lambda (someone _is coda)
+                                       (declare (ignore _is))
+                                       (cons (car coda)
+				     (cons someone (rest coda)))))
+		        (someone is actor-condition
+			       (lambda (someone _is coda)
+                                       (declare (ignore _is))
+                                       (cons (car coda) (cons someone (rest coda))))))
+	 (actor-coda
+	  (at location (lambda (_at location)
+		       (declare (ignore _at))
+		       (list 'enter location)))
+	  (hurt (lambda (_hurt)
+		(declare (ignore _hurt))
+		(list 'hurt 1)))
+	  (hurt for number hp (lambda (_hurt _for number _hp)
+			    (declare (ignore _hurt _for _hp))
+			    (list 'hurt number)))
+	  (sweating (lambda (_sweating)
+		    (declare (ignore _sweating))
+		    (list 'emote '?)))
+	  (confused (lambda (_confused)
+		    (declare (ignore _confused))
+		    (list 'emote '?)))
+	  (gesturing (lambda (_gesturing)
+		     (declare (ignore _gesturing))
+		     (list 'gesture)))
+	  (dancing (lambda (_dancing)
+                       (declare (ignore _dancing))
+                       (list 'dance)))
+	  (flying (lambda (_flying)
+		  (declare (ignore _flying))
+		  (list 'fly)))
+	  (panicking (lambda (_panicking)
+		     (declare (ignore _panicking))
+		     (list 'panic)))
+	  (waving (lambda (_waving)
+		  (declare (ignore _waving))
+		  (list 'wave-arms)))
+	  actor-condition)
+	 
+	 (actor-condition
+	  (sweating (lambda (_sweating)
+		    (declare (ignore _sweating))
+		    (list 'emote 'sweat)))
+	  (confused (lambda (_confused)
+		    (declare (ignore _confused))
+		    (list 'emote '?)))
+	  (surprised (lambda (_surprised)
+		     (declare (ignore _surprised))
+		     (list 'emote '!)))
+	  (alarmed (lambda (_surprised)
+                       (declare (ignore _surprised))
+                       (list 'emote '!)))
+	  (puzzled (lambda (_surprised)
+                       (declare (ignore _surprised))
+                       (list 'emote '?))))
 
-    (pick-up-clause (actor picks up article quoted
-                           (lambda (actor _picks _up _an item)
-                             (declare (ignore _picks _up _an))
-                             (list 'pick-up actor item)))
-                    (actor picks up quoted
-                           (lambda (actor _picks _up item)
-                             (declare (ignore _picks _up))
-                             (list 'pick-up actor item))))
+	 (pick-up-clause (actor picks up article quoted
+			    (lambda (actor _picks _up _an item)
+			      (declare (ignore _picks _up _an))
+			      (list 'pick-up actor item)))
+		       (actor picks up quoted
+			    (lambda (actor _picks _up item)
+			      (declare (ignore _picks _up))
+			      (list 'pick-up actor item))))
 
-    (equip-clause (actor equips item-name
-                         (lambda (actor _equips item)
-                           (declare (ignore _equips))
-                           (list 'equip actor item)))
-                  (actor equips article item-name
-                         (lambda (actor _equips _article item)
-                           (declare (ignore _equips _article))
-                           (list 'equip actor item))))
+	 (equip-clause (actor equips item-name
+			  (lambda (actor _equips item)
+			    (declare (ignore _equips))
+			    (list 'equip actor item)))
+		     (actor equips article item-name
+			  (lambda (actor _equips _article item)
+			    (declare (ignore _equips _article))
+			    (list 'equip actor item))))
 
-    (item-name nothing knife shield (small shield)
-               hammer potion sword (large shield) (no shield)
-               bow torch chalice staff wand rope glass wrench) ; TODO all items
+	 (item-name nothing knife shield (small shield)
+		  hammer potion sword (large shield) (no shield)
+		  bow torch chalice staff wand rope glass wrench) ; TODO all items
 
-    (article a an the)
+	 (article a an the)
 
-    (around-here here
-                 out
-                 (around here))
+	 (around-here here
+		    out
+		    (around here))
 
-    (weather-condition raining)
+	 (weather-condition raining)
 
-    (weather-clause (it is clear (lambda (&rest _)
-                                   (declare (ignore _))
-                                   (list 'weather nil)))
-                    (it is weather-condition (lambda (_it _is weather)
-                                               (declare (ignore _it _is))
-                                               (list 'weather weather)))
-                    (it is clear around-here (lambda (&rest _)
-                                               (declare (ignore _))
-                                               (list 'weather nil)))
-                    (it is weather-condition around-here
-                        (lambda (_it _is weather _here)
-                          (declare (ignore _it _is _here))
-                          (list 'weather weather))))
-    (lighting-word (dim (constantly 'dark))
-                   (night (constantly 'dark))
-                   dark
-                   bright
-                   red-lit
-                   cyan-lit
-                   normal-lit
-                   (normally lit (constantly 'normal-lit))
-                   (brightly lit (constantly 'bright))
-                   (dimly lit (constantly 'dark)))
-    (speed-adverb slowly quickly)
-    (lighting-clause (it is lighting-word
-                         (lambda (_it _is lighting)
-                           (declare (ignore _it _is))
-                           (list 'lighting lighting)))
-                     (it is lighting-word around-here
-                         (lambda (_it _is lighting &rest _)
-                           (declare (ignore _it _is _))
-                           (list 'lighting lighting)))
-                     (it becomes lighting-word
-                         (lambda (_it _becomes lighting &rest _)
-                           (declare (ignore _it _becomes _))
-                           (list 'lighting-change lighting 'normal)))
-                     (it becomes lighting-word around-here
-                         (lambda (_it _becomes lighting &rest _)
-                           (declare (ignore _it _becomes _))
-                           (list 'lighting-change lighting 'normal)))
-                     (it speed-adverb becomes lighting-word
-                         (lambda (_it speed _becomes lighting &rest _)
-                           (declare (ignore _it _becomes _))
-                           (list 'lighting-change lighting speed)))
-                     (it speed-adverb becomes lighting-word around-here
-                         (lambda (_it speed _becomes lighting &rest _)
-                           (declare (ignore _it _becomes _))
-                           (list 'lighting-change lighting speed))))
+	 (weather-clause (it is clear (lambda (&rest _)
+				  (declare (ignore _))
+				  (list 'weather nil)))
+		       (it is weather-condition (lambda (_it _is weather)
+					    (declare (ignore _it _is))
+					    (list 'weather weather)))
+		       (it is clear around-here (lambda (&rest _)
+					    (declare (ignore _))
+					    (list 'weather nil)))
+		       (it is weather-condition around-here
+                               (lambda (_it _is weather _here)
+			   (declare (ignore _it _is _here))
+			   (list 'weather weather))))
+	 (lighting-word (dim (constantly 'dark))
+		      (night (constantly 'dark))
+		      dark
+		      bright
+		      red-lit
+		      cyan-lit
+		      normal-lit
+		      (normally lit (constantly 'normal-lit))
+		      (brightly lit (constantly 'bright))
+		      (dimly lit (constantly 'dark)))
+	 (speed-adverb slowly quickly)
+	 (lighting-clause (it is lighting-word
+			  (lambda (_it _is lighting)
+			    (declare (ignore _it _is))
+			    (list 'lighting lighting)))
+		        (it is lighting-word around-here
+			  (lambda (_it _is lighting &rest _)
+			    (declare (ignore _it _is _))
+			    (list 'lighting lighting)))
+		        (it becomes lighting-word
+			  (lambda (_it _becomes lighting &rest _)
+			    (declare (ignore _it _becomes _))
+			    (list 'lighting-change lighting 'normal)))
+		        (it becomes lighting-word around-here
+			  (lambda (_it _becomes lighting &rest _)
+			    (declare (ignore _it _becomes _))
+			    (list 'lighting-change lighting 'normal)))
+		        (it speed-adverb becomes lighting-word
+			  (lambda (_it speed _becomes lighting &rest _)
+			    (declare (ignore _it _becomes _))
+			    (list 'lighting-change lighting speed)))
+		        (it speed-adverb becomes lighting-word around-here
+			  (lambda (_it speed _becomes lighting &rest _)
+			    (declare (ignore _it _becomes _))
+			    (list 'lighting-change lighting speed))))
 
-    (wake/sleep-clause (someone sleeps (lambda (someone &rest _)
-                                         (declare (ignore _))
-                                         (list 'sleep someone)))
-                       (someone wakes up (lambda (someone &rest _)
-                                           (declare (ignore _))
-                                           (list 'wake someone)))
-                       (someone awakens (lambda (someone &rest _)
-                                          (declare (ignore _))
-                                          (list 'wake someone))))
+	 (wake/sleep-clause (someone sleeps (lambda (someone &rest _)
+				        (declare (ignore _))
+				        (list 'sleep someone)))
+			(someone wakes up (lambda (someone &rest _)
+					(declare (ignore _))
+					(list 'wake someone)))
+			(someone awakens (lambda (someone &rest _)
+				         (declare (ignore _))
+				         (list 'wake someone))))
 
-    (fade-color black white red cyan)
-    (fade-clause (fade from fade-color (lambda (_fade _from color)
-                                         (declare (ignore _fade _from))
-                                         (list 'fade-in color)))
-                 (fade to fade-color (lambda (_fade _to color)
-                                       (declare (ignore _fade _to))
-                                       (list 'fade-out color))))
+	 (fade-color black white red cyan)
+	 (fade-clause (fade from fade-color (lambda (_fade _from color)
+				        (declare (ignore _fade _from))
+				        (list 'fade-in color)))
+		    (fade to fade-color (lambda (_fade _to color)
+				      (declare (ignore _fade _to))
+				      (list 'fade-out color))))
 
-    (to/for to for)
+	 (to/for to for)
 
-    (ship-name quoted)
+	 (ship-name quoted)
 
-    (east/west (east (constantly 'east)) (west (constantly 'west)))
+	 (east/west (east (constantly 'east)) (west (constantly 'west)))
 
-    (someone-list (someone |,| someone)
-                  (someone-list |,| someone))
+	 (someone-list (someone |,| someone)
+		     (someone-list |,| someone))
 
-    (someones someone
-              (someone and someone)
-              (someone |,| and someone)
-              (someone-list |,| and someone))
+	 (someones someone
+		 (someone and someone)
+		 (someone |,| and someone)
+		 (someone-list |,| and someone))
 
-    (call-expr (call quoted
-                     #'stage/call)
-               (call quoted with registers
-                     #'stage/call-with-regs))
-    (registers register
-               (registers |,| register
-                          #'stage/regs-list))
-    (register (reg-name = numeric
-                        #'stage/move-into-reg))
-    (reg-name a x y)
+	 (call-expr (call quoted
+		        #'stage/call)
+		  (call quoted with registers
+		        #'stage/call-with-regs))
+	 (registers register
+		  (registers |,| register
+			   #'stage/regs-list))
+	 (register (reg-name = numeric
+                               #'stage/move-into-reg))
+	 (reg-name a x y)
 
-    (do/done-block (do |:| statements done |.|
-                     #'stage/do-block))
-    (statements statement
-                (statements statement
-                            #'stage/statements-list))
+	 (do/done-block (do |:| statements done |.|
+		        #'stage/do-block))
+	 (statements statement
+                       (statements statement
+			     #'stage/statements-list))
 
-    (truck/dolly (truck left/right
-                        #'stage/truck-left/right)
-                 (dolly up/down
-                        #'stage/dolly-up/down)
-                 (truck numeric left/right
-                        #'stage/truck-numeric-left/right)
-                 (dolly numeric up/down
-                        #'stage/dolly-numeric-up/down)
-                 (dolly/truck direction to include actor/location
-                              #'stage/camera-include)
-                 (dolly/truck direction to center on actor/location
-                              #'stage/camera-center)
-                 (frame actor/location and actor/location
-                        #'stage/camera-frame)
-                 (close on actor/location
-                        #'stage/camera-close))
-    (actor/location someone location)
-    (beat-clause (beat #'stage/one-beat)
-                 (numeric beat
-                          #'stage/numeric-beats)
-                 (numeric beats
-                          #'stage/numeric-beats)
-                 (wait for actor (lambda (_wait _for actor)
-                                   (declare (ignore _wait _for))
-                                   (list 'wait-for actor)))
-                 (wait for the actor (lambda (_wait _for _the actor)
-                                       (declare (ignore _wait _for _the))
-                                       (list 'wait-for actor)))
-                 (wait for numeric second
-                       #'stage/wait-secs)
-                 (wait for numeric seconds
-                       #'stage/wait-secs)
-                 (wait for numeric beat
-                       #'stage/wait-beats)
-                 (wait for numeric beats
-                       #'stage/wait-beats))
-    (go-to-clause (go quoted
-                      #'stage/go)
-                  (go to quoted
-                      #'stage/go-to))
-    (audio-clause (we hear quoted
-                      #'stage/we-hear-sound)
-                  (quoted starts playing
-                          #'stage/song-starts-playing)
-                  (quoted plays
-                          #'stage/song-plays)
-                  (the music stops
-                       #'stage/music-stops)
-                  (silence
-                   #'first))
-    (assignment-clause (set variable to numeric
-                            #'stage/set-var-to-val)
-                       (variable ← numeric
-                                 #'stage/var←val)
-                       (variable < - numeric
-                                 #'stage/var<-val)
-                       (set someone-state to numeric
-                            #'stage/set-state-to-val)
-                       (someone-state ← numeric
-                                      #'stage/state←val)
-                       (someone-state < - numeric
-                                      #'stage/state<-val)
-                       (set player-state to numeric
-                            #'stage/set-state-to-val)
-                       (player-state ← numeric
-                                     #'stage/state←val)
-                       (player-state < - numeric
-                                     #'stage/state<-val)
-                       (set quoted to true/false
-                            #'stage/set-flag-to-bool)
-                       (the ship can go to quoted
-                            #'stage/ship-can-go)
-                       (the ship can not go to quoted
-                            #'stage/ship-can-not-go)
-                       inc/dec-expr)
-    (true/false (true (constantly t))
-                (yes (constantly t))
-                (on (constantly t))
-                (false (constantly nil))
-                (no (constantly nil))
-                (off (constantly nil)))
-    (inc/dec-expr (the player gains/loses numeric crowns
-                       #'stage/player-gains/loses-crowns)
-                  (the player gains/loses numeric arrows
-                       #'stage/player-gains/loses-arrows)
-                  (the player gains/loses numeric karma
-                       #'stage/player-gains/loses-karma)
-                  (the player gains/loses the item
-                       #'stage/player-gains/loses-item)
-                  (the player gains armor numeric
-                       #'stage/player-gains-armor)
-                  (the palyer gains ring numeric
-                       #'stage/player-gains-ring)
-                  (the player gains/loses quoted
-                       #'stage/player-gains/loses-quest-item)
-                  (someone gives the item to someone
-                           #'stage/gives-item)
-                  (inc/dec player-state
-                           #'stage/inc/dec-state-1)
-                  (inc/dec player-state by numeric
-                           #'stage/inc/dec-state-by-n)
-                  (inc/dec player-state by numeric |,| limit numeric
-                           #'stage/inc/dec-state-by-n/limit)
-                  (inc/dec player-state |,| limit numeric
-                           #'stage/inc/dec-state-1/limit))
-    (item knife buckler hammer amulet potion sword shield bow
-          torch chalice staff wand grappling-hook glass wrench boots
-          mask glove)
-    (gains/loses (gains (constantly '+))
-                 (loses (constantly '-)))
-    (inc/dec (increment (constantly 'inc))
-             (increase (constantly 'inc))
-             (decrement (constantly 'dec))
-             (decrease (constantly 'dec)))
-    (conditional simple-conditional
-                 compound-conditional)
-    (compound-conditional (all of conditionals |,| and simple-conditional
-                               #'stage/all-of)
-                          (any of conditionals |,| or simple-conditional
-                               #'stage/any-of)
-                          (none of conditionals |,| nor simple-conditional
-                                #'stage/none-of)
-                          (either simple-conditional |,| or simple-conditional
-                                  #'stage/either-or)
-                          (neither simple-conditional |,| nor simple-conditional
-                                   #'stage/neither-nor)
-                          (both simple-conditional |,| and simple-conditional
-                                #'stage/both-and))
-    (simple-conditional (numeric is less than numeric
-                                 #'stage/is-less-than)
-                        (numeric is greater than numeric
-                                 #'stage/is-greater-than)
-                        (numeric is less than or equal to numeric
-                                 #'stage/is-less-than-or-equal-to)
-                        (numeric is greater than or equal to numeric
-                                 #'stage/is-greater-than-or-equal-to)
-                        (numeric is equal to numeric
-                                 #'stage/is-equal-to)
-                        (numeric is number
-                                 #'stage/num-is-num)
-                        (numeric is zero
-                                 #'stage/is-zero)
-                        (numeric is not less than numeric
-                                 #'stage/is-not-less-than)
-                        (numeric is not greater than numeric
-                                 #'stage/is-not-greater-than)
-                        (numeric is not equal to numeric
-                                 #'stage/is-not-equal-to)
-                        (numeric is not zero
-                                 #'stage/is-not-zero)
-                        (numeric is positive or zero
-                                 #'stage/is-pos-or-zero)
-                        (numeric is zero or positive
-                                 #'stage/is-zero-or-pos)
-                        (numeric is positive
-                                 #'stage/is-pos)
-                        (numeric is negative
-                                 #'stage/is-neg)
-                        (numeric < numeric
-                                 #'stage/<)
-                        (numeric > numeric
-                                 #'stage/>)
-                        (numeric < = numeric
-                                 #'stage/<=)
-                        (numeric ≤ numeric
-                                 #'stage/≤)
-                        (numeric > = numeric
-                                 #'stage/>=)
-                        (numeric ≥ numeric
-                                 #'stage/≥)
-                        (numeric = numeric
-                                 #'stage/=)
-                        (numeric / = numeric
-                                 #'stage//=)
-                        (numeric ≠ numeric
-                                 #'stage/≠)
-                        (numeric is between numeric and numeric
-                                 #'stage/is-between)
-                        (numeric is from numeric to numeric
-                                 #'stage/is-from-to)
-                        (|(| compound-conditional |)|
-                             #'stage/parens))
-    (conditionals (simple-conditional |,| conditionals
-                                      #'stage/conditionals-list))
-    (enter-clause (skyline-tool::enter someone at location
-                                       #'stage/enter))
-    (ship-clause
-     (the ship-name is at location
-          (lambda (_the ship-name _is _at location)
-            (list 'boat ship-name 'at location nil)))
-     (the ship-name appears in the east/west headed for actor/location
-          #'stage/empty-boat)
-     (the ship-name appears in the east/west with someones aboard headed to/for actor/location
-          #'stage/full-boat)
-     (the ship-name gets underway to the east/west
-          #'stage/sail-away)
-     (someone embarks/boards the ship-name #'stage/embarks)
-     (someone disembarks from the ship-name #'stage/disembarks))
+	 (truck/dolly (truck left/right
+                               #'stage/truck-left/right)
+		    (dolly up/down
+                               #'stage/dolly-up/down)
+		    (truck numeric left/right
+                               #'stage/truck-numeric-left/right)
+		    (dolly numeric up/down
+                               #'stage/dolly-numeric-up/down)
+		    (dolly/truck direction to include actor/location
+			       #'stage/camera-include)
+		    (dolly/truck direction to center on actor/location
+			       #'stage/camera-center)
+		    (frame actor/location and actor/location
+                               #'stage/camera-frame)
+		    (close on actor/location
+                               #'stage/camera-close))
+	 (actor/location someone location)
+	 (beat-clause (beat #'stage/one-beat)
+		    (numeric beat
+			   #'stage/numeric-beats)
+		    (numeric beats
+			   #'stage/numeric-beats)
+		    (wait for actor (lambda (_wait _for actor)
+				  (declare (ignore _wait _for))
+				  (list 'wait-for actor)))
+		    (wait for the actor (lambda (_wait _for _the actor)
+				      (declare (ignore _wait _for _the))
+				      (list 'wait-for actor)))
+		    (wait for numeric second
+			#'stage/wait-secs)
+		    (wait for numeric seconds
+			#'stage/wait-secs)
+		    (wait for numeric beat
+			#'stage/wait-beats)
+		    (wait for numeric beats
+			#'stage/wait-beats))
+	 (go-to-clause (go quoted
+		         #'stage/go)
+		     (go to quoted
+		         #'stage/go-to))
+	 (audio-clause (we hear quoted
+		         #'stage/we-hear-sound)
+		     (quoted starts playing
+			   #'stage/song-starts-playing)
+		     (quoted plays
+			   #'stage/song-plays)
+		     (the music stops
+			#'stage/music-stops)
+		     (silence
+		      #'first))
+	 (assignment-clause (set variable to numeric
+			     #'stage/set-var-to-val)
+			(variable ← numeric
+				#'stage/var←val)
+			(variable < - numeric
+				#'stage/var<-val)
+			(set someone-state to numeric
+			     #'stage/set-state-to-val)
+			(someone-state ← numeric
+				     #'stage/state←val)
+			(someone-state < - numeric
+				     #'stage/state<-val)
+			(set player-state to numeric
+			     #'stage/set-state-to-val)
+			(player-state ← numeric
+				    #'stage/state←val)
+			(player-state < - numeric
+				    #'stage/state<-val)
+			(set quoted to true/false
+			     #'stage/set-flag-to-bool)
+			(the ship can go to quoted
+			     #'stage/ship-can-go)
+			(the ship can not go to quoted
+			     #'stage/ship-can-not-go)
+			inc/dec-expr)
+	 (true/false (true (constantly t))
+                       (yes (constantly t))
+                       (on (constantly t))
+                       (false (constantly nil))
+                       (no (constantly nil))
+                       (off (constantly nil)))
+	 (inc/dec-expr (the player gains/loses numeric crowns
+			#'stage/player-gains/loses-crowns)
+		     (the player gains/loses numeric arrows
+			#'stage/player-gains/loses-arrows)
+		     (the player gains/loses numeric karma
+			#'stage/player-gains/loses-karma)
+		     (the player gains/loses the item
+			#'stage/player-gains/loses-item)
+		     (the player gains armor numeric
+			#'stage/player-gains-armor)
+		     (the palyer gains ring numeric
+			#'stage/player-gains-ring)
+		     (the player gains/loses quoted
+			#'stage/player-gains/loses-quest-item)
+		     (someone gives the item to someone
+			    #'stage/gives-item)
+		     (inc/dec player-state
+			    #'stage/inc/dec-state-1)
+		     (inc/dec player-state by numeric
+			    #'stage/inc/dec-state-by-n)
+		     (inc/dec player-state by numeric |,| limit numeric
+			    #'stage/inc/dec-state-by-n/limit)
+		     (inc/dec player-state |,| limit numeric
+			    #'stage/inc/dec-state-1/limit))
+	 (item knife buckler hammer amulet potion sword shield bow
+	       torch chalice staff wand grappling-hook glass wrench boots
+	       mask glove)
+	 (gains/loses (gains (constantly '+))
+		    (loses (constantly '-)))
+	 (inc/dec (increment (constantly 'inc))
+		(increase (constantly 'inc))
+		(decrement (constantly 'dec))
+		(decrease (constantly 'dec)))
+	 (conditional simple-conditional
+		    compound-conditional)
+	 (compound-conditional (all of conditionals |,| and simple-conditional
+			        #'stage/all-of)
+			   (any of conditionals |,| or simple-conditional
+			        #'stage/any-of)
+			   (none of conditionals |,| nor simple-conditional
+                                       #'stage/none-of)
+			   (either simple-conditional |,| or simple-conditional
+				 #'stage/either-or)
+			   (neither simple-conditional |,| nor simple-conditional
+				  #'stage/neither-nor)
+			   (both simple-conditional |,| and simple-conditional
+                                       #'stage/both-and))
+	 (simple-conditional (flag #'stage/flag-true)
+                               (not flag #'stage/flag-false)
+                               (numeric is less than numeric
+		                    #'stage/is-less-than)
+                               (numeric is greater than numeric
+		                    #'stage/is-greater-than)
+                               (numeric is less than or equal to numeric
+		                    #'stage/is-less-than-or-equal-to)
+                               (numeric is greater than or equal to numeric
+		                    #'stage/is-greater-than-or-equal-to)
+                               (numeric is equal to numeric
+		                    #'stage/is-equal-to)
+                               (numeric is number
+		                    #'stage/num-is-num)
+                               (numeric is zero
+		                    #'stage/is-zero)
+                               (numeric is not less than numeric
+		                    #'stage/is-not-less-than)
+                               (numeric is not greater than numeric
+		                    #'stage/is-not-greater-than)
+                               (numeric is not equal to numeric
+		                    #'stage/is-not-equal-to)
+                               (numeric is not zero
+		                    #'stage/is-not-zero)
+                               (numeric is positive or zero
+		                    #'stage/is-pos-or-zero)
+                               (numeric is zero or positive
+		                    #'stage/is-zero-or-pos)
+                               (numeric is positive
+		                    #'stage/is-pos)
+                               (numeric is negative
+		                    #'stage/is-neg)
+                               (numeric < numeric
+		                    #'stage/<)
+                               (numeric > numeric
+		                    #'stage/>)
+                               (numeric < = numeric
+		                    #'stage/<=)
+                               (numeric ≤ numeric
+		                    #'stage/≤)
+                               (numeric > = numeric
+		                    #'stage/>=)
+                               (numeric ≥ numeric
+		                    #'stage/≥)
+                               (numeric = numeric
+		                    #'stage/=)
+                               (numeric / = numeric
+		                    #'stage//=)
+                               (numeric ≠ numeric
+		                    #'stage/≠)
+                               (numeric is between numeric and numeric
+		                    #'stage/is-between)
+                               (numeric is from numeric to numeric
+		                    #'stage/is-from-to)
+                               (|(| compound-conditional |)|
+	                          #'stage/parens))
+	 (conditionals (simple-conditional |,| conditionals
+				     #'stage/conditionals-list))
+	 (enter-clause (enter someone at location
+			  #'stage/enter))
+	 (ship-clause
+	  (the ship-name is at location
+	       (lambda (_the ship-name _is _at location)
+	         (list 'boat ship-name 'at location nil)))
+	  (the ship-name appears in the east/west headed for actor/location
+	       #'stage/empty-boat)
+	  (the ship-name appears in the east/west with someones aboard headed to/for actor/location
+	       #'stage/full-boat)
+	  (the ship-name gets underway to the east/west
+	       #'stage/sail-away)
+	  (someone embarks/boards the ship-name #'stage/embarks)
+	  (someone disembarks from the ship-name #'stage/disembarks))
 
-    (embarks/boards boards (embarks upon) (embarks on))
+	 (embarks/boards boards (embarks upon) (embarks on))
 
-    (exit-clause (someone exits #'stage/exit)
-                 (exit someone (lambda (e s) (stage/exit s e))))
-    (jump-to-other-file-clause (continued in quoted in quoted #'stage/jump-to-file))
-    (facing-clause (someone faces direction
-                            #'stage/faces)
-                   (someone faces to the direction
-                            #'stage/faces-to))
-    (walk-clause (someone walks relative-position
-                          #'stage/walks-relative)
-                 (someone moves relative-position
-                          #'stage/walks-relative)
-                 ;; Start patterns
-                 (someone starts walking relative-position
-                          #'stage/start-walk-relative)
-                 (someone starts moving relative-position
-                          #'stage/start-walk-relative)
-                 (someone starts dancing (lambda (someone &rest _)
-                                           (declare (ignore _))
-                                           (list 'dance someone)))
-                 (someone starts flying (lambda (someone &rest _)
-                                          (declare (ignore _))
-                                          (list 'fly someone)))
-                 (someone starts waving (lambda (someone &rest _)
-                                          (declare (ignore _))
-                                          (list 'wave-arms someone)))
-                 (someone starts waving arms (lambda (someone &rest _)
-                                               (declare (ignore _))
-                                               (list 'wave-arms someone)))
-                 (someone starts waving his arms (lambda (someone &rest _)
-                                                   (declare (ignore _))
-                                                   (list 'wave-arms someone)))
-                 (someone starts waving her arms (lambda (someone &rest _)
-                                                   (declare (ignore _))
-                                                   (list 'wave-arms someone)))
-                 (someone starts waving their arms (lambda (someone &rest _)
-                                                     (declare (ignore _))
-                                                     (list 'wave-arms someone)))
-                 (someone starts gesturing (lambda (someone &rest _)
-                                             (declare (ignore _))
-                                             (list 'gesture someone)))
-                 (someone starts panicking (lambda (someone &rest _)
-                                             (declare (ignore _))
-                                             (list 'panic someone)))
-                 ;; Stop patterns
-                 (someone stops dancing (lambda (someone &rest _)
-                                          (declare (ignore _))
-                                          (list 'wake someone)))
-                 (someone stops flying (lambda (someone &rest _)
-                                         (declare (ignore _))
-                                         (list 'wake someone)))
-                 (someone stops waving (lambda (someone &rest _)
-                                         (declare (ignore _))
-                                         (list 'wake someone)))
-                 (someone stops waving arms (lambda (someone &rest _)
-                                              (declare (ignore _))
-                                              (list 'wake someone)))
-                 (someone stops gesturing (lambda (someone &rest _)
-                                            (declare (ignore _))
-                                            (list 'wake someone)))
-                 (someone stops panicking (lambda (someone &rest _)
-                                            (declare (ignore _))
-                                            (list 'wake someone)))
-                 ;; Action patterns
-                 (someone dances (lambda (someone &rest _)
-                                   (declare (ignore _))
-                                   (list 'dance someone)))
-                 (someone flies (lambda (someone &rest _)
-                                  (declare (ignore _))
-                                  (list 'fly someone)))
-                 (someone waves (lambda (someone &rest _)
-                                  (declare (ignore _))
-                                  (list 'wave-arms someone)))
-                 (someone waves arms (lambda (someone &rest _)
-                                       (declare (ignore _))
-                                       (list 'wave-arms someone)))
-                 (someone waves his arms (lambda (someone &rest _)
-                                           (declare (ignore _))
-                                           (list 'wave-arms someone)))
-                 (someone waves her arms (lambda (someone &rest _)
-                                           (declare (ignore _))
-                                           (list 'wave-arms someone)))
-                 (someone waves their arms (lambda (someone &rest _)
-                                             (declare (ignore _))
-                                             (list 'wave-arms someone)))
-                 (someone gestures (lambda (someone &rest _)
-                                     (declare (ignore _))
-                                     (list 'gesture someone)))
-                 (someone panics (lambda (someone &rest _)
-                                   (declare (ignore _))
-                                   (list 'panic someone))))
-    (relative-position step-distance
-                       (to location
-                           #'stage/relative-to)
-                       (relative-position |,| then step-distance
-                                          #'stage/relative-steps))
-    (step-distance (numeric to the direction
-                            #'stage/num-to-the-dir)
-                   (numeric direction
-                            #'stage/num-dir)
-                   (direction numeric
-                              #'stage/dir-num)
-                   (direction by numeric
-                              #'stage/dir-by-num)
-                   (numeric up/down left/right
-                            #'stage/num-ud-lr)
-                   (up/down left/right by numeric
-                            #'stage/ud-lr-by-num)
-                   (numeric up/down and numeric left/right
-                            #'stage/relative-ud-lr)
-                   (numeric left/right and numeric up/down
-                            #'stage/relative-lr-ud))
+	 (exit-clause (someone exits #'stage/exit)
+		    (exit someone (lambda (e s) (stage/exit s e))))
+	 (jump-to-other-file-clause (continued in quoted in quoted #'stage/jump-to-file))
+	 (facing-clause (someone faces direction
+			     #'stage/faces)
+		      (someone faces to the direction
+			     #'stage/faces-to))
+	 (walk-clause (someone walks relative-position
+			   #'stage/walks-relative)
+		    (someone moves relative-position
+			   #'stage/walks-relative)
+		    ;; Start patterns
+		    (someone starts walking relative-position
+			   #'stage/start-walk-relative)
+		    (someone starts moving relative-position
+			   #'stage/start-walk-relative)
+		    (someone starts dancing (lambda (someone &rest _)
+					(declare (ignore _))
+					(list 'dance someone)))
+		    (someone starts flying (lambda (someone &rest _)
+				         (declare (ignore _))
+				         (list 'fly someone)))
+		    (someone starts waving (lambda (someone &rest _)
+				         (declare (ignore _))
+				         (list 'wave-arms someone)))
+		    (someone starts waving arms (lambda (someone &rest _)
+					    (declare (ignore _))
+					    (list 'wave-arms someone)))
+		    (someone starts waving his arms (lambda (someone &rest _)
+					        (declare (ignore _))
+					        (list 'wave-arms someone)))
+		    (someone starts waving her arms (lambda (someone &rest _)
+					        (declare (ignore _))
+					        (list 'wave-arms someone)))
+		    (someone starts waving their arms (lambda (someone &rest _)
+						(declare (ignore _))
+						(list 'wave-arms someone)))
+		    (someone starts gesturing (lambda (someone &rest _)
+					  (declare (ignore _))
+					  (list 'gesture someone)))
+		    (someone starts panicking (lambda (someone &rest _)
+					  (declare (ignore _))
+					  (list 'panic someone)))
+		    ;; Stop patterns
+		    (someone stops dancing (lambda (someone &rest _)
+				         (declare (ignore _))
+				         (list 'wake someone)))
+		    (someone stops flying (lambda (someone &rest _)
+				        (declare (ignore _))
+				        (list 'wake someone)))
+		    (someone stops waving (lambda (someone &rest _)
+				        (declare (ignore _))
+				        (list 'wake someone)))
+		    (someone stops waving arms (lambda (someone &rest _)
+					   (declare (ignore _))
+					   (list 'wake someone)))
+		    (someone stops gesturing (lambda (someone &rest _)
+					 (declare (ignore _))
+					 (list 'wake someone)))
+		    (someone stops panicking (lambda (someone &rest _)
+					 (declare (ignore _))
+					 (list 'wake someone)))
+		    ;; Action patterns
+		    (someone dances (lambda (someone &rest _)
+				  (declare (ignore _))
+				  (list 'dance someone)))
+		    (someone flies (lambda (someone &rest _)
+				 (declare (ignore _))
+				 (list 'fly someone)))
+		    (someone waves (lambda (someone &rest _)
+				 (declare (ignore _))
+				 (list 'wave-arms someone)))
+		    (someone waves arms (lambda (someone &rest _)
+				      (declare (ignore _))
+				      (list 'wave-arms someone)))
+		    (someone waves his arms (lambda (someone &rest _)
+					(declare (ignore _))
+					(list 'wave-arms someone)))
+		    (someone waves her arms (lambda (someone &rest _)
+					(declare (ignore _))
+					(list 'wave-arms someone)))
+		    (someone waves their arms (lambda (someone &rest _)
+					  (declare (ignore _))
+					  (list 'wave-arms someone)))
+		    (someone gestures (lambda (someone &rest _)
+				    (declare (ignore _))
+				    (list 'gesture someone)))
+		    (someone panics (lambda (someone &rest _)
+				  (declare (ignore _))
+				  (list 'panic someone))))
+	 (relative-position step-distance
+			(to location
+			    #'stage/relative-to)
+			(relative-position |,| then step-distance
+				         #'stage/relative-steps))
+	 (step-distance (numeric to the direction
+			     #'stage/num-to-the-dir)
+		      (numeric direction
+			     #'stage/num-dir)
+		      (direction numeric
+			       #'stage/dir-num)
+		      (direction by numeric
+			       #'stage/dir-by-num)
+		      (numeric up/down left/right
+			     #'stage/num-ud-lr)
+		      (up/down left/right by numeric
+			     #'stage/ud-lr-by-num)
+		      (numeric up/down and numeric left/right
+			     #'stage/relative-ud-lr)
+		      (numeric left/right and numeric up/down
+			     #'stage/relative-lr-ud))
 
-    (color clear ,@*common-palette*)
-    (location (quoted (lambda (place)
-                        (list 'place place 0 'north 0 'east)))
-              (numeric direction of/from quoted
-                       #'stage/num-dir-of-place)
-              (numeric left/right and numeric up/down of/from quoted
-                       #'stage/num-lr-up-of-place)
-              (numeric up/down and numeric left/right of/from quoted
-                       #'stage/num-up-lr-of-place)
-              (|(| numeric |,| numeric |)|
-                   #'stage/raw-coords))
-    (of/from of from)
-    (direction left/right up/down)
-    (left/right (left (constantly 'west))
-                (right (constantly 'east))
-                (east (constantly 'east))
-                (west (constantly 'west)))
-    (up/down (up (constantly 'north))
-             (down (constantly 'south))
-             (north (constantly 'north))
-             (south (constantly 'south)))
-    (numeric (variable (lambda (var)
-                         (list 'var (subseq var 1))))
-             number
-             pi
-             (e (constantly (exp 1)))
-             someone-state
-             player-state
-             (- number)
-             (|(| number + number i |)|
-                  #'stage/complex)
-             (|(| numeric |)|
-                  #'stage/parens)
-             (the sum of numeric plus* numeric
-                  #'stage/sum-of-n+n)
-             (the difference of numeric minus* numeric
-                  #'stage/diff-of-n---n)
-             (the quotient of numeric division* numeric
-                  #'stage/quot-of-n÷n)
-             (the product of numeric times* numeric
-                  #'stage/prod-of-n×n)
-             (the result of numeric shifted by numeric
-                  #'stage/num-ash-num)
-             (the result of numeric raised to the numeric power
-                  #'stage/num-expt-num)
-             (the logarithm base numeric of numeric
-                  #'stage/log-base-n-of-n)
-             (the base numeric logarithm of numeric
-                  #'stage/base-n-log-of-n)
-             (the natural logarithm of n
-                  #'stage/nat-log-of-n)
-             (the square root of numeric
-                  #'stage/sqrt-of-n)
-             (the ceiling value of numeric
-                  #'stage/ceiling-n)
-             (the floor value of numeric
-                  #'stage/floor-n)
-             (the round value of numeric
-                  #'stage/round-n)
-             (the real part of numeric
-                  #'stage/realpart-n)
-             (the imaginary part of numeric
-                  #'stage/imagpart-n)
-             (the absolute value of numeric
-                  #'stage/abs-n)
-             (boolean numeric and numeric
-                      #'stage/bool-and)
-             (boolean numeric or numeric
-                      #'stage/bool-or)
-             (boolean exclusive numeric or numeric
-                      #'stage/bool-xor)
-             (boolean inclusive numeric or numeric
-                      #'stage/logior))
-    (someone-state
-     (the x position of someone)
-     (the y position of someone)
-     (the hit points of someone)
-     (the max hit points of someone))
-    (player-state
-     (the x position of the player)
-     (the y position of the player)
-     (the hit points of the player)
-     (the max hit points of the player)
-     (the karma of the player)
-     (the magic points of the player)
-     (the max magic points of te player)
-     (the arrows of the player)
-     (the crowns of the player))
-    (plus* plus +)
-    (minus* minus - less)
-    (division* (divided by) / ÷)
-    (times* times ✕ ×))))
+	 (color clear ,@*common-palette*)
+	 (location (quoted (lambda (place)
+                               (list 'place place 0 'north 0 'east)))
+		 (numeric direction of/from quoted
+			#'stage/num-dir-of-place)
+		 (numeric left/right and numeric up/down of/from quoted
+			#'stage/num-lr-up-of-place)
+		 (numeric up/down and numeric left/right of/from quoted
+			#'stage/num-up-lr-of-place)
+		 (|(| numeric |,| numeric |)|
+		      #'stage/raw-coords))
+	 (of/from of from)
+	 (direction left/right up/down)
+	 (left/right (left (constantly 'west))
+                       (right (constantly 'east))
+                       (east (constantly 'east))
+                       (west (constantly 'west)))
+	 (up/down (up (constantly 'north))
+		(down (constantly 'south))
+		(north (constantly 'north))
+		(south (constantly 'south)))
+	 (numeric (variable (lambda (var)
+			  (list 'var (subseq var 1))))
+		number
+		pi
+		(e (constantly (exp 1)))
+		someone-state
+		player-state
+		(- number)
+		(|(| number + number i |)|
+		     #'stage/complex)
+		(|(| numeric |)|
+		     #'stage/parens)
+		(the sum of numeric plus* numeric
+		     #'stage/sum-of-n+n)
+		(the difference of numeric minus* numeric
+		     #'stage/diff-of-n---n)
+		(the quotient of numeric division* numeric
+		     #'stage/quot-of-n÷n)
+		(the product of numeric times* numeric
+		     #'stage/prod-of-n×n)
+		(the result of numeric shifted by numeric
+		     #'stage/num-ash-num)
+		(the result of numeric raised to the numeric power
+		     #'stage/num-expt-num)
+		(the logarithm base numeric of numeric
+		     #'stage/log-base-n-of-n)
+		(the base numeric logarithm of numeric
+		     #'stage/base-n-log-of-n)
+		(the natural logarithm of n
+		     #'stage/nat-log-of-n)
+		(the square root of numeric
+		     #'stage/sqrt-of-n)
+		(the ceiling value of numeric
+		     #'stage/ceiling-n)
+		(the floor value of numeric
+		     #'stage/floor-n)
+		(the round value of numeric
+		     #'stage/round-n)
+		(the real part of numeric
+		     #'stage/realpart-n)
+		(the imaginary part of numeric
+		     #'stage/imagpart-n)
+		(the absolute value of numeric
+		     #'stage/abs-n)
+		(boolean numeric and numeric
+		         #'stage/bool-and)
+		(boolean numeric or numeric
+		         #'stage/bool-or)
+		(boolean exclusive numeric or numeric
+		         #'stage/bool-xor)
+		(boolean inclusive numeric or numeric
+		         #'stage/logior))
+	 (someone-state
+	  (the x position of someone)
+	  (the y position of someone)
+	  (the hit points of someone)
+	  (the max hit points of someone))
+	 (player-state
+	  (the x position of the player)
+	  (the y position of the player)
+	  (the hit points of the player)
+	  (the max hit points of the player)
+	  (the karma of the player)
+	  (the magic points of the player)
+	  (the max magic points of te player)
+	  (the arrows of the player)
+	  (the crowns of the player))
+	 (plus* plus +)
+	 (minus* minus - less)
+	 (division* (divided by) / ÷)
+	 (times* times ✕ ×))))
 
 (defvar *fountain-state* nil)
 
@@ -1579,15 +1590,16 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
          ((every (lambda (char) (char= char (char-upcase char))) line)
           (destructuring-bind (kind name)
               (if (find #\( line)
-                  (cl-ppcre:register-groups-bind (name parens)
-                      ("^(.*?)[:space:]*\\((.+)\\)$" (string-trim #(#\Space #\Tab) line))
-                    (assert (member parens '("OC" "O/C" "VO" "V/O")
-                                    :test #'string-equal)
-                            (parens)
-                            "Parentheses after speaker's name ~
+                  (cl-ppcre:register-groups-bind
+                      (name parens)
+		  ("^(.*?)[:space:]*\\((.+)\\)$" (string-trim #(#\Space #\Tab) line))
+		(assert (member parens '("OC" "O/C" "VO" "V/O")
+			      :test #'string-equal)
+		        (parens)
+		        "Parentheses after speaker's name ~
 are only allowed to be used for off-camera (O/C) labels, but got “~a” in “~a”"
-                            parens line)
-                    (list 'speaker-oc (string-trim #(#\Space #\Tab) name)))
+		        parens line)
+		(list 'speaker-oc (string-trim #(#\Space #\Tab) name)))
                   (list 'speaker line))
             (setf *fountain-state* (cons :speech ""))
             (return (list kind name))))
@@ -1657,14 +1669,23 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
   (or (alpha-char-p char) (char= #\- char)))
 
 (defun numeric-char-p (char)
-  "Returns generally true if it's possible for CHAR to be part of a number. [0-9./]"
-  (or (digit-char-p char) (char= #\. char) (char= #\/ char)))
+  "Returns generally true if it's possible for CHAR to be part of a number.
+   Supports: decimal digits [0-9], decimal point [.], fraction bar [/], 
+   scientific notation [e/E], and signs [+/-]"
+  (or (digit-char-p char) 
+      (char= #\. char) 
+      (char= #\/ char)
+      (member char '(#\e #\E #\+ #\-) :test #'char=)))
 
 (defun stage-direction-lexer (stream)
   "A lexer for stage directions in STREAM"
   (labels ((rewind-stream (&optional (n 1))
-             (file-position stream (- (file-position stream) n)))
-           (token-values (string)
+              (file-position stream (- (file-position stream) n)))
+            (normalize-identifier (ident)
+              "Normalize IDENT to canonical PascalCase form"
+              (pascal-case (string-downcase (string-trim #(#\- #\_ #\Space) ident))))
+            
+            (token-values (string)
              (cond
                ((emptyp string) (multiple-value-list (stage-direction-lexer stream)))
                ((member string +stage-direction-words+ :test #'string-equal)
@@ -1673,19 +1694,33 @@ are only allowed to be used for off-camera (O/C) labels, but got “~a” in “
                      (member (last-elt string) '(#\. #\/) :test #'char=))
                 (rewind-stream 2)
                 (list 'number (parse-number (subseq string 0 (1- (length string))))))
-               ((every #'numeric-char-p string)
-                (list 'number (parse-number string)))
-               ((every #'actor-name-char-p string)
-                (list 'actor string))
-               ((and (char= #\$ (char string 0))
-                     (every (lambda (ch) (digit-char-p ch 16)) string)
-                     (= 5 (length string)))
-                (list 'memory (parse-number (subseq string 1) :radix 16)))
-               ((and (char= #\$ (char string 0))
-                     (every #'actor-name-char-p (subseq string 1)))
-                (list 'variable string))
+                ((every #'numeric-char-p string)
+                 (list 'number (parse-number string)))
+                ;; Handle binary literals (0b prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0b"))
+                 (list 'number (parse-number (subseq string 2) :radix 2)))
+                ;; Handle octal literals (0o prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0o"))
+                 (list 'number (parse-number (subseq string 2) :radix 8)))
+                ((every #'actor-name-char-p string)
+                 (list 'actor (normalize-identifier string)))
+                ;; Handle hexadecimal literals ($XXXX format, 5 chars total)
+                ((and (char= #\$ (char string 0))
+                      (every (lambda (ch) (digit-char-p ch 16)) (subseq string 1))
+                      (= 5 (length string)))
+                 (list 'memory (parse-number (subseq string 1) :radix 16)))
+                ;; Handle hexadecimal literals (0x prefix)
+                ((and (>= (length string) 3)
+                      (string-equal (subseq string 0 2) "0x"))
+                 (list 'number (parse-number (subseq string 2) :radix 16)))
+                ;; Handle variables ($ prefix for variables)
+                ((and (char= #\$ (char string 0))
+                      (every #'actor-name-char-p (subseq string 1)))
+                 (list 'variable (concatenate 'string "$" (normalize-identifier (subseq string 1)))))
                ((char= #\" (char string 0))
-                (list 'quoted (pascal-case (subseq string 1))))
+                (list 'quoted (subseq string 1)))
                (t (list 'string string)))))
     (let ((parsed (loop with word = ""
                         for char = (read-char stream nil nil)
@@ -1820,7 +1855,13 @@ as
               "This text is more than 192 characters in length and cannot be prepared.
 “~a”"
               prepared))
-    prepared))
+    (cl-ppcre:regex-replace-all
+     (string +end-emphasis-char+)
+     (cl-ppcre:regex-replace-all
+      (string +begin-emphasis-char+)
+      prepared
+      "~<emph>")
+     "~</emph>")))
 
 (assert (handler-case (prepare-dialogue "Para¶check")
           (error (c)
@@ -1840,12 +1881,14 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
 (define-constant +speakjet-phonemes+
     '(
       "Pause0" "Pause1" "Pause2" "Pause3" "Pause4" "Pause5" "Pause6"
-      "Fast" "Slow" "Stress" "Relax" "Wait" "Soft" "Volume" "Speed" "Pitch" "Bend" "PortCtr"
+      "Fast" "Slow" "Stress" "Relax" "Wait" "Soft"
+      "Volume" "Speed" "Pitch" "Bend" "PortCtr"
       "Port" "Repeat" "CallPhrase" "GotoPhrase" "Delay" "Reset"
       "IY" "IH" "EY" "EH" "AY" "AX" "UX" "OH" "AW" "OW" "UH" "UW"
       "MM" "NE" "NO" "NGE" "NGO" "LE" "LO" "WW"
       "RR" "IYRR" "EYRR" "AXRR" "AWRR" "OWRR"
-      "EYIY" "OHIY" "OWIY" "OHIH" "IYEH" "EHLE" "IYUW" "AXUW" "IHWW" "AYWW" "OWWW"
+      "EYIY" "OHIY" "OWIY" "OHIH" "IYEH" "EHLE"
+      "IYUW" "AXUW" "IHWW" "AYWW" "OWWW"
       "JH" "VV" "ZZ" "ZH" "DH" "BE" "BO" "EB" "OB"
       "DE" "DO" "ED" "OD" "GE" "GO" "EG" "OG"
       "CH" "HE" "HO" "WH" "FF" "SE" "SO" "SH" "TH"
@@ -1859,7 +1902,8 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
       "M0" "M1" "M2" "EndOfPhrase"
       "PlayerNamePlace" "PlayerVerbS"
       "PronounThey" "PronounThem" "PronounTheir" "PronounTheirs"
-      "PronounSibling" "PronounPerson" "PronounAre" "PronounWere" "PronounHave"
+      "PronounSibling" "PronounPerson"
+      "PronounAre" "PronounWere" "PronounHave"
       "ButtonILabel" "ButtonIILabel" "ButtonIIILabel"
       "ButtonSelectLabel" "ButtonPauseLabel" "ButtonResetLabel"
       "PlayerHonorific" )
@@ -1876,13 +1920,13 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
                   (unless (char= #\\ (char phoneme 0))
                     (error "Expected SpeakJet phoneme code, beginning with \\, but got ~s" phoneme))
                 (continue () :report "Continue with a gunshot sound"
-                  "M1"))
+	        "M1"))
            do (restart-case
                   (unless (or (numberp (ignore-errors (parse-number (subseq phoneme 1))))
                               (member (subseq phoneme 1) +speakjet-phonemes+ :test #'string=))
                     (error "Expected SpeakJet phoneme code, but got: ~a" phoneme))
                 (continue () :report "Continue with a gunshot sound"
-                  "M1"))
+	        "M1"))
            collect (if (every #'digit-char-p (subseq phoneme 1))
 		   (format nil "$~2,'0x"
 			 (logand #xff (parse-number (subseq phoneme 1))))
@@ -1892,7 +1936,7 @@ May call `LOAD-ATARIVOX-DICTIONARY' if not already cached"
   "Load the AtariVox (SpeakJet) dictionary from Source/Tables/SpeakJet.dic"
   (tagbody
    top
-     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (project-root)))
+     (with-input-from-file (speakjet.dic (merge-pathnames "Source/Tables/SpeakJet.dic" (uiop:getcwd)))
        (assert (equalp "[words]" (read-line speakjet.dic nil nil)) ()
                "SpeakJet.dic must begin with [words] magic cookie")
 
@@ -1927,12 +1971,47 @@ but now also ~s."
   (setf *atarivox-dictionary* (load-atarivox-dictionary))
   (length (hash-table-keys *atarivox-dictionary*)))
 
+(define-constant +speakjet-pause-durations+
+  '(("Pause0" . 0)
+    ("Pause1" . 100)
+    ("Pause2" . 200)
+    ("Pause3" . 700)
+    ("Pause4" . 30)
+    ("Pause5" . 60)
+    ("Pause6" . 90))
+  :test 'equalp)
+
 (defun speakjet-pause+ (x y)
-  "Sum together the SpeakJet pauses X and Y into one longer pause"
-  (format nil "Pause~d"
-          (min (+ (parse-integer x :start 5)
-                  (parse-integer y :start 5))
-               6)))
+  "Sum together the SpeakJet pauses X and Y into one longer pause, 
+   rounding to the nearest equal or lesser duration based on actual values"
+  (let ((entry-x (assoc x +speakjet-pause-durations+ :test #'string=))
+        (entry-y (assoc y +speakjet-pause-durations+ :test #'string=)))
+    (assert entry-x (entry-x) "Unknown delay token ~s" x)
+    (assert entry-y (entry-y) "Unknown delay token ~s" y)
+    (let ((total (+ (cdr entry-x) (cdr entry-y))))
+      ;; Find the largest duration that is equal-or-lower than the total
+      (loop for (token . duration) in +speakjet-pause-durations+
+            when (<= duration total)
+              collect (cons duration token) into candidates
+            finally (return (cdr (car (sort candidates (lambda (a b) (> (car a) (car b)))))))))))
+
+(defun second-last (list)
+  "Return the second-to-last element of LIST, or NIL if it has fewer than two elements"
+  (when (and list (cdr list))
+    (if (null (cddr list))
+        (car list)
+        (second-last (cdr list)))))
+
+(define-constant +speakjet-control-tokens+
+    '("Volume" "Speed" "Pitch" "Bend" "PortCtr" "Port" "Repeat"
+      "CallPhrase" "GotoPhrase" "Delay" "Reset" "Fast" "Slow"
+      "Stress" "Relax" "Wait" "Soft" "EndOfPhrase")
+  :test #'equalp)
+
+(defun speakjet-control-token-p (token)
+  "Return true if TOKEN is a SpeakJet control token"
+  (and (stringp token)
+       (member token +speakjet-control-tokens+ :test #'string=)))
 
 (defun log-missing-word-for-speakjet (word)
   (with-output-to-file (missing-words #p"Object/SpeakJet.missing.words"
@@ -1942,128 +2021,63 @@ but now also ~s."
     (princ word missing-words)
     (fresh-line missing-words)))
 
-(defun fixup-exclamations (seq)
-  (loop
-     (let ((bang (position-if (lambda (n) (member n '(:bang :query))) seq)))
-       (unless bang
-         (return-from fixup-exclamations seq))
-       (assert (plusp bang) ()
-               "Neither exclamation mark nor question mark can begin a sentence")
-       (setf seq
-             (let* ((alteration (elt seq bang))
-                    (phrase-start
-                      (or (let ((n (position-if
-                                    (lambda (tok)
-                                      (and (stringp tok)
-                                           (starts-with-subseq "Pause" tok)))
-                                    seq
-                                    :end bang :from-end t)))
-                            (when n (1+ n)))
-                          0))
-                    (before (subseq seq 0 phrase-start))
-                    (phrase (subseq seq phrase-start bang))
-                    (after (when (< bang (length seq))
-                             (subseq seq (1+ bang))))
-                    (phrase-length (length phrase)))
-               (assert (plusp phrase-length) ()
-                       "Neither exclamation mark nor question mark can modify a zero-phoneme-long phrase")
-               (ecase alteration
-                 (:bang
-                  (warn "handling of “!” is poor")
-                  (reduce (curry #'concatenate 'list)
-                          (list
-                           before
-                           (list "Bend" "$04")
-                           (mapcan (lambda (phoneme)
-                                     (list "Stress" phoneme))
-                                   phrase)
-                           (list "Bend" "$05")
-                           after)))
-                 (:query
-                  (warn "handling of “?” is poor")
-                  (reduce (curry #'concatenate 'list)
-                          (list
-                           before
-                           (case (length phrase)
-                             (1 (list "Bend" "$08" (car phrase)))
-                             (2 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)))
-                             (3 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)
-                                      "Bend" "$0a" (third phrase)))
-                             (4 (list "Bend" "$06" (first phrase)
-                                      "Bend" "$08" (second phrase)
-                                      "Bend" "$0a" (third phrase)
-                                      "Bend" "$08" (fourth phrase)))
-                             (otherwise
-                              (cons (subseq phrase 0 (- (length phrase) 5))
-                                    (list "Bend" "$06" (elt phrase (- (length phrase) 5))
-                                          "Bend" "$08" (elt phrase (- (length phrase) 4))
-                                          "Bend" "$0a" (elt phrase (- (length phrase) 3))
-                                          "Bend" "$0c" (elt phrase (- (length phrase) 2))
-                                          "Bend" "$09" (elt phrase (- (length phrase) 1))))))
-                           (list "Bend" "$05")
-                           after)))))))))
-
 (defmacro repeat-unrolled ((times) &body body)
   (cons 'progn
         (loop repeat times
               collect `(progn ,@ (copy-list body)))))
 
 (defun combine-adjacent-pauses (bytes)
+  "Consolidate consecutive pauses and parameter changes without intervening phonemes"
+  (setf bytes (flatten bytes))
   (when (< (length bytes) 2)
     (return-from combine-adjacent-pauses bytes))
   (let ((merge1
-          (append
-           (loop for i from 0 below (1- (length bytes))
-                 for a = (elt bytes i)
-                 for b = (elt bytes (1+ i))
-                 if (and (stringp a)
-                         (stringp b)
-                         (starts-with-subseq "Pause" a)
-                         (starts-with-subseq "Pause" b))
-                   collect (prog1 (speakjet-pause+ a b)
-                             (incf i))
-                 else
-                   if (and (stringp a)
-                           (member b '(:bang :query))
-                           (starts-with-subseq "Pause" a))
-                     collect (prog1 b
-                               (incf i))
-                 else
-                   if (and (stringp a)
-                           (starts-with-subseq "Pause" a)
-                           (string= b "EndOfPhrase"))
-                     collect (prog1 b
-                               (incf i))
-                 else
-                   collect a)
-           (last bytes))))
-    (let ((penultimate (elt merge1 (- (length merge1) 2)))
-          (ultimate (elt merge1 (- (length merge1) 1))))
-      (if (and (stringp penultimate)
-               (stringp ultimate)
-               (starts-with-subseq "Pause" penultimate)
-               (or (starts-with-subseq "Pause" ultimate)
-                   (string= "EndOfPhrase" ultimate)))
-          (return-from combine-adjacent-pauses
-            (combine-adjacent-pauses
-             (append (subseq merge1 0 (- (length merge1) 1))
-                     (list "EndOfPhrase"))))
-          merge1))))
+         (append
+          (loop for i from 0 below (1- (length bytes))
+                for a = (elt bytes i)
+                for b = (elt bytes (1+ i))
+                collect
+                (cond
+                  ;; Two consecutive pauses: combine into one longer pause
+                  ((and (stringp a) (stringp b)
+                        (starts-with-subseq "Pause" a)
+                        (starts-with-subseq "Pause" b))
+                   (prog1 (speakjet-pause+ a b) (incf i)))
+                  ;; Pause followed by EndOfPhrase: drop the pause, keep EndOfPhrase
+                  ((and (stringp a) (stringp b)
+                        (starts-with-subseq "Pause" a)
+                        (string= b "EndOfPhrase"))
+                   (prog1 b (incf i)))
+                  ;; Two control tokens in a row: keep the second, drop the first
+                  ((and (speakjet-control-token-p a)
+                        (speakjet-control-token-p b))
+                   (prog1 b (incf i)))
+                  ;; Default: keep both tokens
+                  (t a)))
+          (last bytes))))
+    ;; A trailing pause is redundant before EndOfPhrase, so strip it
+    (if (and (stringp (first (last merge1)))
+             (starts-with-subseq "Pause" (first (last merge1))))
+        (combine-adjacent-pauses (butlast merge1))
+        merge1)))
 
 (defun char-digit-or-comma-p (char)
   (or (digit-char-p char) (char= #\, char)))
 
-(defun convert-for-atarivox (string)
-  "Convert STRING into a list of tokens for AtariVox (SpeakJet)"
+(defun convert-for-atarivox (string &key (voice (default-voice-profile)))
+  "Convert STRING into a list of tokens for AtariVox (SpeakJet)
+under the VOICE character baseline (default: the default voice profile)."
   (ensure-atarivox-dictionary)
-  (when (emptyp string) (return-from convert-for-atarivox nil))
-  (let ((string (cl-ppcre:regex-replace-all
-                 "\\b[\\p{L}\\p{N}’'-]+\\s*\\[(.*?)\\]"
-                 string
-                 " \\1 "))
-        (words nil))
+  (when (stringp voice)
+    (setf voice (voice-profile-for-name voice)))
+  (when (emptyp string)
+    (return-from convert-for-atarivox nil))
+  (let ((string (emphasize-text
+                 (cl-ppcre:regex-replace-all
+                  "\\b[\\p{L}\\p{N}’'-]+\\s*\\[(.*?)\\]"
+                  string
+                  " \\1 ")))
+        words)
     (cl-ppcre:do-scans (start end reg-starts reg-ends
                         "(\\s+|-|\\\\\\d+|[~\\\\]\\p{L}+|[\\p{L}\\p{N}’']+|[^\\s\\p{L}\\p{N}’'-]+)" string)
       (let ((word (string-trim #(#\Space #\Tab #\Newline)
@@ -2079,36 +2093,21 @@ but now also ~s."
               (push num output))
             (push word output)))
       (setf words output))
-    (let ((bytes (loop
-                   for word in words
-                   append (cond
-                            ((emptyp word) (list "Pause1"))
-                            ((char= (char word 0) #\\)
-                             (if (every #'digit-char-p (subseq word 1))
-                                 (list (format nil "$~2,'0x" (parse-number (subseq word 1))))
-                                 (list (subseq word 1))))
-                            ((equalp word "?!") (list :bang :query))
-                            ((equalp word "!") (list :bang))
-                            ((equalp word "?") (list :query))
-                            ((member word '("-" "“" "”") :test #'string-equal)
-                             nil)
-                            ((or (eql :nil (gethash word *atarivox-dictionary*))
-                                 (null (gethash word *atarivox-dictionary* '#:nothing-was-there)))
-                             nil)
-                            ((and (not (gethash word *atarivox-dictionary*))
-                                  (every (complement #'alphanumericp) word))
-                             (list "Pause1"))
-                            (t (or (gethash word *atarivox-dictionary*)
-                                   (progn
-                                     (log-missing-word-for-speakjet word)
-                                     (cerror "Continue with a gunshot sound"
-                                             "Word not in dictionary: “~a” not found"
-                                             word)
-                                     (list "M1"))))))))
-      (flatten
-       (append (remove-if #'null
-                          (fixup-exclamations (combine-adjacent-pauses bytes)))
-               (cons "EndOfPhrase" nil))))))
+    (append
+     (combine-adjacent-pauses
+      (speakjet-convert
+       words
+       (lambda (word)
+         (let ((entry (gethash word *atarivox-dictionary* :absent)))
+           (cond
+             ((eq entry :absent)
+              (if (every (complement #'alphanumericp) word)
+                  (list "Pause1")
+                  (atarivox-basic-pronunciation word)))
+             ((eq entry :nil) nil)
+             (t entry))))
+       voice))
+     (list "EndOfPhrase"))))
 
 (defun compile-fountain-script (pathname)
   "Compile the Fountain script in PATHNAME into source code (to *STANDARD-OUTPUT*)"
@@ -2267,7 +2266,7 @@ but now also ~s."
                                     voice-pitch voice-speed voice-bend speech-color
                                     hp ac character-id nicks class gender
                                     crowns arrows potions chalice
-                               &allow-other-keys)
+			 &allow-other-keys)
              (find-npc-stats actor)
            (unless character-id
              (cerror "Continue, using Norville"
@@ -2318,7 +2317,7 @@ but now also ~s."
                                 (getf actor :character-id)
                                 (= character-id (getf actor :character-id))))
                          *actors*))
-               (setf (elt *actors* i) record)
+	     (setf (elt *actors* i) record)
                (push record *actors*))
              (return-from load-actor record))))))
 
@@ -2416,15 +2415,16 @@ and processed/applied at the appropriate point in the scene setup.")
   (map nil #'stage-directions->code directions))
 
 (defstage music (start/stop song)
-  (ecase start/stop
-    (start (format t "
+  (let ((name (pascal-case song)))
+    (ecase start/stop
+      (start (format t "
 Song_~a_ID NextSong C!
 SoundSourceBackgroundMusic NextSoundSource C!
-PlaySong EXECUTE " song))
-    (incidental (format t "
+PlaySong EXECUTE " name))
+      (incidental (format t "
 Song_~a_ID NextSong C!
 SoundSourceIncidentalMusic NextSoundSource C!
-PlaySong EXECUTE "  song))))
+PlaySong EXECUTE " name)))))
 
 (defstage hurt (actor amount)
   (destructuring-bind (&key name &allow-other-keys)
@@ -2745,10 +2745,10 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
                                who)
                        (return))))
           (format t "~% ~d ~d CharacterID_~a ~[ do-walk ~; do-walk-relative ~]"
-  x y (pascal-case (string name))
-  (ecase abs/rel
-    (:absolute 0)
-    (:relative 1)))
+	        x y (pascal-case (string name))
+	        (ecase abs/rel
+		(:absolute 0)
+		(:relative 1)))
           (when waitp
             (format t "~% CharacterID_~a settle-actor"
                     (pascal-case (string name))))))))
@@ -2821,11 +2821,12 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
            ((and a* b*)
             (return (,fun a* b*)))
            (a*
+            (format t " ~d ($~x) " a a)
             (stage-directions->acc b)
-            (format t forth (forth-number  a*)))
+            (format t " ~a " ,forth*)            )
            (b*
             (stage-directions->acc a)
-            (format t forth (forth-number b*)))
+            (format t " ~d ($~x) ~a " b b ,forth*))
            (t
             (stage-directions->acc a)
             (stage-directions->acc b)
@@ -2998,17 +2999,24 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
       (t (error "Unexpected tree function name ~s" fun)))))
 
 (defun find-actor (actor)
-  (or (when (string-equal actor 'player)
-        (list :name "Player" :kind 'player :character-id #xff))
-      (when (string-equal actor 'narrator)
-        (list :name "Narrator" :kind 'narrator :character-id #xfe))
-      (when-let (found (find-if (lambda (record)
-                                  (or (string-equal actor (getf record :name))
-                                      (member actor (getf record :nicks)
-                                              :test #'string-equal)
-                                      (string-equal actor (getf record :name))))
-                                *actors*))
-        found)))
+  ;; Actor names are matched case-insensitively and hyphen-insensitively:
+  ;; a Fountain script may write “Sentinel-I” which the lexer delivers as
+  ;; “SentinelI”, while the NPC stats table stores “sentinel-i”.
+  (flet ((same-name-p (a b)
+           (string-equal (remove #\- (string a))
+                         (remove #\- (string b)))))
+    (or (when (same-name-p actor 'player)
+          (list :name "Player" :kind 'player :character-id #xff
+                :speed 96 :pitch 80 :bend 5))
+        (when (same-name-p actor 'narrator)
+          (list :name "Narrator" :kind 'narrator :character-id #xfe
+                :speed 96 :pitch 88 :bend 4))
+        (when-let (found (find-if (lambda (record)
+                                    (or (same-name-p actor (getf record :name))
+                                        (member actor (getf record :nicks)
+                                                :test #'same-name-p)))
+                                  *actors*))
+          found))))
 
 (defun find-or-load-actor (actor)
   (if-let (record (find-actor actor))
@@ -3031,15 +3039,17 @@ Returns a string @code{PREFIX_@var{suffix}} suitable for 64tass where
             (list :name actor :found-in-scene-p (when found-in-scene t)))))
 
 (defun fountain/write-scene-start (value)
+  "Set @code{*current-scene*} from a lexer-produced VALUE.
+
+VALUE is either a @code{cons} @code{(island locale)} (already
+pascal-cased by the lexer) or a @code{string}.  The components are
+joined with @code{/} verbatim — no additional @code{pascal-case}
+normalization is applied, since the lexer already handles that."
   (setf *current-scene*
         (etypecase value
-          (cons (concatenate 'string
-                             (pascal-case (first value))
-                             "/"
-                             (pascal-case (second value))))
+          (cons (concatenate 'string (first value) "/" (second value)))
           (string (format nil "~{~a~^/~}"
-                          (mapcar #'pascal-case
-                                  (split-sequence #\/ value))))))
+                          (split-sequence #\/ value)))))
   (format t "~% Map_~a_ID load-map"
           (substitute #\_ #\/ *current-scene*))
 
@@ -3054,39 +3064,33 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
   (format t "~% Blob_~a_ID scripted-blob-screen"
           (pascal-case blob-screen-name)))
 
-(defun fountain/write-speech (text)
+(defun fountain/write-speech (text &key (voice (default-voice-profile)))
   "Write the speech data for TEXT in text, SpeakJet, and IntelliVoice forms"
-  (assert (< (length text) #x100) (text)
-          "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
-          (length text))
-  (when (speech-supported-p)
-    (restart-case
-        (progn
-          (format t "
+  (let ((text (emphasize-text text)))
+    (assert (< (length text) #x100) (text)
+            "Text snippet exceeds maximum length $100 ($~2,'0x = ~:*~d character~:p)"
+            (length text))
+    (when (speech-supported-p)
+      (restart-case
+          (progn
+            (format t "
   C\" ~a\"
   SpeakJet[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]SpeakJet"
-                  (prepare-dialogue text)
-                  (convert-for-atarivox text))
-          ;; Include IntelliVoice phonemes for Intellivision
-          (format t "
+                    (prepare-dialogue text)
+                    (convert-for-atarivox text :voice voice))
+            ;; Include IntelliVoice phonemes for Intellivision
+            (format t "
   IntelliVoice[ ~{~10t~a~^ ~20t~a~^ ~30t~a~^ ~40t~a~^ ~50t~a~^ ~60t~a~^~%~}~60t]IntelliVoice"
-                  (convert-for-speech text :intellivoice)))
-      (reload-dictionary ()
-        :report "Reload the speech dictionaries"
-        (reload-atarivox-dictionary)
-        (reload-intellivoice-dictionary)
-        (fountain/write-speech text))))
-  (format t "~% ( ~s ) do-dialogue"
-          text))
+                    (convert-for-speech (strip-emphasis text) :intellivoice)))
+        (reload-dictionary ()
+          :report "Reload the speech dictionaries"
+          (reload-atarivox-dictionary)
+          (reload-intellivoice-dictionary)
+          (fountain/write-speech text :voice voice))))
+    (format t "~% ( ~s ) do-dialogue"
+            text)))
 
-(defun dialogue-format-token-string (format-token)
-  (ecase format-token
-    (:speakjet "SJ")
-    (:intellivoice "IV")
-    (:minifont "MF")
-    (:branch "BR")))
-
-(defun dialogue-hash (text format)
+(defun dialogue-hash (text format-keyword)
   (let ((intro (format nil "~{~a~}"
                        (mapcar #'string-capitalize
                                (mapcar (lambda (word)
@@ -3096,7 +3100,7 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
     (format nil "~a_~a_~a"
             (subseq intro 0 (min (length intro) 24))
             (subseq hash 0 (min (length hash) 6))
-            (dialogue-format-token-string format))))
+            (title-case (string format-keyword)))))
 
 (defun fountain/write-speech-branch (option text)
   "Write the speech data for TEXT in text and SpeakJet forms as the label for script destination OPTION"
@@ -3105,7 +3109,7 @@ which maps to @code{Blob_NAME_ID} and dispatches to scripted blob mode."
          (format t "
   C\" ~a\"
   add-dialogue-branch-option "
-                 (prepare-dialogue text))
+                 (prepare-dialogue (emphasize-text text)))
        (reload-dictionary ()
          :report "Reload the AtariVox (SpeakJet) dictionary"
          (reload-atarivox-dictionary)
@@ -3141,6 +3145,7 @@ do-branching-dialogue ~a"
       (format t "~% ( Compiled from input stream )  "))
   (let ((lexer (make-fountain-lexer fountain))
         (*actors* nil)
+        (voice (default-voice-profile))
         (*line-number* 0)
         (*fountain-state* nil))
     (loop (multiple-value-bind (sym value)
@@ -3168,11 +3173,15 @@ do-branching-dialogue ~a"
               (blob-screen
                (fountain/write-blob-screen value))
               (speaker-oc
-               (destructuring-bind (&key name &allow-other-keys) (require-actor value)
+               (let* ((deets (require-actor value))
+                      (name (getf deets :name)))
+                 (setf voice (voice-profile-from-actor deets))
                  (write-off-camera-speaker name)))
               (speaker
-               (destructuring-bind (&key name found-in-scene-p &allow-other-keys)
-                   (require-actor value)
+               (let* ((deets (require-actor value))
+                      (name (getf deets :name))
+                      (found-in-scene-p (getf deets :found-in-scene-p)))
+                 (setf voice (voice-profile-from-actor deets))
                  (cond
                    ((string-equal value 'narrator)
                     (write-off-camera-speaker name))
@@ -3182,7 +3191,7 @@ do-branching-dialogue ~a"
                    (t (cerror "Continue, with them speaking from off-camera"
                               "Actor ~:(~a~) was asked to speak, but they are not in the scene" name)
                       (write-off-camera-speaker name)))))
-              (speech (fountain/write-speech value))
+              (speech (fountain/write-speech value :voice voice))
               (reboot
                (format t "~% reboot")
                (return))
@@ -3265,8 +3274,8 @@ code for the game's scripting engine.
                   :report (lambda (s) (format s "Reload script ~a" (enough-namestring from)))
                   (go top))
                 (reload-npc-stats () :report "Reload NPC stats from Source/Tables/NPCStats.ods"
-                  (load-npc-stats)
-                  (go top)))))
+	        (load-npc-stats)
+	        (go top)))))
       (unless victoryp
         (ignore-errors (delete-file forth))))))
 
@@ -3274,12 +3283,18 @@ code for the game's scripting engine.
 
 (defun find-npc-stats (name)
   (unless *npc-stats* (load-npc-stats))
-  (loop for npc in *npc-stats*
-        when (or (string-equal (getf npc :name) name)
-                 (member name (getf npc :nicks) :test #'string-equal))
-          do (return npc)))
+  (let ((normalized-name (string-downcase name))
+        ;; Also try with hyphens inserted before capital letters (SentinelI → sentinel-i)
+        (hyphenated-name (string-downcase 
+                          (cl-ppcre:regex-replace-all "([a-z])([A-Z])" name "\\1-\\2"))))
+    (loop for npc in *npc-stats*
+          when (or (string-equal (getf npc :name) normalized-name)
+                   (string-equal (getf npc :name) hyphenated-name)
+                   (member normalized-name (getf npc :nicks) :test #'string-equal)
+                   (member hyphenated-name (getf npc :nicks) :test #'string-equal))
+            do (return npc))))
 
-(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root))))
+(defun load-npc-stats (&optional (pathname (merge-pathnames "Source/Tables/NPCStats.ods" (uiop:getcwd))))
   "Load the NPC stats table from PATHNAME"
   (format *trace-output* "~&Reading NPC stats from “~a” …"
           (enough-namestring pathname))
@@ -3297,7 +3312,7 @@ code for the game's scripting engine.
             (length *npc-stats*))
     *npc-stats*))
 
-(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (project-root))))
+(defun load-boats (&optional (pathname (merge-pathnames "Source/Tables/Boats.ods" (uiop:getcwd))))
   "Load the registry of boats from PATHNAME"
   (unless (and *boat-ids* *boat-classes*)
     (format *trace-output* "~&Reading boats from “~a” …" (enough-namestring pathname))
@@ -3315,9 +3330,10 @@ code for the game's scripting engine.
 
 (defun find-script-id (script-moniker)
   "Find the script ID for SCRIPT-MONIKER, defined by a scene number or the hash of its name"
-  (let* ((path (mapcar #'pascal-case
+  (let* ((moniker (remove #\' script-moniker))
+         (path (mapcar #'pascal-case
                        (flatten (mapcar (curry #'split-sequence #\/)
-                                        (split-sequence #\- script-moniker)))))
+                                        (split-sequence #\- moniker)))))
          (dir (mapcar (lambda (el)
                         (pascal-case (string-trim #(#\Space #\Tab) el)))
                       (butlast path)))
@@ -3325,37 +3341,62 @@ code for the game's scripting engine.
                   (subseq dir 1)
                   dir))
          (title (string-trim #(#\Space #\Tab) (last-elt path)))
-         (pathname (make-pathname
-                    :directory (append (list :relative "Source" "Scripts") dir)
-                    :name title
-                    :type "fountain"))
+         (base-dir (append (list :relative "Source" "Scripts") dir))
+         (extensions '("fountain" "cob" "bas"))
+         (pathname (or (loop for ext in extensions
+                             for p = (make-pathname :directory base-dir
+                                                    :name title :type ext)
+                               thereis (and (probe-file p) p))
+                       (loop for ext in extensions
+                             for p = (make-pathname
+                                      :directory (list :relative "Source" "Classes")
+                                      :name title :type ext)
+                               thereis (and (probe-file p) p))
+                       (error "Could not find expected script file ~
+                                for script named “~a” (tried ~{~a~^, ~})"
+                              title
+                              (mapcan
+                               (lambda (ext)
+                                 (list (enough-namestring
+                                        (make-pathname :directory base-dir
+                                                       :name title :type ext))
+                                       (enough-namestring
+                                        (make-pathname
+                                         :directory (list :relative "Source" "Classes")
+                                         :name title :type ext))))
+                               extensions))))
          (dir-hash (ash
                     (reduce #'logxor
                             (mapcar (lambda (ch) (- (char-code ch) (char-code #\A)))
                                     (remove-if-not #'upper-case-p
                                                    (coerce (first dir) 'list))))
                     11)))
-    (unless (probe-file pathname)
-      (error "Could not find expected script file “~a” for script named “~a”"
-             (enough-namestring pathname) title))
-    (with-input-from-file (fountain pathname)
-      (loop for line = (read-line fountain nil nil)
-            while line
-            do (when-let (matches (cl-ppcre:all-matches "^(INT|EXT).*#[0-9]+#" line))
-                 (let* ((scene-number (parse-integer
-                                       (subseq line (1+ (position #\# line)))
-                                       :junk-allowed t))
-                        (id (logior dir-hash scene-number)))
-                   (check-type scene-number (integer 0 #x7ff)
-                               "a scene number integer between 0 and 2,047")
-                   (format *trace-output*
-                           "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
-                           dir title scene-number dir-hash id)
-                   (return-from find-script-id id))))
-      (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
-        (format *trace-output* "~&//* Script “~a” is scene ~:d in locale ~:d; id $~4,'0x"
-                script-moniker (logand #x7ff id) dir-hash id)
-        id))))
+    (if (string-equal "fountain" (pathname-type pathname))
+        (with-input-from-file (fountain pathname)
+          (loop for line = (read-line fountain nil nil)
+                while line
+                do (when-let (matches (cl-ppcre:all-matches "^(INT|EXT).*#[0-9]+#" line))
+                     (let* ((scene-number (parse-integer
+                                           (subseq line (1+ (position #\# line)))
+                                           :junk-allowed t))
+                            (id (logior dir-hash scene-number)))
+                       (check-type scene-number (integer 0 #x7ff)
+                                   "a scene number integer between 0 and 2,047")
+                       (format *trace-output*
+                               "~&//* Script “~{~a/~}~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                               dir title scene-number dir-hash id)
+                       (return-from find-script-id id))))
+          (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
+            (format *trace-output*
+                    "~&//* Script “~a” is scene ~:d in locale ~:d; id $~4,'0x"
+                    script-moniker (logand #x7ff id) dir-hash id)
+            id))
+        (let ((id (logior dir-hash (logand #x7ff (sxhash title)))))
+          (format *trace-output*
+                  "~&//* Script “~a” (from ~a) is scene ~:d in locale ~:d; id $~4,'0x"
+                  script-moniker (enough-namestring pathname)
+                  (logand #x7ff id) dir-hash id)
+          id))))
 
 
 
@@ -3424,8 +3465,8 @@ code for the game's scripting engine.
 (defmethod output-actor-value (actor (column (eql :character-equipment)))
   (format nil "~10t.byte Equip~a" (pascal-case (or (getf actor :equipment) "None"))))
 
-(defmethod output-actor-value (actor (column (eql :character-armor-class)))
-  (format nil "~10t.byte ~3d" (or (getf actor :armor-class) 10)))
+(defmethod output-actor-value (actor (column (eql :character-armor)))
+  (format nil "~10t.byte ~3d" (or (getf actor :ac) 10)))
 
 (defmethod output-actor-value (actor (column (eql :character-inventory)))
   (format nil "~10t.dword 0, 0"))
@@ -3460,17 +3501,23 @@ code for the game's scripting engine.
 
 (defmethod output-actor-value (actor (column (eql :character-speech-pitch)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-pitch) 90))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-pitch) :voice-pitch
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-bend)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-bend) 5))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-bend) :voice-bend
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-speed)))
   (if (speech-supported-p)
-      (format nil "~10t.byte ~d" (or (getf actor :speech-speed) 90))
+      (format nil "~10t.byte ~d"
+              (npc-interpret-field (getf actor :voice-speed) :voice-speed
+                                   :name (getf actor :name)))
       ""))
 
 (defmethod output-actor-value (actor (column (eql :character-speech-color)))
@@ -3504,7 +3551,7 @@ code for the game's scripting engine.
                     character-skin-color character-hair-color
                     character-clothes-color character-head character-body
                     character-shield character-equipment
-                    character-armor-class character-crowns
+                    character-armor character-crowns
                     character-arrows character-potions
                     character-character-i-d character-speech-pitch
                     character-speech-bend character-speech-speed
@@ -3557,49 +3604,53 @@ ActorClassSize:
   "Write the prototype data for NPCs to ActorPrototypes.s"
   (format *trace-output* "~&Writing NPC prototypes to ActorPrototypes.s…")
   (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-    (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (project-root))
+    (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
+    (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "ActorPrototypes.s") (uiop:getcwd))
                                             :if-exists :supersede)
       (print-actor-prototypes))
     (format *trace-output* " …done.")))
 
 (defun write-character-ids ()
-  (progn
-    "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
-    (format *trace-output* "~&Writing CharacterIDs.s …")
-    (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-      (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-      (with-output-to-file (*standard-output* (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.s") (project-root))
-                                              :if-exists :supersede)
-        (format t "~&;;; Generated character ID data from NPC Stats file~2%")
-        (dolist (actor (load-npc-stats))
-          (destructuring-bind (&key name character-id
-                               &allow-other-keys)
-              actor
-            (unless (member name '(player narrator) :test 'string-equal)
-              (when (> (length (string name)) 12)
-                (let ((trunc (subseq (string name) 0 12)))
-                  (cerror (format nil "Continue with truncated name “~a”" trunc)
-                          "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
-                          name name (length (string name)))
-                  (setf name trunc)))
-              (format t "~%~10tCharacterID_~a = $~2,'0x"
-                      (pascal-case (string name)) character-id))))
-        (format *trace-output* " …done."))
+  "Write the character IDs enumeration CharacterIDs.s and CharacterIDs.forth"
+  (format *trace-output* "~&Writing CharacterIDs.s …")
+  (ensure-directories-exist (make-pathname
+                             :directory (list :relative "Source" "Generated"
+                                              (machine-directory-name))
+                             :name "CharacterIDs" :type "s"))
+  (with-output-to-file (*standard-output* (make-pathname
+                                           :directory (list :relative "Source" "Generated"
+                                                            (machine-directory-name))
+                                           :name "CharacterIDs" :type "s")
+                                          :if-exists :supersede)
+    (format t "~&;;; Generated character ID data from NPC Stats file~2%")
+    (dolist (actor (load-npc-stats))
+      (destructuring-bind (&key name character-id
+		       &allow-other-keys)
+          actor
+        (unless (member name '(player narrator) :test 'string-equal)
+          (when (> (length (string name)) 12)
+            (let ((trunc (subseq (string name) 0 12)))
+              (cerror (format nil "Continue with truncated name “~a”" trunc)
+                      "Name ~s is too long, limit is 12 characters, ~s is ~:d character~:p"
+                      name name (length (string name)))
+              (setf name trunc)))
+          (format t "~%~10tCharacterID_~a = $~2,'0x"
+                  (pascal-case (string name)) character-id))))
+    (format *trace-output* " …done."))
 
-      (format *trace-output* "~&Writing CharacterIDs.forth …")
-      (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-        (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-        (with-output-to-file (*standard-output*
-                              (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
-                                               (project-root))
-                              :if-exists :supersede)
-          (format t "~& ( Generated character ID data from NPC Stats file )~2%")
-          (dolist (actor (load-npc-stats))
-            (destructuring-bind (&key name character-id
-                                 &allow-other-keys)
-                actor
-              (unless (member name '(player narrator) :test 'string-equal)
-                (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
-                        (pascal-case (string name)) character-id))))
-          (format *trace-output* " …done.~%"))))))
+  (format *trace-output* "~&Writing CharacterIDs.forth …")
+  (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
+    (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
+    (with-output-to-file (*standard-output*
+                          (merge-pathnames (concatenate 'string machine-dir "CharacterIDs.forth")
+                                           (uiop:getcwd))
+                          :if-exists :supersede)
+      (format t "~& ( Generated character ID data from NPC Stats file )~2%")
+      (dolist (actor (load-npc-stats))
+        (destructuring-bind (&key name character-id
+                             &allow-other-keys)
+            actor
+          (unless (member name '(player narrator) :test 'string-equal)
+            (format t "~%: CharacterID_~a ~d ( ~:*$~2,'0x ) ;"
+                    (pascal-case (string name)) character-id))))
+      (format *trace-output* " …done.~%"))))

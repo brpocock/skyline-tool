@@ -131,163 +131,6 @@ Number if parseable, otherwise NIL
               (invalid-number ())
               (sb-int:simple-parse-error ())))))
 
-(defun compile-enemies (&optional (pathname (merge-pathnames "Source/Tables/EnemyStats.ods" (project-root)))
-                                  (output-pathname (merge-pathnames (format nil "Source/Generated/~a/EnemyTables.s" (skyline-tool::machine-directory-name))
-                                                                    (project-root)))
-                                  index-pathname)
-  "Compile enemy statistics from spreadsheet into assembly source.
-
-Processes enemy stat data from an ODS spreadsheet and generates assembly
-code for game enemy definitions, including an index file for lookup.
-
-@table @asis
-@item PATHNAME
-Path to enemy stats ODS file (default: Source/Tables/EnemyStats.ods)
-@item OUTPUT-PATHNAME
-Path for generated assembly file (default: platform-specific EnemyTables.s)
-@item INDEX-PATHNAME
-Optional path for index file (default: Enemies.index alongside output)
-@end table
-
-@xref{fun:read-ods-into-lists}, @xref{fun:ss->lol}."
-  (unless index-pathname
-    (setf index-pathname (make-pathname :defaults output-pathname
-                                        :name "Enemies" :type "index")))
-  (format *trace-output* "~&Reading enemies stats sheets in ~a … "
-          (enough-namestring pathname))
-  (finish-output *trace-output*)
-  (let ((sheet (read-ods-into-lists pathname)))
-    (let* ((enemy-stats (first sheet))
-           (enemy-art (second sheet))
-           (data (ss->lol enemy-stats))
-           (art (ss->lol enemy-art)))
-      (with-output-to-file (output output-pathname :if-exists :supersede)
-        (with-output-to-file (index index-pathname :if-exists :supersede)
-          (format *trace-output* "writing ~a and ~a …"
-                  (enough-namestring output-pathname)
-                  (enough-namestring index-pathname))
-          (finish-output *trace-output*)
-          (format output ";;; Generated from ~a~2%Enemies: .block~%"
-                  (enough-namestring pathname))
-          (format output "~%~10t;; Order of enemies:~{~%~10t;; $~2,'0x = ~a~}"
-                  (loop for record in data
-                        for i from 0
-                        append (list i (getf record :enemy))))
-          (format index "~{~2,'0x~a~%~}"
-                  (loop for record in data
-                        for i from 0
-                        append (list i (getf record :enemy))))
-          (format output "~%Levels:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :level))
-                                     (getf record :enemy))))
-          (format output "~%HitPoints:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :hit-points))
-                                     (getf record :enemy))))
-          (format output "~%Flags:~{~%~10t.byte 0 ~@[| UNDEAD~]~40t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :undead-p)
-                                     (getf record :enemy))))
-          (format output "~%TouchDamage:~{~%~10t.byte ~d~20t; ~a~}"
-                  (loop for record in data
-                        append (list (number? (getf record :touch-damage))
-                                     (getf record :enemy))))
-          (format output "~%Attack:~{~%~10t.byte ~:[0~;~:*Attack~a~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :attack)
-                                     (getf record :enemy))))
-          (format output "~%ProjectileRate:~{~%~10t.byte ~:[0~;~:*~d~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :projectile-rate)
-                                     (getf record :enemy))))
-          (format output "~%Projectile:~{~%~10t.byte ~:[0~;~:*Projectile~a~]~20t; ~a~}"
-                  (loop for record in data
-                        append (list (getf record :projectile)
-                                     (getf record :enemy))))
-          (format output "~2%~10t.bend~%")))))
-  (format *trace-output* " Done.~%"))
-
-(defun compile-item-drops (&optional (pathname (merge-pathnames "Source/Tables/ItemDrop.ods" (project-root)))
-                                     (output-pathname
-                                      (merge-pathnames (format nil "Source/Generated/~a/ItemDropTable.s" (skyline-tool::machine-directory-name))
-                                                      (project-root))))
-  "Compile the item drop tables from PATHNAME into OUTPUT-PATHNAME.
-
-@table @asis
-@item PATHNAME
-Path to the ODS file containing item drop data.
-@item OUTPUT-PATHNAME
-Path where the generated assembly file will be written.
-@end table
-
-Reads item drop tables from an ODS spreadsheet and generates assembly code."
-  (format *trace-output* "~&Reading item drops sheets in ~a … "
-          (enough-namestring pathname))
-  (unless (probe-file pathname)
-    (error "Item drop source file ~a not found" pathname))
-  (let ((sheet (read-ods-into-lists pathname)))
-    (destructuring-bind (enemies-page tiles-page) sheet
-      (let* ((enemies-drops (ss->lol enemies-page))
-             (tiles-drops (ss->lol tiles-page)))
-        (with-output-to-file (output output-pathname :if-exists :supersede)
-          (format *trace-output* "writing ~a … " (enough-namestring output-pathname))
-          (finish-output *trace-output*)
-          (format output ";;; Generated from ~a~2%EnemiesDrops: .block~%"
-                  (enough-namestring pathname))
-          (format output "~%Level:
-~10t.byte ~{~,3d~^, ~,3d~^, ~,3d~^, ~,3d~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop) (number? (getf drop :enemy-level)))
-                          enemies-drops))
-          (format output "~%Combo:
-~10t.byte ~{~3d~^, ~3d~^, ~3d~^, ~3d~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop) (number? (getf drop :combo)))
-                          enemies-drops))
-          (format output "~%Chance:
-~10t.byte ~{$~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^~%~10t.byte ~}"
-                  (mapcar (lambda (drop)
-                            (or (when-let (n (number? (getf drop :chance)))
-                                  (floor (* #x100 n) #x100))
-                                0))
-                          enemies-drops))
-          (format output "~%Item:~{~%~10t.byte Item~a ~}"
-                  (mapcar (lambda (drop) (getf drop :item))
-                          enemies-drops))
-          (format output "~%Flags:~{~%~10t.byte 0~@[ | ITEM_HEALING ~]~}"
-                  (mapcar (lambda (drop) (number? (getf drop :ihealing-p)))
-                          enemies-drops))
-          (format output "~%~10t.bend")
-          (format output "~2%TilesDrops:~{~%;;; ~{ ~a: ~s~^, ~}~}" tiles-drops)))))
-  (format *trace-output* "Done.~%"))
-
-(defun compile-shops (&optional (pathname (merge-pathnames "Source/Tables/Shops.ods" (project-root)))
-                                (output-pathname (merge-pathnames (format nil "Source/Generated/~a/ShoppingTable.s" (skyline-tool::machine-directory-name))
-                                                                 (project-root))))
-  "Compile the shopping tables from PATHNAME into OUTPUT-PATHNAME.
-
-@table @asis
-@item PATHNAME
-Path to the ODS file containing shopping data.
-@item OUTPUT-PATHNAME
-Path where the generated assembly file will be written.
-@end table
-
-Reads shop tables from an ODS spreadsheet and generates assembly code."
-  (format *trace-output* "~&Reading shopping sheets in ~a … "
-          (enough-namestring pathname))
-  (let* ((sheet (read-ods-into-lists pathname))
-         (page1 (first sheet))
-         (data (ss->lol page1)))
-    (with-output-to-file (output output-pathname :if-exists :supersede)
-      (format *trace-output* "writing ~a … " (enough-namestring output-pathname))
-      (finish-output *trace-output*)
-      (format output ";;; Generated from ~a~%;;; Shopping Tables:~%"
-              (enough-namestring pathname))
-      (format output "~%Shopping: .block")
-      (format output "~{~%~{~%;;; ~:(~a~): ~^~s~}~}" data)
-      (format output "~%~10t.bend")))
-  (format *trace-output* "Done.~%"))
-
 (defun write-projection-tables.s ()
   "Writes Source/Generated/$(PORT)/ProjectionTables.s database.
 This contains pre-computed sine and cosine values of various kinds for the 3D projection subsystem."
@@ -308,79 +151,79 @@ This contains pre-computed sine and cosine values of various kinds for the 3D pr
                  "θ")
                 "φ"))))
     (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-      (ensure-directories-exist (merge-pathnames machine-dir (project-root)))
-      (with-output-to-file (projection-tables.csv (merge-pathnames (concatenate 'string machine-dir "ProjectionTables.csv") (project-root))
-        :if-exists :supersede)
-        (with-output-to-file (projection-tables.s (merge-pathnames (concatenate 'string machine-dir "ProjectionTables.s") (project-root))
-                                                :if-exists :supersede)
-        (format projection-tables.s ";;; ProjectionTables.s
+      (ensure-directories-exist (merge-pathnames machine-dir (uiop:getcwd)))
+      (with-output-to-file (projection-tables.csv (merge-pathnames (concatenate 'string machine-dir "ProjectionTables.csv") (uiop:getcwd))
+                                                  :if-exists :supersede)
+        (with-output-to-file (projection-tables.s (merge-pathnames (concatenate 'string machine-dir "ProjectionTables.s") (uiop:getcwd))
+                                                  :if-exists :supersede)
+          (format projection-tables.s ";;; ProjectionTables.s
 ;;; Generated by Skyline Tool, editing is futile.~2%
 ProjectionTables:~20t.block")
-        (let* ((mu #x08) (nu #x10)
-               (phi (atan (/ 1 100.0)))
-               (long-tables (list :cos-theta-dx (list)
-                                  :sin-theta-dz (list)
-                                  :cos-theta-sin-phi-dx (list)
-                                  :sin-theta-sin-phi-dz (list)))
-               (short-tables (list :cos-theta (list)
-                                   :sin-theta (list)
-                                   :cos-theta-sin-phi (list)
-                                   :sin-theta-sin-phi (list))))
-          (format projection-tables.s "~&~10tMu = $~2,'0x~%~10tNu = $~2,'0x~%~20t.bend" mu nu)
-          (format projection-tables.s "
+          (let* ((mu #x08) (nu #x10)
+                           (phi (atan (/ 1 100.0)))
+                           (long-tables (list :cos-theta-dx (list)
+                                              :sin-theta-dz (list)
+                                              :cos-theta-sin-phi-dx (list)
+                                              :sin-theta-sin-phi-dz (list)))
+                           (short-tables (list :cos-theta (list)
+                                               :sin-theta (list)
+                                               :cos-theta-sin-phi (list)
+                                               :sin-theta-sin-phi (list))))
+            (format projection-tables.s "~&~10tMu = $~2,'0x~%~10tNu = $~2,'0x~%~20t.bend" mu nu)
+            (format projection-tables.s "
 ~10t.if floor(Phi * 1000) != ~d
 ~12t.error format(\"Phi value, expected about %f, got %f\", ~f, Phi)
 ~10t.fi"
-                  (floor (* 1000 phi)) phi)
-          (dotimes (theta-i (/ #x100 mu))
-            (let* ((theta-brads (* theta-i mu))
-                   (theta-rads (* (/ theta-brads #x100) 2.0d0 pi)))
-              (format projection-tables.csv "~&Function,θ brads,θ rads,θ°,,,float,fixed")
-              (loop for (table value)
-                      on (list :cos-theta (cos theta-rads)
-                               :sin-theta (sin theta-rads)
-                               :cos-theta-sin-phi (* (cos theta-rads) (sin phi))
-                               :sin-theta-sin-phi (* (sin theta-rads) (sin phi)))
-                    by #'cddr
-                    do (appendf (getf short-tables table) (list value))
-                    do (format projection-tables.csv
-                               "~&~:(~20@a~),$~2,'0x,~6fπ,~6f°,,,~6f,~{$~2,'0x.~2,'0x~}"
-                               (beautify-name table)
-                               theta-brads (rationalize (/ theta-rads pi)) (* 180 (/ theta-rads pi))
-                               value (fixed-8.8 value :note (list table theta-brads))))
-              (format projection-tables.csv "~&Function,θ brads,θ rads,θ°,x|z,x|z,float,fixed")
-              (dotimes (xz-i (/ #x80 nu))
-                (let ((xz (* xz-i nu)))
-                  (loop for (table value)
-                          on (list :cos-theta-dx (* (cos theta-rads) xz)
-                                   :sin-theta-dz (* (sin theta-rads) xz)
-                                   :cos-theta-sin-phi-dx (* (cos theta-rads) (sin phi) xz)
-                                   :sin-theta-sin-phi-dz (* (sin theta-rads) (sin phi) xz))
-                        by #'cddr
-                        do (unless (getf (getf long-tables table) theta-i)
-                             (appendf (getf long-tables table) (list theta-i (list))))
-                        do (format projection-tables.csv
-                                   "~&~:(~20@a~),$~2,'0x,~6fπ,~6f°,$~2,'0x,~3d,~6f,~{$~2,'0x.~2,'0x~}"
-                                   (beautify-name table)
-                                   theta-brads (rationalize (/ theta-rads pi)) (* 180 (/ theta-rads pi))
-                                   xz xz
-                                   value (fixed-8.8 value :note (list table theta-brads xz)))
-                        do (appendf (getf (getf long-tables table) theta-i)
-                                    (list value)))))))
-          (loop for (table values) on short-tables by #'cddr
-                do (format projection-tables.s "
+                    (floor (* 1000 phi)) phi)
+            (dotimes (theta-i (/ #x100 mu))
+              (let* ((theta-brads (* theta-i mu))
+                     (theta-rads (* (/ theta-brads #x100) 2.0d0 pi)))
+                (format projection-tables.csv "~&Function,θ brads,θ rads,θ°,,,float,fixed")
+                (loop for (table value)
+                        on (list :cos-theta (cos theta-rads)
+                                 :sin-theta (sin theta-rads)
+                                 :cos-theta-sin-phi (* (cos theta-rads) (sin phi))
+                                 :sin-theta-sin-phi (* (sin theta-rads) (sin phi)))
+                      by #'cddr
+                      do (appendf (getf short-tables table) (list value))
+                      do (format projection-tables.csv
+                                 "~&~:(~20@a~),$~2,'0x,~6fπ,~6f°,,,~6f,~{$~2,'0x.~2,'0x~}"
+                                 (beautify-name table)
+                                 theta-brads (rationalize (/ theta-rads pi)) (* 180 (/ theta-rads pi))
+                                 value (fixed-8.8 value :note (list table theta-brads))))
+                (format projection-tables.csv "~&Function,θ brads,θ rads,θ°,x|z,x|z,float,fixed")
+                (dotimes (xz-i (/ #x80 nu))
+                  (let ((xz (* xz-i nu)))
+                    (loop for (table value)
+                            on (list :cos-theta-dx (* (cos theta-rads) xz)
+                                     :sin-theta-dz (* (sin theta-rads) xz)
+                                     :cos-theta-sin-phi-dx (* (cos theta-rads) (sin phi) xz)
+                                     :sin-theta-sin-phi-dz (* (sin theta-rads) (sin phi) xz))
+                          by #'cddr
+                          do (unless (getf (getf long-tables table) theta-i)
+                               (appendf (getf long-tables table) (list theta-i (list))))
+                          do (format projection-tables.csv
+                                     "~&~:(~20@a~),$~2,'0x,~6fπ,~6f°,$~2,'0x,~3d,~6f,~{$~2,'0x.~2,'0x~}"
+                                     (beautify-name table)
+                                     theta-brads (rationalize (/ theta-rads pi)) (* 180 (/ theta-rads pi))
+                                     xz xz
+                                     value (fixed-8.8 value :note (list table theta-brads xz)))
+                          do (appendf (getf (getf long-tables table) theta-i)
+                                      (list value)))))))
+            (loop for (table values) on short-tables by #'cddr
+                  do (format projection-tables.s "
 ~aL:
 ~{~&~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x,  $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}
 ~aH:
 ~{~&~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x,  $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}"
-                           (cl-change-case:pascal-case (symbol-name table))
-                           (mapcar (lambda (n) (second (fixed-8.8 n)))
-                                   values)
-                           (cl-change-case:pascal-case (symbol-name table))
-                           (mapcar (lambda (n) (first (fixed-8.8 n)))
-                                   values)))
-          (loop for (table theta-values) on long-tables by #'cddr
-                do (format projection-tables.s "
+                             (cl-change-case:pascal-case (symbol-name table))
+                             (mapcar (lambda (n) (second (fixed-8.8 n)))
+                                     values)
+                             (cl-change-case:pascal-case (symbol-name table))
+                             (mapcar (lambda (n) (first (fixed-8.8 n)))
+                                     values)))
+            (loop for (table theta-values) on long-tables by #'cddr
+                  do (format projection-tables.s "
 ~aLThetaL:
 ~{~&~10t.byte <(~aL_Theta_eql_~2,'0x)~}~0@*
 ~aLThetaH:
@@ -390,24 +233,24 @@ ProjectionTables:~20t.block")
 ~aHThetaH:
 ~{~&~10t.byte >(~aH_Theta_eql_~2,'0x)~}
 "
-                           (cl-change-case:pascal-case (symbol-name table))
-                           (loop for (theta-i values) on theta-values by #'cddr
-                                 append (list (cl-change-case:pascal-case (symbol-name table))
-                                              theta-i)))
-                do (loop for (theta-i values) on theta-values by #'cddr
-                         do (format projection-tables.s "
+                             (cl-change-case:pascal-case (symbol-name table))
+                             (loop for (theta-i values) on theta-values by #'cddr
+                                   append (list (cl-change-case:pascal-case (symbol-name table))
+                                                theta-i)))
+                  do (loop for (theta-i values) on theta-values by #'cddr
+                           do (format projection-tables.s "
 ~aL_Theta_eql_~2,'0x:
 ~{~&~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x,  $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}
 ~aH_Theta_eql_~2,'0x:
 ~{~&~10t.byte $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x,  $~2,'0x, $~2,'0x, $~2,'0x, $~2,'0x~}"
-                                    (cl-change-case:pascal-case (symbol-name table))
-                                    theta-i
-                                    (mapcar (lambda (n) (second (fixed-8.8 n)))
-                                            values)
-                                    (cl-change-case:pascal-case (symbol-name table))
-                                    theta-i
-                                    (mapcar (lambda (n) (first (fixed-8.8 n)))
-                                            values))))))))
+                                      (cl-change-case:pascal-case (symbol-name table))
+                                      theta-i
+                                      (mapcar (lambda (n) (second (fixed-8.8 n)))
+                                              values)
+                                      (cl-change-case:pascal-case (symbol-name table))
+                                      theta-i
+                                      (mapcar (lambda (n) (first (fixed-8.8 n)))
+                                              values))))))))
     (format *trace-output* " Done.~%")))
 
 (defun debug-projection (dx dz cx cz theta-brads)
@@ -432,9 +275,9 @@ ProjectionTables:~20t.block")
 (defun fixed-display (fixed)
   (format nil "~{~2,'0x.~2,'0x~}" fixed))
 
-(defun write-inventory-tables (&optional (source-text (merge-pathnames "Source/Tables/Inventory.txt" (project-root)))
-                                         (source-code (merge-pathnames (format nil "Source/Generated/~a/InventoryLabels.s" (skyline-tool::machine-directory-name))
-                                                                       (project-root)))
+(defun write-inventory-tables (&optional (source-text (merge-pathnames "Source/Tables/Inventory.txt" (uiop:getcwd)))
+                                         (source-code (merge-pathnames (format nil "Source/Generated/~a/InventoryLabels.s" (machine-directory-name))
+                                                                       (uiop:getcwd)))
                                          (label "Item"))
   "Collect the names of all inventory items and write them out"
   (format *trace-output* "~&Reading inventory ~(~a~) names from ~a…"
@@ -503,9 +346,10 @@ GameFlag: .block~2%"
                    (format code "~%~10t.bend~% ;;; end of file~%")
                    (format forth "~%( end of file )~%")))))))
 
-(defun write-characters-tables (&optional (spreadsheet-pathname (merge-pathnames "Source/Tables/NPCStats.ods" (project-root)))
-                                          (source-pathname (merge-pathnames (format nil "Source/Generated/~a/CharacterTables.s" (skyline-tool::machine-directory-name))
-                                                                           (project-root))))
+(defun write-characters-tables
+    (&optional (spreadsheet-pathname #p"Source/Tables/NPCStats.ods")
+               (source-pathname (format nil "Source/Generated/~a/CharacterTables.s"
+                                        (machine-directory-name)))) 
   "Write character tables from SPREADSHEET-PATHNAME to SOURCE-PATHNAME.
 
 SPREADSHEET-PATHNAME: Path to the NPC stats spreadsheet (default: Source/Tables/NPCStats.ods)
@@ -514,8 +358,8 @@ SOURCE-PATHNAME: Output path for the generated source file"
           (enough-namestring spreadsheet-pathname))
   (finish-output *trace-output*)
   (let ((*npc-stats* (list)))
-    (push (list :name "Player" :kind "Player") *npc-stats*)
-    (push (list :name "Narrator" :kind "Narrator") *npc-stats*)
+    (push (list :name "Player") *npc-stats*)
+    (push (list :name "Narrator") *npc-stats*)
     (load-npc-stats spreadsheet-pathname)
     (with-output-to-file (source source-pathname :if-exists :supersede)
       (format *trace-output* "writing ~a … " (enough-namestring source-pathname))
@@ -549,24 +393,138 @@ SOURCE-PATHNAME: Output path for the generated source file"
                                   (getf char :name)))))
       (format *trace-output* " done."))))
 
-(defun write-docks-index
-    (&optional (pathname (merge-pathnames (format nil "Source/Generated/~a/DocksIndex.s"
-                                                  (machine-directory-name))
-                                          (project-root))))
-  "Write the dock IDs from the maps index to PATHNAME"
+(defun find-dock-in-tmx (locale-name &optional dock-name)
+  "Find a dock object in the TMX file for LOCALE-NAME.
+Searches all object groups for an object with type=\"Dock\".
+When DOCK-NAME is provided, also filters on the object's name.
+Returns (values tether-x tether-y) in tile units
+(pixel coordinates divided by 16)."
+  (declare (ignore dock-name))
+  (let ((xml (load-other-map locale-name)))
+    (dolist (object-group (xml-matches "objectgroup" xml))
+      (dolist (object (xml-matches "object" object-group))
+        (let ((type (xml-attr "type" (second object)))
+              (x (xml-attr "x" (second object)))
+              (y (xml-attr "y" (second object))))
+          (when (and type (string-equal type "Dock"))
+            (return-from find-dock-in-tmx
+              (values (floor (parse-number:parse-number x) 16)
+                      (floor (parse-number:parse-number y) 16)))))))
+    ;; No Dock object found — default to 4 tiles from the right edge, midline
+    (let* ((map-attrs (second xml))
+           (map-width (parse-number (xml-attr "width" map-attrs)))
+           (map-height (parse-number (xml-attr "height" map-attrs)))
+           (default-x (- map-width 4))
+           (default-y (floor map-height 2)))
+      (values default-x default-y))))
+
+(defun read-flag-index (flag-name)
+  "Read Flags.txt and return the 0-based line index of FLAG-NAME.
+Comparison is case-insensitive.  Returns 0 when FLAG-NAME is nil or
+blank (always-visible flag).  Signals an error when the flag name is
+not found in the file."
+  (if (or (null flag-name)
+          (emptyp (string-trim '(#\Space #\Tab) (string flag-name))))
+      nil
+      (let ((pathname (merge-pathnames #p"Source/Tables/Flags.txt"
+                                       (uiop:getcwd))))
+        (with-open-file (stream pathname :direction :input)
+          (loop for line = (read-line stream nil nil)
+                for i from 0
+                while line
+                for trimmed = (string-trim '(#\Space #\Tab #\Return #\Newline) line)
+                do (when (string-equal (header-case trimmed) (header-case flag-name))
+                     (return i))
+                finally (error "Flag ~s not found in ~a"
+                               flag-name pathname))))))
+
+(defun write-sea-chart-docks-index
+    (&optional (pathname (merge-pathnames
+                          (format nil "Source/Generated/~a/Docks.s"
+                                  (machine-directory-name))
+                          (uiop:getcwd)))
+               (spreadsheet (merge-pathnames #p"Source/Tables/SeaChartDocks.ods"
+                                             (uiop:getcwd))))
+  "Read dock locations from SPREADSHEET and write 7800 assembly to PATHNAME.
+Reads the SeaChartDocks.ods spreadsheet (first sheet), looks up each
+dock's map ID from the maps index, finds tether coordinates from the
+locale TMX file, resolves flag indices from Flags.txt, and generates
+a 64tass assembly file describing dock cursor positions and warps."
+  (format *trace-output* "~&Reading sea chart docks from ~a …"
+          (enough-namestring spreadsheet))
+  (finish-output *trace-output*)
   (read-map-ids-table)
-  (let ((max-dock-id (loop for dock-id being the hash-keys of *dock-ids-maps*
-                           maximize dock-id into max-dock-id
-                           finally (return max-dock-id))))
+  (let* ((raw (first (read-ods-into-lists spreadsheet)))
+         (table (and raw (ss->lol raw)))
+         (docks (and table
+                     (loop for row in table
+                           for locale = (getf row :island)
+                           for map-name = (getf row :map)
+                           for sea-chart-x = (getf row :chart-x)
+                           for sea-chart-y = (getf row :chart-y)
+                           for island-name = (getf row :island)
+                           for flag-name = (getf row :flag)
+                           when (and locale map-name
+                                     (not (emptyp (string locale)))
+                                     (not (emptyp (string map-name))))
+                             collect (list :locale locale
+                                           :map-name map-name
+                                           :sea-chart-x sea-chart-x
+                                           :sea-chart-y sea-chart-y
+                                           :island-name island-name
+                                           :flag-name flag-name)))))
+    (assert docks)
+    (format *trace-output* " … read ~:d dock~:p …" (length docks))
+    (finish-output *trace-output*)
     (with-output-to-file (code pathname :if-exists :supersede)
-      (loop for i from 1 upto max-dock-id
-            for name = (gethash i *dock-ids-maps* "untitled")
-            do (format code "~%DockName~d: .ptext \"~a\""
-                       i
-                       (cl-change-case:lower-case (gethash name *maps-display-names* "untitled"))))
-      (format code "~2%~10tDockNames = (~{DockName~d~^, ~})"
-              (loop for i from 1 upto max-dock-id collecting i))
-      (format code "~2%DockNameL: <(DockNames)~%DockNameH: >(DockNames)"))))
+      (format code ";;; Generated from ~a~2%;;; Sea Chart Dock Index~2%"
+              (enough-namestring spreadsheet))
+      (format code "~2%Docks: .block")
+      (format code "~2%MapID:")
+      (dolist (dock docks)
+        (format code "~%~10t.byte $~2,'0x~32t; ~a/~a"
+                (gethash (format nil "~a/~a"
+                                 (pascal-case (getf dock :locale-name))
+                                 (pascal-case (getf dock :map-name)))
+                         *maps-index*)
+                (getf dock :locale) (getf dock :map-name)))
+      (format code "~2%Name:")
+      (dolist (dock docks)
+        (format code "~%~10t.ftext 20, \"~a\""
+                (string-trim #(#\space #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+                             (getf dock :map-name))))
+      (format code "~2%Flag:")
+      (dolist (dock docks)
+        (if-let (flag-id (read-flag-index (getf dock :flag-name)))
+          (format code "~%~10t.byte $~2,'0x~32t; ~a … ~a"
+                  flag-id
+                  (getf dock :flag-name)
+                  (getf dock :locale-name))
+          (format code "~%~10t.byte 0~32t; — (~a)"
+                  (getf dock :locale-name))))
+      (format code "~2%TetherX:")
+      (dolist (dock docks)
+        (multiple-value-bind (tether-x tether-y)
+            (find-dock-in-tmx (format nil "~a/~a"
+                                      (pascal-case (getf dock :locale-name))
+                                      (pascal-case (getf dock :map-name))))
+          (declare (ignore tether-y))
+          (format code "~%~10t.byte ~d~32t; ~a"
+                  (parse-integer (string tether-x))
+                  (getf dock :locale-name))))
+      (format code "~2%TetherY:")
+      (dolist (dock docks)
+        (multiple-value-bind (tether-x tether-y)
+            (find-dock-in-tmx (format nil "~a/~a"
+                                      (pascal-case (getf dock :locale-name))
+                                      (pascal-case (getf dock :map-name))))
+          (declare (ignore tether-x))
+          (format code "~%~10t.byte ~d~32t; ~a"
+                  (parse-integer (string tether-y))
+                  (getf dock :locale-name)))        )
+      (format code "~2%~10t.bend~%")
+      (format code "~2%NumDocks = ~d" (length docks)))
+    (format *trace-output* " wrote ~a." (enough-namestring pathname))))
 
 (defun parse-number-or-fraction (value)
   "Parse VALUE as a number, supporting integers, decimals, and fractions (e.g. 20/3).
@@ -836,78 +794,351 @@ INPUT & OUTPUT pathnames can be given."
                   (title-case (getf row :instrument))))
         (format out "~2%;;; End of Orchestration~2%")))))
 
+(defun read-equipment-stats ()
+  (remove-if-not (lambda (record)
+                   (loop for (key value) on record
+                         by #'cddr
+                         unless (str:blankp value)
+                           return t
+                         finally (return nil)))
+                 (ss->lol (first (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))))
+
+;;; 
+;;; Resource Reader Functions — read data sources into plists for scavengers
+;;; 
+
+(defun read-boats-data ()
+  "Read Boats.ods and return a list of boat property lists."
+  (ss->lol (first (read-ods-into-lists #p"Source/Tables/Boats.ods"))))
+
+(defun read-character-stats ()
+  "Read NPCStats.ods and return a list of character property lists."
+  (let ((lol (ss->lol (first (read-ods-into-lists #p"Source/Tables/NPCStats.ods")))))
+    (loop for i from 0 below (length lol)
+          do (setf (getf (elt lol i) :character-id) i
+                   (getf (elt lol i) :nicks)
+                   (remove-if #'null
+                              (mapcar (lambda (n)
+                                        (and n (string-trim " " n)))
+                                      (split-sequence #\,
+                                                      (getf (elt lol i) :nicks))))))
+    (remove-if (lambda (char) (emptyp (getf char :name))) lol)))
+
+(defun read-instrument-data ()
+  "Read Instruments.ods and return a list of instrument property lists.
+Returns NIL if the file does not exist."
+  (let ((path #p"Source/Tables/Instruments.ods"))
+    (when (probe-file path)
+      (ss->lol (first (read-ods-into-lists path))))))
+
+(defun read-flag-data ()
+  "Read Flags.txt and return a list of flag property lists."
+  (let ((path #p"Source/Tables/Flags.txt"))
+    (when (probe-file path)
+      (with-open-file (f path :direction :input)
+        (loop for line = (read-line f nil nil)
+              for i from 0
+              while line
+              for trimmed = (string-trim +whitespace+ line)
+              unless (emptyp trimmed)
+                collect (list :name trimmed :index i))))))
+
+(defun read-key-data ()
+  "Read Keys.txt and return a list of key property lists."
+  (let ((path #p"Source/Tables/Keys.txt"))
+    (when (probe-file path)
+      (with-open-file (f path :direction :input)
+        (loop for line = (read-line f nil nil)
+              for i from 0
+              while line
+              for trimmed = (string-trim +whitespace+ line)
+              unless (emptyp trimmed)
+                collect (list :name trimmed :index i))))))
+
+(defun read-atari-vox-dictionary-data ()
+  "Read SpeakJet.dic and return a single plist describing the dictionary file.
+Returns NIL if the file does not exist."
+  (let ((path #p"Source/Tables/SpeakJet.dic"))
+    (when (probe-file path)
+      (let ((word-count 0))
+        (with-open-file (f path :direction :input)
+          (loop for line = (read-line f nil nil)
+                while line
+                for trimmed = (string-trim +whitespace+ line)
+                when (and (not (emptyp trimmed))
+                          (char/= #\# (char trimmed 0))
+                          (char/= #\[ (char trimmed 0))
+                          (position #\= trimmed))
+                  do (incf word-count)))
+        (list :name "SpeakJet" :path (truename path) :word-count word-count)))))
+
+(defun read-intellivoice-dictionary-data ()
+  "Read IntelliVoice.dic and return a single plist describing the dictionary file.
+Returns NIL if the file does not exist."
+  (let ((path #p"Source/Tables/IntelliVoice.dic"))
+    (when (probe-file path)
+      (let ((word-count 0))
+        (with-open-file (f path :direction :input)
+          (loop for line = (read-line f nil nil)
+                while line
+                for trimmed = (string-trim +whitespace+ line)
+                when (and (not (emptyp trimmed))
+                          (char/= #\# (char trimmed 0))
+                          (char/= #\[ (char trimmed 0))
+                          (position #\= trimmed))
+                  do (incf word-count)))
+        (list :name "IntelliVoice" :path (truename path) :word-count word-count)))))
+
+;;; 
+;;; MSCZ Metadata Extraction
+;;; 
+
+(defun read-mscz-meta-tags (mscz-pathname)
+  "Extract all <metaTag name=\"...\">values</metaTag> from MSCZ-PATHNAME.
+Returns a hash table mapping tag name strings to value strings."
+  (let ((tags (make-hash-table :test 'equal)))
+    (when (probe-file mscz-pathname)
+      (let ((mscx-name (format nil "~a.mscx" (pathname-name mscz-pathname))))
+        (zip:with-zipfile (zip mscz-pathname)
+          (when-let (entry (gethash mscx-name (zip:zipfile-entries zip)))
+            (let* ((xml-string (babel:octets-to-string
+                                (zip:zipfile-entry-contents entry)))
+                   (xml (xmls:parse-to-list xml-string))
+                   (content (cddr (lastcar xml))))
+              (dolist (el content)
+                (when (and (equal (first el) "metaTag")
+                           (second el))
+                  (let ((name (cdr (assoc "name" (second el))))
+                        (value (when (third el) (string (third el)))))
+                    (when name
+                      (setf (gethash name tags) value)))))))))
+      tags)))
+
+(defun read-mscz-metadata (mscz-pathname)
+  "Extract header metadata from an MSCZ file.
+Returns a plist with :title, :subtitle, :composer, :copyright, :lyrics, and :work-number."
+  (let ((tags (read-mscz-meta-tags mscz-pathname)))
+    (list :title (gethash "workTitle" tags)
+          :subtitle (gethash "workSubtitle" tags)
+          :composer (gethash "composer" tags)
+          :copyright (gethash "copyright" tags)
+          :work-number (gethash "workNumber" tags))))
+
+(defun read-mscz-lyrics (mscz-pathname)
+  "Extract all lyrics text from MSCZ-PATHNAME.
+Concatenates lyrics from all voices in all parts, separated by newlines."
+  (when (probe-file mscz-pathname)
+    (let ((mscx-name (format nil "~a.mscx" (pathname-name mscz-pathname))))
+      (zip:with-zipfile (zip mscz-pathname)
+        (when-let (entry (gethash mscx-name (zip:zipfile-entries zip)))
+          (let* ((xml-string (babel:octets-to-string
+                              (zip:zipfile-entry-contents entry)))
+                 (xml (xmls:parse-to-list xml-string))
+                 (lyrics-parts nil))
+            (labels ((walk (node)
+                       (when (consp node)
+                         (when (and (equal (first node) "lyrics")
+                                    (third node))
+                           (push (string (third node)) lyrics-parts))
+                         (dolist (child (if (consp (cdr node))
+                                            (cdr node)
+                                            nil))
+                           (walk child)))))
+              (walk xml))
+            (when lyrics-parts
+              (format nil "~{~a~^~%~}" (nreverse lyrics-parts)))))))))
+
+;;; 
+;;; Plist → Game-Resource Converter Functions
+;;; 
+
+(defun equipment-plist->game-resource (plist)
+  "Convert an equipment index plist to a game-resource-item."
+  (make-instance 'game-resource-item
+                 
+                 :collective-path #p"Source/Tables/EquipmentIndex.ods"
+                 :offset (getf plist :index 0)
+                 :item-id (getf plist :index 0)
+                 :name (getf plist :item-name)
+                 :equippable (getf plist :equip)
+                 :shield (getf plist :shield)
+                 :armor (getf plist :armor)
+                 :worn (getf plist :worn)
+                 :slot (getf plist :slot)
+                 :sound (getf plist :sound)
+                 :entity-class (getf plist :entity-class)
+                 :entity-prototype (getf plist :entity-prototype)
+                 :course-class (getf plist :course-class)
+                 :course-prototype (getf plist :course-prototype)
+                 :decal-bank (getf plist :decal-bank)
+                 :decal-sheet (getf plist :decal-sheet)
+                 :decal-up (getf plist :up)
+                 :decal-down (getf plist :down)
+                 :decal-right (getf plist :right)
+                 :decal-left (getf plist :left)
+                 :drawing-mode (getf plist :drawing-mode)
+                 :palette (getf plist :palette)
+                 :displacement-up (getf plist :displace-up)
+                 :displacement-down (getf plist :displace-down)
+                 :displacement-right (getf plist :displace-right)
+                 :displacement-left (getf plist :displace-left)))
+
+(defun boat-plist->game-resource (plist)
+  "Convert a boat plist to a game-resource-boat."
+  (make-instance 'game-resource-boat
+                
+                 :collective-path #p"Source/Tables/Boats.ods"
+                 :offset (getf plist :index 0)
+                 :id (getf plist :index 0)
+                 :name (getf plist :boat)
+                 :boat-class (getf plist :class)
+                 :notes (getf plist :notes)))
+
+(defun npcstats-plist->game-resource-character (plist)
+  "Convert an NPC stats plist to a game-resource-character."
+  (make-instance 'game-resource-character
+                
+                 :full-path #p"Source/Tables/NPCStats.ods"
+                 :name (getf plist :name)
+                 :character-id (getf plist :character-id)
+                 :decal (getf plist :decal)
+                 :gender (getf plist :gender)
+                 :hp (getf plist :hp)
+                 :max-hp (getf plist :hp)
+                 :ac (getf plist :ac)
+                 :hair-color (getf plist :hair)
+                 :skin-color (getf plist :skin)
+                 :clothes-color (getf plist :clothing)
+                 :head (getf plist :head)
+                 :body (getf plist :body)
+                 :speech-pitch (getf plist :voice-pitch)
+                 :speech-speed (getf plist :voice-speed)
+                 :speech-bend (getf plist :voice-bend)
+                 :speech-color (getf plist :speech-color)
+                 :nicks (getf plist :nicks)
+                 :memo (getf plist :memo)
+                 :equipment (getf plist :equipment)
+                 :shield (getf plist :shield)
+                 :crowns (getf plist :crowns)
+                 :arrows (getf plist :arrows)
+                 :potions (getf plist :potions)
+                 :chalice (getf plist :chalice)))
+
+(defun instrument-plist->game-resource-instrument (plist)
+  "Convert an instrument plist to a game-resource-instrument."
+  (make-instance 'game-resource-instrument
+                
+                 :collective-path #p"Source/Tables/Instruments.ods"
+                 :offset (getf plist :index 0)
+                 :instrument-id (getf plist :index 0)
+                 :instrument (getf plist :instrument)
+                 :distortion (getf plist :distortion)
+                 :attack-addend (getf plist :attack-addend)
+                 :decay-subtrahend (getf plist :decay-subtrahend)
+                 :decay-duration (getf plist :decay-duration)
+                 :release-subtrahend (getf plist :release-subtrahend)
+                 :tia-distortion (getf plist :tia-distortion)
+                 :vibrato (getf plist :vibrato)
+                 :tremolo (getf plist :tremolo)
+                 :psg-tone (getf plist :psg-tone)))
+
+(defun flag-plist->game-resource-flag (plist)
+  "Convert a flag plist to a game-resource-flag."
+  (make-instance 'game-resource-flag
+                
+                 :collective-path #p"Source/Tables/Flags.txt"
+                 :offset (getf plist :index 0)
+                 :flag-id (getf plist :index 0)
+                 :name (getf plist :name)))
+
+(defun key-plist->game-resource-key (plist)
+  "Convert a key plist to a game-resource-key."
+  (make-instance 'game-resource-key
+                
+                 :collective-path #p"Source/Tables/Keys.txt"
+                 :offset (getf plist :index 0)
+                 :key-id (getf plist :index 1)
+                 :name (getf plist :name)))
+
+(defun atari-vox-dict-plist->game-resource-atari-vox-dictionary (plist)
+  "Convert an AtariVox dictionary plist to a game-resource-atari-vox-dictionary."
+  (make-instance 'game-resource-atari-vox-dictionary
+                
+                 :full-path (or (getf plist :path) #p"Source/Tables/SpeakJet.dic")))
+
+(defun intellivoice-dict-plist->game-resource-intellivoice-dictionary (plist)
+  "Convert an Intellivoice dictionary plist to a game-resource-intellivoice-dictionary."
+  (make-instance 'game-resource-intellivoice-dictionary
+                
+                 :full-path (or (getf plist :path) #p"Source/Tables/IntelliVoice.dic")))
+
 (defun write-equipment-index (&optional
                                 (pathname (format nil "Source/Generated/~a/EquipmentIndex.s"
                                                   (machine-directory-name))))
   "Write EquipmentIndex.s from Source/Tables/EquipmentIndex.ods"
   (format *trace-output* "~&Reading equipment attributes from Source/Tables/EquipmentIndex.ods…")
   (finish-output *trace-output*)
-  (let ((sheet (read-ods-into-lists #p"Source/Tables/EquipmentIndex.ods")))
-    (let* ((equipment-stats (remove-if-not (lambda (record)
-                                             (loop for (key value) on record
-                                                   by #'cddr
-                                                   unless (str:blankp value)
-                                                     return t
-                                                   finally (return nil)))
-                                           (ss->lol (first sheet)))))
-      (ensure-directories-exist pathname)
-      (with-output-to-file (output pathname :if-exists :supersede)
-        (format *trace-output* "writing ~a …" (enough-namestring pathname))
-        (finish-output *trace-output*)
-        (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
-        (flet ((always (format value)
-                 (declare (ignore value))
-                 format)
-               (here? (format s)
-                 (if (str:blankp s) ".byte 0" format))
-               (dec (format s)
-                 (if (str:blankp s)
-                     ".byte $ff"
-                     format))
-               (hex (format s)
-                 (if (str:blankp s)
-                     ".byte $ff"
-                     format))
-               (drawing-mode-filter (format s)
-                 (declare (ignore format))
-                 (if (string-equal "160B" (string-trim #(#\Space) s))
-                     ".byte Decal160B"
-                     ".byte 0")))
-          (loop for (format validator field-info)
-                  on
-                  (list ".byte $~2,'0x" #'hex :index
-                        ".byte $~2,'0x" #'hex :decal-bank
-                        ".byte ~aClass" #'here? '(:entity-class :entity)
-                        ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
-                        ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
-                        "" #'drawing-mode-filter :drawing-mode
-                        ".byte ~aClass" #'here? '(:course-class :course)
-                        ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
-                        ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
-                        ".byte Song_~a_ID" #'here? :sound
-                        ".byte $~2,'0x" #'hex :up
-                        ".byte $~2,'0x" #'hex :down
-                        ".byte $~2,'0x" #'hex :left
-                        ".byte $~2,'0x" #'hex :right
-                        ".byte ~d << PaletteShift" #'dec :palette
-                        ".byte ~d" #'dec :displace-up
-                        ".byte ~d" #'dec :displace-down
-                        ".byte ~d" #'dec :displace-left
-                        ".byte ~d" #'dec :displace-right
-                        ".byte >~a" #'here? :decal-sheet)
-                by #'cdddr
+  (let* ((equipment-stats (read-equipment-stats)))
+    (ensure-directories-exist pathname)
+    (with-output-to-file (output pathname :if-exists :supersede)
+      (format *trace-output* "writing ~a …" (enough-namestring pathname))
+      (finish-output *trace-output*)
+      (format output ";;; Generated from Source/Tables/EquipmentIndex.ods~2%EquipmentIndex: .block~%")
+      (flet ((always (format value)
+               (declare (ignore value))
+               format)
+             (here? (format s)
+               (if (str:blankp s) ".byte 0" format))
+             (dec (format s)
+               (if (str:blankp s)
+                   ".byte $ff"
+                   format))
+             (hex (format s)
+               (if (str:blankp s)
+                   ".byte $ff"
+                   format))
+             (drawing-mode-filter (format s)
+               (declare (ignore format))
+               (if (string-equal "160B" (string-trim #(#\Space) s))
+                   ".byte Decal160B"
+                   ".byte 0")))
+        (loop for (format validator field-info)
+                on
+                (list ".byte $~2,'0x" #'hex :index
+                      ".byte $~2,'0x" #'hex :decal-bank
+                      ".byte ~aClass" #'here? '(:entity-class :entity)
+                      ".byte <~aPrototype" #'here? '(:entity-prototype :entity-prototype-l)
+                      ".byte >~aPrototype" #'here? '(:entity-prototype :entity-prototype-h)
+                      "" #'drawing-mode-filter :drawing-mode
+                      ".byte ~aClass" #'here? '(:course-class :course)
+                      ".byte <~aPrototype" #'here? '(:course-prototype :course-prototype-l)
+                      ".byte >~aPrototype" #'here? '(:course-prototype :course-prototype-h)
+                      ".byte Song_~a_ID" #'here? :sound
+                      ".byte $~2,'0x" #'hex :up
+                      ".byte $~2,'0x" #'hex :down
+                      ".byte $~2,'0x" #'hex :left
+                      ".byte $~2,'0x" #'hex :right
+                      ".byte ~d << PaletteShift" #'dec :palette
+                      ".byte ~d" #'dec :displace-up
+                      ".byte ~d" #'dec :displace-down
+                      ".byte ~d" #'dec :displace-left
+                      ".byte ~d" #'dec :displace-right
+                      ".byte >~a" #'here? :decal-sheet)
+              by #'cdddr
 
-                for field-name = (if (listp field-info)
-                                     (first field-info)
-                                     field-info)
-                for field-asm-name = (if (listp field-info)
-                                         (second field-info)
-                                         field-info)
-                do (format output "~2%~a:" (pascal-case (string field-asm-name)))
-                do (dolist (item equipment-stats)
-                     (let ((value (getf item field-name)))
-                       (format output "~%~10t~?~40t; ~a"
-                               (funcall validator format value)
-                               (cons value nil)
-                               (title-case (getf item :item-name)))))))
-        (format output "~2%~10t.bend~%")))))
+              for field-name = (if (listp field-info)
+                                   (first field-info)
+                                   field-info)
+              for field-asm-name = (if (listp field-info)
+                                       (second field-info)
+                                       field-info)
+              do (format output "~2%~a:" (pascal-case (string field-asm-name)))
+              do (dolist (item equipment-stats)
+                   (let ((value (getf item field-name)))
+                     (format output "~%~10t~?~40t; ~a"
+                             (funcall validator format value)
+                             (cons value nil)
+                             (title-case (getf item :item-name)))))))
+      (format output "~2%~10t.bend~%"))))
+
+

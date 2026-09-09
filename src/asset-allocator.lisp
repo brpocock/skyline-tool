@@ -32,6 +32,12 @@ Affects whether bank directories are named \"LastBank\" vs \"Bank$XX\".
 
 Do not modify this variable after system initialization.")
 
+(define-constant +all-build-codes+
+    '((#\A "AA" :publisher)
+      (#\P "Public" :public)
+      (#\D "Demo" :demo))
+  :test #'equalp)
+
 (defun parse-assets-line (line)
   "Parse one LINE from Assets.index.
 
@@ -47,17 +53,13 @@ Returns @code{(ASSET BUILDS)} where ASSET is the asset identifier and BUILDS is 
       (destructuring-bind (asset &optional builds-string &rest machines)
           (split-sequence #\space line :remove-empty-subseqs t)
         (declare (ignore machines)) ;; TODO
-        (list (string-trim " " asset)
+        (list (string-trim +whitespace+ asset)
               (if (null builds-string)
-                  (list "AA" "Public" "Demo")
+                  (mapcar #'second +all-build-codes+)
                   (remove-if #'null
-                             (list
-                              (when (find #\A builds-string :test #'char-equal)
-                                "AA")
-                              (when (find #\P builds-string :test #'char-equal)
-                                "Public")
-                              (when (find #\D builds-string :test #'char-equal)
-                                "Demo"))))))))
+                             (loop for (code name) in +all-build-codes+
+                                   when (find code builds-string :test #'char-equal)
+                                     collect name)))))))
 
 (defun kind-by-name (kind$)
   "Convert a string KIND$ representing an asset type to the corresponding keyword.
@@ -76,6 +78,7 @@ Returns the keyword @code{:ART}, @code{:BLOB}, @code{:SONG}, etc., or @code{NIL}
 Signals an error for unknown asset types.
 @end table"
   (cond
+    ((keywordp kind$) kind$)
     ((or (equal kind$ "Songs")
          (equal kind$ "Song"))
      :song)
@@ -89,8 +92,57 @@ Signals an error for unknown asset types.
     ((or (equal kind$ "Scripts")
          (equal kind$ "Script"))
      :script)
+    ((or (equal kind$ "Tilesets")
+         (equal kind$ "Tileset"))
+     :tileset)
+    ((or (equal kind$ "Sprite Sheets")
+         (equal kind$ "Sprite Sheet"))
+     :sprite-sheet)
+    ((or (equal kind$ "Object Prototypes")
+         (equal kind$ "Object Prototype"))
+     :object-prototype)
+    ((or (equal kind$ "Classes")
+         (equal kind$ "Class"))
+     :class)
+    ((or (equal kind$ "Routines")
+         (equal kind$ "Routine"))
+     :routine)
+    ((or (equal kind$ "Characters")
+         (equal kind$ "Character"))
+     :character)
+    ((or (equal kind$ "Boats")
+         (equal kind$ "Boat"))
+     :boat)
+    ((or (equal kind$ "Special Resources")
+         (equal kind$ "Special Resource"))
+     :special-resource)
+    ((or (equal kind$ "Instruments")
+         (equal kind$ "Instrument"))
+     :instruments)
+    ((or (equal kind$ "Items")
+         (equal kind$ "Item"))
+     :items)
+    ((or (equal kind$ "Flags")
+         (equal kind$ "Flag"))
+     :flags)
+    ((or (equal kind$ "Keys")
+         (equal kind$ "Key"))
+     :keys)
+    ((or (equal kind$ "Translations")
+         (equal kind$ "Translation"))
+     :translations)
+    ((or (equal kind$ "Phonetic Dictionary")
+         (equal kind$ "AtariVox Dictionary"))
+     :atari-vox-dictionary)
+    ((or (equal kind$ "IntelliVoice Dictionary"))
+     :intellivoice-dictionary)
+    ((or (equal kind$ "Magic Desk Dictionary"))
+     :magic-desk-dictionary)
+    ((or (equal kind$ "Phrasebooks")
+         (equal kind$ "Phrasebook"))
+     :phrasebook)
     ((or (null kind$)
-	 (emptyp kind$))
+         (emptyp kind$))
      nil)
     (t (error "Unrecognized asset kind: ~a" kind$))))
 
@@ -152,18 +204,21 @@ Hash table for asset index data (optional).
 @end table
 
 Returns the parsed asset information or NIL if line is empty/invalid."
-  (tagbody top
-     (destructuring-bind (asset builds) (parse-assets-line line)
-       (when asset
-         (destructuring-bind (kind$ name) (asset-kind/name asset)
-           (let* ((kind (kind-by-name kind$))
-                  (id (get-asset-id kind name)))
-             (assert id (id)
-                     "Could not find the asset ID for ~(~a~) “~a”"
-                     kind name)
-             (if-let (existing (gethash id (gethash kind seen-ids)))
-		 (restart-case
-                     (error "Two ~(~a~)s (at least) have the same ID: “~a” and “~a”~:[ (both nil)~;~:* (both $~x)~]"
+  (when (and line (not (or (string= line "")
+                           (char= (char line 0) #\;)
+                           (char= (char line 0) #\#))))
+    (tagbody top
+       (destructuring-bind (asset builds) (parse-assets-line line)
+         (when asset
+           (destructuring-bind (kind$ name) (asset-kind/name asset)
+             (let* ((kind (kind-by-name kind$))
+                    (id (get-asset-id kind name)))
+               (assert id (id)
+                       "Could not find the asset ID for ~(~a~) \"~a\""
+                       kind name)
+               (if-let (existing (gethash id (gethash kind seen-ids)))
+                 (restart-case
+                     (error "Two ~(~a~)s (at least) have the same ID: \"~a\" and \"~a\"~:[ (both nil)~;~:* (both $~x)~]"
                             kind existing name id)
                    (reload-assets ()
                      :report "Reload the assets to check for changed IDs"
@@ -171,8 +226,8 @@ Returns the parsed asset information or NIL if line is empty/invalid."
                            *assets-list* nil
                            *asset-ids-seen* nil)
                      (go top)))
-               (setf (gethash id (gethash kind seen-ids)) name)))))
-       (setf (gethash asset index-hash) builds))))
+                 (setf (gethash id (gethash kind seen-ids)) name)))))
+         (setf (gethash asset index-hash) builds)))))
 
 (defun read-assets-list (&optional (index-file #p"Source/Assets.index"))
   "Read Assets.index from INDEX-FILE (using *ASSETS-LIST* cache).
@@ -183,25 +238,22 @@ Pathname to the assets index file (default @file{Source/Assets.index}).
 @end table
 
 Returns the cached or freshly parsed assets list."
-  (let* ((base (or (project-root)
-                   (uiop:pathname-directory-pathname (uiop:getcwd))))
-         (resolved-index (merge-pathnames index-file base)))
-    (read-map-ids-table (merge-pathnames #p"Source/Tables/MapsIndex.ods" base))
-    (when (and *assets-list* *asset-ids-seen*)
-      (return-from read-assets-list
-        (values *assets-list* *asset-ids-seen*)))
-    (format *trace-output* "~&Reading assets index from ~a…"
-            (enough-namestring resolved-index))
-    (let ((index-hash (make-hash-table :test 'equal))
-          (seen-ids (make-seen-ids-table)))
-      (with-input-from-file (index resolved-index)
-        (loop for line = (read-line index nil nil)
-              while line
-              do (interpret-line-from-assets-list line
-                                                  :seen-ids seen-ids :index-hash index-hash)))
-      (setf *assets-list* index-hash
-            *asset-ids-seen* seen-ids)
-      (values index-hash seen-ids))))
+  (read-map-ids-table #p"Source/Tables/MapsIndex.ods")
+  (when (and *assets-list* *asset-ids-seen*)
+    (return-from read-assets-list
+      (values *assets-list* *asset-ids-seen*)))
+  (format *trace-output* "~&Reading assets index from ~a…"
+          (enough-namestring index-file))
+  (let ((index-hash (make-hash-table :test 'equal))
+        (seen-ids (make-seen-ids-table)))
+    (with-input-from-file (index index-file)
+      (loop for line = (read-line index nil nil)
+            while line
+            do (interpret-line-from-assets-list line
+                                                :seen-ids seen-ids :index-hash index-hash)))
+    (setf *assets-list* index-hash
+          *asset-ids-seen* seen-ids)
+    (values index-hash seen-ids)))
 
 (defun filter-assets-for-build (index-hash build)
   "Select only the assets from INDEX-HASH which are for the selected BUILD.
@@ -216,7 +268,7 @@ Build target string (e.g., @samp{AA}, @samp{Public}).
 Returns a list of asset identifiers that are included in the specified BUILD."
   (loop for asset being the hash-keys of index-hash
         when (member build (gethash asset index-hash) :test #'equal)
-        collect asset))
+          collect asset))
 
 (defun existing-object-file (file-name)
   "Assert that file FILE-NAME exists.
@@ -298,10 +350,10 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
   (:method ((kind (eql :blob)) record-count (machine (eql 7800)))
     (+ 284 1 (* record-count 3)))
   (:method ((kind (eql :map)) record-count (machine (eql 7800)))
-    (+
-     #|LoadMap|# 1024 #| approx XXX |#
-     #| end of table |# 1
-     #|per record|# (* record-count 3)))
+    (+ 384
+       #|LoadMap|# 1024 #| approx XXX |#
+       #| end of table |# 1
+       #|per record|# (* record-count 3)))
   ;; Atari 5200 (same loader tables as 7800 on this port)
   (:method ((kind (eql :overhead)) record-count (machine (eql 5200)))
     12)
@@ -358,8 +410,8 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
         for banks = (gethash sequence permutations)
         for bank-count = (length (hash-table-keys banks))
         when (< bank-count optimal-count)
-        do (setf optimal-count bank-count
-                 optimal-assets banks)
+          do (setf optimal-count bank-count
+                   optimal-assets banks)
         finally (return optimal-assets)))
 
 (defun size-of-banks ()
@@ -378,7 +430,7 @@ Returns @code{T} if the asset is a BLOB, @code{NIL} otherwise."
 
 (defun assembler-invocation-macro ()
   "Makefile token for 64tass: @samp{${AS7800}} or @samp{${AS5200}} depending on @code{*MACHINE*}.
-Z80 machines use @samp{${ASZ80}} (sjasmplus) when wired in the port Makefile."
+Z80 machines use @samp{${ASZ80}} (z80asm) when wired in the port Makefile."
   (case *machine*
     ((5200 400 800) "${AS5200}")
     ((3010 9918 1000) "${ASZ80}")
@@ -408,31 +460,37 @@ Returns allocation result if successful, NIL if allocation fails."
                                   (setf (gethash asset tentative-bank) asset-size)
                                   tentative-bank)
            when (null asset-size)
-           do (progn
-                (cerror "Pretend it's 8kiB"
-                        "Did not get size of asset file~%~8t“~a” (for ~a)" asset-file asset)
-                8192)
+             do (progn
+                  (cerror "Pretend it's 8kiB"
+                          "Did not get size of asset file~%~8t“~a” (for ~a)" asset-file asset)
+                  8192)
            when (zerop asset-size)
-           do (restart-case
-                  (error "Asset file is empty~%~8t“~a” is empty (for asset ~a)" asset-file asset)
-                (continue () :report "Pretend it's 8kiB"
-			  8192)
-                (make-file () :report "Re-run “make” for file"
-			   (uiop:run-program (list "make" asset-file "AUTOCONTINUE=t")
-					     :ignore-error-status t)
-			   (go top)))
+             do (restart-case
+                    (error "Asset file is empty~%~8t“~a” is empty (for asset ~a)" asset-file asset)
+                  (continue () :report "Pretend it's 8kiB"
+		8192)
+                  (make-file () :report "Re-run “make” for file"
+		(uiop:run-program (list "make" asset-file "AUTOCONTINUE=t")
+			        :ignore-error-status t)
+		(go top)))
            if (< (bank-size tentative-bank) (size-of-banks))
-           do (setf bank-assets tentative-bank)
+             do (setf bank-assets tentative-bank)
            else
-           do (setf (gethash bank banks) bank-assets
-                    bank-assets (make-hash-table :test 'equal)
-                    (gethash asset bank-assets) asset-size
-                    bank (1+ bank))
+             do (setf (gethash bank banks) bank-assets
+                      bank-assets (make-hash-table :test 'equal)
+                      (gethash asset bank-assets) asset-size
+                      bank (1+ bank))
            finally (progn
                      (setf (gethash bank banks)
                            (when (plusp (hash-table-count bank-assets))
                              bank-assets))
                      (return-from try-allocation-sequence banks)))))
+
+(defun find-size-tag-in (file)
+  (let ((size (nth-value 1 (cl-ppcre:scan-to-strings
+                            "\\$SIZE\\$([0-9a-f]{4})" (read-file-into-string file)))))
+    (when size
+      (parse-integer (aref size 0) :radix 16))))
 
 (defun compute-asset-size (asset-file &key file-sizes)
   "Compute the size of ASSET-FILE for ROM allocation.
@@ -448,7 +506,8 @@ Returns the size in bytes required for the asset in ROM."
   (let ((n (cond ((equal "o" (pathname-type asset-file))
                   (ql-util:file-size asset-file))
                  ((equal "s" (pathname-type asset-file))
-                  (assemble-file-for-size asset-file))
+                  (or (find-size-tag-in asset-file)
+                      (assemble-file-for-size asset-file)))
                  (t (cerror "Pretend asset size is 8kiB"
                             "Don't know how to estimate size of “~a”"
                             (enough-namestring asset-file))
@@ -538,32 +597,8 @@ trying greedy orderings for ~:d ROM bank~:p … "
 (define-constant +all-builds+ '("AA" "Public" "Demo")
   :test #'equalp)
 
-(define-constant +all-video+ '(:ntsc :pal :secam)
+(define-constant +all-video+ '(:ntsc :pal :secam :internal :hd)
   :test #'equalp)
-
-(defun supported-video-types (&optional (machine *machine*))
-  "Return the list of video types supported by MACHINE.
-
-Portable and single-region handheld devices return a one-element list
-@code{(:ntsc)} so that Makefile generation iterates only once and
-@code{asset->object-name} emits a single video-suffix-free target.
-TV-connected machines with both NTSC and PAL releases return
-@code{(:ntsc :pal)}; the catch-all additionally includes SECAM."
-  (case machine
-    ;; Portable/single-region devices: Lynx, Game Boy family, Game Gear,
-    ;; WonderSwan family, Virtual Boy.  All emit video-independent objects.
-    ((200    ; Lynx
-      810    ; VB
-      837    ; GG
-      3296   ; GBA
-      4800   ; WS
-      6800   ; WSC
-      20953  ; CGB
-      35902) ; DMG
-     '(:ntsc))
-    (5200 '(:ntsc))
-    ((400 800 20 64 128 7800 7850) '(:ntsc :pal))
-    (t '(:ntsc :pal :secam))))
 
 (defvar *first-assets-bank* nil)
 
@@ -599,10 +634,10 @@ Prerequisites match the former per-bank rules; the recipe runs
            (all-assets (all-assets-for-build build))
            (asset-objects (apply #'nconc (mapcar (rcurry #'asset->deps-list build) all-assets)))
            (target-lines
-            (loop for b in banks
-                  collect (format nil "Source/Generated/${PORT}/Bank~a.~a.~a.list"
-                                  (string-upcase (format nil "~2,'0x" b))
-                                  build video))))
+             (loop for b in banks
+                   collect (format nil "Source/Generated/${PORT}/Bank~a.~a.~a.list"
+                                   (string-upcase (format nil "~2,'0x" b))
+                                   build video))))
       (format t "~%# Batched Bank*.list targets: allocate-assets writes every bank list;~%")
       (format t "# one recipe per build/video avoids parallel make clobbering those files.~%")
       ;; One physical target line (all BankNN…list files, space-separated), then
@@ -611,11 +646,13 @@ Prerequisites match the former per-bank rules; the recipe runs
       ;; ends with @samp{\\} before any @samp{:} appears on the continued logical line.
       (format t "~{~a~^ ~}: Source/Assets.index \\~%" target-lines)
       (format t "          bin/skyline-tool \\~%")
+      (when (and build video)
+        (format t "          Source/Generated/${PORT}/LastBankDefs.~a.~a.s \\~%" build video))
       (loop for dep on asset-objects
             do (if (cdr dep)
-                    (format t "          ~a \\~%" (car dep))
-                    (format t "          ~a~%" (car dep))))
-      (format t "	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} allocate-assets ~a~%"
+                   (format t "          ~a \\~%" (car dep))
+                   (format t "          ~a~%" (car dep))))
+      (format t "	bin/skyline-tool --port ${PORT} allocate-assets ~a~%"
               build))
     (setf *asset-bank-list-batch* nil)))
 
@@ -651,7 +688,7 @@ Uses the same path layout as @code{bank-source-pathname}
       (setf *first-assets-bank*
             (loop for bank from 0
                   unless (probe-file (bank-source-pathname bank))
-                  return bank))))
+                    return bank))))
 
 (defun allocation-list-name (bank build video)
   (make-pathname :directory `(:relative "Source" "Generated" ,(machine-directory-name))
@@ -667,72 +704,65 @@ Uses the same path layout as @code{bank-source-pathname}
                                build video)
                  :type "size"))
 
-(defun allocate-assets (build &optional supplied-machine)
+(defun allocate-assets (build &optional (supplied-machine *machine*))
   "Allocate ROM bank lists for BUILD (Demo, AA, Public, Test).
 
 Uses special @code{*machine*} from the loaded @code{--port} unless
 SUPPLIED-MACHINE overrides it for tests; defaults to machine 7800 when no port
 binding exists."
-  (let ((*machine* (or supplied-machine
-                        (when (boundp '*machine*)
-                          *machine*)
-                        7800)))
-    (assert (member build +all-builds+ :test 'equal) (build)
-            "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
-    (let ((assets-list (all-assets-for-build build)))
-      (dolist (video (supported-video-types))
-        (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
-                build video)
-        (loop with allocation = (find-best-allocation assets-list
-                                                      :build build :video video)
-              for bank-offset being the hash-keys of allocation
-              for bank = (+ (first-assets-bank build) bank-offset)
-              for assets = (gethash bank-offset allocation)
-              for allocation-list-name = (allocation-list-name bank build video)
-              for allocation-size-name = (allocation-size-name bank build video)
-              unless (and assets (plusp (hash-table-count assets)))
+  (assert (member build +all-builds+ :test 'equal) (build)
+          "BUILD must be one of ~{~a~^ or ~} not “~a”" +all-builds+ build)
+  (let ((assets-list (all-assets-for-build build)))
+    (dolist (video (all-regions-for-machine))
+      (format *trace-output* "~&Writing asset list files for ~a ~a: Bank "
+              build video)
+      (loop with allocation = (find-best-allocation assets-list
+                                                    :build build :video video)
+            for bank-offset being the hash-keys of allocation
+            for bank = (+ (first-assets-bank build) bank-offset)
+            for assets = (gethash bank-offset allocation)
+            for allocation-list-name = (allocation-list-name bank build video)
+            for allocation-size-name = (allocation-size-name bank build video)
+            unless (and assets (plusp (hash-table-count assets)))
               do (error "No assets assigned to bank ~2,'0x" bank)
-              do (ensure-directories-exist allocation-list-name)
-              do (with-output-to-file (allocation-file allocation-list-name
-                                                       :if-exists :supersede)
-                   (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
-                           bank (length (hash-table-keys assets)))
-                   (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
-              do (ensure-directories-exist allocation-size-name)
-              do (with-output-to-file (allocation-file allocation-size-name
-                                                       :if-exists :supersede)
-                   (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
-                           (hash-table-plist assets)
-                           (reduce #'+ (hash-table-values assets))))
-              finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
-                               (1- (number-of-banks build video)))
-                        (format *trace-output* "~&… and blank asset lists for: Bank ")
-                        (let ((empty-banks (list)))
-                          (loop for bank from (+ (first-assets-bank build)
-                                                 (length (hash-table-keys allocation)))
+            do (ensure-directories-exist allocation-list-name)
+            do (with-output-to-file (allocation-file allocation-list-name
+                                                     :if-exists :supersede)
+                 (format *trace-output* " $~2,'0x (#~d; ~:*~:d asset~:p) "
+                         bank (length (hash-table-keys assets)))
+                 (format allocation-file "~{~a~%~}" (hash-table-keys assets)))
+            do (ensure-directories-exist allocation-size-name)
+            do (with-output-to-file (allocation-file allocation-size-name
+                                                     :if-exists :supersede)
+                 (format allocation-file "~{~&~a	~d~}~2%@	~d~%"
+                         (hash-table-plist assets)
+                         (reduce #'+ (hash-table-values assets))))
+            finally (when (< (+ (length (hash-table-keys allocation)) (first-assets-bank build))
+                             (1- (number-of-banks build video)))
+                      (format *trace-output* "~&… and blank asset lists for: Bank ")
+                      (let ((empty-banks (list)))
+                        (loop for bank from (+ (first-assets-bank build)
+                                               (length (hash-table-keys allocation)))
                                 below (1- (number-of-banks build video))
-                                for allocation-list-name = (allocation-list-name bank build video)
-                                for allocation-size-name = (allocation-size-name bank build video)
-                                do (ensure-directories-exist allocation-list-name)
-                                do (with-output-to-file (allocation-file allocation-list-name
-                                                                         :if-exists :supersede)
-                                     (push bank empty-banks)
-                                     (fresh-line allocation-file))
-                                do (ensure-directories-exist allocation-size-name)
-                                do (with-output-to-file (allocation-file allocation-size-name
-                                                                         :if-exists :supersede)
-                                     (format allocation-file "@	0~%")))
-                          (format *trace-output* "~{~a~^, ~}"
-                                  (apply #'compress-sequential-numbers
-                                         (sort empty-banks #'<))))))))))
+                              for allocation-list-name = (allocation-list-name bank build video)
+                              for allocation-size-name = (allocation-size-name bank build video)
+                              do (ensure-directories-exist allocation-list-name)
+                              do (with-output-to-file (allocation-file allocation-list-name
+                                                                       :if-exists :supersede)
+                                   (push bank empty-banks)
+                                   (fresh-line allocation-file))
+                              do (ensure-directories-exist allocation-size-name)
+                              do (with-output-to-file (allocation-file allocation-size-name
+                                                                       :if-exists :supersede)
+                                   (format allocation-file "@	0~%")))
+                        (format *trace-output* "~{~a~^, ~}"
+                                (apply #'compress-sequential-numbers
+                                       (sort empty-banks #'<)))))))))
 
 (defun number-of-banks (build video)
   (declare (ignore video))
   (ecase *machine*
-    (7800 (cond
-            ((equal build "Demo") 64)
-            ((equal build "Test") 64)
-            (t 64)))
+    (7800 64)
     ((5200 400 800) 32)
     ;; Atari Lynx (Phantasia #1321 / Phase 1 #1322): 32 logical 16 KiB banks
     ;; produce a 512 KiB cart image, matching @file{Project.Lynx.json}
@@ -782,11 +812,11 @@ Returns the filename (e.g., @samp{Filename}) if found, otherwise @code{NIL}.
 
 (defun cpu-directory-name (&optional (machine *machine*))
   (ecase machine
-    ((1 2 3 8 16 20 23 64 128 200 223 264 400 800 1200 2600 5200 7800 7850)
+    ((1 2 3 8 16 20 23 64 200 223 264 400 800 1200 2600 5200 7800 7850)
      "6502")
     ((9 1080 1601 8011) "m68k")
     ((15) "F8")
-    ((81 1000 2068 2110 3010 837 9918) "Z80")
+    ((128 81 1000 2068 2110 3010 837 9918) "Z80")
     ((88 222 2416) "65816")
     ((821) "V810")
     ((1624) "sh2")
@@ -801,113 +831,7 @@ pointer width: 2 bytes for 16-bit (6502, Z80, etc.), 3 for 24-bit (65816), 4 for
     (cond
       ((member cpu-name '("m68k" "sh2" "arm7" "v810") :test #'string=) 4)
       ((string= cpu-name "65816") 3)
-      ((member cpu-name '("i286") :test #'string=) 2)
       (t 2))))
-
-(defun machine-directory-name (&optional (machine *machine*))
-  "Return the directory name for the current machine platform"
-  (ecase machine
-    (1 "Oric")
-    (2 "A2")
-    (3 "A3")
-    (8 "NES")
-    (9 "NG")
-    (15 "F")
-    (16 "TG16")
-    (20 "VIC20")
-    (23 "A2e")
-    ((64 128) "CBM")
-    (81 "ZX81")
-    (88 "SNES")
-    (200 "Lynx")
-    (222 "2gs")
-    (223 "BBC")
-    (264 "C16")
-    (400 "400")
-    (800 "800")
-    (810 "VB")
-    (920 "NNG")
-    (1000 "SG1000")
-    (1080 "ST")
-    (1200 "1200")
-    (1601 "SMD")
-    (1624 "32X")
-    (2068 "Spc")
-    (837 "GG")
-    (2600 "2600")
-    (2609 "Intv")
-    (3000 "Vx")
-    (3010 "SMS")
-    (3296 "GBA")
-    (4386 "HS")
-    (4800 "WS")
-    (5200 "5200")
-    (6122 "Vs")
-    (6800 "WSC")
-    (7600 "O2")
-    (7800 "7800")
-    (7850 "vcs800")
-    (7801 "SC")
-    (8011 "Jag")
-    (9001 "PSX")
-    (9918 "ClcV")
-    (2416 "CDR")
-    (20953 "CGB")
-    (35902 "DMG")))
-
-(defun machine-number-by-tag (tag)
-  (ecase (make-keyword (string-upcase tag))
-    (:|Oric| 1)
-    (:|A2| 2)
-    (:|A3| 3)
-    (:|NES| 8)
-    (:|NG| 9)
-    (:|F| 15)
-    (:|TG16| 16)
-    (:|VIC| 20)
-    (:|VIC20| 20)
-    (:|A2e| 23)
-    (:|C64| 64)
-    (:|ZX81| 81)
-    (:|SNES| 88)
-    (:|C128| 128)
-    (:|Lynx| 200)
-    (:|2gs| 222)
-    (:|BBC| 223)
-    (:|C16| 264)
-    (:|400| 400)
-    (:|800| 800)
-    (:|VB| 810)
-    (:|GG| 2110)
-    (:|NNG| 920)
-    (:|1000| 1000)
-    (:|ST| 1080)
-    (:|1200| 1200)
-    (:|SMD| 1601)
-    (:|32X| 1624)
-    (:|Spc| 2068)
-    (:|2600| 2600)
-    (:|Intv| 2609)
-    (:|INTV| 2609)
-    (:|Vx| 3000)
-    (:|SMS| 3010)
-    (:|GBA| 3296)
-    (:|HS| 4386)
-    (:|WS| 4800)
-    (:|5200| 5200)
-    (:|Vs| 6122)
-    (:|WSC| 6800)
-    (:|O2| 7600)
-    (:|7800| 7800)
-    (:|vcs800| 7850)
-    (:|SC| 7801)
-    (:|Jag| 8011)
-    (:|PSX| 9001)
-    (:|ClcV| 9918)
-    (:|CDR| 2416)
-    (:|DMG| 35902)
-    (:|CGB| 20953)
-    ((:nil :|nil|) nil)))
 
 (defun include-paths-for-current-bank (&key cwd testp)
   "Return a list of directories to search for included files in the current bank.
@@ -926,18 +850,18 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
          (machine-dir (machine-directory-name))
          (cpu-dir (cpu-directory-name))
          (base-includes (append (list (list :relative "Source" "Code" machine-dir)
-				      (list :relative "Source" "Code" machine-dir "Common")
-				      ;; Shared Atari 8-bit video (GTIA/ANTIC) used by 400/800/5200 via Atari8.s
-				      (list :relative "Source" "Code" "Atari8" "Common")
-				      (list :relative "Source" "Code" machine-dir "Routines")
-				      (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol .s output
-				      (list :relative "Source" "Code" machine-dir "Classes")
-				      (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
-				      (list :relative "Source" "Code" machine-dir "Stagehand")
-				      (list :relative "Object" machine-dir)
-				      (list :relative "Object" machine-dir "Assets")
-				      (list :relative "Source" "Generated" machine-dir)
-				      (list :relative "Source" "Generated" machine-dir "Assets"))
+			        (list :relative "Source" "Code" machine-dir "Common")
+			        ;; Shared Atari 8-bit video (GTIA/ANTIC) used by 400/800/5200 via Atari8.s
+			        (list :relative "Source" "Code" "Atari8" "Common")
+			        (list :relative "Source" "Code" machine-dir "Routines")
+			        (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol .s output
+			        (list :relative "Source" "Code" machine-dir "Classes")
+			        (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
+			        (list :relative "Source" "Code" machine-dir "Stagehand")
+			        (list :relative "Object" machine-dir)
+			        (list :relative "Object" machine-dir "Assets")
+			        (list :relative "Source" "Generated" machine-dir)
+			        (list :relative "Source" "Generated" machine-dir "Assets"))
                                 (when (= *machine* 128)
                                   (list (list :relative "Source" "Generated" "Classes" "z80")))))
          (includes (if cwd
@@ -1005,7 +929,7 @@ Source/Generated/~a/Assets/Blob.~a.s: ~a~%	bin/skyline-tool
        (format t "~%
 Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
-	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"
+	bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"
                machine-dir blob-name blob-png-path machine-dir))
       ((3010 9918 1000 837 2110) ; Z80 + TMS9918 family (SMS, ClcV, SG-1000, GG, VS)
        ;; ColecoVision uses Blob.<stem>.ClcV.s (see asset->object-name); others Blob.<stem>.s.
@@ -1013,13 +937,19 @@ Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
            (format t "~%
 Source/Generated/~a/Assets/Blob.~a.ClcV.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
-	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
+	bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
                    machine-dir blob-name blob-png-path machine-dir)
            (format t "~%
 Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
 	mkdir -p Source/Generated/~a/Assets
-	SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
-                   machine-dir blob-name blob-png-path machine-dir))))))
+	bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"
+                   machine-dir blob-name blob-png-path machine-dir)))
+      ((64 128) ; C64/C128: VIC-II character-cell blobs (via dispatch-png)
+       (format t "~%
+Source/Generated/~a/Assets/Blob.~a.s: ~a\\~%          bin/skyline-tool
+	mkdir -p Source/Generated/~a/Assets
+	bin/skyline-tool --port ${PORT} dispatch-png $< Source/Generated/~a/Assets"
+               machine-dir blob-name blob-png-path machine-dir machine-dir)))))
 
 (defun write-art-generation (pathname)
   "Generates Makefile rules for compiling art assets for the current platform.
@@ -1043,7 +973,7 @@ or compilation steps for graphics conversion."
   (let ((art-name (pathname-name pathname))
         (art-path (enough-namestring pathname))
         (machine-dir (machine-directory-name)))
-    (ecase *machine*
+    (case *machine*
       (200 ; Lynx
        (format t "~%
 Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
@@ -1052,10 +982,12 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
                machine-dir art-name art-path machine-dir))
       (7800 ; Atari 7800
        (format t "~%
-Object/~a/Assets/Art.~a.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
+Source/Generated/~a/Assets/Art.~a.s ~
+Object/~a/Assets/Art.~a.NTSC.o Object/~a/Assets/Art.~a.PAL.o: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
-	bin/skyline-tool --port 7800 compile-art-7800 $@ $<"
-               machine-dir art-name art-path
+	bin/skyline-tool --port 7800 --region PAL compile-art-7800 $@ $<"
+               machine-dir art-name
+               machine-dir art-name machine-dir art-name art-path
                (mapcar (compose #'enough-namestring #'second)
                        (read-7800-art-index pathname))
                machine-dir))
@@ -1066,7 +998,7 @@ Object/~a/Assets/Art.~a.s: ~a \\~{~%	~a \\~}~%	bin/skyline-tool
 	bin/skyline-tool --port ${PORT} compile-art-intv $@ $<"
                machine-dir art-name art-path
                (mapcar (compose #'enough-namestring #'first)
-                       (skyline-tool::read-intv-art-index pathname))
+                       (read-intv-art-index pathname))
                machine-dir))
       (20953 ; Game Boy Color
        (format t "~%
@@ -1086,8 +1018,8 @@ Object/~a/Assets/Art.~a.o: ~a~%	bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port 264 compile-art-264 $@ $<"
                machine-dir art-name art-path machine-dir))
-      ((1 2 8 16 20 64 88 128 223 1601 2600 3010 5200 400 800) ; Other supported machines without art support
-       (error "Art generation not supported for machine ~A (~A)" *machine* (skyline-tool::machine-long-name))))))
+      (otherwise
+       (error "Art generation not supported for machine ~A (~A)" *machine* (machine-long-name))))))
 
 (defun write-tsx-generation (pathname)
   (let ((machine-dir (machine-directory-name)))
@@ -1109,51 +1041,66 @@ Object/~a/Assets/Tileset.~a.o: Source/Maps/Tiles/~:*~a.tsx \\
                 machine-dir (pathname-name pathname) machine-dir))))
 
 (defun makefile-contains-target-p (target)
-  (let* ((target-str (typecase target
-                       (pathname (enough-namestring target))
-                       (string target)
-                       (t (princ-to-string target))))
-         (target-prefix (concatenate 'string target-str ":"))
-         (makefiles (list (merge-pathnames #p"Source/Generated/7800/Makefile" (project-root))
-                          (merge-pathnames #p"common.mak" (project-root))
-                          (merge-pathnames
-                           (make-pathname :directory (list :relative "Source" "Build")
-                                          :name (machine-directory-name) :type "mak")
-                           (project-root))))
+  (let* ((target-string (typecase target
+                          (pathname (enough-namestring target))
+                          (string target)
+                          (t (princ-to-string target))))
+         (target-prefix (concatenate 'string target-string ":"))
+         (makefiles (list #p"Source/Generated/7800/Makefile" 
+                          #p"common.mak" 
+                          (make-pathname :directory (list :relative "Source" "Build")
+                                         :name (machine-directory-name) :type "mak")))
          (cpu-dir (cpu-directory-name)))
     (flet ((matches-p (line)
-             (or (eql 0 (search target-prefix line))
-                 ;; Match Source/Generated/${CPUDIR}/%Class.s pattern rule for any eightbol class
-                 (and (eql 0 (search "Source/Generated/" line))
-                      (search "Class.s:" line)
-                      (or (search (format nil "Generated/Classes/~a/" cpu-dir) line)
-                          (search "Generated/Classes/${CPUDIR}/" line))))))
-      (dolist (makefile makefiles)
+             (when-let (colon (position #\: line))
+               (or (eql 0 (search target-prefix line))
+                   ;; Match Source/Generated/${CPUDIR}/%Class.s pattern rule for any eightbol class
+                   (and (eql 0 (search "Source/Generated/" line))
+                        (search "Class.s:" line))
+                   (search (format nil "Generated/Classes/~a/" cpu-dir) line)
+                   (when-let (found (search target-string line))
+                     (< found colon))))))
+      (dolist (makefile makefiles nil)
         (when (probe-file makefile)
           (with-open-file (stream makefile :external-format :utf-8)
             (loop for line = (read-line stream nil nil)
                   while line
                   when (matches-p line)
-                    do (return-from makefile-contains-target-p t))))))
-    nil))
-
-(defun project-root-from-path (path)
-  "Return project root by traversing up from PATH until Makefile or Project.*.json found.
-Used when (project-root) or getcwd may not resolve correctly."
-  (let ((dir (uiop:pathname-directory-pathname (merge-pathnames path (uiop:getcwd)))))
-    (loop for current = dir then (uiop:pathname-parent-directory-pathname current)
-          for i from 0 below 20
-          when (null current) return nil
-          when (or (probe-file (merge-pathnames #p"Makefile" current))
-                   (probe-file (merge-pathnames #p"Project.7800.json" current)))
-          return current)))
+                    do (return-from makefile-contains-target-p t))))))))
 
 (defun find-copybook (name)
   (make-pathname :directory (list :relative "Source" "Generated"
                                   (machine-directory-name) "Classes")
                  :name name :type "cpy"))
 
-(defun find-included-file (name &key cwd testp (root #p"."))
+(defun art-source-file (name)
+  "Find the .art source file for Art asset NAME (e.g. \"Art.Font\").
+Returns the pathname if found, NIL otherwise."
+  (when (eql 0 (search "Art." name))
+    (let ((stem (subseq name 4)))
+      (or (probe-file (make-pathname
+                        :directory (list :relative "Source" "Art"
+                                         (machine-directory-name))
+                        :name stem :type "art"))
+          (probe-file (make-pathname
+                        :directory (list :relative "Source" "Art")
+                        :name stem :type "art"))))))
+
+(defun generated-art-asset-p (pathname)
+  "True if PATHNAME is a generated Art asset .s file (e.g. Source/Generated/PORT/Assets/Art.Font.s)."
+  (and (string= (pathname-type pathname) "s")
+       (eql 0 (search "Art." (pathname-name pathname)))
+       (member "Assets" (pathname-directory pathname) :test #'string=)))
+
+(defun art-source-for-generated (generated-pathname)
+  "Find the .art source for a generated Art asset .s PATHNAME.
+Returns a list of (GENERATED-PATHNAME ART-SOURCE), or just (GENERATED-PATHNAME)."
+  (let ((art (art-source-file (pathname-name generated-pathname))))
+    (if art
+        (remove-duplicates (list generated-pathname art) :test #'equal)
+        (list generated-pathname))))
+
+(defun find-included-file (name &key cwd testp)
   "Find the pathname of an included source file NAME.
 
 @table @asis
@@ -1163,69 +1110,65 @@ The base name of the file to find (without extension).
 Current working directory (optional).
 @item TESTP
 If true, include test directories in search.
-@item ROOT
-Project root pathname. Defaults to (project-root). Override for testing.
 @end table
 
 Searches for .s, .cob, or .cpy sources.
 
 Returns the pathname of the found file, or signals an error if not found."
-  ;; Check for COBOL copybooks in Generated/Classes (e.g. Phantasia-Globals.cpy, Basic-Object-Slots.cpy)
-  (let ((cobol-path (merge-pathnames
-                     (make-pathname :directory (list :relative "Source" "Generated"
-                                                     (machine-directory-name) "Classes")
-                                    :name name :type "cpy")
-                     root)))
+  ;; Check    for   COBOL    copybooks   in    Generated/Classes   (e.g.
+  ;; Phantasia-Globals.cpy, Basic-Object-Slots.cpy)
+  (let ((cobol-path (make-pathname :directory (list :relative "Source" "Generated"
+                                                    (machine-directory-name) "Classes")
+                                   :name name :type "cpy")))
     (when (probe-file cobol-path)
       (return-from find-included-file cobol-path)))
-  #+ ()  (comment
-           ;; Check for COBOL sources in Source/Classes
-           (let ((cobol-path (merge-pathnames
-                              (make-pathname :directory (list :relative "Source" "Classes")
-                                             :name name :type "cob")
-                              root)))
-             (when (probe-file cobol-path)
-               (return-from find-included-file cobol-path))))
-
+  (let ((cobol-path (make-pathname :directory (list :relative "Source" "Classes")
+                                   :name name :type "cob")))
+    (when (probe-file cobol-path)
+      (return-from find-included-file cobol-path)))
+  
   (let ((generated-asset-pathname
           (make-pathname :directory (list :relative "Source" "Generated"
-				  (machine-directory-name) "Assets")
+ 				  (machine-directory-name) "Assets")
                          :name name :type "s")))
     (when (some (lambda (frag)
                   (eql 0 (search frag name)))
-                (list "Song." "Art." "Blob." "Script."))
-      (return-from find-included-file generated-asset-pathname)))
-  ;; EightBol-generated class assembly (e.g. Source/Generated/Classes/6502/MummyCourseClass.s from MummyCourse.cob)
-  ;; When NAME ends with "Class", check for corresponding .cob; if present, use eightbol output path.
-  ;; Return path relative to project root so Makefile deps work regardless of project-root resolution.
-  (when (and (>= (length name) 5)
-             (string-equal (subseq name (- (length name) 5)) "Class"))
-    (let* ((cob-name (header-case (subseq name 0 (- (length name) 5))))
-           (cob-path (merge-pathnames
-                      (make-pathname :directory (list :relative "Source" "Classes")
-                                     :name cob-name :type "cob")
-                      root)))
-      (when (probe-file cob-path)
-        (return-from find-included-file
-          (make-pathname :directory (list :relative "Source" "Generated" "Classes"
-                                          (cpu-directory-name))
-                         :name name :type "s")))))
-  (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
-    (let ((possible-file (make-pathname :directory path :name name :type "s")))
-      (when (probe-file possible-file)
-        (return-from find-included-file possible-file))))
-  (let ((generated-pathname
-          (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
-                         :name name :type "s")))
-    (when (skyline-tool-writes-p generated-pathname)
-      (return-from find-included-file generated-pathname))
-    (when (makefile-contains-target-p generated-pathname)
-      (return-from find-included-file generated-pathname)))
-  (error "Cannot find a possible source for included ~:[source~;test~] ~
+                (list "Song." "Blob." "Script."))
+      (return-from find-included-file generated-asset-pathname))
+     (when (art-source-file name)
+       (return-from find-included-file generated-asset-pathname)))
+    ;; EightBol-generated          class           assembly          (e.g.
+    ;; Source/Generated/Classes/6502/MummyCourseClass.s               from
+    ;; MummyCourse.cob)   When  NAME   ends   with   "Class",  check   for
+    ;; corresponding  .cob;   if  present,   use  eightbol   output  path.
+    ;; Return  path  relative  to  project  root  so  Makefile  deps  work
+    ;; regardless of project-root resolution.
+    (when (and (>= (length name) 5)
+               (string-equal (subseq name (- (length name) 5)) "Class"))
+      (let* ((cob-name (header-case (subseq name 0 (- (length name) 5))))
+             (cob-path (make-pathname :directory (list :relative "Source" "Classes")
+                                      :name cob-name :type "cob")))
+        (when (probe-file cob-path)
+          (return-from find-included-file
+            (make-pathname :directory (list :relative "Source" "Generated" "Classes"
+                                            (cpu-directory-name))
+                           :name name :type "s")))))
+    (dolist (path (include-paths-for-current-bank :cwd cwd :testp testp))
+      (let ((possible-file (make-pathname :directory path :name name :type "s")))
+        (when (probe-file possible-file)
+          (return-from find-included-file possible-file))))
+    (let ((generated-pathname
+            (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name))
+                           :name name :type "s")))
+      (when (skyline-tool-writes-p generated-pathname)
+        (return-from find-included-file generated-pathname))
+      (when (makefile-contains-target-p generated-pathname)
+        (return-from find-included-file generated-pathname)))
+    (error "Cannot find a possible source for included ~:[source~;test~] ~
 file ~a.s in bank $~2,'0x~
 ~@[~&Current working directory: ~a~]~
 ~@[~&TestP: ~a~]"
-         testp name *bank* cwd testp))
+           testp name *bank* cwd testp))
 
 (defun find-included-binary-file (name)
   (when (search "StagehandHigh" name)
@@ -1237,12 +1180,22 @@ file ~a.s in bank $~2,'0x~
       (make-pathname :directory (list :relative "Object" (machine-directory-name))
                      :name "StagehandLow" :type "o")))
   (when (eql 0 (search "Art." name))
-    (let ((possible-file (make-pathname :directory (list :relative "Source" "Art" (machine-directory-name))
-                                        :name (subseq name 4) :type "art")))
-      (when (probe-file possible-file)
-        (return-from find-included-binary-file
-          (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
-                         :name name :type "o")))))
+    (flet ((try-art (stem)
+             (let ((possible-file (make-pathname
+                                   :directory (list :relative "Source" "Art" (machine-directory-name))
+                                   :name stem :type "art")))
+               (when (probe-file possible-file)
+                 (return-from find-included-binary-file
+                   (make-pathname :directory (list :relative "Object" (machine-directory-name) "Assets")
+                                  :name name :type "o"))))))
+      (let ((stem (subseq name 4)))
+        (try-art stem)
+        (dolist (video-type (all-regions-for-machine))
+          (let ((suffix (format nil ".~:@(~a~)" video-type))
+                (stem-len (length stem)))
+            (when (and (> stem-len (length suffix))
+                       (string-equal (subseq stem (- stem-len (length suffix))) suffix))
+              (try-art (subseq stem 0 (- stem-len (length suffix))))))))))
   (when (eql 0 (search "Tileset." name))
     (let ((possible-file (make-pathname
                           :directory (list :relative "Source" "Maps" "Tiles")
@@ -1264,31 +1217,30 @@ file ~a.s in bank $~2,'0x~
       (when (probe-file possible-file)
         (return-from find-included-binary-file
           (make-pathname :directory (list :relative "Object"
-					  (machine-directory-name) "Assets")
+				  (machine-directory-name) "Assets")
                          :name name :type "o")))))
   (error "Cannot find a possible source for included binary file ~a.o in bank ~2,'0x"
          name *bank*))
 
 (defun eightbol-compile (source
-			 &optional
-			   (target (make-pathname :directory (list :relative "Source"
-								   "Classes"
-								   (cpu-directory-name))
-						  :name (concatenate 'string
-								     (pascal-case (pathname-name source))
-								     "Class")
-						  :type "s")))
-  (eightbol:compile-eightbol-class
+		     &optional
+		       (target (make-pathname :directory (list :relative "Source"
+						       "Classes"
+						       (cpu-directory-name))
+					:name (concatenate 'string
+						         (pascal-case (pathname-name source))
+						         "Class")
+					:type "s")))
+  (eightbol::compile-eightbol
    (list source)
    :cpus (list (make-keyword (string-upcase
-			      (cpu-directory-name))))
+			(cpu-directory-name))))
    :copybook-paths (list "Source/Classes"
-			 (format nil "Source/Generated/~a/Classes"
-				 (machine-directory-name)))
-   :output-file target
-   :root-directory #p"."))
+		     (format nil "Source/Generated/~a/Classes"
+			   (machine-directory-name)))
+   :output-file target))
 
-(defun recursive-read-deps (source-file &key testp from-classes-p)
+(defun recursive-read-deps (source-file &key testp)
   (unless (equal (pathname-type source-file) "o")
     (unless (probe-file source-file)
       (cond
@@ -1310,6 +1262,9 @@ file ~a.s in bank $~2,'0x~
 	 (return-from recursive-read-deps
 	   (remove-duplicates (list* source-file eightbol-file copybooks)
 			  :test #'equal))))
+        ((generated-art-asset-p source-file)
+         (return-from recursive-read-deps
+           (art-source-for-generated source-file)))
         (t
          (error "Can't find “~a” and don't know how to make it~2%(~s)"
                 (enough-namestring source-file) source-file))))
@@ -1334,16 +1289,12 @@ file ~a.s in bank $~2,'0x~
 
 (defun extract-palette (palette-file)
   (let* ((base-name (subseq (pathname-name palette-file)
-			    0
-			    (- (length (pathname-name palette-file)) 7)))
+		        0
+		        (- (length (pathname-name palette-file)) 7)))
          (tsx-file (make-pathname :name (format nil "~aTiles" base-name)
                                   :type "tsx"
                                   :directory (list :relative "Source" "Maps" "Tiles"))))
     (extract-tileset-palette tsx-file palette-file)))
-
-(defun compile-enemy-stats ()
-  (compile-enemies #p"Source/Tables/EnemyStats.ods"
-                   (format nil "Source/Generated/~a/EnemyStatsTable.s" (machine-directory-name))))
 
 (define-constant +skyline-writes-files+
     (list "ActorPrototypes" 'write-actor-prototypes
@@ -1351,8 +1302,8 @@ file ~a.s in bank $~2,'0x~
           "AnimationTable" 'compile-animation-sequences
           "AssetIDs" 'write-asset-ids
           "Asset-IDs" 'write-asset-ids
-          "EnemyStatsTable" 'compile-enemy-stats
           "EquipmentIndex" 'write-equipment-index
+          "FlagLabels" 'write-flags-tables
           "ItemDropTable" 'compile-item-drops
           "DocksIndex" 'write-docks-index
           "CharacterIDs" 'write-character-ids
@@ -1366,7 +1317,7 @@ file ~a.s in bank $~2,'0x~
           "Orchestration" 'write-orchestration)
   :test 'equalp)
 
-(defun eightbol-class-file-p (pathname &optional root)
+(defun eightbol-class-file-p (pathname)
   "True if PATHNAME is an EightBol-generated class assembly
 
 (Source/Generated/Classes/${CPU}/${ClassName}Class.s)."
@@ -1377,12 +1328,10 @@ file ~a.s in bank $~2,'0x~
          (string-equal (subseq name (- (length name) 5)) "Class")
          (member "Generated" dir :test #'string=)
          (member "Classes" dir :test #'string=)
-         (probe-file (merge-pathnames
-                      (make-pathname :directory (list :relative "Source" "Classes"
-					    (cpu-directory-name))
-                                     :name (header-case (subseq name 0 (- (length name) 5)))
-                                     :type "cob")
-                      root)))))
+         (probe-file (make-pathname :directory (list :relative "Source" "Classes"
+					   (cpu-directory-name))
+                                    :name (header-case (subseq name 0 (- (length name) 5)))
+                                    :type "cob")))))
 
 (defun skyline-tool-writes-p (pathname)
   "Check if PATHNAME is a file that Skyline-Tool can generate.
@@ -1423,39 +1372,39 @@ Checks for files in Generated directories with specific names or containing 'Pal
      'list
      (directory wild-pathname)
      (loop for subdir
-           in (directory
-               (make-pathname :name :wild
-                              :type nil
-                              :directory (pathname-directory
-                                          wild-pathname)))
+             in (directory
+                 (make-pathname :name :wild
+                                :type nil
+                                :directory (pathname-directory
+                                            wild-pathname)))
            when (cl-fad:directory-pathname-p subdir)
-           collect (recursive-directory
-		    (make-pathname :name :wild
-                                   :type (pathname-type
-                                          wild-pathname)
-                                   :directory
-                                   (pathname-directory subdir))))))))
+             collect (recursive-directory
+		  (make-pathname :name :wild
+                                     :type (pathname-type
+                                            wild-pathname)
+                                     :directory
+                                     (pathname-directory subdir))))))))
 
 (defun all-portable-assets ()
   (let ((source-prefix-length
-         (length (pathname-directory (merge-pathnames #p"Source/")))))
+          (length (pathname-directory (merge-pathnames #p"Source/")))))
     (loop for (dir . type) in '(("Maps" . "tmx") ("Songs" . "mscz")
                                 ("Scripts" . "fountain"))
           append
           (mapcar
            (lambda (pathname)
-	     (subseq
-	      (enough-namestring
-	       (make-pathname :directory
-			      (append (list :relative "Source")
-				      (subseq (pathname-directory (merge-pathnames pathname))
-					      source-prefix-length))
-			      :name (pathname-name pathname)
-			      :version nil
-			      :type nil))
-	      (length "Source/")))
+	   (subseq
+	    (enough-namestring
+	     (make-pathname :directory
+			(append (list :relative "Source")
+			        (subseq (pathname-directory (merge-pathnames pathname))
+				      source-prefix-length))
+			:name (pathname-name pathname)
+			:version nil
+			:type nil))
+	    (length "Source/")))
            (recursive-directory
-	    (make-pathname :directory (list :relative "Source" dir)
+	  (make-pathname :directory (list :relative "Source" dir)
                            :name :wild
                            :type type))))))
 
@@ -1467,8 +1416,8 @@ Checks for files in Generated directories with specific names or containing 'Pal
         (subseq path (length "Source/") (position #\. path :from-end t))))
     (recursive-directory
      (make-pathname :directory (list :relative "Source" "Blobs" (machine-directory-name))
-		    :name :wild
-		    :type "xcf")))
+		:name :wild
+		:type "xcf")))
    (all-portable-assets)))
 
 (defun %asset-leaf-name (name)
@@ -1532,46 +1481,44 @@ registered in @code{machine-directory-name}.
       ;; ports.  Object-file names include the video-standard suffix so that
       ;; NTSC and PAL builds produce distinct targets.
       ((7800 7850 5200 400 800
-        ;; Additional TV-connected ports:
-        1      ; Oric
-        2      ; A2
-        3      ; A3
-        8      ; NES
-        9      ; NG
-        15     ; F
-        16     ; TG16
-        20     ; VIC20
-        23     ; A2e
-        81     ; ZX81
-        88     ; SNES
-        222    ; 2gs
-        223    ; BBC
-        264    ; C16
-        920    ; NNG
-        1000   ; SG1000
-        1080   ; ST
-        1200   ; 1200
-        1601   ; SMD
-        1624   ; 32X
-        2068   ; Spc
-        2416   ; CDR
-        2600   ; 2600
-        3000   ; Vx
-        3010   ; SMS
-        4386   ; HS
-        6122   ; Vs
-        7600   ; O2
-        7801   ; SC
-        8011   ; Jag
-        9001)  ; PSX
+             ;; Additional TV-connected ports:
+             1      ; Oric
+             2      ; A2
+             3      ; A3
+             8      ; NES
+             9      ; NG
+             15     ; F
+             16     ; TG16
+             20     ; VIC20
+             23     ; A2e
+             81     ; ZX81
+             88     ; SNES
+             222    ; 2gs
+             223    ; BBC
+             264    ; C16
+             920    ; NNG
+             1000   ; SG1000
+             1080   ; ST
+             1200   ; 1200
+             1601   ; SMD
+             1624   ; 32X
+             2068   ; Spc
+             2416   ; CDR
+             2600   ; 2600
+             3000   ; Vx
+             3010   ; SMS
+             4386   ; HS
+             6122   ; Vs
+             7600   ; O2
+             7801   ; SC
+             8011   ; Jag
+             9001)  ; PSX
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
          (cond ((equal kind "Songs")
-	      (assert (not (null video)))
-	      (format nil "Object/~a/Assets/Song.~a.~a.o"
+                (format nil "Object/~a/Assets/Song.~a.~a.o"
                         machine-dir name video))
-	     ((equal kind "Maps")
-	      (assert (not (null video)))
-	      (format nil "Object/~a/Assets/Map.~a.~a.o"
+               ((equal kind "Maps")
+                (format nil "Object/~a/Assets/Map.~a.~a.o"
                         machine-dir (substitute #\. #\/ name) video))
 	     ((equal kind "Scripts")
 	      (format nil "Source/Generated/~a/Assets/Script.~a.s"
@@ -1598,19 +1545,20 @@ registered in @code{machine-directory-name}.
                         machine-dir (%asset-leaf-name name)))
                (t
                 (format nil "Object/~a/Assets/~a.~a.o" machine-dir kind name)))))
-      ;; Portable/single-region devices: Atari Lynx plus all handheld ports
+      ;; Portable/single-region devices: Atari Lynx plus all other handheld ports
       ;; (DMG, CGB, GBA, GG, WS, WSC, VB).  These have no NTSC/PAL variant —
       ;; the hardware has its own display — so Maps and Songs targets are
       ;; emitted without a video suffix.  Blobs and Scripts go under
       ;; Source/Generated/<PORT>/Assets/.
-      ((200    ; Lynx
-        810    ; VB (Virtual Boy)
-        837    ; GG (Game Gear)
-        3296   ; GBA (Game Boy Advance)
-        4800   ; WS (WonderSwan)
-        6800   ; WSC (WonderSwan Color)
-        20953  ; CGB (Game Boy Color)
-        35902) ; DMG (Game Boy)
+      ;; FIXME: This list should come from *region* :internal detectionn
+      ((200                             ; Lynx
+        810                             ; VB (Virtual Boy)
+        837                             ; GG (Game Gear)
+        3296                            ; GBA (Game Boy Advance)
+        4800                            ; WS (WonderSwan)
+        6800                            ; WSC (WonderSwan Color)
+        20953                           ; CGB (Game Boy Color)
+        35902)                          ; DMG (Game Boy)
        (destructuring-bind (kind name) (asset-kind/name asset-indicator)
          (cond ((equal kind "Songs")
                 (format nil "Object/~a/Assets/Song.~a.o"
@@ -1669,24 +1617,24 @@ Each element is a single path suitable for Makefile continuation lines (one path
   (let ((machine-dir (machine-directory-name)))
     (destructuring-bind (kind name) (asset-kind/name asset-indicator)
       (cond ((equal kind "Songs")
-	     (list* (format nil "Source/Generated/~a/Orchestration.s" machine-dir)
-		    (loop for video in (supported-video-types)
+	   (list* (format nil "Source/Generated/~a/Orchestration.s" machine-dir)
+		(loop for video in (all-regions-for-machine)
                           collect (format nil "Object/~a/Assets/Song.~a.~a.o"
                                           machine-dir name video))))
-	    ((equal kind "Maps")
-	     (loop for video in (supported-video-types)
+	  ((equal kind "Maps")
+	   (loop for video in (all-regions-for-machine)
                    collect (asset->object-name asset-indicator :video video)))
-	    ((equal kind "Blob")
-	     (list (format nil "Source/Generated/Assets/Blob.~a.s" name)))
-	    ((equal kind "Art")
-	     (list (format nil "Source/Generated/Assets/Art.~a.s" name)))
-	    (t (list (asset->object-name asset-indicator)))))))
+	  ((equal kind "Blob")
+	   (list (format nil "Source/Generated/Assets/Blob.~a.s" name)))
+	  ((equal kind "Art")
+	   (list (format nil "Source/Generated/Assets/Art.~a.s" name)))
+	  (t (list (asset->object-name asset-indicator)))))))
 
 (defun asset->symbol-name (asset-indicator)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
     (format nil "~a_~{~a~^_~}"
-	    (subseq kind 0 (1- (length kind)))
-	    name)))
+	  (subseq kind 0 (1- (length kind)))
+	  name)))
 
 (defun asset->source-name (asset-indicator)
   (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
@@ -1723,6 +1671,9 @@ and target platform. Handles special cases for different machines and video mode
     (destructuring-bind (kind &rest name) (split-sequence #\/ asset-indicator)
       (cond
         ((equal kind "Maps")
+         ;; Intv (2609): compile-map still emits 7800 .map; future compile-map-intv
+         ;; should emit per-quadrant TL/TR/BL/BR GROM ($0000-$00FF) or GRAM
+         ;; ($0100+) card refs with color in tileset data (GROM-first dedup).
          (format nil "bin/skyline-tool --port ${PORT} compile-map $<"))
         ((equal kind "Songs")
          (ecase *machine*
@@ -1730,13 +1681,14 @@ and target platform. Handles special cases for different machines and video mode
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HUC6280 ~a $@" video))
            (222 ; Apple IIGS
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< DOC ~a $@" video))
-           ;; FIXME: Dedicated Mikey / Lynx song backend; HOKEY path is a stub so master Makefiles can be emitted and parsed.
+           ;; FIXME: Dedicated Mikey / Lynx  song backend; HOKEY path is
+           ;; a stub so master Makefiles can be emitted and parsed.
            (200
             (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            ((5200 7800 400 800 7850)
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< HOKEY ~a $@" video))
            (2609 ; Intellivision — AY-3-8910 PSG (STIC is display only; not used for music)
-	  (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-music $@ $< 2609 AY-3-8910 ~a" video))
+	  (format nil "bin/skyline-tool --port ${PORT} compile-music $@ $< 2609 AY-3-8910 ~a" video))
            ((3010 9918 1000) ; SMS, ColecoVision, SG-1000 — SN76489 PSG
 	  (format nil "bin/skyline-tool --port ${PORT} compile-midi $< SN76489 ~a $@" video))
            (35902 ; DMG
@@ -1751,9 +1703,9 @@ and target platform. Handles special cases for different machines and video mode
         ((equal kind "Blobs")
          (cond
            ((= *machine* 2609)
-            (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"))
+            (format nil "bin/skyline-tool --port ${PORT} compile-blob-intv $< $@"))
            ((member *machine* '(3010 9918 1000 837 2110))
-            (format nil "SKYLINE_DEBUG_BACKTRACE=t bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"))
+            (format nil "bin/skyline-tool --port ${PORT} blob-rip-tms9918 $<"))
            (t
             (format nil "bin/skyline-tool --port ${PORT} dispatch-png $< Object/~a/Assets" machine-dir))))
         (t (error "Asset kind ~a not known" kind))))))
@@ -1769,46 +1721,90 @@ and target platform. Handles special cases for different machines and video mode
         (ensure-directories-exist source-pathname)
         (with-output-to-file (source source-pathname :if-exists :supersede)
           (format source ";; This is a generated file~2%")
-          (dolist (video (supported-video-types))
+          (dolist (video (all-regions-for-machine))
             (format source "~%~10t.if TV == ~a
 ~10t  .binary \"Song.~a.~a.o\"
 ~10t.fi~%"
                     video basename video)))))
-    (dolist (video (supported-video-types))
+    (dolist (video (all-regions-for-machine))
       (format t "
 ~a: ~a \\
           Source/Assets.index bin/skyline-tool Source/Generated/~a/Orchestration.s Source/Tables/Orchestration.ods
 	mkdir -p ~a
 	~a"
-	      (asset->object-name asset-indicator :video video)
-	      (asset->source-name asset-indicator)
-	      machine-dir
-	      (if (= *machine* 2609)
-                  (format nil "Source/Generated/~a/Assets" machine-dir)
-                  (format nil "Object/~a/Assets" machine-dir))
-	      (asset-compilation-line asset-indicator :video video)))))
-
-(defun write-asset-compilation/map (asset-indicator)
-  (let ((machine-dir (machine-directory-name)))
-    (dolist (video (supported-video-types))
-      (format t "~%
-~a: ~a \\
-          Source/Assets.index bin/skyline-tool
-	mkdir -p Object/~a/Assets
-	~a"
 	    (asset->object-name asset-indicator :video video)
 	    (asset->source-name asset-indicator)
 	    machine-dir
+	    (if (= *machine* 2609)
+                  (format nil "Source/Generated/~a/Assets" machine-dir)
+                  (format nil "Object/~a/Assets" machine-dir))
 	    (asset-compilation-line asset-indicator :video video)))))
 
-(defun makefile-blob-videos ()
-  "Video keywords to emit for blob compile rules.
+(defun write-asset-compilation/map (asset-indicator)
+  (let* ((machine-dir (machine-directory-name))
+         (source (asset->source-name asset-indicator))
+         (source-pathname (merge-pathnames source (uiop:getcwd)))
+         (deps ()))
+    (when (probe-file source-pathname)
+      (handler-case
+          (let* ((xml (xmls:parse-to-list
+                       (alexandria:read-file-into-string source-pathname)))
+                 (source-dir (make-pathname
+                              :directory (pathname-directory source-pathname)
+                              :name nil :type nil)))
+            (dolist (ts (xml-matches "tileset" xml))
+              (let ((ts-source (xml-attr "source" (second ts))))
+                (when ts-source
+                  (let* ((ts-path (merge-pathnames
+                                   (parse-namestring ts-source) source-dir))
+                         (ts-name (pathname-name ts-path)))
+                    (push (format nil "Object/~a/Assets/Tileset.~a.o"
+                                  machine-dir ts-name)
+                          deps)))))
+            (let ((map-props (xml-match "properties" xml nil)))
+              (when map-props
+                (dolist (prop (xml-matches "property" map-props))
+                  (let* ((attrs (second prop))
+                         (name (xml-attr "name" attrs))
+                         (value (xml-attr "value" attrs)))
+                    (when (and name value (string-equal name "rc"))
+                      (push (format nil "Source/Generated/~a/RunCommands/~a.s"
+                                    (machine-directory-name)
+                                    (pascal-case (remove #\' value)))
+                            deps))))))
+            (dolist (og (xml-matches "objectgroup" xml))
+              (dolist (obj (xml-matches "object" og))
+                (let ((obj-props (xml-match "properties" obj nil)))
+                  (when obj-props
+                    (dolist (prop (xml-matches "property" obj-props))
+                      (let* ((attrs (second prop))
+                             (name (xml-attr "name" attrs))
+                             (value (xml-attr "value" attrs)))
+                        (when (and name value (string-equal name "Script"))
+                          (let* ((stripped (remove #\' value))
+                                 (path (mapcar #'pascal-case
+                                               (flatten
+                                                (mapcar (lambda (s)
+                                                          (split-sequence #\/ s))
+                                                        (split-sequence #\- stripped)))))
+                                 (indicator (format nil "Scripts/~{~a~^/~}" path)))
+                            (push (asset->object-name indicator)
+                                  deps))))))))))
+        (error (c)
+          (warn "write-asset-compilation/map: failed to parse ~a for dependencies: ~a"
+                source c))))
+    (format t "~%~{~a~^ ~}: ~a \\~%          Source/Assets.index bin/skyline-tool"
+            (mapcar (lambda (v) (asset->object-name asset-indicator :video v))
+                    (all-regions-for-machine))
+            source)
+    (dolist (dep (reverse deps))
+      (format t " \\~%          ~a" dep))
+    (format t "~%	mkdir -p Object/~a/Assets~%	bin/skyline-tool --port ${PORT} compile-map $<"
+            machine-dir)))
 
-Blobs whose paths omit a video suffix (TMS9918-family Z80 ports) must not
-emit duplicate GNU Make targets for :ntsc / :pal / :secam."
-  (if (member *machine* '(3010 9918 1000 837 2110))
-      '(:ntsc)
-      (supported-video-types)))
+(defun makefile-blob-videos ()
+  "Video keywords to emit for blob compile rules."
+  (all-regions-for-machine))
 
 (defun write-asset-compilation/blob (asset-indicator)
   (let ((machine-dir (machine-directory-name)))
@@ -1882,34 +1878,42 @@ emit duplicate GNU Make targets for :ntsc / :pal / :secam."
                    (asset->object-name asset-indicator)
                    (asset->source-name asset-indicator)
                    (when (and (script-asset-p asset-indicator) (speech-supported-p))
-		     "Source/Tables/SpeakJet.dic")
+		 "Source/Tables/SpeakJet.dic")
                    machine-dir
                    (asset-compilation-line asset-indicator))))))
 
 (defun speech-supported-p ()
   "Return true if the current platform supports speech synthesis."
-  (member *machine* '(2600 7800 2609))) ; VCS (AtariVox), 7800 (AtariVox), Intellivision (IntelliVoice)
+  (member *machine* '(2600 7800 2609 3000)))
 
 (defun asset-loaders (asset-objects)
   "Enumerates the asset loaders that might be needed for the ASSET-OBJECTS given.
 
 Currently just enumerates all four asset loaders."
   (declare (ignore asset-objects))
-  (list (format nil "Source/Code/~a/Routines/LoadMap.s" (machine-directory-name))
-        (format nil "Source/Code/~a/Routines/LoadBlob.s" (machine-directory-name))
-        (format nil "Source/Code/~a/Routines/LoadSong.s" (machine-directory-name))
-        (format nil "Source/Code/~a/Routines/LoadScript.s" (machine-directory-name))))
+  (let ((dir (machine-directory-name)))
+    (list (make-pathname :directory `(:relative "Source" "Code" ,dir "Routines")
+                         :name "LoadMap" :type "s")
+          (make-pathname :directory `(:relative "Source" "Code" ,dir "Routines")
+                         :name "LoadBlob" :type "s")
+          (make-pathname :directory `(:relative "Source" "Code" ,dir "Routines")
+                         :name "LoadSong" :type "s")
+          (make-pathname :directory `(:relative "Source" "Code" ,dir "Routines")
+                         :name "LoadScript" :type "s"))))
 
 (defun %asset-ids-find-song-hash (asset-ids song-name)
   "Return hash key for SONG-NAME in @code{:song} table of ASSET-IDs, or NIL."
   (let ((songs (gethash :song asset-ids)))
     (when songs
       (loop for asset-hash being the hash-keys in songs using (hash-value asset-name)
-	    when (string-equal asset-name song-name)
+	  when (string-equal asset-name song-name)
 	    do (return asset-hash)))))
 
 (defun write-asset-ids (&optional
-                          (outfile-pathname (format nil "Source/Generated/~a/AssetIDs.s" (machine-directory-name)))
+                          (outfile-pathname (make-pathname :directory (list :relative "Source" "Generated"
+                                                                            (machine-directory-name))
+                                                           :name "AssetIDs"
+                                                           :type "s"))
                           (infile-pathname #p"Source/Assets.index"))
   "Write AssetIDs.s, AssetIDs.forth, and Asset-IDs.cpy from INFILE-PATHNAME (optional paths).
 
@@ -1927,50 +1931,43 @@ and an EIGHTBOL @code{COPY} book of @code{77} level IDs.
 @subsection Side effects
 Reads the assets index (cached) and overwrites the three output files.
 "
-  (let* ((base (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))
-         (resolved-out (merge-pathnames outfile-pathname base))
-         (resolved-in (merge-pathnames infile-pathname base)))
-    (ensure-directories-exist resolved-out)
-    (multiple-value-bind (asset-builds asset-ids) (read-assets-list resolved-in)
-      (declare (ignore asset-builds))
-      (let ((asset-count (loop for kind being the hash-keys in asset-ids
-			 sum (hash-table-count (gethash kind asset-ids)))))
-        (format *trace-output* "~&Writing AssetIDs.s for ~:d asset~:p" asset-count)
-        (with-output-to-file (outfile resolved-out :if-exists :supersede)
-          (format outfile ";;; Asset IDs are auto-generated")
-          (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
-                do (terpri outfile)
-                do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
-                         do (let ((sym (asset->symbol-name
-                                         (format nil "~:(~a~)s/~a" kind asset-name))))
-                              (if (= *machine* 2609)
-                                  (format outfile "~%~a_ID           EQU     $~2,'0x"
-                                          sym asset-hash)
-                                  (format outfile "~%~10t~a_ID = $~2,'0x"
-                                          sym asset-hash)))))))))
-
-  (let* ((base (or (project-root) (uiop:pathname-directory-pathname (uiop:getcwd))))
-         (resolved-out (merge-pathnames outfile-pathname base))
-         (resolved-in (merge-pathnames infile-pathname base)))
-    (with-output-to-file (outfile (merge-pathnames (make-pathname :type "forth")
-                                                   resolved-out)
-                                  :if-exists :supersede)
-      (format outfile " ( -*- forth -*- Asset IDs are auto-generated )")
-      (multiple-value-bind (asset-builds asset-ids) (read-assets-list resolved-in)
-        (declare (ignore asset-builds))
-        (format *trace-output* "~&Writing AssetIDs.forth for ~:d asset~:p"
-                (loop for kind being the hash-keys in asset-ids
-		  sum (hash-table-count (gethash kind asset-ids))))
+  (ensure-directories-exist outfile-pathname)
+  (multiple-value-bind (asset-builds asset-ids) (read-assets-list infile-pathname)
+    (declare (ignore asset-builds))
+    (let ((asset-count (loop for kind being the hash-keys in asset-ids
+		         sum (hash-table-count (gethash kind asset-ids)))))
+      (format *trace-output* "~&Writing AssetIDs.s for ~:d asset~:p" asset-count)
+      (with-output-to-file (outfile outfile-pathname :if-exists :supersede)
+        (format outfile ";;; Asset IDs are auto-generated")
         (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
-	    do (terpri outfile)
-	    do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
-		   do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;"
-                                  kind (split-sequence #\/ asset-name) asset-hash)))))
-    (with-output-to-file (outfile (merge-pathnames (make-pathname
-                                                    :directory '(:relative "Classes")
-                                                    :name "Asset-IDs" :type "cpy")
-                                                   resolved-out)
-                                  :if-exists :supersede)
+              do (terpri outfile)
+              do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
+                       do (let ((sym (asset->symbol-name
+                                      (format nil "~:(~a~)s/~a" kind asset-name))))
+                            (if (= *machine* 2609)
+                                (format outfile "~%~a_ID           EQU     $~2,'0x"
+                                        sym asset-hash)
+                                (format outfile "~%~10t~a_ID = $~2,'0x"
+                                        sym asset-hash))))))))
+
+  (with-output-to-file (outfile (make-pathname :defaults outfile-pathname :type "forth")
+                                :if-exists :supersede)
+    (format outfile " ( -*- forth -*- Asset IDs are auto-generated )")
+    (multiple-value-bind (asset-builds asset-ids) (read-assets-list infile-pathname)
+      (declare (ignore asset-builds))
+      (format *trace-output* "~&Writing AssetIDs.forth for ~:d asset~:p"
+              (loop for kind being the hash-keys in asset-ids
+		sum (hash-table-count (gethash kind asset-ids))))
+      (loop for kind being the hash-keys in asset-ids using (hash-value ids-by-kind)
+	  do (terpri outfile)
+	  do (loop for asset-hash being the hash-keys in ids-by-kind using (hash-value asset-name)
+		 do (format outfile "~%: ~:(~a~)_~{~a~^_~}_ID  ~d ( ~:*$~2,'0x ) ;"
+                                kind (split-sequence #\/ asset-name) asset-hash)))))
+  (let ((copybook (make-pathname
+                   :directory (list :relative "Source" "Generated" (machine-directory-name) "Classes")
+                   :name "Asset-IDs" :type "cpy")))
+    (ensure-directories-exist copybook)
+    (with-output-to-file (outfile copybook :if-exists :supersede)
       (format outfile "~
 000000* Asset IDs are auto-generated
 000001* This must be COPY:ed into the WORKING-STORAGE SECTION
@@ -1978,7 +1975,7 @@ Reads the assets index (cached) and overwrites the three output files.
 000010  DATA DIVISION.
 000020   WORKING-STORAGE SECTION.
 000100      01 ASSET-IDS EXTERNAL.")
-      (multiple-value-bind (asset-builds asset-ids) (read-assets-list resolved-in)
+      (multiple-value-bind (asset-builds asset-ids) (read-assets-list infile-pathname)
         (declare (ignore asset-builds))
         (format *trace-output* "~&Writing Asset-IDs.cpy for ~:d asset~:p"
                 (loop for kind being the hash-keys in asset-ids
@@ -1989,9 +1986,9 @@ Reads the assets index (cached) and overwrites the three output files.
 		   do (format
                            outfile
                            (if (eql kind :script)
-			 "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 9999
+		           "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 9999
 ~6T-~20TUSAGE IS BINARY VALUE IS x'~4,'0x'."
-			 "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 99
+		           "~%~10t78 ~:(~a~)--~{~a~^--~}--ID PIC 99
 ~6T-~20TUSAGE IS BINARY VALUE IS x'~2,'0x'.")
                            kind (mapcar #'header-case
                                         (split-sequence #\/ asset-name))
@@ -1999,6 +1996,8 @@ Reads the assets index (cached) and overwrites the three output files.
 
 (defun write-asset-bank-makefile (bank &key build video)
   "Writes the Makefile for an asset ROM bank"
+  (unless *makefile-bank-rules-emitted*
+    (setf *makefile-bank-rules-emitted* (make-hash-table :test 'equal)))
   (let ((dedup-key (list bank build (%makefile-video-key video) :asset)))
     (when (gethash dedup-key *makefile-bank-rules-emitted*)
       (return-from write-asset-bank-makefile))
@@ -2008,7 +2007,7 @@ Reads the assets index (cached) and overwrites the three output files.
          (bank-hex (string-upcase (format nil "~2,'0x" bank)))
          (object-deps (append asset-objects (asset-loaders asset-objects)))
          (include-paths (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
-				(include-paths-for-current-bank)))
+			  (include-paths-for-current-bank)))
          (asm-flags (cond ((equal build "AA") "-DATARIAGE=true -DPUBLISHER=true")
                           ((equal build "Demo") "-DDEMO=true")
                           (t ""))))
@@ -2021,10 +2020,10 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: Source/Assets.index Source/Generated/${
           bin/skyline-tool \\~{~%          ~a~^ \\~}
 	bin/skyline-tool --port ${PORT} write-asset-bank ~x ~a ~a
 ~%"
-	    bank-hex build video
-	    bank-hex build video
-	    asset-objects
-	    bank build video)
+	  bank-hex build video
+	  bank-hex build video
+	  asset-objects
+	  bank build video)
     (format t "
 Object/${PORT}/Bank~a.~a.~a.o \\
   ~3:*Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
@@ -2037,11 +2036,11 @@ Object/${PORT}/Bank~a.~a.~a.o \\
                     ~0@*-L Object/${PORT}/Bank~a.~a.~a.o.list.txt \\
 		~0@*$< -o Object/${PORT}/Bank~a.~a.~a.o
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode ~0@*Object/${PORT}/Bank~a.~a.~a.o.list.txt"
-	    bank-hex build video
-	    object-deps
-	    (assembler-invocation-macro)
-	    video asm-flags
-	    include-paths)))
+	  bank-hex build video
+	  object-deps
+	  (assembler-invocation-macro)
+	  video asm-flags
+	  include-paths)))
 
 (defun write-bank-makefile (bank-source &key build video)
   "Writes the Makefile entry for a ROM bank.
@@ -2086,7 +2085,8 @@ Object/${PORT}/Bank~a.~a.~a.o ~
 	[ -f $@ ]
 "
 	  bank-hex build video
-	  (recursive-read-deps bank-source)
+	  (recursive-read-deps bank-source
+		             :testp (string-equal build "Test"))
 	  (if (= *bank* *last-bank*)
 	      "Source/Generated/${PORT}/Orchestration.s"
 	      (format nil "Source/Generated/${PORT}/LastBankDefs.~a.~a.s" build video))
@@ -2098,7 +2098,8 @@ Object/${PORT}/Bank~a.~a.~a.o ~
                   ((equal build "Demo") "-DDEMO=true")
                   (t ""))
 	  (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
-		(include-paths-for-current-bank)))))
+		(include-paths-for-current-bank
+		 :testp (string-equal build "Test"))))))
 
 (defun write-ram-bank-makefile (&key build video)
   "Writes the Makefile entry for the RAM bank used by 7800GD"
@@ -2116,7 +2117,7 @@ Object/${PORT}/Bank~a.~a.~a.o:
 	mkdir -p Object/${PORT}
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
-	    ram-bank-hex build video ram-bank-hex build video)))
+	  ram-bank-hex build video ram-bank-hex build video)))
 
 (defun write-makefile-test-target ()
   "Writes the test ROM target for the Makefile"
@@ -2226,7 +2227,7 @@ Dist/$(PORT)/~a.~a.~a.bin: \\~
 Uses *ASSETS-FOR-BUILDS* as a cache"
   (or (gethash build *assets-for-builds*)
       (let ((assets (filter-assets-for-build (read-assets-list #p"Source/Assets.index")
-					     build)))
+                                             build)))
         (format *trace-output* "~&Assets for build ~s: …~:d asset~:p selected" build
                 (length assets))
         (setf (gethash build *assets-for-builds*) assets)
@@ -2247,7 +2248,7 @@ Source/Generated/${PORT}/Bank~a.~a.~a.s: \\~{~%          ~a~^ \\~}
   ;; Julian day of year
   (1+ (- (local-time:modified-julian-date (local-time:now))
          (local-time:modified-julian-date (local-time:adjust-timestamp (local-time:now)
-								       (set :month 1) (set :day-of-month 1))))))
+				    (set :month 1) (set :day-of-month 1))))))
 
 (defun current-year ()
   (nth-value 5 (decode-universal-time (get-universal-time))))
@@ -2290,12 +2291,22 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname
                                  :if-exists :supersede)
-      (format script "name ~a ~a.~a~%set tv~(~a~)~%~a"
-	    (%makefile-game-title)
-	    build
-	    (string-upcase (symbol-name video))
-	    video
-	    *7800-a78-header-shared-script-lines*))))
+      (let* ((title (string (%makefile-game-title)))
+             (build-str (or (uiop:getenv "BUILD")
+                            (format nil "~2,'0d.~3,'0d"
+                                    (mod (current-year) 100)
+                                    (current-julian-date))))
+             (region (string-upcase (symbol-name video)))
+             (variant (cond ((string= build "AA") "AA  ")
+                            ((string= build "Public") "Pub.")
+                            ((string= build "Demo") "Demo")
+                            ((string= build "Test") "Test ")
+                            (t build)))
+             (name (format nil "~16a~6a ~4a ~4a"
+                           title build-str region variant)))
+        (format script "name ~a~%set tv~(~a~)~%~a"
+                name video
+                *7800-a78-header-shared-script-lines*)))))
 
 (defun write-test-header-script ()
   "Write the header file for the test ROM (7800 only; same flags as other builds)."
@@ -2307,9 +2318,16 @@ Embedded name is @code{<game> <build>.<NTSC|PAL>}; TV is @code{tvntsc} or
                           :type "script")))
     (ensure-directories-exist script-pathname)
     (with-output-to-file (script script-pathname :if-exists :supersede)
-      (format script "name ~a Test~%set tvntsc~%~a"
-	    (%makefile-game-title)
-	    *7800-a78-header-shared-script-lines*))))
+      (let* ((title (string (%makefile-game-title)))
+             (build-str (or (uiop:getenv "BUILD")
+                            (format nil "~2,'0d.~3,'0d"
+                                    (mod (current-year) 100)
+                                    (current-julian-date))))
+             (name (format nil "~16a~6a NTSC Test"
+                           title build-str)))
+        (format script "name ~a~%set tvntsc~%~a"
+                name
+                *7800-a78-header-shared-script-lines*)))))
 
 (defun write-makefile-test-banks ()
   "Write Makefile rules for test ROM banks
@@ -2321,9 +2339,9 @@ consume a true argument, mis-binding later @code{~a} directives (@code{~{ …
   (let ((*last-bank* (1- (number-of-banks :public :ntsc))))
     (dotimes (*bank* (1+ *last-bank*))
       (let* ((bank (if (= *bank* *last-bank*)
-		       "LastBank"
-		       (format nil "Bank~2,'0x" *bank*)))
-	     (bank-source (make-pathname
+		   "LastBank"
+		   (format nil "Bank~2,'0x" *bank*)))
+	   (bank-source (make-pathname
                            :directory (list :relative "Source" "Code" (machine-directory-name) "Banks" bank)
                            :name bank
                            :type "s")))
@@ -2342,7 +2360,7 @@ Object/${PORT}/Bank~2,'0x.Test.o.LABELS.txt: Object/${PORT}/Bank~:*~2,'0x.Test.o
 " *bank*))
         (if (and (= #x3f *last-bank*)
                  (= #x3e *bank*))
-	    (format t "~%
+	  (format t "~%
 Object/${PORT}/Bank~2,'0x.Test.o.LABELS.txt:~:*
 	mkdir -p Object/${PORT}
 	echo \";;; nop\" > $@
@@ -2351,13 +2369,12 @@ Object/${PORT}/Bank~2,'0x.Test.o:
 	mkdir -p Object/${PORT}
 	dd if=/dev/zero bs=1024 count=16 of=$@
 "
-		    *bank*)
-	    ;; Prerequisites: mirrors WRITE-BANK-MAKEFILE (see same ~:[ branch).
-	    ;; Non-last banks INCLUDE AssemblerSetup, which INCLUDEs LastBankDefs.
-	    ;; LASTBANK omit that include; a LastBankDefs prereq on the last bank is
-	    ;; a make cycle ( defs are emitted from LAST bank labels ).  ~:[ uses
-	    ;; one explicit FORMAT argument per CLHS 22.3.7.2.
-	    (format t "~%
+		*bank*)
+	  ;; Prerequisites: mirrors WRITE-BANK-MAKEFILE (see same ~:[ branch).
+	  ;; Non-last banks INCLUDE AssemblerSetup, which INCLUDEs LastBankDefs.
+	  ;; LASTBANK omit that include; a LastBankDefs prereq on the last bank is
+	  ;; a make cycle ( defs are emitted from LAST bank labels ).
+	  (format t "~%
 Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%                    Source/Generated/${PORT}/LastBankDefs.Test.NTSC.s~] \\
                     bin/skyline-tool | $(EIGHTBOL_CLASS_OUTPUTS)
 	mkdir -p Object/${PORT}
@@ -2366,22 +2383,24 @@ Object/${PORT}/Bank~2,'0x.Test.o:~{ \\~%                    ~a~}~:[~; \\~%      
 		-l $@.LABELS.txt -L $@.list.txt $< -o $@
 	bin/skyline-tool --port ${PORT} prepend-fundamental-mode $@.list.txt
 "
-		    *bank*
-		    (if (probe-file bank-source)
-                        (recursive-read-deps bank-source)
+		*bank*
+		(if (probe-file bank-source)
+                        (recursive-read-deps bank-source
+                                             :testp t)
                         ;; Keep generated bank asm path platform-qualified.
                         ;; Asset-bank rules are emitted under Source/Generated/${PORT}/.
                         (list (make-pathname
-			       :directory (list :relative "Source" "Generated" (machine-directory-name))
-			       :name (format nil "Bank~2,'0x.Public.NTSC" *bank*)
-			       :type "s")))
-		    (/= *bank* *last-bank*)
-		    (assembler-invocation-macro)
-		    (when (= *bank* *last-bank*)
-		      "-DLASTBANK=true")
-		    (first-assets-bank "Test")
-		    (mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
-			    (include-paths-for-current-bank))))))))
+			 :directory (list :relative "Source" "Generated" (machine-directory-name))
+			 :name (format nil "Bank~2,'0x.Public.NTSC" *bank*)
+			 :type "s")))
+		(/= *bank* *last-bank*)
+		(assembler-invocation-macro)
+		(when (= *bank* *last-bank*)
+		  "-DLASTBANK=true")
+		(first-assets-bank "Test")
+		(mapcar (lambda (path) (format nil "~{~a~^/~}" (rest path)))
+		        (include-paths-for-current-bank
+		         :testp t))))))))
 
 (defun write-makefile-for-blobs ()
   "Emit Makefile rules for @file{Source/Blobs/<platform>/*.xcf}.
@@ -2401,15 +2420,16 @@ Intellivision uses @code{compile-blob-intv} (tile map + GRAM cards)."
 
 (defun write-makefile-for-tilesets ()
   (dolist (tileset (recursive-directory (make-pathname :directory (list :relative "Source" "Maps")
-						       :name :wild
-						       :type "tsx")))
+					     :name :wild
+					     :type "tsx")))
     (write-tsx-generation tileset)))
 
 (defun write-makefile-for-bare-assets ()
-  (dolist (asset (all-bare-assets))
-    (unless (and (= *machine* 2609)
-                 (blob-asset-p asset))
-      (write-asset-compilation asset))))
+  (maphash (lambda (asset builds)
+             (declare (ignore builds))
+             (when asset
+               (write-asset-compilation asset)))
+           (read-assets-list)))
 
 (defun write-makefile-header ()
   (format t "# Makefile (generated)~%# -*- makefile -*-~%"))
@@ -2429,15 +2449,18 @@ Intellivision uses @code{compile-blob-intv} (tile map + GRAM cards)."
     (sort stems #'string<)))
 
 (defun write-makefile-for-eightbol-classes ()
-  "Emit pattern rules for EIGHTBOL: @code{Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/%Class.s} from @code{%.bas} when present, else @code{%.cob}. When both exist, @code{.bas} wins."
+  "Emit           pattern           rules           for           EIGHTBOL:
+@code{Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/%Class.s}         from
+@code{%.bas}  when   present,  else   @code{%.cob}.  When   both  exist,
+@code{.bas} wins."
   (format t "~%
 EIGHTBOL_CPUDIR ?= $(CPUDIR)
 ")
   (dolist (class-id (eightbol-sources))
-    (let* ((bas (merge-pathnames (make-pathname :name class-id :type "bas")
-                                 #p"Source/Classes/"))
-           (cob (merge-pathnames (make-pathname :name class-id :type "cob")
-                                 #p"Source/Classes/"))
+    (let* ((bas (make-pathname :directory (pathname-directory #p"Source/Classes/")
+                               :name class-id :type "bas"))
+           (cob (make-pathname :directory (pathname-directory #p"Source/Classes/")
+                               :name class-id :type "cob"))
            (pascal (pascal-case class-id)))
       (cond
         ((probe-file bas)
@@ -2454,13 +2477,7 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.bas \\
 "
                  pascal class-id class-id))
         ((probe-file cob)
-         (let ((post-sed (cond
-                           ((string-equal class-id "Intercardinal-Course")
-                            (format nil "~%	sed -i 's/Lib\\.IntercardinalCourse/IntercardinalCourse/g' $@"))
-                           ((string-equal class-id "Non-Player-Character")
-                            (format nil "~%	sed -i -e 's/MoveXh/MoveXH/g' -e 's/MoveYh/MoveYH/g' -e 's/MoveXl/MoveXL/g' -e 's/MoveYl/MoveYL/g' -e 's/DecalXh/DecalXH/g' -e 's/DecalYh/DecalYH/g' -e 's/NpcMovementSpeed/NPCMovementSpeed/g' $@"))
-                           (t ""))))
-           (format t "
+         (format t "
 Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 		Source/Generated/$(PORT)/Classes/~a-Slots.cpy \\
                     Source/Generated/$(PORT)/Classes/Asset-IDs.cpy \\
@@ -2468,19 +2485,19 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 		bin/eightbol
 	mkdir -p Source/Generated/Classes/$(EIGHTBOL_CPUDIR)
 	bin/eightbol $< -m $(EIGHTBOL_CPUDIR) -o $@ \\
-         -I Source/Generated/$(PORT)/Classes \\
-         -I Source/Classes~a"
-                   pascal class-id class-id post-sed)))
+		-I Source/Generated/$(PORT)/Classes \\
+		-I Source/Classes"
+                 pascal class-id class-id))
         (t nil))))
   (let ((outputs
-         (loop for class-id in (eightbol-sources)
-               for bas = (merge-pathnames (make-pathname :name class-id :type "bas")
-                                          #p"Source/Classes/")
-               for cob = (merge-pathnames (make-pathname :name class-id :type "cob")
-                                          #p"Source/Classes/")
-               when (or (probe-file bas) (probe-file cob))
-                 collect (format nil "Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s"
-                                 (pascal-case class-id)))))
+          (loop for class-id in (eightbol-sources)
+                for bas = (make-pathname :directory (pathname-directory #p"Source/Classes/")
+                                         :name class-id :type "bas")
+                for cob = (make-pathname :directory (pathname-directory #p"Source/Classes/")
+                                         :name class-id :type "cob")
+                when (or (probe-file bas) (probe-file cob))
+                  collect (format nil "Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s"
+                                  (pascal-case class-id)))))
     (when outputs
       (format t "~%# Concrete class outputs for order-only bank prerequisites (see write-bank-makefile).~%")
       (format t "EIGHTBOL_CLASS_OUTPUTS :=~{ ~a~}~%" outputs))))
@@ -2489,14 +2506,14 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
   (if (and *last-bank* bank (= bank *last-bank*))
       (last-bank-source-pathname)
       (make-pathname :directory (list :relative "Source" "Code"
-				      (machine-directory-name) "Banks"
-				      (format nil "Bank~2,'0x" bank))
-		     :name (format nil "Bank~2,'0x" bank)
-		     :type "s")))
+			        (machine-directory-name) "Banks"
+			        (format nil "Bank~2,'0x" bank))
+		 :name (format nil "Bank~2,'0x" bank)
+		 :type "s")))
 
 (defun last-bank-source-pathname ()
   (make-pathname :directory (list :relative "Source" "Code"
-				  (machine-directory-name) "Banks" "LastBank")
+			    (machine-directory-name) "Banks" "LastBank")
                  :name "LastBank" :type "s"))
 
 (defgeneric write-master-makefile-for-machine (machine)
@@ -2507,15 +2524,29 @@ Source/Generated/Classes/$(EIGHTBOL_CPUDIR)/~aClass.s: Source/Classes/~a.cob \\
 (defmethod write-master-makefile-for-machine ((machine (eql 7800)))
   "Write makefile content for Atari 7800"
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (format t "
 Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 ~{\\~%     Source/Generated/Classes/$(CPUDIR)/~aClass.s~}
 "
               build video
               (mapcar #'pascal-case (eightbol-sources)))))
+  (let ((machine-dir (machine-directory-name)))
+    (dolist (ext '("cob" "bas"))
+      (dolist (f (directory (make-pathname :directory '(:relative "Source" "Maps" "RunCommands")
+                                           :name :wild
+                                           :type ext)))
+        (let* ((stem (pathname-name f))
+               (pascal (pascal-case stem))
+               (out (format nil "Source/Generated/~a/RunCommands/~a.s" machine-dir pascal))
+               (flag (if (string-equal ext "bas") "--basic " "")))
+          (format t "~%~a: ~a \\
+          bin/eightbol
+	mkdir -p Source/Generated/~a/RunCommands
+	bin/eightbol ~a$< -m $(CPUDIR) -o $@"
+                  out (enough-namestring f) machine-dir flag)))))
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
@@ -2542,18 +2573,18 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
       (dotimes (*bank* (1+ *last-bank*))
         (let ((bank-source (bank-source-pathname)))
           (cond
-	    ((= *bank* *last-bank*)
-	     (write-bank-makefile (last-bank-source-pathname)
+	  ((= *bank* *last-bank*)
+	   (write-bank-makefile (last-bank-source-pathname)
                                   :build build))
-	    ((and (= *last-bank* #x3f)
+	  ((and (= *last-bank* #x3f)
                   (= *bank* #x3e))
-	     (write-ram-bank-makefile :build build))
-	    ((probe-file bank-source)
-	     (write-bank-makefile bank-source
+	   (write-ram-bank-makefile :build build))
+	  ((probe-file bank-source)
+	   (write-bank-makefile bank-source
                                   :build build))
-	    (t (write-asset-bank-makefile *bank*
+	  (t (write-asset-bank-makefile *bank*
                                           :build build))))))
-      (emit-grouped-asset-bank-list-rules build nil)))
+    (emit-grouped-asset-bank-list-rules build nil)))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 64)))
   "Write makefile content for Commodore 64"
@@ -2570,14 +2601,14 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
   (emit-grouped-asset-bank-list-rules nil nil))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 3010)))
-  "Append SMS note: Z80 build uses Source/Build/SMS.mak and ASZ80 (sjasmplus), not 64tass per-bank assembly."
+  "Append SMS note: Z80 build uses Source/Build/SMS.mak and ASZ80 (z80asm), not 64tass per-bank assembly."
   (format t "~%
 # --- Sega Master System (3010): Z80 ---
 # See Source/Build/SMS.mak and Source/Build/z80-common.mak.
 "))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 837)))
-  "Append Game Gear note: Z80 build uses Source/Build/GG.mak and ASZ80 (sjasmplus)."
+  "Append Game Gear note: Z80 build uses Source/Build/GG.mak and ASZ80 (z80asm)."
   (format t "~%
 # --- Sega Game Gear (837): Z80 ---
 # See Source/Build/GG.mak and Source/Build/z80-common.mak.
@@ -2606,27 +2637,27 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 
 (defun write-atari8-cartridge-bank-rules ()
   "Emit Dist and per-bank recipes for @code{*machine*} 5200, 400, or 800 (32×32 KiB / 1 MiB)."
-  (let ((root (or (uiop:pathname-directory-pathname (uiop:getcwd)) (project-root)))
-        (machine *machine*))
+  (let ((machine *machine*))
     (dolist (build +all-builds+)
-      (dolist (video (supported-video-types machine))
+      (dolist (video (all-regions-for-machine machine))
         (let ((*region* video)
-	      (*last-bank* (1- (number-of-banks build video))))
+	    (*last-bank* (1- (number-of-banks build video))))
           (write-makefile-top-line :build build :video video)
           (write-header-script :build build :video video)
           (reset-asset-bank-list-batch)
           (dotimes (*bank* (1+ *last-bank*))
-	    (let ((bank-source (bank-source-pathname)))
-	      (cond
+	  (let ((bank-source (bank-source-pathname)))
+	    (cond
                 ((= *bank* *last-bank*)
                  (write-bank-makefile (last-bank-source-pathname)
-				      :build build :video video))
-                ((probe-file (merge-pathnames bank-source root))
+			        :build build :video video))
+                ((probe-file bank-source)
                  (write-bank-makefile bank-source
-				      :build build :video video))
+			        :build build :video video))
                 (t (write-asset-bank-makefile *bank*
-					      :build build :video video)))))
-          (emit-grouped-asset-bank-list-rules build video))))))
+				      :build build :video video)))))
+          (emit-grouped-asset-bank-list-rules build video)
+          (format t "~2%"))))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 5200)))
   "Write makefile content for Atari 5200 (32 × 32 KiB banks, 1 MiB concatenated image)."
@@ -2654,9 +2685,9 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-ram-bank-makefile :build "Public" :video :NTSC))
         ((probe-file bank-source)
          (write-bank-makefile bank-source
-			      :build "Public" :video "NTSC"))
+			:build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-				      :build "Public" :video "NTSC")))))
+			        :build "Public" :video "NTSC")))))
   (emit-grouped-asset-bank-list-rules "Public" "NTSC"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 2068)))
@@ -2670,9 +2701,9 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
          (write-ram-bank-makefile :build "Public" :video "NTSC"))
         ((probe-file bank-source)
          (write-bank-makefile bank-source
-			      :build "Public" :video "NTSC"))
+			:build "Public" :video "NTSC"))
         (t (write-asset-bank-makefile *bank*
-				      :build "Public" :video "NTSC")))))
+			        :build "Public" :video "NTSC")))))
   (emit-grouped-asset-bank-list-rules "Public" "NTSC"))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 128)))
@@ -2692,22 +2723,22 @@ Object/$(PORT)/Bank01.~a.~a.o: Source/Generated/$(PORT)/Classes/Classes.cpy ~
 (defmethod write-master-makefile-for-machine ((machine (eql 20953)))
   "Write makefile content for Game Boy Color"
   (dolist (build +all-builds+)
-    (dolist (video (supported-video-types machine))
+    (dolist (video (all-regions-for-machine machine))
       (let ((*last-bank* (1- (number-of-banks build video))))
         (write-makefile-top-line :build build :video video)
         (write-header-script :build build :video video)
         (reset-asset-bank-list-batch)
         (dotimes (*bank* (1+ *last-bank*))
           (let ((bank-source (bank-source-pathname)))
-	    (cond
-	      ((= *bank* *last-bank*)
-	       (write-bank-makefile (last-bank-source-pathname)
-				    :build build :video video))
-	      ((probe-file bank-source)
-	       (write-bank-makefile bank-source
-				    :build build :video video))
-	      (t (write-asset-bank-makefile *bank*
-					    :build build :video video)))))
+	  (cond
+	    ((= *bank* *last-bank*)
+	     (write-bank-makefile (last-bank-source-pathname)
+			      :build build :video video))
+	    ((probe-file bank-source)
+	     (write-bank-makefile bank-source
+			      :build build :video video))
+	    (t (write-asset-bank-makefile *bank*
+				    :build build :video video)))))
         (emit-grouped-asset-bank-list-rules build video)))))
 
 (defmethod write-master-makefile-for-machine ((machine (eql 2609)))
@@ -2731,19 +2762,19 @@ as1600 (@file{Source/Build/Intv.mak}).  The cartridge binary is
 Generated master Makefiles must be plain UTF-8 text; a stray NUL (e.g. from a
 bad @code{FORMAT} argument) makes GNU Make warn and abort parsing."
   (let ((bytes (with-open-file (in pathname :direction :input
-				     :element-type '(unsigned-byte 8))
-		 (let ((buf (make-array (file-length in) :element-type '(unsigned-byte 8))))
-		   (read-sequence buf in)
-		   buf))))
+				    :element-type '(unsigned-byte 8))
+	       (let ((buf (make-array (file-length in) :element-type '(unsigned-byte 8))))
+	         (read-sequence buf in)
+	         buf))))
     (when (position 0 bytes)
       (let ((clean (remove 0 bytes)))
-	(with-open-file (out pathname :direction :output
-			     :if-exists :supersede
-			     :element-type '(unsigned-byte 8))
-	  (write-sequence clean out))
-	(format *trace-output*
-		"~&Warning: removed ~:d NUL byte~:p from ~a~%"
-		(- (length bytes) (length clean)) pathname)))))
+        (with-open-file (out pathname :direction :output
+			        :if-exists :supersede
+			        :element-type '(unsigned-byte 8))
+	(write-sequence clean out))
+        (format *trace-output*
+	      "~&Warning: removed ~:d NUL byte~:p from ~a~%"
+	      (- (length bytes) (length clean)) pathname)))))
 
 (defun write-master-makefile (&optional (*machine* *machine*))
   "Generates the master Makefile for the current platform
@@ -2775,16 +2806,14 @@ file interleaved with @code{*standard-output*} content.  Progress is sent to
 @code{*trace-output*}, rebound to @code{*error-output*} for the duration of the write so
 accidental @samp{> Makefile} only duplicates Makefile bytes on fd 1 while trace stays on
 stderr."
-  (let* ((root (uiop:ensure-directory-pathname (project-root)))
-         (gen-dir (merge-pathnames
-                   (make-pathname :directory (list :relative "Source" "Generated" (machine-directory-name)))
-                   root))
+  (let* ((gen-dir (make-pathname :directory (list :relative "Source" "Generated"
+                                                  (machine-directory-name))))
          (gen-mf (merge-pathnames (make-pathname :name "Makefile" :type nil) gen-dir)))
     (ensure-directories-exist gen-dir)
     (format *trace-output* "~&Writing master Makefile content to ~a …" gen-mf)
     (with-output-to-file (*standard-output* gen-mf
-					    :if-exists :supersede
-					    :external-format :utf-8)
+				    :if-exists :supersede
+				    :external-format :utf-8)
       (let ((*trace-output* *error-output*))
         (setf *makefile-bank-rules-emitted* (make-hash-table :test 'equal))
         (let ((*region* nil))
@@ -2794,11 +2823,10 @@ stderr."
           (write-makefile-for-tilesets)
           (write-makefile-for-art)
           (write-makefile-for-blobs)
-          (unless (member *machine* '(5200 400 800 2609 200))
-	    (write-makefile-test-target)
-	    (write-test-header-script)
-	    (write-makefile-test-banks))
-        (write-master-makefile-for-machine *machine*))))
+          (write-makefile-test-target)
+	(write-test-header-script)
+	(write-makefile-test-banks)
+          (write-master-makefile-for-machine *machine*))))
     (%scrub-makefile-nul-bytes gen-mf)
     (format *trace-output* " … done writing master Makefile.~%")))
 
@@ -2843,14 +2871,14 @@ The EQU name suffix (e.g. @samp{MAP_WIDTH}).
                                       :junk-allowed t)))))))
   0)
 
-(defun %intv-map-catalog-entries (root)
+(defun %intv-map-catalog-entries ()
   "Return sorted alists for compiled Intv map @file{Map.*.s} files on disk.
 
 Each entry has @code{:id}, @code{:sym}, @code{:gram} (0), @code{:map}
 (@code{LAB_MAP_HEADER} pointer), @code{:cols} (width), @code{:rows} (height),
 @code{:ngram} (0).  Uses @code{read-assets-list} IDs for @code{:map} kind only."
   (read-assets-list)
-  (let ((gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+  (let ((gen-dir #p"Source/Generated/Intv/Assets/")
         (id-table (gethash :map *asset-ids-seen*))
         (entries nil))
     (when (and gen-dir id-table)
@@ -2871,14 +2899,14 @@ Each entry has @code{:id}, @code{:sym}, @code{:gram} (0), @code{:map}
                          entries))))
     (sort entries #'< :key (lambda (e) (getf e :id)))))
 
-(defun %intv-blob-catalog-entries (root)
+(defun %intv-blob-catalog-entries ()
   "Return sorted alists for Intv BLOB PNGs on disk.
 
 Each entry has @code{:id}, @code{:sym}, @code{:gram}, @code{:map}, @code{:cols},
 @code{:rows}, @code{:ngram}.  Uses @code{read-assets-list} IDs only."
   (read-assets-list)
-  (let ((blob-dir (merge-pathnames #p"Source/Blobs/Intv/" root))
-        (gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+  (let ((blob-dir #p"Source/Blobs/Intv/")
+        (gen-dir #p"Source/Generated/Intv/Assets/")
         (id-table (gethash :blob *asset-ids-seen*))
         (entries nil))
     (when (and blob-dir (uiop:directory-exists-p blob-dir) id-table)
@@ -2886,24 +2914,24 @@ Each entry has @code{:id}, @code{:sym}, @code{:gram}, @code{:map}, @code{:cols},
             for name = (gethash id id-table)
             for png = (merge-pathnames (make-pathname :name name :type "png") blob-dir)
             when (probe-file png)
-            do (let* ((sym (asset->symbol-name (format nil "Blobs/~a" name)))
-                      (blob-s (merge-pathnames (make-pathname :name (format nil "Blob.~a" name)
+              do (let* ((sym (asset->symbol-name (format nil "Blobs/~a" name)))
+                        (blob-s (merge-pathnames (make-pathname :name (format nil "Blob.~a" name)
                                                                 :type "s")
-                                               gen-dir)))
-                 (push (list :id id :sym sym
-                             :gram (format nil "~a_GRAM_DATA" sym)
-                             :map (format nil "~a_TILE_MAP" sym)
-                             :cols (%intv-read-blob-equ blob-s sym "TILE_COLS")
-                             :rows (%intv-read-blob-equ blob-s sym "TILE_ROWS")
-                             :ngram (%intv-read-blob-equ blob-s sym "UNIQUE_GRAM_CARDS"))
-                       entries))))
+                                                 gen-dir)))
+                   (push (list :id id :sym sym
+                               :gram (format nil "~a_GRAM_DATA" sym)
+                               :map (format nil "~a_TILE_MAP" sym)
+                               :cols (%intv-read-blob-equ blob-s sym "TILE_COLS")
+                               :rows (%intv-read-blob-equ blob-s sym "TILE_ROWS")
+                               :ngram (%intv-read-blob-equ blob-s sym "UNIQUE_GRAM_CARDS"))
+                         entries))))
     (sort entries #'< :key (lambda (e) (getf e :id)))))
 
-(defun %intv-song-catalog-entries (root)
+(defun %intv-song-catalog-entries ()
   "Return sorted alists for Intv AY songs with generated @file{Song.*.s} on disk."
   (read-assets-list)
-  (let ((song-dir (merge-pathnames #p"Source/Songs/" root))
-        (gen-dir (merge-pathnames #p"Source/Generated/Intv/Assets/" root))
+  (let ((song-dir #p"Source/Songs/" )
+        (gen-dir #p"Source/Generated/Intv/Assets/")
         (id-table (gethash :song *asset-ids-seen*))
         (entries nil))
     (when (and song-dir (uiop:directory-exists-p song-dir) id-table)
@@ -2911,21 +2939,20 @@ Each entry has @code{:id}, @code{:sym}, @code{:gram}, @code{:map}, @code{:cols},
             for name = (gethash id id-table)
             for mscz = (merge-pathnames (make-pathname :name name :type "mscz") song-dir)
             for gen-s = (merge-pathnames (make-pathname :name (format nil "Song.~a" name)
-                                                         :type "s")
+                                                        :type "s")
                                          gen-dir)
             when (and (probe-file mscz) (%intv-song-asm-ready-p gen-s))
-            do (let ((sym (asset->symbol-name (format nil "Songs/~a" name))))
-                 (push (list :id id :sym sym
-                             :gram 0
-                             :map (format nil "~a_DATA" sym)
-                             :cols 0 :rows 0 :ngram 0)
-                       entries))))
+              do (let ((sym (asset->symbol-name (format nil "Songs/~a" name))))
+                   (push (list :id id :sym sym
+                               :gram 0
+                               :map (format nil "~a_DATA" sym)
+                               :cols 0 :rows 0 :ngram 0)
+                         entries))))
     (sort entries #'< :key (lambda (e) (getf e :id)))))
 
 (defun write-intv-asset-catalog (&optional
-                                 (output-path
-                                  (format nil "Source/Generated/~a/AssetCatalog.s"
-                                          (machine-directory-name))))
+                                   (output-path
+                                    #p"Source/Generated/Intv/AssetCatalog.s"))
   "Write @file{AssetCatalog.s} for the current @code{*machine*} (Intv / 2609).
 
 Each row is @code{(id, gram, map, cols, rows, nunique, bank)}. Lookup is by
@@ -2933,14 +2960,12 @@ unique ID only. Requires @code{--port Intv} so @code{*machine*} is 2609."
   (unless (= *machine* 2609)
     (error "write-intv-asset-catalog requires Intellivision port (~a); *machine* is ~a"
            (machine-directory-name) *machine*))
-  (let* ((root (uiop:ensure-directory-pathname (project-root)))
-         (out (merge-pathnames output-path root))
-         (entries (sort (append (%intv-blob-catalog-entries root)
-                                (%intv-song-catalog-entries root)
-                                (%intv-map-catalog-entries root))
+  (let* ((entries (sort (append (%intv-blob-catalog-entries)
+                                (%intv-song-catalog-entries)
+                                (%intv-map-catalog-entries))
                         #'< :key (lambda (e) (getf e :id)))))
-    (ensure-directories-exist out)
-    (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
+    (ensure-directories-exist output-path)
+    (with-output-to-file (s output-path :if-exists :supersede :external-format :utf-8)
       (format s ";;; Intellivision asset catalog (generated by write-intv-asset-includes)~%")
       (format s ";;; Rows are sorted by unique asset ID; lookup by ID only.~2%")
       (format s "AssetCatalogStride    EQU     6~%")
@@ -2954,8 +2979,8 @@ unique ID only. Requires @code{--port Intv} so @code{*machine*} is 2609."
         (format s "    DECLE   ~d           ; rows~%" (getf entry :rows))
         (format s "    DECLE   ~d           ; unique GRAM cards~%" (getf entry :ngram))
         (format s "    DECLE   0           ; bank (flat ROM until mapper lands)~%")))
-    (format *trace-output* "~&Wrote ~a (~:d catalog row~:p)~%" out (length entries))
-    out))
+    (format *trace-output* "~&Wrote ~a (~:d catalog row~:p)~%" output-path (length entries))
+    output-path))
 
 (defun %intv-song-asm-ready-p (gen-s)
   "True when @file{gen-s} is as1600 AY song data (not a 64tass @code{.binary} stub)."
@@ -2966,7 +2991,8 @@ unique ID only. Requires @code{--port Intv} so @code{*machine*} is 2609."
             when (search "_DATA:" line)
               do (return t)))))
 
-(defun write-intv-asset-includes (&optional (output-path #p"Source/Generated/Intv/AssetIncludes.s"))
+(defun write-intv-asset-includes (&optional
+                                    (output-path #p"Source/Generated/Intv/AssetIncludes.s"))
   "Write @file{OUTPUT-PATH} with Intellivision generated asset includes.
 
 Also writes @file{AssetCatalog.s} beside it. Invoke with @code{--port Intv}
@@ -2984,13 +3010,11 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
   (unless (= *machine* 2609)
     (error "write-intv-asset-includes requires Intellivision port (~a); *machine* is ~a"
            (machine-directory-name) *machine*))
-  (let* ((root (uiop:ensure-directory-pathname (project-root)))
-         (port-dir (machine-directory-name))
-         (out (merge-pathnames output-path root))
-         (art-dir (merge-pathnames (format nil "Source/Art/~a/" port-dir) root))
-         (blob-dir (merge-pathnames #p"Source/Blobs/Intv/" root)))
-    (ensure-directories-exist out)
-    (with-output-to-file (s out :if-exists :supersede :external-format :utf-8)
+  (let* ((port-dir (machine-directory-name))
+         (art-dir (format nil "Source/Art/~a/" port-dir))
+         (blob-dir #p"Source/Blobs/Intv/"))
+    (ensure-directories-exist output-path)
+    (with-output-to-file (s output-path :if-exists :supersede :external-format :utf-8)
       (format s ";;; Intellivision asset includes (generated by write-intv-asset-includes)~%")
       (let ((arts (when (uiop:directory-exists-p art-dir)
                     (directory (merge-pathnames #p"*.art" art-dir))))
@@ -3006,27 +3030,29 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
                 (let ((stem (pathname-name b)))
                   (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Blob.~A.s\"~%"
                           port-dir stem)))
-              (let ((song-dir (merge-pathnames #p"Source/Songs/" root))
+              (let ((song-dir #p"Source/Songs/")
                     (id-table (progn (read-assets-list) (gethash :song *asset-ids-seen*))))
                 (when (and (uiop:directory-exists-p song-dir) id-table)
                   (dolist (song (sort (loop for name being the hash-values of id-table
-                                           collect name)
-                                     #'string<))
+                                            collect name)
+                                      #'string<))
                     (let ((mscz (merge-pathnames (make-pathname :name song :type "mscz") song-dir))
-                          (gen-s (merge-pathnames (format nil "Source/Generated/~a/Assets/Song.~a.s"
-                                                          port-dir song)
-                                                  root)))
+                          (gen-s  (make-pathname :directory (list :relative "Source"
+                                                                  "Generated"
+                                                                  port-dir
+                                                                  "Assets")
+                                                 :name (format nil "Song.~a" song)
+                                                 :type "s")))
                       (when (and (probe-file mscz) (%intv-song-asm-ready-p gen-s))
                         (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Song.~A.s\"~%"
                                 port-dir song))))))
               ;; Include compiled Intv map assemblies
               (let* ((map-id-table (gethash :map *asset-ids-seen*))
-                     (gen-dir (merge-pathnames (format nil "Source/Generated/~a/Assets/" port-dir)
-                                              root)))
+                     (gen-dir (format nil "Source/Generated/~a/Assets/" port-dir)))
                 (when map-id-table
                   (dolist (name (sort (loop for n being the hash-values of map-id-table
-                                           collect n)
-                                     #'string<))
+                                            collect n)
+                                      #'string<))
                     (let* ((dot-name (substitute #\. #\/ name))
                            (gen-s (merge-pathnames (make-pathname :name (format nil "Map.~a" dot-name)
                                                                   :type "s")
@@ -3035,21 +3061,47 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
                         (format s "~%        INCLUDE \"Source/Generated/~a/Assets/Map.~A.s\"~%"
                                 port-dir dot-name)))))))
             (format s ";;; (no Source/Art/~a/*.art or Source/Blobs/Intv/*.png yet)~%" port-dir))))
-    (format *trace-output* "~&Wrote ~a~%" out)
+    (format *trace-output* " … Wrote ~a~%" output-path)
     (write-intv-asset-catalog)))
 
 (defmethod get-asset-id ((kind (eql :map)) asset)
-  "Find the asset ID for ASSET (a map), ultimately via `FIND-LOCALE-ID-FOR-SEGMENT'"
-  (let ((id (find-locale-id-for-segment asset)))
-    (assert id (id)
-	    "Could not find asset ID for map “~a”" asset)
-    (format *trace-output* "~&//* Map “~a” has ID $~2,'0x" asset id)
-    id))
+  "Find the asset ID for ASSET (a map)"
+  (tagbody top
+     (restart-case
+         (return-from get-asset-id
+           (or (gethash asset *maps-ids*)
+               (progn
+                 (read-map-ids-table)
+                 (gethash asset *maps-ids*))))
+       (reload-map-ids-table ()
+         :report "Reload Source/Tables/MapsIndex.ods"
+         (read-map-ids-table)
+         (go top)))))
 
 (defmethod get-asset-id ((kind (eql :script)) asset)
-  "Calls `FIND-SCRIPT-ID' for ASSET"
-  (or (find-script-id asset)
-      (error "Counld not get asset ID for ~s" asset)))
+  "Calls `FIND-SCRIPT-ID' for ASSET; falls back to .forth, then warns and returns 0"
+  (or (handler-case (find-script-id asset)
+        (error ()
+          (let* ((dir (butlast
+                       (mapcar #'pascal-case
+                               (flatten (mapcar (curry #'split-sequence #\/)
+                                                (split-sequence #\- asset))))))
+                 (dir (if (equal "Scripts" (first dir)) (subseq dir 1) dir))
+                 (title (pascal-case (car (last (split-sequence #\- asset)))))
+                 (forth-path (make-pathname :directory
+                                            (append (list :relative "Source" "Scripts") dir)
+                                            :name title :type "forth")))
+            (if (probe-file forth-path)
+                (let ((id (logand #x7ff (sxhash asset))))
+                  (format *trace-output*
+                          "~&//* Script “~a” (Forth) has ID $~3,'0x"
+                          (enough-namestring forth-path) id)
+                  id)
+                (progn
+                  (cerror "Continue with script ID 0"
+                          "Script ~s not found as .fountain or .forth" asset)
+                  0)))))
+      0))
 
 (defmethod get-asset-id ((kind (eql :art)) asset-name)
   "Find the asset-id of ASSET-NAME from its name"
@@ -3063,6 +3115,18 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
     (format *trace-output* "~&//* Blob “~a” has ID $~2,'0x" asset-name id)
     id))
 
+(defmethod get-asset-id ((kind (eql :tileset)) asset-name)
+  "Find the asset-id of a tileset from its name"
+  (let ((id (logand #xff (sxhash asset-name))))
+    (format *trace-output* "~&//* Tileset “~a” has ID $~2,'0x" asset-name id)
+    id))
+
+(defmethod get-asset-id ((kind (eql :sprite-sheet)) asset-name)
+  "Find the asset-id of a sprite sheet from its name"
+  (let ((id (logand #xff (sxhash asset-name))))
+    (format *trace-output* "~&//* Sprite sheet “~a” has ID $~2,'0x" asset-name id)
+    id))
+
 (defmethod get-asset-id ((kind (eql :song)) asset-name)
   "Find the asset ID for a song (based on its workNumber or name ASSET-NAME)"
   (let ((pathname (make-pathname :directory '(:relative "Source" "Songs")
@@ -3072,28 +3136,28 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
       (zip:with-zipfile (zip pathname)
         (if-let (entry (gethash (format nil "~a.mscx" asset-name)
                                 (zip:zipfile-entries zip)))
-	    (when-let (raw (third (find-if
-                                   (lambda (el)
-				     (and (equal (first el) "metaTag")
-                                          (equalp (second el) '(("name" "workNumber")))))
-                                   (cddr
-				    (lastcar (xmls:parse-to-list
-					      (babel:octets-to-string
-					       (zip:zipfile-entry-contents entry))))))))
-	      (let ((work-number$ (string raw)))
-		(when (every #'digit-char-p work-number$)
-                  (format *trace-output* "~&//* Song “~a” has ID $~2,'0x (from workNumber)"
-                          (pathname-name pathname) (parse-integer work-number$))
-                  (return-from get-asset-id (parse-integer work-number$))))))))
+	(when-let (raw (third (find-if
+                                 (lambda (el)
+			     (and (equal (first el) "metaTag")
+                                        (equalp (second el) '(("name" "workNumber")))))
+                                 (cddr
+			    (lastcar (xmls:parse-to-list
+				    (babel:octets-to-string
+				     (zip:zipfile-entry-contents entry))))))))
+	  (let ((work-number$ (string raw)))
+	    (when (every #'digit-char-p work-number$)
+                (format *trace-output* "~&//* Song “~a” has ID $~2,'0x (from workNumber)"
+                        (pathname-name pathname) (parse-integer work-number$))
+                (return-from get-asset-id (parse-integer work-number$))))))))
     (let ((id (ash (logand #xff00 (sxhash asset-name)) -8)))
       (format *trace-output* "~&//* Song “~a” has ID $~2,'0x"
-	      (pathname-name pathname) id)
+	    (pathname-name pathname) id)
       id)))
 
 (defun write-asset-source (kind$ predicate assets source)
   "Write a generic asset stanza for any KIND$ ASSETS (meeting PREDICATE) into bank SOURCE"
   (let ((kind (kind-by-name kind$)))
-      (when (some predicate assets)
+    (when (some predicate assets)
       (when (and (equal :map kind)
                  (not (= *machine* 2609))
                  (= *machine* 7800))
@@ -3136,14 +3200,12 @@ Path relative to project root (default @file{Source/Generated/Intv/AssetIncludes
 
 If CHAR does not occur in STRING, returns STRING."
   (if-let (position (position char string :from-end t))
-      (subseq string (1+ position))
+    (subseq string (1+ position))
     string))
 
 (defun start-bank-include-name ()
   "Return @file{StartBank.s} or @file{StartAssetBank.s} for the active @code{*machine*}."
-  (if (member *machine* '(5200 400 800))
-      "StartAssetBank.s"
-      "StartBank.s"))
+  "StartBank.s")
 
 (defun write-asset-bank (bank-hex build video)
   "Write out the skeletal bank file for BANK-HEX for BUILD with VIDEO formats specified.
@@ -3157,8 +3219,8 @@ based on the asset listing files."
                                  :type "s"))
          (assets (with-input-from-file (list (allocation-list-name *bank* build video))
                    (sort (loop for asset = (read-line list nil nil)
-			       while asset
-			       collect asset)
+			 while asset
+			 collect asset)
                          #'string<))))
     (format *trace-output* "~& Bank ~2,'0x assets: ~s" *bank* assets)
     (ensure-directories-exist outfile)
@@ -3182,12 +3244,12 @@ VLoadBlob:~10t~:[sec
 ~10trts
 ~10tnop~;jmp LoadBlob~]
 ~2%"
-	      *bank* *bank*
-	      (start-bank-include-name)
-	      (some #'map-asset-p assets)
-	      (some #'song-asset-p assets)
-	      (some #'script-asset-p assets)
-	      (some #'blob-asset-p assets))
+	    *bank* *bank*
+	    (start-bank-include-name)
+	    (some #'map-asset-p assets)
+	    (some #'song-asset-p assets)
+	    (some #'script-asset-p assets)
+	    (some #'blob-asset-p assets))
       (write-asset-source "Map" #'map-asset-p assets source)
       (write-asset-source "Song" #'song-asset-p assets source)
       (write-asset-source/script assets source)
@@ -3195,7 +3257,7 @@ VLoadBlob:~10t~:[sec
       (terpri source)
       (dolist (asset assets)
         (cond ((song-asset-p asset)
-	       (format source "
+	     (format source "
 ~10t.section BankData
 ~a:
 ~10t.if TV == NTSC
@@ -3204,10 +3266,10 @@ VLoadBlob:~10t~:[sec
 ~10t.binary \"Song.~1@*~a.PAL.o\"
 ~10t.fi
 ~10t.send"
-		       (asset->symbol-name asset)
-		       (subseq asset (1+ (position #\/ asset)))))
-	      ((map-asset-p asset)
-	       (destructuring-bind (dir map)
+		   (asset->symbol-name asset)
+		   (subseq asset (1+ (position #\/ asset)))))
+	    ((map-asset-p asset)
+	     (destructuring-bind (dir map)
                    (split-sequence #\/ (subseq asset (1+ (position #\/ asset))))
                  (format source "~&
 ~10t.section BankData
@@ -3230,13 +3292,13 @@ EndOfBinary = *
 "
                          (asset->symbol-name asset)
                          dir map dir map)))
-	      ((blob-asset-p asset)
-	       (format source "~2%~10t.section BankData~%~10t.include \"Blob.~a.s\"~%~10t.send"
-		       (subseq asset (1+ (position #\/ asset)))))
-	      ((script-asset-p asset)
-	       (format source "~2%~10t.include \"Script.~{~a.~a~}.s\""
-		       (split-sequence #\/ (subseq asset (1+ (position #\/ asset))))))
-	      (t (error "Unknown kind of asset (“~a”)" asset))))
+	    ((blob-asset-p asset)
+	     (format source "~2%~10t.section BankData~%~10t.include \"Blob.~a.s\"~%~10t.send"
+		   (subseq asset (1+ (position #\/ asset)))))
+	    ((script-asset-p asset)
+	     (format source "~2%~10t.include \"Script.~{~a.~a~}.s\""
+		   (split-sequence #\/ (subseq asset (1+ (position #\/ asset))))))
+	    (t (error "Unknown kind of asset (“~a”)" asset))))
       (format source "~3&~10t.dsection BankData~%~10t.include \"EndBank.s\"~%"))))
 
 (defun %parse-64tass-label-equate-address (value-string)
@@ -3249,11 +3311,11 @@ are not folded to address @samp{0} (which previously collided with real zero-pag
     (when (zerop (length v))
       (return-from %parse-64tass-label-equate-address nil))
     (flet ((parse-hex-from (start)
-	     (ignore-errors (parse-integer v :radix 16 :start start))))
+	   (ignore-errors (parse-integer v :radix 16 :start start))))
       (cond
         ((and (>= (length v) 2)
-	      (char= #\~ (char v 0))
-	      (char= #\$ (char v 1)))
+	    (char= #\~ (char v 0))
+	    (char= #\$ (char v 1)))
          (let ((n (parse-hex-from 2)))
            (when n (logxor #xffff n))))
         ((char= #\$ (char v 0))
@@ -3285,8 +3347,8 @@ Creates parent directories if needed; overwrites the output file."
   (let ((low (parse-integer lower :radix 16))
         (high (parse-integer upper :radix 16))
         (include-file (make-pathname :name include-file-name
-				     :type "s"
-				     :directory `(:relative "Source" "Generated" ,(machine-directory-name)))))
+			       :type "s"
+			       :directory `(:relative "Source" "Generated" ,(machine-directory-name)))))
     (with-input-from-file (labs labels-file)
       (ensure-directories-exist include-file)
       (with-output-to-file (incs include-file :if-exists :supersede)
@@ -3305,13 +3367,13 @@ Creates parent directories if needed; overwrites the output file."
                                    (string-trim '(#\Space #\Tab #\Newline)
                                                 (subseq line (1+ eq-pos)))))
                           (number (when value (%parse-64tass-label-equate-address value))))
-		     (when (and label (plusp (length label)) number
-				(<= low number high)
-				(not (ends-with-subseq "_ID" label)))
-		       (pushnew label (gethash number table) :test #'string=))))
+		 (when (and label (plusp (length label)) number
+			  (<= low number high)
+			  (not (ends-with-subseq "_ID" label)))
+		   (pushnew label (gethash number table) :test #'string=))))
           (loop for number in (sort (copy-list (hash-table-keys table)) #'<)
                 do (dolist (label (sort (copy-list (gethash number table)) #'string<))
-		     (format incs "~&~10t~a = $~x" label number))))
+		 (format incs "~&~10t~a = $~x" label number))))
         (format incs "~2%~10t.bend~%")
         (format *trace-output* "Done.")))))
 
@@ -3330,54 +3392,114 @@ Creates parent directories if needed; overwrites the output file."
                 while line
                 do (let ((parts (mapcar (lambda (each)
                                           (string-trim #(#\Space #\Newline) each))
-					(split-sequence #\= line))))
-		     (when (>= (length parts) 2)
-		       (destructuring-bind (label value) parts
-			 (when-let (number (cond
-                     			     ((char= #\~ (char value 0))
-                     			      (logxor #xffff
-                     				      (if (char= #\$ (char value 1))
-							  (parse-integer (subseq value 2) :radix 16)
-                     					  (parse-integer (subseq value 1)))))
-					     ((char= #\$ (char value 0))
-					      (parse-integer (subseq value 1) :radix 16))
-					     ((every #'digit-char-p value)
-					      (parse-integer value))
-					     ((char= #\" (char value 0))
-					      (char->minifont (char value 1)))
-					     (t nil)))
-			   (setf (gethash label table) number))))))
+				(split-sequence #\= line))))
+		 (when (>= (length parts) 2)
+		   (destructuring-bind (label value) parts
+		     (when-let (number (cond
+                     		     ((char= #\~ (char value 0))
+                     		      (logxor #xffff
+                     			    (if (char= #\$ (char value 1))
+					        (parse-integer (subseq value 2) :radix 16)
+                     			        (parse-integer (subseq value 1)))))
+				     ((char= #\$ (char value 0))
+				      (parse-integer (subseq value 1) :radix 16))
+				     ((every #'digit-char-p value)
+				      (parse-integer value))
+				     ((char= #\" (char value 0))
+				      (char->minifont (char value 1)))
+				     (t nil)))
+		       (setf (gethash label table) number))))))
           (loop for label in (sort (copy-list (hash-table-keys table)) #'string-lessp)
                 for number = (gethash label table)
                 do (format incs "~% : ~a ~d ; " label number)))
         (terpri incs)))
     (format *trace-output* " Done.")))
 
+(defun asset-file->moniker (asset-file)
+  "Convert a filesystem path like Source/Blobs/7800/TitleCard.xcf to
+   the Assets.index moniker format: Blobs/TitleCard (no extension,
+   no machine directory for Blobs)."
+  (let* ((dir (pathname-directory asset-file))
+         (name (pathname-name asset-file))
+         (src-pos (position "Source" dir :test #'string=)))
+    (when (null src-pos) (return-from asset-file->moniker nil))
+    (let ((parts (subseq dir (1+ src-pos))))
+      ;; Blobs path has <machine>/ after Blobs/ — strip the machine dir
+      (when (and (string-equal (first parts) "Blobs")
+                 (> (length parts) 1))
+        ;; Keep Blobs/ and the filename, discard the machine directory
+        (setf parts (list (first parts))))
+      ;; Append the filename without extension
+      (setf parts (append parts (list name)))
+      (format nil "~{~a~^/~}" parts))))
+
+(defun absent-asset-add-to-index (asset-path builds)
+  "Add an ASSET-PATH (like \"Blobs/TitleCard\") to Assets.index
+   for the given BUILDS (list of \"AA\", \"Public\", \"Demo\")."
+  (let* ((index-path #p"Source/Assets.index")
+         (lines (with-open-file (f index-path :external-format :utf-8)
+                  (loop for l = (read-line f nil nil) while l collect l)))
+         (build-str (format nil "~{~a~}" (mapcar (lambda (b) (subseq b 0 1)) builds)))
+         (new-entry (string-trim " " (format nil "~a~@[ ~a~]" asset-path
+                                             (unless (emptyp build-str) build-str))))
+         ;; Find alphabetical insertion point
+         (ins (or (loop for i from 0 below (length lines)
+                        for line = (nth i lines)
+                        when (and (> (length line) 0)
+                                  (not (char= (char line 0) #\;))
+                                  (not (every (lambda (c) (char= c #\Space)) line))
+                                  (string-greaterp line new-entry))
+                          return i)
+                  (length lines))))
+    (with-open-file (f index-path :direction :output :if-exists :supersede
+                                  :external-format :utf-8)
+      ;; Lines before insertion point
+      (loop for i from 0 below ins do (write-line (nth i lines) f))
+      ;; Ensure blank line before new section
+      (when (and (> ins 0) (> (length (nth (1- ins) lines)) 0))
+        (terpri f))
+      (write-line new-entry f)
+      ;; Remaining lines
+      (loop for i from ins below (length lines) do (write-line (nth i lines) f))))
+  (format *query-io* "~&Added ~a to Assets.index~%" asset-path))
+
 (defun check-for-absent-assets ()
   "Looks into Assets.index and searches Source directories for “forgotten” files."
   (read-assets-list)
   (let ((absent nil))
-    (dolist (asset-file (loop for wild in '(#p"Source/Blobs/*/*.xcf"
-					    #p"Source/Maps/*.tmx"
-					    #p"Source/Scripts/*.fountain"
-					    #p"Source/Songs/*.mscz")
-			      append (recursive-directory wild)))
-      (let* ((dir (pathname-directory asset-file))
-	     (moniker (format nil "~{~a~^/~}"
-			      (append (subseq dir
-					      (1+ (position "Source" dir
-							    :test #'string=)))
-				      (cons (pathname-name asset-file) nil)))))
-        (unless (gethash moniker *assets-list*)
-          (push (enough-namestring asset-file) absent))))
-    (when absent
-      (finish-output *error-output*)
-      (finish-output *standard-output*)
-      (format *error-output*
-	      "~3&The following assets are not found in any build in Source/Assets.index:
-~{~% ~a~}~2%"
-	      absent)
-      (finish-output *error-output*))))
+    (dolist (asset-file (loop for wild in (list (format nil "Source/Blobs/~a/*.xcf"
+                                                        (machine-directory-name))
+                                                #p"Source/Maps/*/*.tmx"
+                                                #p"Source/Scripts/*.fountain"
+                                                #p"Source/Songs/*.mscz")
+			append (recursive-directory (pathname wild))))
+      (let ((moniker (asset-file->moniker asset-file)))
+        (when (and moniker (not (gethash moniker *assets-list*)))
+          (push (list :path (enough-namestring asset-file)
+                      :moniker moniker
+                      :full-path (namestring (truename asset-file)))
+                absent))))
+    (setf absent (nreverse absent))
+    (if (null absent)
+        (format t "~&All assets are accounted for in Assets.index.~%")
+        (progn
+          (format t "~2%Click an asset below, then choose Add To to add it:~2%")
+          (dolist (a absent)
+            (let* ((moniker (getf a :moniker))
+                   (full (getf a :full-path))
+                   (slash-pos (position #\/ moniker))
+                   (dir (if slash-pos (subseq moniker 0 slash-pos) ""))
+                   (rest (if slash-pos (subseq moniker (1+ slash-pos)) moniker)))
+              (clim:with-output-as-presentation
+                  (*standard-output* (list moniker full) 'absent-asset)
+                (write-string "  " *standard-output*)
+                (clim:with-text-face (*standard-output* :bold)
+                  (princ dir *standard-output*))
+                (princ "/" *standard-output*)
+                (princ rest *standard-output*)
+                (princ "  [ ] D  [ ] P  [ ] A" *standard-output*)
+                (terpri *standard-output*))))
+          (format t "~2%Click an entry to add it to Assets.index with selected builds.~%")))))
 
 (defun assemble-with-64tass (source-name object-name error-stream)
   (let* ((machine (machine-directory-name))
@@ -3411,9 +3533,9 @@ Creates parent directories if needed; overwrites the output file."
                             "-o"
                             (enough-namestring object-name))))))
     (format *trace-output* "~&~{~a~^ ~}" cmd)
-    (run-program cmd
-                 :error-output error-stream
-                 :ignore-error-status t)))
+    (uiop:run-program cmd
+                      :error-output error-stream
+                      :ignore-error-status t)))
 
 (defun write-assembly-skeleton-for-size (tmp.s pathname)
   (format tmp.s ";;; Temporary rig to get size of “~a”" (enough-namestring pathname))
@@ -3422,7 +3544,7 @@ Creates parent directories if needed; overwrites the output file."
 ~10t.include \"~a\"
 "
           (start-bank-include-name))
-  (when (not (member *machine* '(5200 400 800)))
+  (when (member *machine* '(2600 7800 3000))
     (format tmp.s "~10t.include \"SpeakJet.s\"~%"))
   (format tmp.s "Start:
 ~10t.include ~s
@@ -3436,14 +3558,14 @@ Creates parent directories if needed; overwrites the output file."
 (defun compress-sequential-numbers (first &optional next &rest rest)
   (cond
     (rest (let ((begin (compress-sequential-numbers first next)))
-	    (apply #'compress-sequential-numbers begin rest)))
+	  (apply #'compress-sequential-numbers begin rest)))
     ((stringp first)
      (destructuring-bind (start$ end$) (split-sequence #\… first :count 2)
        (let ((start (parse-number start$))
-	     (end (parse-number end$)))
+	   (end (parse-number end$)))
          (if (= (1+ end) next)
-	     (list (format nil "~d…~d" start next))
-	     (list first next)))))
+	   (list (format nil "~d…~d" start next))
+	   (list first next)))))
     ((stringp next)
      (compress-sequential-numbers next first))
     ((consp first)
@@ -3454,38 +3576,38 @@ Creates parent directories if needed; overwrites the output file."
 
 (defun assemble-file-for-size (pathname)
   (uiop/stream:with-temporary-file (:pathname object-name
-					      :prefix (concatenate 'string
-								   (pathname-name pathname)
-								   "-")
-					      :suffix "-GetSoloSize"
-					      :type "o"
-					      :keep nil
-					      :element-type '(unsigned-byte 8))
+			      :prefix (concatenate 'string
+					       (pathname-name pathname)
+					       "-")
+			      :suffix "-GetSoloSize"
+			      :type "o"
+			      :keep nil
+			      :element-type '(unsigned-byte 8))
     (uiop/stream:with-temporary-file (:stream tmp.s
-					      :pathname temp-name
-					      :prefix (concatenate 'string
-								   (pathname-name pathname)
-								   "-")
-					      :suffix "-GetSoloSize"
-					      :type "s"
-					      :keep nil
-					      :direction :output
-					      :external-format :utf-8)
+			        :pathname temp-name
+			        :prefix (concatenate 'string
+					         (pathname-name pathname)
+					         "-")
+			        :suffix "-GetSoloSize"
+			        :type "s"
+			        :keep nil
+			        :direction :output
+			        :external-format :utf-8)
       (write-assembly-skeleton-for-size tmp.s pathname)
       (format *trace-output* "~&Using Turbo Assembler to get size of “~a”"
-	      (enough-namestring pathname))
+	    (enough-namestring pathname))
       (let ((err (with-output-to-string (e)
                    (assemble-with-64tass temp-name object-name e))))
         (let ((size (nth-value 1 (cl-ppcre:scan-to-strings
                                   "\\$SIZE\\$([0-9a-f]{4})" err))))
           (unless size
-	    (cerror "Pretend it's 8kiB"
-		    "Tried to assemble “~a” to get size of asset “~a”
+	  (cerror "Pretend it's 8kiB"
+		"Tried to assemble “~a” to get size of asset “~a”
 Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
-		    (enough-namestring temp-name)
-		    (enough-namestring pathname)
-		    err (length err))
-	    (return-from assemble-file-for-size 8192))
+		(enough-namestring temp-name)
+		(enough-namestring pathname)
+		err (length err))
+	  (return-from assemble-file-for-size 8192))
           (parse-integer (aref size 0) :radix 16))))))
 
 (defun write-asset-compilation/blob-lynx (asset-indicator)
@@ -3498,8 +3620,7 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
           bin/skyline-tool
 	mkdir -p Object/~a/Assets
 	bin/skyline-tool --port Lynx dispatch-png $< Object/~a/Assets"
-	    object-name source-name machine-dir machine-dir)))
-
+	  object-name source-name machine-dir machine-dir)))
 
 (defun collect-assets (&rest args)
   "Stub function for collect-assets command"
@@ -3514,3 +3635,22 @@ Did not get expected $SIZE$xxxx token in:~%~a~%(~:d byte~:p)"
 (defun prepend-fundamental-mode (&rest args)
   "Stub function for prepend-fundamental-mode command"
   (format *standard-output* "prepend-fundamental-mode called with args: ~A~%" args))
+
+
+(define-constant +all-machines+
+    '(1 2 3 8 9 15 16 20 22 23 64 81 88 128 200 222 223 264 400 800 810 837 920
+      1000 1080 1200 1601 1624
+      2068 2110 2416 2600 2609
+      3000 3010 3296
+      4386 4800
+      5200
+      6122 6800
+      7600 7800 7850 7801
+      8011
+      9001 9918)
+  :test 'equalp)
+
+;; Helper: get machine list from asset-allocator
+(defun skyline-tool.version-control::get-all-machines ()
+  "Return alist of (display-name . machine-id) for all supported machines"
+  (map 'list (lambda (id) (cons (machine-long-name id) id)) +all-machines+))

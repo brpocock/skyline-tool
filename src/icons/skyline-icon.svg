@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="161.8mm"
+   height="100mm"
+   viewBox="0 0 161.8 100"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   sodipodi:docname="skyline-icon.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#505050"
+     bordercolor="#ff00ff"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="1"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.78840488"
+     inkscape:cx="397.63833"
+     inkscape:cy="317.73015"
+     inkscape:window-width="1920"
+     inkscape:window-height="1131"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       id="path11"
+       style="fill:#000000;stroke:#4141e1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;paint-order:stroke markers fill"
+       d="M 1.9482015 47.154228 L 0.44493408 47.154228 L 0.44493408 47.48444 C 0.94707213 47.380346 1.448128 47.270206 1.9482015 47.154228 z " />
+    <path
+       id="path10"
+       style="fill:#000000;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;paint-order:stroke markers fill;stroke-opacity:1"
+       d="M 20.916036 0.44493408 C 9.5749991 0.44493408 0.44493408 9.5749991 0.44493408 20.916036 L 0.44493408 47.154228 L 1.9482015 47.154228 C 24.434202 41.939196 44.633968 25.039871 44.633968 26.17618 C 44.633968 27.518552 56.37962 29.196608 61.077926 26.847457 C 65.77623 24.498304 81.549028 4.0271444 81.549028 4.0271444 L 99.335539 11.410156 C 99.335539 11.410156 102.35573 31.210123 123.16251 39.935547 C 135.37693 45.057722 150.18418 46.247758 160.80517 46.442126 L 160.80517 20.916036 C 160.80517 9.5749991 151.67459 0.44493408 140.33355 0.44493408 L 20.916036 0.44493408 z " />
+    <circle
+       id="path1"
+       style="fill:#000000;stroke:#4141e1;stroke-width:0.264583"
+       cx="-13.423728"
+       cy="60.40678"
+       r="0.33789498" />
+    <path
+       id="rect2"
+       style="fill:#000000;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1;paint-order:stroke markers fill"
+       d="m 23.826969,48.481279 c -4.090212,0 -7.383011,3.292799 -7.383011,7.383012 V 72.152702 H 0.44493408 v 6.93136 c 0,11.341037 9.13006502,20.471102 20.47110192,20.471102 H 140.33355 c 11.34104,0 20.47162,-9.130065 20.47162,-20.471102 V 59.994788 h -12.27212 c -4.0578,0 -7.32461,3.266818 -7.32461,7.324617 v 0.436666 c -0.26128,-0.02798 -0.52688,-0.04238 -0.79582,-0.04238 H 103.5637 c -0.77247,0 -1.51627,0.118269 -2.21433,0.337964 v -0.932759 c 0,-0.255639 -0.0131,-0.508261 -0.0382,-0.75706 -0.10048,-0.995212 -0.39696,-1.9307 -0.8506,-2.76779 -0.567032,-1.046363 -1.379379,-1.93871 -2.361092,-2.600875 C 97.90311,60.860757 97.69995,60.737602 97.49069,60.624207 96.6536,60.170574 95.718113,59.874091 94.7229,59.773612 c -0.248803,-0.02512 -0.501421,-0.03824 -0.757059,-0.03824 H 76.515226 c -0.255638,0 -0.50826,0.01312 -0.757059,0.03824 -0.995197,0.100479 -1.930755,0.396962 -2.76779,0.850595 -0.627776,0.340224 -1.200243,0.768696 -1.700672,1.269173 -0.16681,0.166811 -0.325199,0.341303 -0.475423,0.523482 -0.60101,0.728841 -1.064532,1.575628 -1.351338,2.501656 -0.07169,0.231467 -0.132371,0.467742 -0.181385,0.708484 -0.09809,0.481651 -0.149345,0.980447 -0.149345,1.491899 v 11.439611 c -0.221003,-0.01974 -0.444968,-0.02945 -0.671277,-0.02945 H 46.247823 c -0.822008,0 -1.611867,0.132539 -2.349211,0.378271 V 55.864291 c 0,-4.090213 -3.292799,-7.383012 -7.383011,-7.383012 z"
+       sodipodi:nodetypes="ssccsssscsscsscscssssssssssscscsscsss" />
+    <rect
+       style="fill:#000000;stroke:#4141e1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;paint-order:stroke markers fill"
+       id="rect8"
+       width="0.33559322"
+       height="0.67118645"
+       x="81.213554"
+       y="85.576271"
+       ry="0.16779661" />
+  </g>
+</svg>

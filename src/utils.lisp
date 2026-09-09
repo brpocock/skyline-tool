@@ -224,16 +224,13 @@ parameters."
       nil
       value))
 
-(defun range (from to)
-  (check-type from real)
-  (check-type to real)
-  (assert (<= from to))
-  (loop for i from from to to collect i))
+
 
 (defmacro maptimes ((var count) &body body)
-  `(mapcar (lambda (,var)
-             ,@body)
-           (range 0 (1- ,count))))
+  "Execute BODY with VAR bound to successive integers from 0 below COUNT.
+Collects results into a list."
+  `(loop for ,var from 0 below ,count
+         collect (progn ,@body)))
 
 
 

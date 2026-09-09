@@ -25,7 +25,7 @@
 
 (defvar *words* nil)
 (defparameter *forth-bootstrap-pathname*
-  (merge-pathnames #p"Source/Scripts/Forth/Bootstrap.forth" (project-root))
+  (merge-pathnames #p"Source/Scripts/Forth/Bootstrap.forth" (uiop:getcwd))
   "Absolute path to Forth bootstrap under the game project root (Phantasia), not SkylineTool cwd.")
 (defvar *forth-file* nil)
 (defparameter *forth-base* 10)

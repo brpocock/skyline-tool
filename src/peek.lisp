@@ -1,21 +1,23 @@
 (in-package :skyline-tool)
 
 (defun find-label-from-files (goal
-                              &optional (low-bank-pathname #p"Object/7800/Bank02.Public.NTSC.o.LABELS.txt")
-                                        (last-bank-pathname #p"Object/7800/Bank3f.Public.NTSC.o.LABELS.txt"))
+                              &optional
+                                (low-bank-pathname #p"Object/7800/Bank02.Public.NTSC.o.LABELS.txt")
+                                (last-bank-pathname #p"Object/7800/Bank3f.Public.NTSC.o.LABELS.txt"))
   (dolist (pathname (list low-bank-pathname last-bank-pathname))
-    (when (probe-file pathname)
-      (with-input-from-file (labeled pathname :if-does-not-exist :error)
-        (loop for line = (read-line labeled nil nil)
-              while line
-              do (destructuring-bind (label$ value$$) (split-sequence #\= line)
-                   (let* ((label (string-trim #(#\Space) label$))
-                          (value$ (string-trim #(#\Space) value$$)))
-                     (when (string= label goal)
-                       (return-from find-label-from-files
-                         (if (char= #\$ (char value$ 0))
-                             (+ 0 (parse-integer (subseq value$ 1) :radix 16))
-                             (+ 0 (parse-integer value$))))))))))
+    (unless (probe-file pathname)
+      (build-target pathname))
+    (with-input-from-file (labeled pathname :if-does-not-exist :error)
+      (loop for line = (read-line labeled nil nil)
+            while line
+            do (destructuring-bind (label$ value$$) (split-sequence #\= line)
+                 (let* ((label (string-trim +whitespace+ label$))
+                        (value$ (string-trim +whitespace+ value$$)))
+                   (when (string= label goal)
+                     (return-from find-label-from-files
+                       (if (char= #\$ (char value$ 0))
+                           (+ 0 (parse-integer (subseq value$ 1) :radix 16))
+                           (+ 0 (parse-integer value$)))))))))
     nil))
 
 (defun dump-peek (label &optional (dump (load-dump-into-mem)))

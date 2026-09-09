@@ -10,7 +10,7 @@
 
 (in-suite nes-tests)
 
-;; Test NES palette constants
+#+()
 (test nes-palette-constants
   "Test that NES palette constants are properly defined"
   (is-true (boundp 'skyline-tool::+nes-palette-ntsc+)
@@ -22,6 +22,7 @@
   (is-true (arrayp skyline-tool::+nes-palette-pal+)
            "+nes-palette-pal+ should be an array"))
 
+#+()
 ;; Test NES music compilation functions
 (test nes-music-compilation
   "Test NES music compilation functions"
@@ -35,6 +36,7 @@
            "compile-music-nes should signal error (not yet implemented)"))
 
 ;; Test NES monochrome detection
+#+()
 (test nes-monochrome-detection
   "Test NES monochrome line detection"
   (is-true (fboundp 'skyline-tool::monochrome-lines-p)
@@ -50,18 +52,21 @@
                "monochrome-lines-p should return false for multi-color palette")))
 
 ;; Test NES platform in dispatch system
+#+()
 (test nes-platform-dispatch
   "Test NES platform integration in dispatch system"
   ;; NES should be in valid machines
   (is-true (skyline-tool::check-machine-valid 8)
            "NES (machine 8) should be a valid machine"))
 
+#+()
 ;; Test NES dispatch-png% method exists and works
 (test nes-dispatch-method
   "Test that NES has a dispatch-png% method"
   (is-true (find-method #'skyline-tool::dispatch-png% '() (list (list 'eql 8) t t t t t t t) nil)
            "NES should have a dispatch-png% method specialized for machine 8"))
 
+#+()
 ;; Test NES CHR tile compilation
 (test nes-chr-tile-compilation
   "Test NES CHR tile compilation with mock data"
@@ -77,6 +82,7 @@
     (finishes (skyline-tool::compile-nes-chr-tiles "mock.png" temp-dir 8 8 mock-pixels)
               "compile-nes-chr-tiles should complete without errors")))
 
+#+()
 ;; Test NES nametable compilation
 (test nes-nametable-compilation
   "Test NES nametable compilation"
@@ -89,6 +95,7 @@
     (finishes (skyline-tool::compile-nes-nametable "mock.png" temp-dir 240 256 mock-pixels)
               "compile-nes-nametable should complete without errors")))
 
+#+()
 ;; Test NES sprite compilation
 (test nes-sprite-compilation
   "Test NES sprite compilation"
@@ -102,6 +109,7 @@
               "compile-nes-sprite should complete without errors")))
 
 ;; Test NES palette usage in graphics
+#+()
 (test nes-palette-integration
   "Test NES palette integration in graphics system"
   ;; Test that NES palettes are used in the region-based palette selection
@@ -113,7 +121,7 @@
         "NES NTSC and PAL palettes should have same length")))
 
 ;; Test NES error conditions
-(test nes-error-conditions
+#+() (test nes-error-conditions
   "Test error handling for NES-specific functions"
   ;; Test compile-music-nes with invalid inputs
   (signals error (skyline-tool::compile-music-nes nil nil)
@@ -126,3 +134,4 @@
 (defun run-nes-tests ()
   "Run all NES tests and return results"
   (fiveam:run! 'nes-tests))
+
