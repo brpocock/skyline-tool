@@ -854,6 +854,7 @@ Returns a list of pathnames as directory lists for @code{CL:MAKE-PATHNAME}."
 			        ;; Shared Atari 8-bit video (GTIA/ANTIC) used by 400/800/5200 via Atari8.s
 			        (list :relative "Source" "Code" "Atari8" "Common")
 			        (list :relative "Source" "Code" machine-dir "Routines")
+                                      (list :relative "Source" "Code" machine-dir "Data")
 			        (list :relative "Source" "Generated" "Classes" cpu-dir) ; EightBol .s output
 			        (list :relative "Source" "Code" machine-dir "Classes")
 			        (list :relative "Source" "Generated" machine-dir "Classes") ; Copybooks (Globals, *-Slots.cpy)
@@ -1342,7 +1343,7 @@ Checks for files in Generated directories with specific names or containing 'Pal
   (and (member (pathname-type pathname) '("s" "forth" "cpy") :test #'string=)
        (member "Generated" (pathname-directory pathname) :test #'string=)
        (or (when-let (found (member (pathname-name pathname) +skyline-writes-files+
-			      :test #'equal))
+			      :test #'string=))
              (second found))
            (when (and (boundp '*game-title*)
                       (symbol-value '*game-title*)
