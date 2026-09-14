@@ -9,8 +9,8 @@
 
 (defun prefs-pathname ()
   "Return the pathname for the preferences file.
-    Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
-    using *game-title* (Header-Case) and machine-directory-name."
+     Constructs ~/.config/Skyline-Tool/<GAME-TITLE>/<PORT>.lisp
+     using *game-title* (Header-Case) and machine-directory-name."
   (make-pathname
    :directory (append (pathname-directory (user-homedir-pathname))
                        '(".config" "Skyline-Tool")
@@ -30,46 +30,74 @@
        (sb-posix:passwd-name pw))
       (t (or (getenv "NAME") (getenv "USERNAME") (getenv "USER") "unknown")))))
 
+;; Ensure *machine* is lazily initialized from the Makefile symlink
+;; before any preference code runs that needs it, since *machine* being
+;; unbound is not permitted.
+(defun ensure-machine-initialized ()
+  "Set *machine* from the Makefile symlink if not already bound."
+  (unless (boundp '*machine*)
+    (let* ((port-label (find-default-port))
+           (machine-id (machine-number-from-tag (make-keyword (string-upcase port-label)))))
+      (setf *machine* machine-id))))
+
 (defun load-prefs ()
-  "Read the preferences JSON file and return a plist.
+  "Read the preferences s-exp file and return a plist.
    Returns NIL if the file does not exist."
+  (ensure-machine-initialized)
   (let ((path (prefs-pathname)))
     (when (probe-file path)
-      (let ((alist (cl-json:decode-json-from-string (uiop:read-file-string path))))
-        (loop for (key . value) in alist
-              append (list (intern (string-upcase key) :keyword) value))))))
+      (with-open-file (s path :direction :input :external-format :utf-8)
+        (read s)))))
 
 (defun save-prefs (plist)
-  "Write PLIST as pretty-printed JSON to the preferences file.
+  "Write PLIST as a raw s-expression to the preferences file.
    Creates the directory if it does not exist."
+  (ensure-machine-initialized)
   (let ((path (prefs-pathname)))
     (ensure-directories-exist path)
     (with-open-file (s path :direction :output :if-exists :supersede
                             :external-format :utf-8)
-      (write-json-pretty (loop for (key value) on plist by #'cddr
-                               collect (cons (string-downcase (symbol-name key)) value))
-                         s))))
+      (let ((*print-pretty* t)
+            (*print-right-margin* 120))
+        (prin1 plist s)
+        (terpri s)))))
 
-(defun get-pref (key &optional default)
+(defun get-pref (key-or-path &optional default-value)
   "Read a preference value from the cached prefs.
-   Returns DEFAULT (default NIL) if KEY is not found."
+   KEY-OR-PATH is either a single keyword or a list of keywords forming a path.
+   DEFAULT-VALUE is returned if the key is not found."
+  (ensure-machine-initialized)
   (unless *prefs-cache*
     (setf *prefs-cache* (load-prefs)))
-  (labels ((descend (plist key)
-             (if (and (consp key) (< 1 (length key)))
-                 (if (consp (getf plist key '#:nothing))
-                     (descend plist (rest key))
-                     (prog1
-                         default
-                       (setf (getf plist key) nil)))
-                 (getf plist (if (consp key)
-                                 (first key)
-                                 key)
-                       default))))
-    (descend *prefs-cache* key)))
+  (let ((path (if (listp key-or-path) key-or-path (list key-or-path))))
+    (labels ((descend (plist key-list)
+               (if (null (rest key-list))
+                   (getf plist (first key-list) default-value)
+                   (let ((k (first key-list)))
+                     (unless (listp (getf plist k))
+                       (setf (getf plist k) nil))
+                     (descend (getf plist k) (rest key-list))))))
+      (descend *prefs-cache* path))))
 
-(defun (setf get-pref) (value key)
-  (error "implementation deleted"))
+(defun (setf get-pref) (new-value key-or-path)
+  "Set a preference value in *prefs-cache* and persist to disk.
+   KEY-OR-PATH is either a single keyword or a list of keywords forming a path;
+   intermediate sub-plists are created as needed."
+  (ensure-machine-initialized)
+  (unless *prefs-cache*
+    (setf *prefs-cache* (load-prefs)))
+  (let ((path (if (listp key-or-path) key-or-path (list key-or-path))))
+    (labels ((descend (plist key-list)
+               (if (null (rest key-list))
+                   (values plist (first key-list))
+                   (let ((k (first key-list)))
+                     (unless (listp (getf plist k))
+                       (setf (getf plist k) nil))
+                     (descend (getf plist k) (rest key-list))))))
+      (multiple-value-bind (parent leaf-key) (descend *prefs-cache* path)
+        (setf (getf parent leaf-key) new-value))
+      (save-prefs *prefs-cache*)
+      new-value)))
 
 (defvar *last-save-directory* nil
   "Last directory used by prompt-save-pathname for Save As dialogs.")
@@ -106,7 +134,7 @@
         (and saved (probe-file (pathname saved)) (pathname saved)))
       (let ((home (user-homedir-pathname)))
         (or (some (lambda (d) (let ((p (merge-pathnames d home)))
-                                (when (probe-file p) p)))
+                                    (when (probe-file p) p)))
                   '("work/" "Work/" "Documents/" "./"))))))
 
 (defun prompt-save-pathname (default-name prefs-key)
