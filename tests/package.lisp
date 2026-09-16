@@ -12,6 +12,10 @@
    #:generate-invalid-tile-dimensions
    #:generate-random-pixels
    #:with-temp-file)
+  (:import-from :skyline-tool
+   #:7800-image-to-320c
+   #:7800-image-to-320a
+   #:stamp-is-monochrome-p)
   (:export #:action-tests
            #:animation-preview-tests
            #:graphics-tests
@@ -29,6 +33,7 @@
            #:interface-tests
            #:makefile-tests
            #:music-tests
+           #:speech-unit-test
            #:intv-asset-converters
            #:intv-card-layouts
            #:intv-gram-tests
@@ -131,7 +136,7 @@
 (defun unit-test-midi-input-pathname ()
   "Pathname for scratch MIDI input under Source/Songs (SkylineUnitTestInput.midi)."
   (merge-pathnames (pathname "Source/Songs/SkylineUnitTestInput.midi")
-                   (skyline-tool::project-root)))
+                   (uiop:getcwd)))
 
 (defun unit-test-midi-input-path ()
   "NAMESTRING for `unit-test-midi-input-pathname'."
@@ -140,19 +145,19 @@
 (defun unit-test-missing-midi-path ()
   "NAMESTRING for a Source/Songs .midi path that must not exist (negative tests)."
   (namestring (merge-pathnames (pathname "Source/Songs/NoSuchSkylineUnitTestInput.midi")
-                               (skyline-tool::project-root))))
+                               (uiop:getcwd))))
 
 (defun unit-test-missing-midi-nested-path ()
   "NAMESTRING for a nested Source/Songs .midi path that must not exist."
   (namestring (merge-pathnames (pathname "Source/Songs/DeepDir/NoSuchSkylineUnitTestInput.midi")
-                               (skyline-tool::project-root))))
+                               (uiop:getcwd))))
 
 (defun format-unit-test-midi-scratch-path ()
   "Unique NAMESTRING under Source/Songs for a writable .midi scratch file."
   (namestring (merge-pathnames
                (pathname (format nil "Source/Songs/SkylineScratch-~D.midi"
                                  (get-universal-time)))
-               (skyline-tool::project-root))))
+               (uiop:getcwd))))
 
 (defun ensure-unit-test-midi-input-file (&optional (data *unit-test-midi-stub-data*))
   "Write DATA readably to `unit-test-midi-input-pathname'; return its NAMESTRING."

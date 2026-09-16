@@ -1,0 +1,21 @@
+(require :asdf)
+(let* ((load-path (merge-pathnames *load-pathname* (uiop:getcwd)))
+       (tests-dir (uiop:pathname-directory-pathname load-path))
+       (skyline-tool-dir (uiop:pathname-parent-directory-pathname tests-dir))
+       (project-root (uiop:pathname-parent-directory-pathname skyline-tool-dir)))
+  (load (merge-pathnames "setup.lisp" skyline-tool-dir))
+  (asdf:load-asd (merge-pathnames "skyline-tool.asd" skyline-tool-dir))
+  ;; load eightbol with full error handling
+  (handler-case
+      (asdf:load-system :eightbol)
+    (error (c)
+      (format t "~&Warning: eightbol loading failed (~A), continuing...~%" c)))
+  (asdf:load-system :skyline-tool/test :force t)
+  (uiop:chdir project-root)
+  (setf *default-pathname-defaults*
+        (uiop:ensure-directory-pathname (uiop:getcwd)))
+  (setf (symbol-value (find-symbol "*MACHINE*" (find-package :skyline-tool))) 7800)
+  (let ((result (eval (read-from-string "(fiveam:run-all-tests :summary :end)"))))
+    (if result
+        (progn (format t "~&All tests passed~%") (uiop:quit 0))
+        (progn (format t "~&Tests failed~%") (uiop:quit 1)))))

@@ -1,0 +1,1 @@
+(import-from :alexandria #:emptyp)

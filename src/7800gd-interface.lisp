@@ -10,8 +10,7 @@
 
 (defun spawn-thread-to-look-for-7800gd-on-port (pathname)
   (check-type pathname (or pathname string))
-  (make-thread (lambda () (ignore-errors (serial-port-has-7800gd-p pathname)))
-               :name (format nil "Looking for 7800GD on port ~a" pathname)))
+  (submit-task (lambda () (ignore-errors (serial-port-has-7800gd-p pathname)))))
 
 (defun find-7800gd-serial-port ()
   (if (tty-xterm-p)
@@ -64,11 +63,21 @@ When ready, hit Return, and I'll try to locate the path to the interface.")
 
 (defun push-7800gd (binary-pathname &key (serial-pathname (uiop:getenv "TTY"))
                                          (executep t) (skip-bank-62-p nil))
-  "Push the BINARY-PATHNAME file in BIN format to the 7800GD on serial port SERIAL-PATHNAME.
+  "Push BINARY-PATHNAME file in BIN format to the 7800GD on serial port SERIAL-PATHNAME.
 
 If SERIAL-PATHNAME is not supplied, search for the 7800GD on any serial port.
+If EXECUTEP is T then boot the uploaded code freshly.
 
-If EXECUTEP is T then boot the uploaded code freshly."
+@table @asis
+@item BINARY-PATHNAME
+Path to the BIN format file to upload
+@item SERIAL-PATHNAME
+Serial port device pathname (keyword, default from @code{TTY} env var)
+@item EXECUTEP
+If true, execute uploaded code after transfer (keyword, default T)
+@item SKIP-BANK-62-P
+If true, skip bank 62 during upload (keyword, default NIL)
+@end table"
   (check-type binary-pathname (or string pathname))
   (check-type serial-pathname (or null string pathname))
   (assert (probe-file binary-pathname) (binary-pathname)
@@ -96,15 +105,33 @@ If EXECUTEP is T then boot the uploaded code freshly."
          :mapper-audio 7800gd-debug::+ea78-v4-audio-pokey-450+
          :size (file-length binary))))))
 
-(defun push-7800gd-bin (binary-pathname &optional serial-pathname)
+(defun push-7800gd-bin (BINARY-PATHNAME &optional SERIAL-PATHNAME)
+  "Push BINARY-PATHNAME to the 7800GD over SERIAL-PATHNAME and execute.
+
+@table @asis
+@item BINARY-PATHNAME
+Path to the BIN file to upload
+@item SERIAL-PATHNAME
+Serial port pathname (optional; will search if not given)
+@end table"
   (push-7800gd binary-pathname :serial-pathname serial-pathname))
 
-(defun push-7800gd-bin-no-execute (binary-pathname
-                                   &optional serial-pathname (bump-version-p t))
+(defun push-7800gd-bin-no-execute (BINARY-PATHNAME
+                                    &optional SERIAL-PATHNAME (BUMP-VERSION-P t))
+  "Push BINARY-PATHNAME to the 7800GD over SERIAL-PATHNAME without executing.
+
+@table @asis
+@item BINARY-PATHNAME
+Path to the BIN file to upload
+@item SERIAL-PATHNAME
+Serial port pathname (optional; will search if not given)
+@item BUMP-VERSION-P
+If true (default), bump the version cookie after upload
+@end table"
   (let ((serial (or serial-pathname
                     (first (find-7800gd-serial-port)))))
     (push-7800gd binary-pathname :serial-pathname serial :executep nil :skip-bank-62-p t)
-    (when bump-version-p
+    (when BUMP-VERSION-P
       (7800gd-bump-version serial))))
 
 (defvar *7800gd-version-cookie* 0)

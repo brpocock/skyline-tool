@@ -946,119 +946,19 @@ inventory_end = *
 
 
 
-(defun machine-short-name ()
-  (ecase *machine*
-    (1 "Oric-1")
-    (2 "Apple ][")
-    (8 "NES")
-    (9 "Neo Geo")
-    (15 "Channel F")
-    (16 "TG-16")
-    (20 "VIC-20")
-    (64 "C=64")
-    (81 "ZX-81")
-    (88 "SNES")
-    (128 "C=128")
-    (200 "Lynx")
-    (222 "Apple //gs")
-    (223 "BBC")
-    (264 "Plus/4")
-    (400 "Atari 400")
-    (800 "Atari 800")
-    (810 "Virtual Boy")
-    (837 "Game Gear")
-    (920 "N-Gage")
-    (1000 "SG-1000")
-    (1080 "Atari ST")
-    (1200 "Atari 1200")
-    (1601 "SMD")
-    (1624 "32X")
-    (2068 "Spectrum")
-    (2110 "Game Gear")
-    (2600 "Atari VCS")
-    (2609 "Intellivision")
-    (3000 "Vectrex")
-    (3010 "SMS")
-    (3296 "GBA")
-    (4386 "HyperScan")
-    (4800 "WonderSwan")
-    (5200 "Atari SuperSystem")
-    (6122 "V.smile")
-    (6800 "WonderSwan Color")
-    (7600 "Odyssey 2")
-    (7800 "Atari ProSystem")
-    (7850 "Atari VCS")
-    (7801 "SwanCrystal")
-    (8011 "Jaguar")
-    (9001 "PSX")
-    (9918 "ColecoVision")
-    (2416 "Commander X-16")))
-
-(defun machine-long-name ()
-  (ecase *machine*
-    (1 "Oric-1")
-    (2 "Apple ][ (][plus, //c, //e)")
-    (3 "Apple ///")
-    (8 "Nintendo Entertainment System")
-    (9 "Neo Geo")
-    (15 "Fairchild Channel F")
-    (16 "TurboGrafx-16 (PC Engine)")
-    (20 "Commodore VIC-20 (VC-20)")
-    (22 "Apple //c (//c Plus)")
-    (23 "Apple //e (//e Plus, //e Enhanced)")
-    (64 "Commodore 64 (64C, SX-64)")
-    (81 "Sinclair ZX-81 (Timex Sinclair 1000)")
-    (88 "Super Nintendo Entertainment System")
-    (128 "Commodore 128 (128D, 128DCR)")
-    (200 "Atari Lynx")
-    (222 "Apple //gs")
-    (223 "Acorn British Broadcasting Corporation Microcomputer")
-    (264 "Commodore Plus/4 (16)")
-    (400 "Atari 400")
-    (800 "Atari 800")
-    (810 "Nintendo Virtual Boy")
-    (837 "Sega Game Gear")
-    (920 "Nokia N-Gage")
-    (1000 "Sega Game 1000")
-    (1080 "Atari ST/TT")
-    (1200 "Atari 1200")
-    (1601 "Sega Genesis (Mega Drive)")
-    (1624 "Sega 32X")
-    (2068 "Sinclair Spectrum (Timex Sinclair 2068)")
-    (2110 "Sega Game Gear")
-    (2416 "Commander X-16")
-    (2600 "Atari Video Computer System CX-2600")
-    (2609 "Intellivision")
-    (3000 "Vectrex")
-    (3010 "Sega Master System")
-    (3296 "Nintendo Game Boy Advance")
-    (4386 "Mattel HyperScan")
-    (4800 "Bandai WonderSwan")
-    (5200 "Atari Video SuperSystem CX-5200")
-    (6122 "V.smile")
-    (6800 "Bandai WonderSwan Color")
-    (7600 "Magnavox Odyssey 2")
-    (7800 "Atari Video ProSystem CX-7800")
-    (7850 "Atari VCS (Linux native / bundle-gen host)")
-    (7801 "Bandai SwanCrystal")
-    (8011 "Atari Jaguar")
-    (9001 "Sony PlayStation")
-    (9918 "ColecoVision")
-    (otherwise "no particular system at all")))
-
-(defun machine-valid-p (&optional (machine *machine* machine-provided-p))
+(defun machine-valid-p (&optional (machine *machine*))
   "Check if MACHINE is a valid machine type.
 
 Returns T if the machine is supported, NIL otherwise."
   (handler-case
-      (let ((*machine* (if machine-provided-p machine *machine*)))
-        (and (machine-short-name)
-             (machine-long-name)
-             t))
+      (and (machine-short-name)
+           (machine-long-name)
+           t)
     (error () nil)))
 
-(defun check-machine-valid ()
-  (assert (machine-valid-p)))
+(defun check-machine-valid (&optional (machine *machine*))
+  (let ((*machine* machine))
+    (assert (machine-valid-p))))
 
 
 
@@ -1132,7 +1032,7 @@ then use $f9 (512kiB) banking."
     (let ((make-qp (uiop:run-program '("make" "-qp") :output :string
                                                      :ignore-error-status 1))
           (vars (make-hash-table :test 'equal)))
-      (loop for line in (split-string make-qp :separator #(#\newline))
+      (loop for line in (uiop:split-string make-qp :separator #(#\newline))
             when (and
                   (plusp (length line))
                   (char/= #\# (char line 0))
@@ -1173,7 +1073,7 @@ then use $f9 (512kiB) banking."
                (concatenate
                 'string
                 (subseq value 0 (search "$(shell" value))
-                (run-program
+                (uiop:run-program
                  (string-trim
                   #(#\space #\tab)
                   (subseq value
@@ -1192,12 +1092,12 @@ then use $f9 (512kiB) banking."
 
 (defun ensure-bin/64tass-exists ()
   (unless (probe-file "bin/64tass")
-    (run-program '("make" "bin/64tass"))))
+    (uiop:run-program '("make" "bin/64tass"))))
 
 (defun error-output-from-compiling (temp-name)
   (second
    (multiple-value-list
-    (run-program
+    (uiop:run-program
      (concatenate 'string
                   "bin/64tass "
                   (make-var-actual-value "AS2600" (get-make-vars))
@@ -1387,6 +1287,8 @@ Path to the raw ROM binary to wrap.
                  do (write-byte b out))))))))
 
 (defun prepend-fundamental-mode (file)
+  "Prepend -*- fundamental -*- mode marker to FILE.
+Writes the marker to the beginning of FILE, preserving existing content after it."
   (let ((contents (read-file-into-string file)))
     (with-output-to-file (f file :if-does-not-exist :error :if-exists :overwrite)
       (princ ";;; -*- fundamental -*-" f)

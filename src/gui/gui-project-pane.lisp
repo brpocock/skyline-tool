@@ -1,0 +1,5 @@
+(defun display-resource-project-status (frame pane)
+  (declare (ignore frame))
+  (let ((*standard-output* pane))
+    (format pane "Project Pane \u2014 not yet implemented~%"))
+)

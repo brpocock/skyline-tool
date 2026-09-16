@@ -45,11 +45,6 @@ Emits one @code{rp} when @code{pc<0x8000}: instruction fetch must not occur outs
                        (setf break addr))
                      (when (string-equal "MinorFault" label)
                        (setf minor-fault addr)))))
-        (format mame "printf \"Phantasia A7800 public/demo debugger script (labels-to-mame).\\n\"~%")
-        (format mame "printf \"Source labels: ~a\\n\"~%" labels-file)
-        (format mame "printf \"Regenerate: make Dist/7800/Phantasia.Public.NTSC.mame (or Demo/PAL).\\n\"~%")
-        (format mame "printf \"No go here: press F12 (Debug -> Run) after setting extra breakpoints.\\n\"~%")
-        (format mame "printf \"Watchpoints: bank switch $8000, thread id $5048; bp Break/MinorFault; rp pc<8000.\\n\\n\"~%")
         (format mame "printf \"Wait a moment . . .\"~%")
         ;; (loop for addr being the hash-keys of comments
         ;;       for label = (gethash addr comments)
@@ -85,7 +80,7 @@ wp 5048,1,w,{wpdata > 3},{printf \"Switching context to non-existing thread (tid
 bp ~4,'0x,1,{snap \"brk.snap.png\"; save \"brk.core\",0,10000; printf \"BRK handler invoked at $%02x:%04x\", b@(4661),  -2+w@(2+sp)}
 bp ~4,'0x,1,{snap \"fault.snap.png\"; save \"fault.core\",0,10000; printf \"Minor Fault %x.%x.%x.%x invoked at $%02x:%04x\", b@(1+w@(1+sp)), b@(2+w@(1+sp)), b@(3+w@(1+sp)), b@(4+w@(1+sp)), b@(4661),  -2+w@(1+sp)}
 rp {pc<0x8000},{printf \"PC below ROM window (not $8000-$ffff) pc=$%04x bank=$%02x\", pc, b@(4661)}
-bp c024,1,{printf \"NMI selector: $%04x (scanline %d)\", w@97, beamy;go}
+bp c024,1,{printf \"NMI selector: $%04x (scanline %d)\", w@98, beamy;go}
 printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
                 (or break 0)

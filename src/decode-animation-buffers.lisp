@@ -1,7 +1,37 @@
 (in-package :skyline-tool)
 
+;; Macro for defining frame-specific commands for anim-buffer-frame
+(defmacro define-anim-buffer-frame-command ((name &rest options) args &body body)
+  "Define a CLIM command for the anim-buffer-frame command table."
+  `(clim:define-command (,name :command-table anim-buffer-frame ,@options)
+     ,args
+     ,@body))
+
 ;; duplicated declaration
 (clim:define-presentation-type decal-index-value () :inherit-from 'integer)
+
+(clim:define-command-table buffer-save-as-menu
+  :menu (("As JSON..." :command com-save-buffer)
+         ("As Text..." :command com-save-buffer)
+         ("As PDF..." :command com-save-buffer)
+          ("As PNG..." :command com-save-buffer)))
+
+(clim:define-command-table print-buffer-menu
+  :menu ())
+
+(clim:define-command-table animation-buffer-menu
+  :menu (("Save As" :menu buffer-save-as-menu)
+         (nil :divider :line)
+         ("Print Buffer" :menu print-buffer-menu)
+         (nil :divider :line)
+         ("Toggle Write Mode" :command com-toggle-mode)
+         ("Switch Palette" :command com-change-palette-for-buffer)
+         ("Next Offset" :command com-next-offset)
+         ("Find Decal..." :command com-find-decal)
+         ("Change Color..." :command com-change-color)
+         ("Switch Indirect Color..." :command com-switch-indirect-color)
+         (nil :divider :line)
+         ("Close Buffer" :command com-close-frame)))
 
 (clim:define-application-frame anim-buffer-frame ()
   ((%anim-buffer-index :initform 0 :accessor anim-buffer-index :initarg :index)
@@ -15,7 +45,20 @@
           (palette-pane :application :height 300 :width 800
                                      :display-function 'display-anim-buffer-palette)
           (interactor :interactor :height 75 :width 800))
+  (:menu-bar anim-buffer-menu-bar)
+  (:icon (skyline-tool-icon :resource :animation-buffer))
   (:layouts (default (clim:vertically () display-pane palette-pane interactor))))
+
+(clim:define-command-table buffer-help-menu
+  :menu (("How to Inspect Animation Buffers" :command com-help-for-window)
+         ("Skyline-Tool Developers' Guide" :command com-open-dev-guide)
+         ("Skyline-Tool Scripting Guide" :command com-open-scripting-guide)
+         (nil :divider :line)
+         ("About Skyline-Tool" :command com-about-skyline-tool)))
+
+(clim:define-command-table anim-buffer-menu-bar
+  :menu (("Animation Buffer" :menu animation-buffer-menu)
+         ("Edit" :menu edit-menu) ("Help" :menu buffer-help-menu)))
 
 (defun set-animation-buffer-colors (frame)
   (setf (anim-buffer-colors frame)
@@ -300,6 +343,14 @@
   (set-animation-buffer-colors *anim-buffer-frame*)
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
+(define-constant +all-actions+
+    '(:idle :climbing :hurt :flying
+      :knocked-back :swimming :use-equipment :wading
+      :walking :wave-arms :gesture :sleep :non-interactive
+      :dance :panic :special-walk-with-shield :special-idle-with-shield
+      :boating)
+  :test 'equalp)
+
 (define-constant +anim-buffer-offsets+
     (list 0 (- #x1000) #x1000)
   :test 'equalp)
@@ -316,8 +367,8 @@
     (setf (anim-buffer-offset *anim-buffer-frame*) new-offset))
   (clim:redisplay-frame-panes *anim-buffer-frame*))
 
-(defun show-animation-buffer (&optional (index 0) &key (mode :160b) (palette 4)
-                                                       (dump (load-dump-into-mem)))
+(defun show-animation-buffer (index &key (mode :160b) (palette 4)
+                                         (dump (load-dump-into-mem)))
   "Show (from a core dump) the state of the animation buffers"
   (flet ((run ()
            (let ((frame (clim:make-application-frame 'anim-buffer-frame
@@ -326,9 +377,10 @@
                                                      :palette palette
                                                      :dump dump)))
              (let ((*anim-buffer-frame* frame))
-               (setf (clim:frame-pretty-name frame)
-                     (format nil "Show Animation Buffer"))
-               (clim:run-frame-top-level frame)))))
+                (setf (clim:frame-pretty-name frame)
+                      (window-title "Animation Buffer"))
+               (let ((clim:*application-frame* frame))
+                 (clim:run-frame-top-level frame))))))
     (run)))
 
 (clim:define-presentation-to-command-translator click-for-decal
@@ -380,4 +432,116 @@
         ((aref buffer-info i 1)
          (format t "~&Buffer $~x is marked available but is in use by decal $~2,'0x.~40t ← BAD"
                  i (aref buffer-info i 1)))
-        (t (format t "~&Buffer $~x is free." i))))))
+         (t (format t "~&Buffer $~x is free." i))))))
+
+;; Buffer menu stubs (defined after frame so define-anim-buffer-frame-command is available)
+(define-anim-buffer-frame-command (com-new-buffer :menu nil :name t) ()
+  (error "New Buffer is not yet implemented."))
+
+(define-anim-buffer-frame-command (com-import-buffer :menu nil :name t) ()
+  (error "Import Buffer is not yet implemented."))
+
+(define-anim-buffer-frame-command (com-save-buffer :menu nil :name t) ()
+  (let* ((frame *anim-buffer-frame*)
+         (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
+         (dump (anim-buffer-from-dump frame))
+         (mode (anim-buffer-mode frame))
+         (colors (anim-buffer-colors frame))
+         (width 4))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
+      (let ((path (prompt-save-pathname
+                   (format nil "AnimBuffer-$~x.png" (anim-buffer-index frame)) "png")))
+        (when path
+          (let ((png (make-instance 'zpng:png :width iw :height ih
+                                             :color-type :truecolor :bpp 8
+                                             :image-data rgb)))
+            (zpng:write-png png path))
+          (format *query-io* "~&Saved ~a (~dx~d)~%" (namestring path) iw ih)
+          (uiop:run-program (list "xdg-open" (namestring path)) :output nil :ignore-error-status t))))))
+
+(defun %print-buffer-to-printer (printer)
+  (let* ((queue (if (typep printer 'ipp-printer) (ipp-queue printer) printer))
+         (frame *anim-buffer-frame*)
+         (address (+ #x5000 (anim-buffer-offset frame) (* 4 (anim-buffer-index frame))))
+         (dump (anim-buffer-from-dump frame))
+         (mode (anim-buffer-mode frame))
+         (colors (anim-buffer-colors frame))
+         (width 4)
+         (title (format nil "~a: Animation Buffer $~x" (title-case *game-title*)
+                        (anim-buffer-index frame)))
+         (author (user-real-name))
+         (date-str (multiple-value-bind (s m h d mo y) (get-decoded-time)
+                     (declare (ignore s))
+                     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d" y mo d h m))))
+    (multiple-value-bind (iw ih rgb) (render-maria-to-rgb dump mode address width colors)
+      (let* ((base (format nil "AnimBuffer-$~x" (anim-buffer-index frame)))
+             (ps-path (format nil "~a.ps" base))
+             (pdf-path (format nil "~a.pdf" base)))
+        (with-open-file (ps ps-path :direction :output :if-exists :supersede)
+          (format ps "%!PS-Adobe-3.0~%")
+          (write-ps-docinfo ps title "Skyline-Tool" author)
+          (format ps "<< /PageSize [792 612] >> setpagedevice~%")
+          (format ps "%%Page: 1 1~%")
+          (write-ps-header-bar ps title date-str author (title-case *game-title*))
+          (format ps "/Helvetica-ISOLatin1 findfont 7 scalefont setfont 0.6 0.6 0.6 setrgbcolor 50 15 moveto (Page 1 of 1) show~%")
+          (format ps "/Helvetica findfont 9 scalefont setfont~%")
+          (format ps "50 500 moveto (Buffer: $~x  Address: $~4,'0x  Mode: ~a) show~%"
+                  (anim-buffer-index frame) address mode)
+          ;; Palette color swatches
+          (format ps "gsave~%")
+          (dotimes (i (min (length colors) 16))
+            (let* ((reg (elt colors i))
+                   (col (elt (ecase *region*
+                                (:ntsc +prosystem-ntsc-palette+)
+                                (:pal +prosystem-pal-palette+)) reg)))
+              (when col
+                (destructuring-bind (r g b) col
+                  (format ps "~f ~f ~f setrgbcolor~%" (/ r 255.0) (/ g 255.0) (/ b 255.0))
+                  (format ps "~d 470 ~d 10 rectfill~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))
+                  (format ps "0 0 0 setrgbcolor~%")
+                  (format ps "~d 470 ~d 10 rectstroke~%"
+                          (+ 50 (* (mod i 4) 120))
+                          (- 60 (* (floor i 4) 14)))))))
+          (format ps "grestore~%")
+          ;; Sprite image
+          (write-ps-image ps rgb iw ih 490 280)
+          (format ps "showpage~%"))
+        (uiop:run-program (list "ps2pdf" ps-path pdf-path)
+                          :output nil :ignore-error-status t)
+        (ignore-errors (delete-file ps-path))
+        (uiop:run-program (if queue (list "lp" "-d" queue pdf-path) (list "lp" pdf-path))
+                          :output nil :ignore-error-status t)))))
+
+(defun populate-buffer-print-menu ()
+  (ignore-errors
+    (clim:remove-menu-item-from-command-table 'print-buffer-menu "No printers found")
+    (dolist (p (mapcar #'car *ipp-printer-registry*))
+      (ignore-errors
+        (clim:remove-menu-item-from-command-table 'print-buffer-menu p))))
+  (ensure-printer-scavenger-is-running)
+  (if (null *ipp-printer-registry*)
+      (clim:add-menu-item-to-command-table
+       'print-buffer-menu "No printers found" :function
+       (lambda (g n)
+         (declare (ignore g n))
+         (error "No printers discovered.")))
+      (dolist (printer *ipp-printer-registry*)
+        (let* ((struct (cdr printer))
+               (display (ipp-name struct)))
+          (clim:add-menu-item-to-command-table
+           'print-buffer-menu display :command
+           `(com-print-buffer-to-printer ,struct)
+           :after :end)))))
+
+(clim:define-command (com-print-buffer-to-printer
+                      :command-table clim-internals::global-command-table
+                      :menu nil :name t)
+    ((printer t))
+  (handler-case
+      (%print-buffer-to-printer printer)
+    (error (e)
+      (format *query-io* "~&Print error: ~a~%" e))))
+
+
