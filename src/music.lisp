@@ -438,11 +438,11 @@ Uses frequency distance minimization with linear interpolation between notes
     (let ((notes (mapcar #'first
                          (rest (elt +tia-voices+ voice)))))
       (when-let (freq-code (position (first (sort (copy-list notes) #'<
-                                                  ::key (curry #'frequency-distance freq)))
+                                                  :key (curry #'frequency-distance freq)))
                                      notes :test #'=))
         (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
               (dist0 (frequency-distance freq (elt notes freq-code)))
-              (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
+              (dist+1 (when (< freq-code (1- (length notes))) (frequency-distance freq (elt notes (1+ freq-code))))))
           (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
               (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
               (list voice freq-code (/ dist0 (+ dist0 dist+1)))))))))
@@ -473,10 +473,10 @@ Uses frequency distance minimization with linear interpolation between notes
                                    notes :test #'=))
       (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
             (dist0 (frequency-distance freq (elt notes freq-code)))
-            (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
+            (dist+1 (when (< freq-code (1- (length notes))) (frequency-distance freq (elt notes (1+ freq-code))))))
         (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
-          (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-          (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
+            (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
+            (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
@@ -2327,7 +2327,6 @@ numbers; the runtime assigns tonal or noise voices dynamically.
 TV standard keyword (@code{:ntsc}, @code{:pal}, @code{:secam})
 @end table"
   (let* ((tv-keyword (if (keywordp tv) tv (make-keyword (string-upcase (string tv)))))
-         (*ay-tv* tv-keyword)
          (*region* tv-keyword)
          (*orchestra* (get-orchestration))
          (fps (ay-fps))
@@ -2341,26 +2340,26 @@ TV standard keyword (@code{:ntsc}, @code{:pal}, @code{:secam})
              (setf track-instrument
                    (make-keyword (string-upcase (param-case (second event))))))
             (:note
-             (destructuring-bind (&key time key duration velocity instrument) (rest event)
-               (let* ((time-sec (float (or time 0) 1.0d0))
-                      (dur-sec (float (or duration 0) 1.0d0))
-                      (t-frames (floor (* time-sec fps)))
-                      (vel (or velocity 127))
-                      (instrument-id (orchestration-instrument-id
-                                      (or instrument track-instrument)))
-                      (max-vol (min 15 (floor (* 15 (/ vel 127)))))
-                      (sustain-duration
-                        (nth-value 0
-                                   (calculate-duration-for
-                                    (make-hokey-note :duration dur-sec
-                                                     :volume (/ vel 127.0)
-                                                     :instrument instrument-id)
-                                    instrument-id))))
-                 (let* ((frequency (freq<-midi-key key))
-                        (period (frequency-to-ay-period frequency clock)))
-                   (push (list t-frames instrument-id (logand period #xff) (ash period -8)
-                               max-vol (max 1 sustain-duration))
-                         notes)))))))))
+              (destructuring-bind (&key time key duration velocity instrument) (rest event)
+                (let* ((time-sec (float (or time 0) 1.0d0))
+                       (dur-sec (float (or duration 0) 1.0d0))
+                       (t-frames (floor (* time-sec fps)))
+                       (vel (or velocity 127))
+                       (instrument-id (orchestration-instrument-id
+                                       (or instrument track-instrument)))
+                       (max-vol (min 15 (floor (* 15 (/ vel 127)))))
+                       (sustain-duration
+                         (nth-value 0
+                                    (calculate-duration-for
+                                     (make-hokey-note :duration dur-sec
+                                                      :volume (/ vel 127.0)
+                                                      :instrument instrument-id)
+                                     instrument-id))))
+                  (let* ((frequency (freq<-midi-key key))
+                         (period (frequency-to-ay-period frequency clock)))
+                    (push (list t-frames instrument-id (logand period #xff) (ash period -8)
+                                max-vol (max 1 sustain-duration))
+                          notes)))))))))
     (setf notes (sort notes #'< :key #'first))
     (let ((result (make-array (list (length notes) 6))))
       (loop for i from 0
@@ -2488,17 +2487,14 @@ Formula: f = clock / (32 * (n+1)) => n = clock/(32*f) - 1."
   "PAL Intellivision AY-3-8914 master clock (jzIntv @file{psg.txt}:
 PAL uses a 4.00 MHz crystal).")
 
-(defvar *ay-tv* :ntsc
-  "Current TV standard for AY-3-8910 compilation (:ntsc, :pal, or :secam).")
-
 (defun ay-fps ()
   "Return frames per second for the current AY TV standard."
-  (ecase *ay-tv* (:ntsc 60) (:pal 50) (:secam 50)))
+  (ecase *region* (:ntsc 60) (:pal 50) (:secam 50)))
 
 (defun ay-clock ()
   "Return AY master clock for the current TV standard.
 SECAM uses the NTSC crystal (3.579545 MHz) with 50 fps."
-  (ecase *ay-tv*
+  (ecase *region*
     (:ntsc +intv-ay-ntsc-clock-hz+)
     (:pal +intv-ay-pal-clock-hz+)
     (:secam +intv-ay-ntsc-clock-hz+)))

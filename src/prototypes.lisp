@@ -8,13 +8,13 @@
 (defvar *object-prototype-index* nil
   "Hash table: prototype basename string → stable compile-time index.")
 
-(defun object-prototypes-directory (&optional (root (uiop:getcwd)))
+(defun object-prototypes-directory ()
   "Return pathname for JSON object prototypes under ROOT."
-  (merge-pathnames #p"Source/Objects/" root))
+  #p"Source/Objects/")
 
-(defun list-object-prototype-json-files (&optional (root (uiop:getcwd)))
+(defun list-object-prototype-json-files ()
   "Return sorted list of @file{Source/Objects/*.json} pathnames under ROOT."
-  (let ((dir (object-prototypes-directory root)))
+  (let ((dir (object-prototypes-directory)))
     (if (probe-file dir)
         (sort (directory (merge-pathnames #p"*.json" dir))
               #'string< :key #'pathname-name)
@@ -52,12 +52,12 @@ JSON slot names (maintaining original capitalization)."
   (let ((ids (read-class-ids-from-file)))
     (gethash class-name ids)))
 
-(defun ensure-object-prototype-index (&optional (root (uiop:getcwd)))
+(defun ensure-object-prototype-index ()
   "Build or return hash NAME → index for @file{Source/Objects/*.json}."
   (or *object-prototype-index*
       (setf *object-prototype-index*
             (let ((table (make-hash-table :test #'equal)))
-              (loop for file in (list-object-prototype-json-files root)
+              (loop for file in (list-object-prototype-json-files)
                     for index from 0
                     do (setf (gethash (pathname-name file) table) index))
               table))))
@@ -67,10 +67,10 @@ JSON slot names (maintaining original capitalization)."
   (or (gethash name (ensure-object-prototype-index))
       (error "Unknown object prototype ~s (no Source/Objects/~a.json)" name name)))
 
-(defun list-object-prototypes-for-class (class-name &optional (root (uiop:getcwd)))
+(defun list-object-prototypes-for-class (class-name)
   "Return list of prototype basenames in Source/Objects/ whose Class key matches CLASS-NAME.
 CLASS-NAME is a PascalCase class name string like \"MonkeyCourse\"."
-  (loop for file in (list-object-prototype-json-files root)
+  (loop for file in (list-object-prototype-json-files)
         for prototype = (read-object-prototype-json file)
         when (string= (getf prototype :|Class|) class-name)
           collect (pathname-name file)))
@@ -152,16 +152,16 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
     (terpri)
     (list label (class-id-for-name class-name) )))
 
-(defun write-object-prototypes (&optional (root (uiop:getcwd)))
+(defun write-object-prototypes ()
   "Compile @file{Source/Objects/*.json} into ObjectPrototypes.s for the port."
   (format *trace-output* "~&Writing object prototypes to ObjectPrototypes.s…")
   (setf *object-prototype-index* nil)
   (let* ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name)))
          (object-protos (loop for name in (directory #p"Source/Objects/*.json")
                               collect (cons (pathname-name name) (read-object-prototype-json name)))))
-    (ensure-directories-exist (merge-pathnames machine-dir root))
+    (ensure-directories-exist (merge-pathnames machine-dir))
     (with-output-to-file (*standard-output*
-                          (merge-pathnames (concatenate 'string machine-dir "ObjectPrototypes.s") root)
+                          (concatenate 'string machine-dir "ObjectPrototypes.s")
                           :if-exists :supersede)
       (format t "~&;;; Generated object prototype data from Source/Objects/*.json")
       (format t "~2%~10tSpawnableObjects := [~{ Spawnable.~a~^, ~} ]"
@@ -186,15 +186,15 @@ $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~^, $~2,'0x~}"
                            name name)
                    (print-one-object-prototype name (getf prototype :|Class|) prototype))))
       (format t "~%~10t.bend"))
-    (write-spawnable-object-ids object-protos root))
+    (write-spawnable-object-ids object-protos))
   (format *trace-output* " …done."))
 
-(defun write-spawnable-object-ids (object-protos root)
+(defun write-spawnable-object-ids (object-protos)
   "Write spawnable object ID mapping to Spawn-IDs.lisp for maps.lisp."
   (let ((machine-dir (format nil "Source/Generated/~a/" (machine-directory-name))))
-    (ensure-directories-exist (merge-pathnames machine-dir root))
+    (ensure-directories-exist machine-dir)
     (with-output-to-file (*standard-output*
-                          (merge-pathnames (concatenate 'string machine-dir "Spawn-IDs.lisp") root)
+                          (concatenate 'string machine-dir "Spawn-IDs.lisp")
                           :if-exists :supersede)
       (format t "~&;;; Generated spawnable object ID mappings from Source/Objects/*.json")
       (format t "~%Spawnable: .block")

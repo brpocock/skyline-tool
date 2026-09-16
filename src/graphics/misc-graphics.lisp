@@ -173,9 +173,16 @@
                                                   replacement
                                                   (subseq buffer (+ start (length part)))))
                      finally (return buffer))))
-      (setf result (replace-all result "Brp" "BRP"))
-      (setf result (replace-all result "Aa" "AA"))
-      (setf result (replace-all result "Zph" "ZPH"))
+      (setf result
+            (replace-all
+             (replace-all
+              (replace-all
+               (replace-all
+                result
+                "Prge" "PRGE")
+               "Zph" "ZPH")
+              "Aa" "AA")
+             "Brp" "BRP"))
       result)))
 
 (defun pathname-base-name (pathname)

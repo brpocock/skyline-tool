@@ -64,7 +64,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "when CONDITIONAL is true, perform CLAUSES"
     (declare (ignore _when _comma _stop))
     (list 'if conditional clauses))
-
+  
   (defun stage/if-otherwise (if conditional comma clauses sem
                                 otherwise otherwise-clauses stop)
     "iff CONDITIONAL is true, perform CLAUSES, otherwise, OTHERWISE-CLAUSES"
@@ -166,7 +166,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "Go to QUOTED in the script"
     (declare (ignore go))
     (list 'go quoted))
-
+  
   (defun stage/go-to (go to quoted)
     "Go to QUOTED in the script"
     (declare (ignore go to))
@@ -191,7 +191,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
     "Stop SONG if it is playing"
     (declare (ignore stops playing))
     (list 'music 'stop song))
-
+  
   (defun stage/music-stops (the music stops)
     "Stop all music"
     (declare (ignore the music stops))
@@ -218,7 +218,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/state←val (state from num)
     (declare (ignore from))
     (list 'set state num))
-
+  
   (defun stage/state<-val (state less tack num)
     (declare (ignore less tack))
     (list 'set state num))
@@ -299,7 +299,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/all-of (all of a comma and b)
     (declare (ignore all of comma and))
     (list 'every a b))
-
+  
   (defun stage/any-of (any of a comma or b)
     (declare (ignore any of comma or))
     (list 'some a b))
@@ -347,7 +347,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/is-zero (number is zero)
     (declare (ignore is zero))
     (list '= number 0))
-
+  
   (defun stage/is-not-less-than (a is not less than b)
     (declare (ignore is not less than))
     (list '≥  a b))
@@ -439,7 +439,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/faces (someone faces dir)
     (declare (ignore faces))
     (list 'face someone dir))
-
+  
   (defun stage/faces-to (someone faces to the dir)
     (declare (ignore faces to the))
     (list 'face someone dir))
@@ -463,7 +463,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/num-to-the-dir (num to the dir)
     (declare (ignore to the))
     (list 'δ num dir))
-
+  
   (defun stage/num-dir (num dir)
     (list 'δ num dir))
 
@@ -481,7 +481,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/ud-lr-by-num (nor eas by num)
     (declare (ignore nor eas by))
     (list 'δ num 'south num 'east))
-
+  
   (defun stage/relative-ud-lr (n1 up/down and n2 left/right)
     (declare (ignore and))
     (list 'δ n1 up/down n2 left/right))
@@ -514,7 +514,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/color-skin (color skin)
     (declare (ignore skin))
     (list 'skin color))
-
+  
   (defun stage/color-tunic (a color tunic)
     (declare (ignore a tunic))
     (list 'tunic color))
@@ -542,7 +542,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/raw-coords (lparen x comma y rparen)
     (declare (ignore lparen comma rparen))
     (list 'place nil x 'east y 'south))
-
+  
   (defun stage/complex (lparen real plus imag i rparen)
     (declare (ignore lparen plus i rparen))
     (complex real imag))
@@ -562,11 +562,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/prod-of-n×n (the prod of n1 times n2)
     (declare (ignore the prod of times))
     (list '* n1 n2))
-
+  
   (defun stage/num-ash-num (the res of n1 shif by n2)
     (declare (ignore the res of shif by))
     (list 'ash n1 n2))
-
+  
   (defun stage/num-expt-num (the res of n1 raised to the2 n2 pow)
     (declare (ignore the res of raised to the2 pow))
     (list 'expt n1 n2))
@@ -586,7 +586,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/sqrt-of-n (the sq rt of num)
     (declare (ignore the sq rt of))
     (list 'sqrt num))
-
+  
   (defun stage/ceiling-n (the ceil val of num)
     (declare (ignore the ceil val of))
     (list 'ceiling num))
@@ -646,7 +646,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/enter (enter someone at place)
     (declare (ignore enter at))
     (list 'enter someone place))
-
+  
   (defun stage/empty-boat (the ship-name appears in _the east/west headed for actor/location)
     (declare (ignore the appears in _the headed for))
     (list 'boat ship-name east/west actor/location nil))
@@ -659,7 +659,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
   (defun stage/sail-away (the ship-name gets underway to _the east/west)
     (declare (ignore the gets underway to _the))
     (list 'sail-away ship-name east/west))
-
+  
   (defun stage/embarks (actor embarks/boards the ship-name)
     (declare (ignore embarks/boards the))
     (list 'embark actor ship-name))
@@ -940,7 +940,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 			  (lambda (_it speed _becomes lighting &rest _)
 			    (declare (ignore _it _becomes _))
 			    (list 'lighting-change lighting speed))))
-
+           
 	 (wake/sleep-clause (someone sleeps (lambda (someone &rest _)
 				        (declare (ignore _))
 				        (list 'sleep someone)))
@@ -950,7 +950,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 			(someone awakens (lambda (someone &rest _)
 				         (declare (ignore _))
 				         (list 'wake someone))))
-
+           
 	 (fade-color black white red cyan)
 	 (fade-clause (fade from fade-color (lambda (_fade _from color)
 				        (declare (ignore _fade _from))
@@ -989,7 +989,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 	 (statements statement
                        (statements statement
 			     #'stage/statements-list))
-
+           
 	 (truck/dolly (truck left/right
                                #'stage/truck-left/right)
 		    (dolly up/down
@@ -1192,7 +1192,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 	  (someone disembarks from the ship-name #'stage/disembarks))
 
 	 (embarks/boards boards (embarks upon) (embarks on))
-
+           
 	 (exit-clause (someone exits #'stage/exit)
 		    (exit someone (lambda (e s) (stage/exit s e))))
 	 (jump-to-other-file-clause (continued in quoted in quoted #'stage/jump-to-file))
@@ -1304,7 +1304,7 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
 			     #'stage/relative-ud-lr)
 		      (numeric left/right and numeric up/down
 			     #'stage/relative-lr-ud))
-
+           
 	 (color clear ,@*common-palette*)
 	 (location (quoted (lambda (place)
                                (list 'place place 0 'north 0 'east)))
@@ -1477,12 +1477,11 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
                                   (setf *fountain-state* nil)))))
          ((and (char= #\( (char line 0))
                (char= #\) (last-elt line)))
-          (return (prog1
-                      (if (starts-with-subseq "(to " line)
-                          (let ((label (subseq line 4 (1- (length line)))))
-                            (setf *fountain-state* (cons :branch label))
-                            (return nil))
-                          (error "Emotes are not supported, saw ~s" line)))))
+          (return (if (starts-with-subseq "(to " line)
+                      (let ((label (subseq line 4 (1- (length line)))))
+                        (setf *fountain-state* (cons :branch label))
+                        (return nil))
+                      (error "Emotes are not supported, saw ~s" line))))
          (t (setf (cdr *fountain-state*)
                   (if (emptyp (cdr *fountain-state*))
                       line

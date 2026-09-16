@@ -179,12 +179,10 @@
 
 (defun assembler-label-name (string)
   (let ((result (pascal-case string)))
-    (when (search "Brp" result)
-      (setf result (cl-ppcre:regex-replace-all "Brp" result "BRP")))
-    (when (search "Aa" result)
-      (setf result (cl-ppcre:regex-replace-all "Aa" result "AA")))
-    (when (search "Zph" result)
-      (setf result (cl-ppcre:regex-replace-all "Zph" result "ZPH")))
+    (setf result (regex-replace-all "Brp" result "BRP"))
+    (setf result (regex-replace-all "Aa" result "AA"))
+    (setf result (regex-replace-all "Zph" result "ZPH"))
+    (setf result (regex-replace-all "Prge" result "PRGE"))
     result))
 
 (defun tia-48px-preview (image-pixels)
