@@ -763,7 +763,7 @@ grestore
 
 (defmethod clim:stream-cursor-position ((stream swank/gray::slime-output-stream)) 1)
 
-(defmethod clim:invoke-with-output-recording-options
+#+()(defmethod clim:invoke-with-output-recording-options
     ((stream swank/gray::slime-output-stream) continuation _ __)
   (funcall continuation stream))
 
