@@ -2071,7 +2071,7 @@ A MIDI note number from 0 to 127, or nil if parsing fails
                     return i
                   finally (progn (cerror "Continue, use Piano"
                                          "No instrument called ~s in orchestra"
-                                         (param-case (string (getf i* :instrument))))
+                                         (param-case (string instrument)))
                                  (return 0)))))
     (when note
       (multiple-value-bind (best1 best-e) (best-pokey-note-for note nil nil tv)
