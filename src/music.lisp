@@ -2030,20 +2030,25 @@ A MIDI note number from 0 to 127, or nil if parsing fails
   (declare (ignore _ignored))
   (let ((score (list)))
     (dolist (track (read-midi input))
-      (let ((instrument (make-keyword (string-upcase (param-case (if (eql :text (caar track))
-                                                                     (prog1
-                                                                         (cadar track)
-                                                                       (setf track (rest track)))
-                                                                     "Piano")))))
+      (let ((instrument (make-keyword
+                         (string-upcase
+                          (param-case (if (eql :text (caar track))
+                                          (prog1
+                                              (cadar track)
+                                            (setf track (rest track)))
+                                          (progn
+                                            (cerror "Continue with piano"
+                                                    "No instrument name recognized")
+                                            "Piano"))))))
             (lyric nil))
         (loop for token in track
               do (ecase (first token)
                    (:text (setf lyric (second token)))
                    (:note
-                    (push (list* :lyric lyric :instrument instrument
-                                 (rest token))
-                          score)
-                    (setf lyric nil))))
+                     (push (list* :lyric lyric :instrument instrument
+                                  (rest token))
+                           score)
+                     (setf lyric nil))))
         (setf score (sort score (lambda (a b)
                                   (< (getf a :time 0) (getf b :time 0)))))))
     score))
@@ -2064,7 +2069,10 @@ A MIDI note number from 0 to 127, or nil if parsing fails
                   when (string-equal (param-case (string instrument))
                                      (param-case (string (getf i* :instrument))))
                     return i
-                  finally (return 0))))
+                  finally (progn (cerror "Continue, use Piano"
+                                         "No instrument called ~s in orchestra"
+                                         (param-case (string (getf i* :instrument))))
+                                 (return 0)))))
     (when note
       (multiple-value-bind (best1 best-e) (best-pokey-note-for note nil nil tv)
         (when (and best1 (< 0 best1 #xff))
