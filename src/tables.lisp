@@ -787,11 +787,6 @@ INPUT & OUTPUT pathnames can be given."
                   (floor (min 15 (max 0 (getf row :vibrato 0))))
                   (floor (min 15 (max 0 (getf row :tremolo 0))))
                   (title-case (getf row :instrument))))
-        (format out "~2%InstrumentPSGTone:~%~10t;; 0 = tonal voice, 1 = white noise")
-        (dolist (row table)
-          (format out "~%~10t.byte ~d~40t; ~a"
-                  (orchestration-psg-tone-byte row)
-                  (title-case (getf row :instrument))))
         (format out "~2%;;; End of Orchestration~2%")))))
 
 (defun read-equipment-stats ()
