@@ -562,8 +562,7 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
                   :psg-tone (getf row :psg-tone))
           when (and row (not (emptyp (string-trim #(#\Space) (getf row :alias)))))
             append (dolist (alias (split-sequence #\Comma
-                                                  (and row (not (emptyp (string-trim #(#\Space)
-                                                                                     (getf row :alias)))))))
+                                                  (string-trim #(#\Space) (getf row :alias))))
                      (list :instrument alias
                            :distortion (make-keyword (string-upcase (getf row :distortion)))
                            :attack-addend (parse-number-or-fraction (getf row :attack-addend))
