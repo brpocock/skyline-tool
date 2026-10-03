@@ -542,7 +542,8 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
                   (parse-number:parse-number (subseq s (1+ pos))))
                (parse-number:parse-number s)))))))
 
-(defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods"))
+(defun read-orchestration (&optional (pathname #p"Source/Tables/Orchestration.ods")
+                           &key (with-aliases-p t))
   "Read the orchestration table from Source/Tables/Orchestration.ods"
   (format *trace-output* "~&Reading orchestration from ~a" (enough-namestring pathname))
   (finish-output *trace-output*)
@@ -560,19 +561,23 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
                   :vibrato (parse-number-or-fraction (getf row :vibrato))
                   :tremolo (parse-number-or-fraction (getf row :tremolo))
                   :psg-tone (getf row :psg-tone))
-          when (and row (not (emptyp (string-trim #(#\Space) (getf row :alias)))))
-            append (dolist (alias (split-sequence #\Comma
-                                                  (string-trim #(#\Space) (getf row :alias))))
-                     (list :instrument alias
-                           :distortion (make-keyword (string-upcase (getf row :distortion)))
-                           :attack-addend (parse-number-or-fraction (getf row :attack-addend))
-                           :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
-                           :decay-duration (parse-number-or-fraction (getf row :decay-duration))
-                           :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
-                           :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))
-                           :vibrato (parse-number-or-fraction (getf row :vibrato))
-                           :tremolo (parse-number-or-fraction (getf row :tremolo))
-                           :psg-tone (getf row :psg-tone))))))
+          when (and row with-aliases-p
+                    (not (emptyp (string-trim #(#\Space) (getf row :alias))))
+                    (not (string-equal "nil" (string-trim #(#\Space) (getf row :alias)))))
+            append (mapcar (lambda (alias)
+                             (list :instrument alias
+                                   :distortion (make-keyword (string-upcase (getf row :distortion)))
+                                   :attack-addend (parse-number-or-fraction (getf row :attack-addend))
+                                   :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
+                                   :decay-duration (parse-number-or-fraction (getf row :decay-duration))
+                                   :release-subtrahend (parse-number-or-fraction (getf row :release-subtrahend))
+                                   :tia-distortion (parse-number-or-fraction (getf row :tia-distortion))
+                                   :vibrato (parse-number-or-fraction (getf row :vibrato))
+                                   :tremolo (parse-number-or-fraction (getf row :tremolo))
+                                   :psg-tone (getf row :psg-tone)))
+                           (mapcar (curry #'string-trim #(#\space))
+                                   (split-sequence #\Comma
+                                                   (string-trim #(#\Space) (getf row :alias))))))))
 
 (defun orchestration-psg-tone-byte (row)
   "Return 0 for tonal PSG voices, 1 for the white-noise generator path.
@@ -584,12 +589,6 @@ to tonal (Hokey @code{Distortion} is not used on Intellivision)."
   (let ((psg (getf row :psg-tone))
         (name (string-downcase (string (getf row :instrument "")))))
     (cond
-      ((or (search "snare" name)
-           (search "wood block" name)
-           (search "kick" name)
-           (search "hi-hat" name)
-           (search "cymbal" name))
-       1)
       ((and psg (stringp psg) (not (str:blankp psg))
             (or (search "noise" (string-downcase psg))
                 (string-equal psg "1")))
@@ -681,7 +680,7 @@ INPUT & OUTPUT pathnames can be given."
               (enough-namestring input) (enough-namestring output))
       (format out ";;;; ~:(~a~) ~a~%;;; This file is generated from ~a~2%"
               *game-title* (enough-namestring output) (enough-namestring input))
-      (let ((table (read-orchestration input)))
+      (let ((table (read-orchestration input :with-aliases-p nil)))
         (format out "~2%~10tNumInstruments = ~d" (length table))
         (format out "~2%InstrumentHokeyDistortion:")
         (dolist (row table)
