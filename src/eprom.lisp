@@ -195,8 +195,7 @@ additional char; start over if any other char(s) is/are received."
     (list port s)))
 
 (defun spawn-thread-to-look-for-ep-1-on-port (port)
-  (make-thread (lambda () (ignore-errors (serial-port-has-ep-1-p port)))
-               :name (format nil "Looking for EP-1 on port ~a" port)))
+  (submit-task (lambda () (ignore-errors (serial-port-has-ep-1-p port)))))
 
 (defun interactive-wait (prompt &rest args)
   (loop for char = nil then (read-char *query-io* t)

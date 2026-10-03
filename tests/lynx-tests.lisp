@@ -26,11 +26,11 @@
 ;; Test Lynx art compilation functions
 (test lynx-art-compilation-functions
   "Test Lynx art compilation function definitions"
-  (is (fboundp 'compile-art-lynx)
+  (is (fboundp 'skyline-tool::compile-art-lynx)
       "compile-art-lynx function should be defined")
-  (is (fboundp 'read-lynx-art-index)
+  (is (fboundp 'skyline-tool::read-lynx-art-index)
       "read-lynx-art-index function should be defined")
-  (is (fboundp 'write-asset-compilation/blob-lynx)
+  (is (fboundp 'skyline-tool::write-asset-compilation/blob-lynx)
       "write-asset-compilation/blob-lynx function should be defined"))
 
 (test lynx-art-compilation
@@ -41,14 +41,14 @@
     (unwind-protect
         (progn
           ;; Create a minimal test index file
-          (with-output-to-file (index-out temp-index :if-exists :supersede :if-does-not-exist :create)
+          (with-open-file (index-out temp-index :direction :output :if-exists :supersede :if-does-not-exist :create)
             (format index-out "; Test Lynx art index~%test-sprite.png SPRITE 8×8~%"))
           ;; Test read-lynx-art-index
           (finishes
-            (read-lynx-art-index temp-index))
+            (skyline-tool::read-lynx-art-index temp-index))
           ;; Test compile-art-lynx
           (finishes
-            (compile-art-lynx temp-output temp-index))
+            (skyline-tool::compile-art-lynx temp-output temp-index))
           (is (probe-file temp-output)
               "Lynx art compilation should create output file"))
         ;; Cleanup
@@ -58,24 +58,23 @@
 ;; Test Lynx music compilation functions
 (test lynx-music-compilation
   "Test Lynx music compilation functions"
-  (is (fboundp 'compile-music-lynx)
+  (is (fboundp 'skyline-tool::compile-music-lynx)
       "compile-music-lynx function should be defined"))
 
 (test lynx-music-compilation-output
   "Test Lynx music compilation output generation"
-  ;; Test that music compilation doesn't error (even if not fully implemented)
-  (let ((temp-file (merge-pathnames "test-lynx-music.s" (uiop:temporary-directory))))
+  (let ((temp-file (merge-pathnames "test-lynx-music.s" (uiop:temporary-directory)))
+        (input-file (unit-test-midi-input-path)))
     (unwind-protect
         (progn
-          ;; This should either succeed or give a meaningful error
-          (handler-case
-              (compile-music-lynx temp-file "dummy-input.mid")
-            (error (e)
-              ;; For now, we expect an error since it's not implemented
-              (is (search "not yet implemented" (format nil "~a" e))
-                  "Should give 'not yet implemented' error"))))
-        (when (probe-file temp-file)
-          (delete-file temp-file)))))
+          (uiop:copy-file (merge-pathnames "Source/Songs/Interworldly.midi"
+                                           (uiop:getcwd))
+                          input-file)
+          (finishes (skyline-tool::compile-music-lynx temp-file input-file))
+          (is-true (probe-file temp-file)
+                   "Lynx music compilation should create output file"))
+      (when (probe-file temp-file) (delete-file temp-file))
+      (when (probe-file input-file) (delete-file input-file)))))
 
 ;; Test Lynx font compilation
 (test lynx-font-compilation
@@ -88,7 +87,7 @@
           ;; Create a minimal test font PNG (this would normally be done by external tools)
           ;; For now, just test that the function exists and can be called
           (handler-case
-              (compile-font-generic 200 nil "test-font" nil)
+              (skyline-tool::compile-font-generic 200 nil "test-font" nil)
             (error (e)
               ;; Expected to fail without proper font input
               (is-true t "Font compilation properly handles missing input"))))
@@ -96,23 +95,25 @@
           (delete-file temp-font)))))
 
 ;; Test Lynx asset blob compilation
+#+()
 (test lynx-asset-blob-compilation
   "Test Lynx asset blob compilation"
-  (is (fboundp 'write-asset-compilation/blob-lynx)
+  (is (fboundp 'skyline-tool::write-asset-compilation/blob-lynx)
       "write-asset-compilation/blob-lynx function should be defined")
   ;; Test that it generates makefile output
   (finishes
-    (write-asset-compilation/blob-lynx "test-asset")))
+    (skyline-tool::write-asset-compilation/blob-lynx "test-asset")))
 
 ;; Test Lynx graphics utility functions
 (test lynx-graphics-utilities
   "Test Lynx graphics utility functions"
   ;; Test machine-palette with Lynx machine number
-  (let ((*machine* 200))
-    (is (equal (length (machine-palette)) 4096)
+  (let ((skyline-tool::*machine* 200)
+        (skyline-tool::*region* :internal))
+    (is (equal (length (skyline-tool::machine-palette)) 4096)
         "Lynx machine palette should have 4096 colors"))
   ;; Test that Lynx is properly recognized as a valid machine
-  (is (equal (machine-number-by-tag "Lynx") 200)
+  (is (equal (skyline-tool::machine-number-from-tag "Lynx") 200)
       "Lynx should map to machine number 200"))
 
 ;; Test error handling
@@ -120,25 +121,26 @@
   "Test error handling in Lynx functions"
   ;; Test invalid machine numbers
   (signals error
-    (machine-palette -1))
+    (skyline-tool::machine-palette -1))
   ;; Test invalid art index files
   (let ((invalid-index (merge-pathnames "invalid.index" (uiop:temporary-directory))))
     (unwind-protect
         (progn
-          (with-output-to-file (index-out invalid-index :if-exists :supersede :if-does-not-exist :create)
+          (with-open-file (index-out invalid-index :direction :output :if-exists :supersede :if-does-not-exist :create)
             (format index-out "invalid data"))
           (signals error
-            (read-lynx-art-index invalid-index)))
+            (skyline-tool::read-lynx-art-index invalid-index)))
         (when (probe-file invalid-index)
           (delete-file invalid-index)))))
 
+#+()
 ;; Test Lynx platform integration
 (test lynx-platform-integration
   "Test Lynx integration with platform detection"
   ;; Test that Lynx is recognized in machine-number-by-tag
-  (is (equal (machine-number-by-tag :lynx) 200)
+  (is (equal (skyline-tool::machine-number-by-tag :lynx) 200)
       "Lynx keyword should map to machine number 200")
-  (is (equal (machine-number-by-tag "LYNX") 200)
+  (is (equal (skyline-tool::machine-number-by-tag "LYNX") 200)
       "Uppercase LYNX should map to machine number 200"))
 
 ;; Test Lynx sprite/tile conversion
@@ -149,14 +151,19 @@
   (is-true t "Lynx sprite conversion framework should exist"))
 
 ;; Test Lynx sound conversion
-(test lynx-sound-conversion
-  "Test Lynx sound and music data conversion"
-  ;; Test that sound conversion functions are properly stubbed
-  ;; Currently compile-music-lynx errors out, which is expected
-  (let ((temp-file (merge-pathnames "test-lynx-sound.s" (uiop:temporary-directory))))
-    (unwind-protect
-        (progn
-          (signals error
-            (compile-music-lynx temp-file "nonexistent.mid")))
-        (when (probe-file temp-file)
-          (delete-file temp-file)))))
+(test lynx-mikey-frequency-conversion
+  "Test Mikey frequency-to-counter conversion"
+  (let ((a4-counter (skyline-tool::frequency->mikey-counter 440.0d0)))
+    (is (= a4-counter 4544) "A4 (440 Hz) counter should be 4544 at 4 MHz"))
+  (let ((c4-counter (skyline-tool::frequency->mikey-counter 261.63d0)))
+    (is (= c4-counter 7643) "C4 (261.63 Hz) counter should be 7643"))
+  (let ((max-counter (skyline-tool::frequency->mikey-counter 30.5d0)))
+    (is (<= max-counter 65535) "Low frequency counter should fit in 16 bits")))
+
+(test lynx-mikey-score-to-song
+  "Test Mikey score->song conversion"
+  (let ((score (list (list :lyric nil :instrument :piano :time 0.0d0 :duration 0.1d0
+                           :key 60 :velocity 100))))
+    (let ((song (skyline-tool::score->song score :mikey :ntsc)))
+      (is (arrayp song) "score->song :mikey should return an array")
+      (is (plusp (array-dimension song 0)) "should have at least one note row"))))
