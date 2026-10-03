@@ -358,7 +358,7 @@ all-default (@code{#xff}) record."
   (let ((x (floor (parse-number (or (second (assoc "x" (second object) :test #'equal)) "0")) tile-width))
         (y (1- (floor (parse-number (or (second (assoc "y" (second object) :test #'equal)) "0")) 16)))
         (name (or (assocdr "name" (second object)) "(Unnamed decal)")))
-    (when-let (gid$ (assocdr "gid" (second object)))
+    (when-let (gid$ (second (assoc "gid" (second object) :test #'equal)))
       (let ((gid (let ((n (parse-integer gid$)))
                    (assert (<= 0 n 1023) (n)
                            "GID of decal object is insane, got ~d ($~x) from “~a”"
