@@ -51,7 +51,7 @@
                                   (read-file-into-string
                                    (namestring (tileset-pathname tileset))))))
           (when (equal "tile" (car tile-data))
-            (let (#+ () (tile-id (parse-integer (assocdr "id" (second tile-data)))))
+            (let (#+ () (tile-id (parse-integer (car (assocdr "id" (second tile-data))))))
               (dolist (animation (cddr tile-data))
                 (when (equal "animation" (car animation))
                   (let ((sequence (list)))
@@ -260,7 +260,7 @@ Later covering objects win per slot, analogous to @code{Palette} on 7800."
                                      (and (equal "object" (car el))
                                           (object-covers-tile-p x y el :tile-width tile-width)))
                                    objects))
-      (when-let (stic$ (assocdr "STIC" (second object)))
+      (when-let (stic$ (car (assocdr "STIC" (second object))))
         (let ((parsed (parse-stic-region-value stic$)))
           (dotimes (i 8)
             (setf (aref override i) (aref parsed i))))))
@@ -357,14 +357,14 @@ all-default (@code{#xff}) record."
   (declare (ignore prototypes)) ; TODO: #1238
   (let ((x (floor (parse-number (or (second (assoc "x" (second object) :test #'equal)) "0")) tile-width))
         (y (1- (floor (parse-number (or (second (assoc "y" (second object) :test #'equal)) "0")) 16)))
-        (name (or (assocdr "name" (second object)) "(Unnamed decal)")))
+        (name (or (car (assocdr "name" (second object))) "(Unnamed decal)")))
     (when-let (gid$ (second (assoc "gid" (second object) :test #'equal)))
       (let ((gid (let ((n (parse-integer gid$)))
                    (assert (<= 0 n 1023) (n)
                            "GID of decal object is insane, got ~d ($~x) from “~a”"
                            n n gid$)
                    n))
-            (type (or (assocdr "type" (second object)) "rug"))
+            (type (or (car (assocdr "type" (second object))) "rug"))
             (decal-props (logior-numbers (decal-properties->binary object))))
         (multiple-value-bind (id attrs tileset) (find-tile-by-number gid base-tileset
                                                                      :decal-tileset decal-tileset)
@@ -380,7 +380,7 @@ all-default (@code{#xff}) record."
                                       (ash tile-default-palette 24))))
           (when (plusp tileset)         ; XXX ref #109 ?
             (setf decal-props (logior decal-props #x1000)))
-          (when-let (pal$ (assocdr "Palette" (second object)))
+          (when-let (pal$ (car (assocdr "Palette" (second object))))
             #+ () (format *trace-output* "~2&//% tile $~2,'0x override palette ~s" id pal$)
             (assert (typep (parse-integer pal$) '(integer 0 7)) (pal$)
                     "Expected a palette index from 0 to 7, not ~s" pal$)
@@ -400,17 +400,14 @@ all-default (@code{#xff}) record."
           (return-from collect-decal-object (list x y id decal-props)))))))
 
 (defun collect-prototype-object (object &key (tile-width 8))
-  (let ((x (floor (parse-number (or (second (assoc "x" (second object) :test #'equal)) "0")) tile-width))
-        (y (1- (floor (parse-number (or (second (assoc "y" (second object) :test #'equal)) "0")) 16))))
-    (cond
-      ((assocdr "Character" (second object))
-       (let ((name (assocdr "Character" (second object))))
-         (format *trace-output* "~&Character spawn @(~3d, ~3d) “~a”" x y name)
-         (return-from collect-prototype-object (list x y :character name))))
-      ((assocdr "Object" (second object))
-       (let ((name (assocdr "Object" (second object))))
-         (format *trace-output* "~&Object spawn @(~3d, ~3d) “~a”" x y name)
-         (return-from collect-prototype-object (list x y :object name)))))))
+  (let ((x (floor (parse-number (or (car (assocdr "x" (second object) :test #'string-equal)) "0")) tile-width))
+        (y (1- (floor (parse-number (or (car (assocdr "y" (second object) :test #'string-equal)) "0")) 16))))
+    (when-let (name (tile-property-value "Character" object))
+      (format *trace-output* "~&Character spawn @(~3d, ~3d) “~a”" x y name)
+      (return-from collect-prototype-object (list x y :character name)))
+    (when-let (name (tile-property-value "Object" object))
+      (format *trace-output* "~&Object spawn @(~3d, ~3d) “~a”" x y name)
+      (return-from collect-prototype-object (list x y :object name)))))
 
 (defun pascal-case-property (string)
   "Normalize STRING to PascalCase, preserving slashes for region/script paths.
@@ -1642,12 +1639,12 @@ entries with their filenames and pixel coordinates.
     (force-output *trace-output*)
     (let ((json:*json-identifier-name-to-lisp* 'string))
       (let ((json (json:decode-json-from-source pathname)))
-        (loop for entry in (assocdr "maps" json)
-              collect (list :filename (assocdr "fileName" entry)
-                            :x (assocdr "x" entry)
-                            :y (assocdr "y" entry)
-                            :width (assocdr "width" entry)
-                            :height (assocdr "height" entry)))))))
+        (loop for entry in (car (assocdr "maps" json))
+              collect (list :filename (car (assocdr "fileName" entry))
+                            :x (car (assocdr "x" entry))
+                            :y (car (assocdr "y" entry))
+                            :width (car (assocdr "width" entry))
+                            :height (car (assocdr "height" entry))))))))
 
 (defun resolve-world-map-id (filename island-name)
   "Resolve a TMX filename from a world file to a map asset ID.
