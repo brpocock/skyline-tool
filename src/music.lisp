@@ -2065,13 +2065,11 @@ A MIDI note number from 0 to 127, or nil if parsing fails
 
 (defun hokey-reckon (note instrument &optional (q 1) (tv :ntsc))
   (let* ((o (get-orchestration))
-         (i (loop for i* in o for i from 0
+         (i (loop for i* in o
                   when (string-equal (param-case (string instrument))
                                      (param-case (string (getf i* :instrument))))
-                    return i
-                  finally (progn (cerror "Continue, use Piano"
-                                         "No instrument called ~s in orchestra"
-                                         (param-case (string instrument)))
+                    return (getf i* :i)
+                  finally (progn (warn "No ~s, using Piano" instrument)
                                  (return 0)))))
     (when note
       (multiple-value-bind (best1 best-e) (best-pokey-note-for note nil nil tv)
