@@ -549,9 +549,11 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
   (finish-output *trace-output*)
   (let ((table (ss->lol (first (read-ods-into-lists pathname)))))
     (loop for row in table
+          for i from 0
           when (and row (not (emptyp (string-trim #(#\Space) (getf row :instrument)))))
             collecting
-            (list :instrument (getf row :instrument)
+            (list :i i
+                  :instrument (getf row :instrument)
                   :distortion (make-keyword (string-upcase (getf row :distortion)))
                   :attack-addend (parse-number-or-fraction (getf row :attack-addend))
                   :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
@@ -565,7 +567,8 @@ Uses parse-number:parse-number for numeric parsing (supports decimals, hex, etc.
                     (not (emptyp (string-trim #(#\Space) (getf row :alias))))
                     (not (string-equal "nil" (string-trim #(#\Space) (getf row :alias)))))
             append (mapcar (lambda (alias)
-                             (list :instrument alias
+                             (list :i i
+                                   :instrument alias
                                    :distortion (make-keyword (string-upcase (getf row :distortion)))
                                    :attack-addend (parse-number-or-fraction (getf row :attack-addend))
                                    :decay-subtrahend (parse-number-or-fraction (getf row :decay-subtrahend))
@@ -586,8 +589,7 @@ Uses @code{PSG Tone} from @var{ROW} when present (@code{0}/tone = tonal,
 @code{1}/noise = noise).  When blank, percussion instrument names and
 @code{Snare Drum} / @code{Wood Blocks} default to noise; all others default
 to tonal (Hokey @code{Distortion} is not used on Intellivision)."
-  (let ((psg (getf row :psg-tone))
-        (name (string-downcase (string (getf row :instrument "")))))
+  (let ((psg (getf row :psg-tone)))
     (cond
       ((and psg (stringp psg) (not (str:blankp psg))
             (or (search "noise" (string-downcase psg))

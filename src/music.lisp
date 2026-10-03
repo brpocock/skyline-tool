@@ -2203,10 +2203,10 @@ A single @code{(:note :time … :key … :duration … :velocity … :instrument
 
 (defun orchestration-instrument-id (instrument-name)
   "Map MuseScore instrument name to orchestration table index."
-  (loop for row in (get-orchestration) for i from 0
+  (loop for row in (get-orchestration)
         when (string-equal (param-case (string instrument-name))
                            (param-case (string (getf row :instrument))))
-          return i
+          return (getf row :i)
         finally (return 0)))
 
 (defun quieter-note (note)
