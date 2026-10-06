@@ -675,7 +675,8 @@ return the symbol for the cross-quarter direction, e.g. NORTHEAST")
               arrow arrows arms armor at awakens
               base beat beats becomes below black boards boolean boots
               both bow bright brightly buckler by
-              can catamaran ceiling chalice clear close confused continued crown crowns cut cyan cyan-lit
+              call can catamaran ceiling chalice clear close
+              confused continued crown crowns cut cyan cyan-lit
               dances dancing dark difference dim disembarks divided do dolly done down
               e east either embarks enter enters equal equips exclusive exit exits
               faces fade find floor for frame from
