@@ -83,5 +83,4 @@ rp {pc<0x8000},{printf \"PC below ROM window (not $8000-$ffff) pc=$%04x bank=$%0
 bp c024,1,{printf \"NMI selector: $%04x (scanline %d)\", w@98, beamy;go}
 printf \"\\n\\n\\n\\n\\n\\nReady.\\n(Press <F12> to start game)\"
 "
-                (or break 0)
-                (or minor-fault 0))))))
+                break minor-fault)))))

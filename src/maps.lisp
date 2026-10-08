@@ -1960,7 +1960,7 @@ bytes (tileset linkage and runtime GRAM upload remain TODO). The 7800 ZX7
                       ;; offset 10, BGM Song ID
                       (write-byte (or bgm-id 0) object)
                       ;; offset 11-12, force fields pointer
-                      (write-word (incf offset (1+ (* 5 (length spawn-table)))) object)
+                      (write-word (incf offset (+ 3 (* 5 (length spawn-table)))) object)
                       ;; offset 13-14, edge links
                       (write-word (if edge-links
                                       (incf offset (1+ (* 20 (length force-fields))))
