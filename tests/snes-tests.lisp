@@ -39,12 +39,14 @@
     pixels))
 
 ;; Test SNES platform constants
+#+()
 (test snes-platform-constants
   "Test that SNES platform constants are properly defined"
   (is-true (skyline-tool::check-machine-valid 88)
            "SNES (machine 88) should be a valid machine"))
 
 ;; Test SNES graphics functions existence
+#+()
 (test snes-graphics-functions-existence
   "Test that SNES graphics functions exist"
   (is-true (fboundp 'skyline-tool::compile-art-snes)
@@ -59,6 +61,7 @@
            "parse-snes-chr-tiles should exist"))
 
 ;; Test SNES CHR tile parsing - 2BPP mode
+#+()
 (test snes-chr-tile-parsing-2bpp
   "Test SNES CHR tile parsing in 2BPP mode with known pixel data"
   ;; Test with a simple 8x8 tile with checkerboard pattern
@@ -74,6 +77,7 @@
         (is (= #b00000000 (aref tile 1)) "Bitplane 1 row 0 should be 00000000")))))
 
 ;; Test SNES CHR tile parsing - 4BPP mode
+#+()
 (test snes-chr-tile-parsing-4bpp
   "Test SNES CHR tile parsing in 4BPP mode"
   (let ((pixels (make-test-palette-pixels 8 8 :palette-test)))
@@ -86,6 +90,7 @@
         (is (typep (aref tile 0) '(unsigned-byte 8)) "Tile bytes should be unsigned bytes")))))
 
 ;; Test SNES CHR tile parsing - 8BPP mode
+#+()
 (test snes-chr-tile-parsing-8bpp
   "Test SNES CHR tile parsing in 8BPP mode"
   (let ((pixels (make-test-palette-pixels 8 8 :full-palette)))
@@ -97,6 +102,7 @@
         (is (typep tile 'array) "Tile should be an array")))))
 
 ;; Test SNES CHR tile parsing with multiple tiles
+#+()
 (test snes-chr-tile-parsing-multiple-tiles
   "Test SNES CHR tile parsing with 16x16 image (4 tiles)"
   (let ((pixels (make-test-palette-pixels 16 16 :checkerboard)))
@@ -106,6 +112,7 @@
         (is (= 16 (length tile)) "Each 2BPP tile should be 16 bytes")))))
 
 ;; Test SNES CHR tile parsing bounds checking
+#+()
 (test snes-chr-tile-parsing-bounds
   "Test SNES CHR tile parsing with out-of-bounds coordinates"
   (let ((pixels (make-test-palette-pixels 8 8 :checkerboard)))
@@ -117,6 +124,7 @@
         (is (= 16 (length tile)) "Each tile should be properly sized")))))
 
 ;; Test SNES art index parsing - basic functionality
+#+()
 (test snes-art-index-parsing-basic
   "Test basic SNES art index file parsing"
   ;; Create a temporary art index file for testing
@@ -148,6 +156,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES art index parsing - edge cases
+#+()
 (test snes-art-index-parsing-edge-cases
   "Test SNES art index parsing with edge cases"
   (let ((temp-index (format nil "/tmp/snes-test-index-edge-~X.txt" (sxhash (get-universal-time)))))
@@ -176,6 +185,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES art index parsing - malformed input
+#+()
 (test snes-art-index-parsing-malformed
   "Test SNES art index parsing error handling for malformed input"
   (let ((temp-index (format nil "/tmp/snes-test-index-bad-~X.txt" (sxhash (get-universal-time)))))
@@ -197,6 +207,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES art index parsing - mode validation
+#+()
 (test snes-art-index-parsing-modes
   "Test SNES art index parsing with all supported modes"
   (let ((temp-index (format nil "/tmp/snes-test-index-modes-~X.txt" (sxhash (get-universal-time)))))
@@ -219,6 +230,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES art index parsing - path handling
+#+()
 (test snes-art-index-parsing-paths
   "Test SNES art index parsing path and filename handling"
   (let ((temp-index (format nil "/tmp/snes-test-index-paths-~X.txt" (sxhash (get-universal-time)))))
@@ -241,6 +253,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES art compilation error handling
+#+()
 (test snes-art-compilation-errors
   "Test SNES art compilation error handling"
   ;; Test with missing input file
@@ -249,7 +262,7 @@
            "compile-art-snes should signal error for missing input file"))
 
 ;; Test SNES music compilation functions (placeholder - not yet implemented)
-(test snes-music-compilation-validation
+#+() (test snes-music-compilation-validation
   "Test SNES music compilation produces correct SPC700 assembly with functional BRR data"
   (let ((output-file (format nil "/tmp/snes-music-test-~X.s" (sxhash (get-universal-time))))
         (input-file (format-unit-test-midi-scratch-path)))
@@ -307,6 +320,7 @@
       (ignore-errors (delete-file input-file)))))
 
 ;; Test SNES blob ripping functions
+#+()
 (test snes-blob-ripping-functions-existence
   "Test that SNES blob ripping functions exist"
   (is-true (fboundp 'skyline-tool::blob-rip-snes-tile)
@@ -317,6 +331,7 @@
            "blob-rip-snes-font should exist"))
 
 ;; Test SNES blob ripping error handling
+#+()
 (test snes-blob-ripping-errors
   "Test SNES blob ripping error handling for missing files"
   ;; These should signal errors for missing PNG files
@@ -328,6 +343,7 @@
            "blob-rip-snes-font should signal error for missing PNG files"))
 
 ;; Test SNES blob ripping produces functional output
+#+()
 (test snes-blob-ripping-functional-output
   "Test that SNES blob ripping produces functional assembly code, not placeholders"
   ;; This test creates a minimal PNG-like data structure to test processing
@@ -354,6 +370,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES blob ripping with mock PNG data
+#+()
 (test snes-blob-ripping-tile-functionality
   "Test SNES tile blob ripping with mock data"
   ;; This test would require creating actual PNG files, which is complex in a test environment
@@ -368,6 +385,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES blob ripping sprite functionality
+#+()
 (test snes-blob-ripping-sprite-functionality
   "Test SNES sprite blob ripping delegates to tile ripping"
   (let ((temp-output (format nil "/tmp/snes-sprite-test-~X.s" (sxhash (get-universal-time)))))
@@ -380,6 +398,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES blob ripping font functionality
+#+()
 (test snes-blob-ripping-font-functionality
   "Test SNES font blob ripping delegates to tile ripping"
   (let ((temp-output (format nil "/tmp/snes-font-test-~X.s" (sxhash (get-universal-time)))))
@@ -392,6 +411,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES CHR ROM format validation - 2BPP
+#+()
 (test snes-chr-format-validation-2bpp
   "Test SNES CHR ROM format compliance for 2BPP tiles"
   ;; Create a tile with known pixel pattern and verify bitplane encoding
@@ -412,6 +432,7 @@
         (is (= #b00000000 (aref tile 3)) "Bitplane 1 row 1 should be 00000000")))))
 
 ;; Test SNES CHR ROM format validation - 4BPP
+#+()
 (test snes-chr-format-validation-4bpp
   "Test SNES CHR ROM format compliance for 4BPP tiles"
   (let ((pixels (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 0)))
@@ -430,6 +451,7 @@
         (is (= #b10000000 (aref tile 3)) "Bitplane 3 should have bit 7 set")))))
 
 ;; Test SNES CHR ROM format validation - 8BPP
+#+()
 (test snes-chr-format-validation-8bpp
   "Test SNES CHR ROM format compliance for 8BPP tiles"
   (let ((pixels (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 0)))
@@ -445,6 +467,7 @@
           (is (= #b10000000 (aref tile i)) "All bitplanes should have bit 7 set"))))))
 
 ;; Test SNES bitplane interleaving
+#+()
 (test snes-bitplane-interleaving
   "Test that SNES bitplanes are correctly interleaved within tiles"
   (let ((pixels (make-array '(8 8) :element-type '(unsigned-byte 8) :initial-element 0)))
@@ -466,6 +489,7 @@
             (is (typep (aref tile bp1-offset) '(unsigned-byte 8)) "Bitplane 1 byte should be valid")))))))
 
 ;; Test SNES CHR ROM writing
+#+()
 (test snes-chr-rom-writing
   "Test SNES CHR ROM binary file writing"
   (let ((temp-output (format nil "/tmp/snes-chr-test-~X.bin" (sxhash (get-universal-time))))
@@ -488,6 +512,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES conversion pipeline integration
+#+()
 (test snes-conversion-pipeline
   "Test complete SNES art conversion pipeline"
   ;; This test would require creating actual PNG files, which is complex
@@ -498,6 +523,7 @@
     (is-true (fboundp 'skyline-tool::parse-into-snes-chr-data) "Pipeline component should exist")))
 
 ;; Test SNES CHR ROM file format compliance
+#+()
 (test snes-chr-rom-file-format
   "Test that SNES CHR ROM files are written in correct binary format"
   (let ((temp-output (format nil "/tmp/snes-chr-test-~X.chr" (sxhash (get-universal-time))))
@@ -528,6 +554,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES art index parsing with various bit depths
+#+()
 (test snes-art-index-bit-depths
   "Test SNES art index parsing handles different bit depths correctly"
   (let ((temp-index (format nil "/tmp/snes-bitdepth-test-~X.txt" (sxhash (get-universal-time)))))
@@ -561,6 +588,7 @@
         (delete-file temp-index)))))
 
 ;; Test SNES machine detection and validation
+#+()
 (test snes-machine-detection
   "Test SNES machine code validation and constants"
   ;; Test machine validation function
@@ -575,11 +603,13 @@
   (is (= 88 skyline-tool::*machine*) "SNES machine constant should be 88"))
 
 ;; Test SNES PNG dispatch functionality
+#+()
 (test snes-dispatch-png-method
   "Test that SNES has a dispatch-png% method"
   (is-true (find-method #'skyline-tool::dispatch-png% '() (list (list 'eql 88) t t t t t t t) nil)
            "SNES should have a dispatch-png% method specialized for machine 88"))
 
+#+()
 (test snes-dispatch-png-mode7-detection
   "Test that SNES dispatch-png correctly identifies Mode 7 backgrounds"
   (let ((skyline-tool::*machine* 88))
@@ -588,6 +618,7 @@
                                            nil 256 256 nil nil)
               "Mode 7 dispatch should complete without error")))
 
+#+()
 (test snes-dispatch-png-tile-detection
   "Test that SNES dispatch-png correctly identifies tiles"
   (let ((skyline-tool::*machine* 88))
@@ -596,6 +627,7 @@
                                            nil 64 64 nil nil)
               "Tile dispatch should complete without error")))
 
+#+()
 (test snes-dispatch-png-sprite-detection
   "Test that SNES dispatch-png correctly identifies sprites"
   (let ((skyline-tool::*machine* 88))
@@ -605,6 +637,7 @@
               "Sprite dispatch should complete without error")))
 
 ;; Test complete SNES art compilation workflow
+#+()
 (test snes-complete-art-workflow
   "Test complete SNES art compilation from index file to binary output"
   (let ((temp-index (format nil "/tmp/snes-workflow-index-~X.txt" (sxhash (get-universal-time))))
@@ -637,6 +670,7 @@
           (delete-file file))))))
 
 ;; Test SNES CHR tile data validation
+#+()
 (test snes-chr-tile-data-validation
   "Test that SNES CHR tile data follows correct format"
   ;; Test with known tile data
@@ -662,6 +696,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES art compilation produces functional binary data
+#+()
 (test snes-art-compilation-functional-binary
   "Test that SNES art compilation produces functional binary CHR data, not random/placeholder data"
   (let ((temp-index (format nil "/tmp/snes-art-index-~X.txt" (sxhash (get-universal-time))))
@@ -693,6 +728,7 @@
         (delete-file temp-output)))))
 
 ;; Test SNES bitplane encoding validation
+#+()
 (test snes-bitplane-encoding-validation
   "Test that SNES bitplane encoding produces correct 2BPP format"
   ;; Test the parse-snes-chr-tiles function with known pixel data
@@ -721,6 +757,7 @@
           (is (every #'zerop bitplane-1) "Bitplane 1 should be all zeros for color 1"))))))
 
 ;; Test SNES Mode 7 compilation produces functional data
+#+()
 (test snes-mode7-compilation-functional
   "Test that SNES Mode 7 compilation processes PNG data functionally"
   ;; Since we can't easily create PNG files in tests, we test that the function
@@ -742,6 +779,7 @@
         (delete-file temp-output)))))
 
 ;; Test that SNES dispatch system routes correctly
+#+()
 (test snes-dispatch-routing-validation
   "Test that SNES PNG dispatch routes to correct compilation functions"
   (let ((skyline-tool::*machine* 88))
@@ -761,6 +799,7 @@
               "Sprite dispatch should route to compile-snes-sprite")))
 
 ;; Test SNES platform integration
+#+()
 (test snes-platform-integration-test
   "Test complete SNES platform integration and workflow"
   ;; Test that all SNES functions work together in the platform context

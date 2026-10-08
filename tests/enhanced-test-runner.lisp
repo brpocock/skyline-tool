@@ -135,7 +135,7 @@
       (format t "  Max:     ~,2F sec~%" max-time)
       (format t "  StdDev:  ~,3F sec~%" (sqrt (/ (apply #'+ (mapcar (lambda (t) (expt (- t avg-time) 2)) times))
                                                   iterations))))
-      (values avg-time min-time max-time))))
+    (values avg-time min-time max-time)))
 
 (defun generate-detailed-report (&optional (output-file "test-report.html"))
   "Generate a detailed HTML test report"

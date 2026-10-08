@@ -12,6 +12,7 @@ DEADJOE
 
 # Generated/output files
 *.fasl
+bin/
 
 # IDE temp files
 .emacs.desktop
@@ -24,3 +25,4 @@ DEADJOE
 
 lib/system-index.txt
 
+*.bak*

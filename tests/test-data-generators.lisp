@@ -399,7 +399,7 @@
                 (0 -1)        ; Negative (if allowed)
                 (1 256)       ; Out of range
                 (2 'invalid)  ; Wrong type
-                (3 nil)       ; Nil
+                (3 nil)       ; Boat class/type
                 (otherwise (random 256))))))
     pixels))
 

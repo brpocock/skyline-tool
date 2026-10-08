@@ -139,7 +139,7 @@ Creates DIRECTORY, writes two @code{SEQ} binaries, prints byte counts
       (ensure-directories-exist (pathname out-dir))
       (let ((root (merge-pathnames
                    #p"Source/Code/CBM/Reference/petscii/"
-                   (project-root)))
+                   (uiop:getcwd)))
             (pairs '(("MANUAL-RETAIL-MASTER.txt" . "phantasia.doc.manual.seq")
                      ("DEMO-ZIP-MASTER.txt" . "phantasia.doc.demo.seq"))))
         (dolist (pair pairs)
