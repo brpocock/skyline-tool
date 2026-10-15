@@ -344,13 +344,13 @@
          (dump (load-tile-sheet-object-by-name
                 (simple-animation-sequence-tile-sheet seq) artp))
          (mode (simple-animation-sequence-write-mode seq))
-         (bw (simple-animation-sequence-bytes-width seq))
-         (ppb (ecase mode (:160a 4) (:160b 2)))
-         (tw (* bw ppb)) (th 16)
-         (fc (simple-animation-sequence-frame-count seq))
+         (byte-width (simple-animation-sequence-bytes-width seq))
+         (pixels-per-byte (ecase mode (:160a 4) (:160b 2)))
+         (total-width (* byte-width pixels-per-byte)) (th 16)
+         (frame-count (simple-animation-sequence-frame-count seq))
          (single (>= frame 0))
-         (nf (if single 1 fc))
-         (iw (* (max 1 nf) tw 2)) (ih th)
+         (number-of-frames (if single 1 frame-count))
+         (iw (* (max 1 number-of-frames) total-width 2)) (ih th)
          (s (or scale 1))
          (colors (read-palette-for-tile-sheet
                   (simple-animation-sequence-tile-sheet seq) palette-index
@@ -375,14 +375,14 @@
                            rgb))))
          (pixels (make-array (* iw ih 3 s s) :element-type '(unsigned-byte 8)
                                              :initial-element 0)))
-    (dotimes (f nf)
+    (dotimes (f number-of-frames)
       (let* ((fi (if single frame f))
              (tile-ref (aref (simple-animation-sequence-frames seq) fi))
-             (addr (* bw tile-ref))
-             (fp (extract-maria-pixels dump mode addr bw))
-             (xo (* f tw 2 s)))
+             (addr (* byte-width tile-ref))
+             (fp (extract-maria-pixels dump mode addr byte-width))
+             (xo (* f total-width 2 s)))
         (dotimes (y th)
-          (dotimes (x tw)
+          (dotimes (x total-width)
             (destructuring-bind (r g b) (funcall pen->rgb (aref fp x y))
               (let ((bx (* 2 x s)))
                 (dotimes (sy s)
@@ -770,10 +770,12 @@ Called from note-sheet-grafted after the frame is connected to the display."
                 do (setf (aref mem i) byte))))
       mem)))
 
-(defun read-palette-for-tile-sheet (tile-sheet-name palette-index &key write-mode)
-  (let ((sprite-sheet-pathname (make-pathname :directory (list :relative "Source" "Art" tileset-name-reference)
-                                              :name tile-sheet-name
-                                              :type "art")))
+(defun read-palette-for-tile-sheet (tile-sheet-name palette-index
+                                    &key write-mode)
+  (let ((sprite-sheet-pathname (make-pathname
+                                :directory (list :relative "Source" "Art" tileset-name-reference)
+                                :name tile-sheet-name
+                                :type "art")))
     (unless (probe-file sprite-sheet-pathname)
       (error "Missing sprite sheet: ~a" (enough-namestring sprite-sheet-pathname)))
     (let* ((tileset (load-tileset sprite-sheet-pathname))
@@ -1403,33 +1405,36 @@ Called from note-sheet-grafted after the frame is connected to the display."
               hash)))))
 
 (defun save-all-animation-sequences ()
-  (let ((text-props-normal '(:color "#000000" :font-name "Cantarell" :font-size "10.5pt"))
-        (text-props-title '(:color "#000000" :font-name "Cantarell"
-                            :font-size "14pt" :font-weight :bold))
-        (text-props-link '(:color "#0563c1" :font-name "Cantarell" :font-size "10.5pt"
-		       :text-underline-style :solid :text-underline-type :single)))
+  (let ((text-props-normal
+          '(:color "#000000" :font-name "Cantarell" :font-size "10.5pt"))
+        (text-props-title
+          '(:color "#000000" :font-name "Cantarell"
+            :font-size "14pt" :font-weight :bold))
+        (text-props-link
+          '(:color "#0563c1" :font-name "Cantarell" :font-size "10.5pt"
+	  :text-underline-style :solid :text-underline-type :single)))
     (clods:with-spreadsheet ((make-pathname :name "Animation" :type "ods"
                                             :directory (list :relative "Source" "Tables"))
                              :generator "Skyline-Tool" :creator (user-real-name))
       (clods:using-fonts ()
-        ;; fonts
-        (clods:font "Cantarell" :family "Cantarell" :family-generic :swiss))
+                         ;; fonts
+                         (clods:font "Cantarell" :family "Cantarell" :family-generic :swiss))
       (clods:using-styles (:locale (clods:make-locale "US" #\space 3 #\.))
-        ;; number formats
-        (clods:number-text-style "n-text")
-        ;; cell styles
-        (clods:cell-style "ce-normal" nil text-props-normal :data-style "n-text")
-        (clods:cell-style "ce-title" "ce-normal" text-props-title :horizontal-align :center)
-        (clods:cell-style "ce-header" "ce-normal" text-props-title
-                          :border-bottom '(:thin :solid "#000000"))
-        (clods:cell-style "ce-link" "ce-normal" text-props-link)
+                          ;; number formats
+                          (clods:number-text-style "n-text")
+                          ;; cell styles
+                          (clods:cell-style "ce-normal" nil text-props-normal :data-style "n-text")
+                          (clods:cell-style "ce-title" "ce-normal" text-props-title :horizontal-align :center)
+                          (clods:cell-style "ce-header" "ce-normal" text-props-title
+                                            :border-bottom '(:thin :solid "#000000"))
+                          (clods:cell-style "ce-link" "ce-normal" text-props-link)
 
-        ;; column styles
-        (clods:column-style "co-column" nil :width "5.0cm")
+                          ;; column styles
+                          (clods:column-style "co-column" nil :width "5.0cm")
 
-        ;; row styles
-        (clods:row-style "ro-normal" nil :height "10.5pt" :use-optimal-height t)
-        (clods:row-style "ro-title" nil :height "14pt" :use-optimal-height t))
+                          ;; row styles
+                          (clods:row-style "ro-normal" nil :height "10.5pt" :use-optimal-height t)
+                          (clods:row-style "ro-title" nil :height "14pt" :use-optimal-height t))
 
       (clods:with-body ()
         (clods:with-table ("Caution")
@@ -1501,9 +1506,9 @@ Called from note-sheet-grafted after the frame is connected to the display."
                 (clods:cell (princ-to-string action))
                 (clods:cell (princ-to-string facing))
                 (clods:cell
-                  (when-let ((seq (gethash key *animation-assignments*)))
-                    (princ-to-string
-                     (simple-animation-sequence-index seq)))))))))))
+                 (when-let ((seq (gethash key *animation-assignments*)))
+                   (princ-to-string
+                    (simple-animation-sequence-index seq)))))))))))
   (load-all-animation-sequences))
 
 (defun save-animation-sequence (sequence)

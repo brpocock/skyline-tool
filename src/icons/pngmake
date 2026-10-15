@@ -1,1 +1,2 @@
+#!/bin/bash
 for f in *.svg ; do magick $f -geometry 300x300 $(basename $f .svg).png & done
