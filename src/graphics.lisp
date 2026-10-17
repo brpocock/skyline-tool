@@ -1502,99 +1502,54 @@ Shape:~{~{~a~}~2%~}
         (ensure-directories-exist output-path)
         (when color-output-path
           (ensure-directories-exist color-output-path))
-        (if titlescreen-kernel-p
-            ;; Titlescreen kernel assembly format (×2 drawing style)
-            ;; Colors are written to a separate file to allow bitmap data to be page-aligned
-            (progn
-              ;; Write bitmap data file (without colors)
-              (with-open-file (stream output-path
+        (with-open-file (stream output-path
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          ;; Header banner
+          (format stream ";;; Chaos Fight - ~a" (namestring output-path))
+          (format stream "~2%;;;; This is a generated file, do not edit.
+;;; Color tables are in separate .colors.s files
+;;;; Bitmap data is packed at page-aligned address ~a" page-address)
+          (format stream "~2%~10t* = ~a" page-address)
+          ;; Essential data without verbose comments
+          (format stream "~%~10t~a_window = ~d" kernel-prefix height)
+          (format stream "~%~10t~a_height = ~d" kernel-prefix height)
+          (format stream "~2%~10t.byte 0 ; leave this here!~%")
+          ;; Note: Color table, PF1, PF2, and background are in separate .colors.s file at $f500
+          ;; Output bitmap columns (6 columns: 00-05)
+          ;; Alignment only at beginning (line above), not between strips
+          (loop for column from 0 below 6
+                do (format stream "~2%~a_~2,'0D~%" kernel-prefix column)
+                   ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
+                   (loop for row from (1- height) downto 0
+                         for byte = (elt (elt shape column) row)
+                         do (format stream "~%~10t.byte %~8,'0b" byte))
+                   (format stream "~%~%")))
+        ;; Write color table, PF1, PF2, and background to separate file
+        ;; These will be combined into titlescreen_colors.s at $f500
+        (with-open-file (color-stream color-output-path
                                       :direction :output
                                       :if-exists :supersede
                                       :if-does-not-exist :create)
-                ;; Header banner
-                (format stream ";;; Chaos Fight - ~a~%" (namestring output-path))
-                (format stream "~%")
-                (format stream ";;;; This is a generated file, do not edit.~%")
-                (format stream ";;;; Color tables are in separate .colors.s files~%")
-                (format stream ";;;; Bitmap data is packed at page-aligned address ~a (CPU/RORG space)~%" page-address)
-                (format stream "~%")
-                ;; Set relocatable CPU address for bitmap data (titlescreen kernel always runs in bank 9)
-                ;; NOTE: We must *not* change the assembler's file offset here, or we blow past Bank 9's file space.
-                ;;       Using RORG keeps the CPU address correct ($F100/$F200/…) without seeking the output file.
-                (format stream "   rorg ~a~%" page-address)
-                (format stream "~%")
-                ;; Essential data without verbose comments
-                (format stream "~a_window = ~d~%" kernel-prefix height)
-                (format stream "~%")
-                (format stream "~a_height = ~d~%" kernel-prefix height)
-                (format stream "~%")
-                (format stream " BYTE 0 ; leave this here!~%")
-                (format stream "~%~%")
-                ;; Note: Color table, PF1, PF2, and background are in separate .colors.s file at $f500
-                ;; Output bitmap columns (6 columns: 00-05)
-                ;; Alignment only at beginning (line above), not between strips
-                (loop for column from 0 below 6
-                      do (format stream "~%~%")
-                      do (format stream "~a_~2,'0D~%" kernel-prefix column)
-                         ;; Output rows in reverse order (bottom to top, inverted-y) - tab-indented
-                         (loop for row from (1- height) downto 0
-                               for byte = (elt (elt shape column) row)
-                               for binary = (format nil "~8,'0b" byte)
-                               do (format stream "~tBYTE %~a~%" binary))
-                         (format stream "~%~%")))
-              ;; Write color table, PF1, PF2, and background to separate file
-              ;; These will be combined into titlescreen_colors.s at $f500
-              (with-open-file (color-stream color-output-path
-                                            :direction :output
-                                            :if-exists :supersede
-                                            :if-does-not-exist :create)
-                ;; Header banner
-                (format color-stream ";;; Chaos Fight - ~a~%" (namestring color-output-path))
-                (format color-stream "~%")
-                (format color-stream ";;;; This is a generated file, do not edit.~%")
-                (format color-stream ";;;; Color table, PF1, PF2, and background for ~a bitmap~%" kernel-prefix)
-                (format color-stream ";;;; This file will be included in titlescreen_colors.s at $f500~%")
-                (format color-stream "~%")
-                (format color-stream "~a_colors ~%" kernel-prefix)
-                ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
-                (loop for y from (1- height) downto 0
-                      for color-idx = (elt colors-per-line y)
-                      for color-byte = (playfield-color-byte color-idx tv-standard)
-                      do (format color-stream "~tBYTE $~2,'0X~%" color-byte))
-                (format color-stream "~%")
-                ;; PF1, PF2, and background (will be at $f500 with colors)
-                ;; PF1 and PF2 must be defined unconditionally for ifconst checks in kernel
-                (format color-stream "~a_PF1~%" kernel-prefix)
-                (format color-stream "~tBYTE %00000000~%")
-                (format color-stream "~a_PF2~%" kernel-prefix)
-                (format color-stream "~tBYTE %00000000~%")
-                (format color-stream " ifnconst ~a_background~%" kernel-prefix)
-                (format color-stream "~a_background~%" kernel-prefix)
-                (format color-stream " endif~%")
-                (format color-stream "~tBYTE $00~%")
-                (format color-stream "~%"))
-              (format *trace-output* "~% Done writing titlescreen kernel bitmap to ~A~%" output-path)
-              (format *trace-output* "~% Done writing color table to ~A~%" color-output-path)
-              (values output-path color-output-path))
-            ;; Basic batariBASIC data format (backward compatibility)
-            (progn
-              (with-open-file (stream output-path
-                                      :direction :output
-                                      :if-exists :supersede
-                                      :if-does-not-exist :create)
-                (format stream "rem Generated bitmap data from ~a~%" (pathname-name png-file))
-                (format stream "rem Do not edit - regenerate from source artwork~%~%")
-                (format stream "data Bitmap~a~%" label-name)
-                (loop for column below 6
-                      do (loop for row from 41 downto 0
-                               for byte = (elt (elt shape column) row)
-                               for binary = (format nil "~8,'0b" byte)
-                               do (format stream "~%        %~a" binary))
-                      do (format stream "~%~%"))
-                (format stream "end~%"))
-              (format *trace-output* "~% Done writing batariBASIC bitmap to ~A~%" output-path)
-              output-path))))))
-
+          ;; Header banner
+          (format color-stream ";;; Chaos Fight - ~a~%" (namestring color-output-path))
+          (format color-stream "~%")
+          (format color-stream ";;;; This is a generated file, do not edit.~%")
+          (format color-stream ";;;; Color table, PF1, PF2, and background for ~a bitmap~%" kernel-prefix)
+          (format color-stream ";;;; This file will be included in titlescreen_colors.s at $f500~%")
+          (format color-stream "~%")
+          (format color-stream "~a_colors ~%" kernel-prefix)
+          ;; Output colors in reverse order (bottom to top) - one per row, tab-indented
+          (loop for y from (1- height) downto 0
+                for color-idx = (elt colors-per-line y)
+                for color-byte = (playfield-color-byte color-idx tv-standard)
+                do (format color-stream "~%~12t.byte $~2,'0x~%" color-byte))
+          (fresh-line color-stream)
+          (format *trace-output* "~% Done writing titlescreen kernel bitmap to ~A~%" output-path)
+          (format *trace-output* "~% Done writing color table to ~A~%" color-output-path)
+          (values output-path color-output-path))))))
+  
 (defun reverse-7-or-8 (shape)
   (let* ((height (length shape))
          (group-height (if (zerop (mod height 7)) 7 8)))

@@ -728,9 +728,6 @@ skipping MIDI music with ~:d track~:p"
                   #'< :key #'second)
             'vector)))
 
-(defmethod midi-to-sound-binary (output-coding machine-type midi-notes (sound (eql :pokey)))
-  (error "superseded"))
-
 (defun collect-midi-texts (midi)
   (loop for track in (midi:midifile-tracks midi)
         for track-number from 0
@@ -1036,7 +1033,7 @@ Music:~:*
           (hash-table-count catalog) output-coding sound-chip))
 
 (defun compile-music-7800 (object-name midi-name sound-chip output-coding)
-  (let ((*machine* 7800)
+  (let ((*machine* (if (eql output-coding 5200) 5200 7800))
         (catalog (make-hash-table))
         (comments-catalog (make-hash-table)))
     (with-output-to-file (object object-name :element-type '(unsigned-byte 8)
@@ -1085,6 +1082,9 @@ Music:~:*
     (format *trace-output* "~&Writing music from playlist ~a…" in-file-name)
     (ecase *machine*
       (2600 (compile-music-2600 source-out-name in-file-name))
+      (5200 (compile-music-7800 source-out-name in-file-name
+                                :hokey
+                                5200))
       (7800 (compile-music-7800 source-out-name in-file-name
                                 (make-keyword (string-upcase sound-chip))
                                 (make-keyword (string-upcase output-coding)))))))
@@ -1414,8 +1414,10 @@ Music:~:*
                            (write-byte (hokey-note-hokey-f note) out)
                            (write-byte (floor (min #xff (* #x100 (hokey-note-hokey-error note)))) out)
                            (write-byte (min 15 (round (* 15 (hokey-note-volume note)))) out)
-                           (write-byte (hokey-note-tia-f note) out)
-                           (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out)
+                           (unless (= *machine* 5200)
+                             (write-byte (hokey-note-tia-f note) out))
+                           (unless (= *machine* 5200)
+                             (write-byte (floor (min #xff (* #x100 (hokey-note-tia-error note)))) out))
                            (setf d-t #xff)))
                 (incf note-count)
                 (write-byte (floor d-t) out)
@@ -1424,9 +1426,14 @@ Music:~:*
                 (write-byte (hokey-note-hokey-f note) out)
                 (write-byte (hokey-note-hokey-error note) out)
                 (write-byte (min 15 (round (* 15 (hokey-note-volume note)))) out)
-                (write-byte (hokey-note-tia-f note) out)
-                (write-byte (hokey-note-tia-error note) out)))))
-        (write-bytes #(0 0 0 0 0 0 0 0) out)
+                (unless (= *machine* 5200)
+                  (write-byte (hokey-note-tia-f note) out))
+                (unless (= *machine* 5200)
+                  (write-byte (hokey-note-tia-error note) out))))))
+        (write-bytes (ecase *machine*
+                       (5200 #(0 0 0 0 0 0))
+                       (7800 #(0 0 0 0 0 0 0 0)))
+                     out)
         (format *trace-output* " … wrote ~:d note~:p (total ~:d bytes)"
                 note-count (* 8 (1+ note-count))))
       (terpri *trace-output*))))
@@ -1582,8 +1589,8 @@ Music:~:*
                                             (setf gap (- gap rest-duration))))))))
                 ;; Add end marker: lag=0 marks end of song
                 (format out "~% .byte 0,  0,  0,  0  ; End marker (lag=0)~%")))
-            (format out "~%.bend"))
-          
+            (format out "~% .bend"))
+          (fresh-line out)
           ;; Trace output (total notes/entries written across all voices)
           (format *trace-output* " … wrote ~:d note~:p/rest~:p for batariBASIC format"
                   note-count)
