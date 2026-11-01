@@ -94,4 +94,6 @@
                 :components ((:file "action-tests")
                              (:file "text-transcription-tests")
                              (:file "graphics-tests")
-                             (:file "sprite-compilation-tests")))))
+                             (:file "sprite-compilation-tests")
+                             (:file "music-tests")
+                             (:file "interface-tests")))))

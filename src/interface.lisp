@@ -235,8 +235,34 @@
   (first (split-sequence #\,
                          (sb-posix:passwd-gecos (sb-posix:getpwuid user-id)))))
 
+(defun skyline-debug-backtrace-p ()
+  "True if SKYLINE_DEBUG_BACKTRACE is set to t.
+
+When true, errors print the condition plus a backtrace and exit the
+process immediately, instead of offering interactive restarts or
+invoking the CLIM debugger (which hangs when there is no display)."
+  (string-equal "t" (or (uiop:getenv "SKYLINE_DEBUG_BACKTRACE") "")))
+
+(defun backtrace-mode-report (condition &optional (stream *error-output*))
+  "Write the SKYLINE_DEBUG_BACKTRACE=T report for CONDITION to STREAM.
+
+The report names the condition class, prints the condition itself, and
+follows it with a stack backtrace. Returns STREAM."
+  (format stream "~%~|
+An error of type ~:(~a~) was signalled (SKYLINE_DEBUG_BACKTRACE=t), ending immediately.~%~a~%Backtrace:~%"
+          (class-name (class-of condition))
+          condition)
+  (sb-debug:print-backtrace :stream stream :count 128)
+  (finish-output stream)
+  stream)
+
 (defun friendly-tty-debugger (condition &optional myself)
   (declare (ignore myself))
+  (when (skyline-debug-backtrace-p)
+    (finish-output)
+    (finish-output *trace-output*)
+    (backtrace-mode-report condition *error-output*)
+    (sb-ext:exit :code 2))
   (when (string-equal (or (sb-ext:posix-getenv "RESTARTS") "") "NIL")
     (finish-output)
     (finish-output *trace-output*)
@@ -322,11 +348,15 @@ There ~[are no restart options~;is one restart option~:;are ~:*~:d restart optio
 
 (defmacro with-happy-restarts (&body body)
   `(tagbody do-over
-      (let ((*system-debugger* *debugger-hook*)
-            (*debugger-hook* (or
-                              #+mcclim (when  (x11-p) #'clim-debugger:debugger)
-                              (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
-                              *debugger-hook*)))
+      (let* ((*system-debugger* *debugger-hook*)
+             (*debugger-hook* (or
+                               ;; SKYLINE_DEBUG_BACKTRACE=t: dump the backtrace and
+                               ;; exit at once; never open the CLIM debugger.
+                               (when (skyline-debug-backtrace-p)
+                                 #'friendly-tty-debugger)
+                               #+mcclim (when  (x11-p) #'clim-debugger:debugger)
+                               (when (or #+mcclim (not (x11-p)) t)#'friendly-tty-debugger)
+                               *debugger-hook*)))
         (restart-case
             (unwind-protect
                  (progn ,@body)
@@ -491,6 +521,10 @@ See COPYING for details
   (command (append '("port") subcommand)))
 
 (defun command (argv)
+  ;; SKYLINE_DEBUG_BACKTRACE=t: bypass the interactive debugger entirely so an
+  ;; error prints the condition and backtrace, then exits non-zero for Make.
+  (when (skyline-debug-backtrace-p)
+    (sb-ext:disable-debugger))
   (let ((verb (and (< 1 (length argv)) (second argv))))
     (format *trace-output* "~&Skyline tool (© 2025) invoked:
 (Skyline-Tool:Command '~s)~@[~%~10t• AUTOCONTINUE=~a~]"

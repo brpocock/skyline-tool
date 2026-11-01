@@ -366,32 +366,50 @@ Format: NTSC followed by PAL/SECAM frequency values for each AUDF value")
 skipping MIDI music with ~:d track~:p"
            output-coding machine-type sound-chip (length midi-notes))))
 
-(defun best-tia-ntsc-note-for (freq &optional (voice 1))
-  (when freq
-    (let ((notes (mapcar #'first
+(defun best-tia-voice-note-for (freq voice frequency-of)
+  "Find the TIA frequency code nearest FREQ in the table for waveform VOICE.
+
+FREQUENCY-OF extracts the NTSC or PAL frequency from a table entry.  Table
+entries whose frequency is NIL (the TV standard has no value for that code)
+are never selected.
+
+Returns (VOICE CODE ERROR) where CODE is the TIA frequency code (an index
+into the voice's table, i.e. the AUDV/AUDF value) and ERROR is a normalized
+interpolation error in [0, 1], or NIL if no code can be chosen.
+
+Both ends of the table are special-cased, so that a frequency below the
+lowest tabulated note cannot walk off the end of the table."
+  (when (and freq (plusp freq) (<= 0 voice) (< voice (length +tia-voices+)))
+    (let ((notes (mapcar frequency-of
                          (rest (elt +tia-voices+ voice)))))
       (when-let (freq-code (position (first (sort (copy-list notes) #'<
-                                                  ::key (curry #'frequency-distance freq)))
+                                                  :key (curry #'frequency-distance freq)))
                                      notes :test #'=))
-        (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
-              (dist0 (frequency-distance freq (elt notes freq-code)))
-              (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
-          (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
-              (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-              (list voice freq-code (/ dist0 (+ dist0 dist+1)))))))))
+        (when (elt notes freq-code)
+          (let* ((last-code (1- (length notes)))
+                 (dist-1 (when (plusp freq-code)
+                           (frequency-distance freq (elt notes (1- freq-code)))))
+                 (dist0 (frequency-distance freq (elt notes freq-code)))
+                 (dist+1 (when (< freq-code last-code)
+                           (frequency-distance freq (elt notes (1+ freq-code))))))
+            (cond ((zerop dist0) (list voice freq-code 0))
+                  ;; No tabulated code above: report the lowest code itself.
+                  ((null dist+1) (list voice freq-code (if dist-1
+                                                           (/ dist0 (+ dist0 dist-1))
+                                                           0)))
+                  ;; No tabulated code below: report the highest code itself.
+                  ((null dist-1) (list voice freq-code (/ dist0 (+ dist0 dist+1))))
+                  ((> (+ dist0 dist+1) (+ dist-1 dist0))
+                   (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0))))
+                  (t (list voice freq-code (/ dist0 (+ dist0 dist+1)))))))))))
+
+(defun best-tia-ntsc-note-for (freq &optional (voice 1))
+  "The NTSC TIA note nearest FREQ for the given waveform VOICE."
+  (best-tia-voice-note-for freq voice #'first))
 
 (defun best-tia-pal-note-for (freq &optional (voice 1))
-  (let ((notes (mapcar #'second
-                       (rest (elt +tia-voices+ voice)))))
-    (when-let (freq-code (position (first (sort (copy-list notes) #'<
-                                                :key (curry #'frequency-distance freq)))
-                                   notes :test #'=))
-      (let ((dist-1 (when (plusp freq-code) (frequency-distance freq (elt notes (1- freq-code)))))
-            (dist0 (frequency-distance freq (elt notes freq-code)))
-            (dist+1 (when (< freq-code #xff) (frequency-distance freq (elt notes (1+ freq-code))))))
-        (if (> (if dist+1 (+ dist0 dist+1) most-positive-fixnum) (if dist-1 (+ dist-1 dist0) most-positive-fixnum))
-          (list voice (1- freq-code) (/ dist-1 (+ dist-1 dist0)))
-          (list voice freq-code (/ dist0 (+ dist0 dist+1))))))))
+  "The PAL TIA note nearest FREQ for the given waveform VOICE."
+  (best-tia-voice-note-for freq voice #'second))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun ooxml->string (xml)
